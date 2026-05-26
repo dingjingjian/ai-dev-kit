@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mv /c/claude/CLAUDE.md /c/claude/daily-report/CLAUDE.md)",
+      "Bash(mv /c/claude/daily-report.sh /c/claude/daily-report/daily-report.sh)",
+      "Bash(mv /c/claude/temp_daily.md /c/claude/daily-report/temp_daily.md)",
+      "Bash(npx *)",
+      "WebSearch",
+      "Bash(start /c/claude/ai-news/output/ai-news-2026-05-25.html)",
+      "Bash(explorer.exe \"C:\\\\claude\\\\ai-news\\\\output\\\\ai-news-2026-05-25.html\")"
+    ]
+  }
+}

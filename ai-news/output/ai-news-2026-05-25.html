@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI 新闻日报 — 2026年5月25日</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --bg-deep: #0a0e1a;
+    --bg-card: rgba(15, 23, 42, 0.85);
+    --bg-card-hover: rgba(20, 30, 55, 0.95);
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-bright: #f1f5f9;
+    --border: rgba(100, 130, 200, 0.15);
+    --border-glow: rgba(99, 102, 241, 0.4);
+    --accent: #818cf8;
+    --accent-bright: #a5b4fc;
+    --cyan: #22d3ee;
+    --tag-llm: #38bdf8;
+    --tag-os: #34d399;
+    --tag-product: #fb923c;
+    --tag-policy: #f87171;
+    --tag-research: #c084fc;
+    --tag-other: #94a3b8;
+    --heat-high: #ef4444;
+    --heat-mid: #fbbf24;
+    --heat-low: #64748b;
+    --glow-blue: 0 0 30px rgba(56, 189, 248, 0.15);
+    --glow-purple: 0 0 30px rgba(129, 140, 248, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg-deep);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(99, 102, 241, 0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 211, 238, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 60% at 50% 50%, rgba(168, 85, 247, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+    background-size: 60px 60px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 32px 20px 64px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .header {
+    position: relative;
+    border-radius: 20px;
+    padding: 48px 40px 40px;
+    margin-bottom: 32px;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 27, 75, 0.9) 50%, rgba(15, 23, 42, 0.95) 100%);
+    border: 1px solid var(--border);
+    box-shadow: var(--glow-purple), 0 20px 60px rgba(0,0,0,0.4);
+  }
+
+  .header::before {
+    content: '';
+    position: absolute;
+    top: -50%; left: -50%;
+    width: 200%; height: 200%;
+    background: conic-gradient(from 0deg at 50% 50%,
+      transparent 0deg,
+      rgba(129, 140, 248, 0.08) 60deg,
+      transparent 120deg,
+      rgba(34, 211, 238, 0.06) 180deg,
+      transparent 240deg,
+      rgba(168, 85, 247, 0.08) 300deg,
+      transparent 360deg);
+    animation: headerRotate 20s linear infinite;
+    pointer-events: none;
+  }
+
+  @keyframes headerRotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    background: linear-gradient(135deg, rgba(15, 23, 42, 0.97) 0%, rgba(30, 27, 75, 0.93) 50%, rgba(15, 23, 42, 0.97) 100%);
+    border-radius: 19px;
+    z-index: 0;
+  }
+
+  .header > * { position: relative; z-index: 1; }
+
+  .header .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(129, 140, 248, 0.15);
+    border: 1px solid rgba(129, 140, 248, 0.3);
+    color: var(--accent-bright);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 16px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .header .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--cyan);
+    border-radius: 50%;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(34, 211, 238, 0); }
+  }
+
+  .header h1 {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--text-bright);
+    margin-bottom: 4px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #f1f5f9 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header .date {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 28px;
+    font-weight: 500;
+  }
+
+  .header .stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+
+  .header .stat-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 18px 20px;
+    text-align: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+  }
+
+  .header .stat-card:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(129, 140, 248, 0.3);
+    transform: translateY(-2px);
+  }
+
+  .header .stat-card .num {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--cyan), var(--accent));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .header .stat-card .label {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    font-weight: 500;
+    letter-spacing: 0.3px;
+  }
+
+  .summary {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: 18px;
+    padding: 36px 40px;
+    margin-bottom: 28px;
+    border: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    box-shadow: var(--glow-blue);
+    overflow: hidden;
+  }
+
+  .summary::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--accent), var(--tag-research));
+  }
+
+  .summary h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--text-bright);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .summary h2::before {
+    content: '';
+    width: 4px;
+    height: 22px;
+    background: linear-gradient(180deg, var(--cyan), var(--accent));
+    border-radius: 2px;
+  }
+
+  .summary p {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 14px;
+    line-height: 1.9;
+  }
+
+  .summary p:last-child { margin-bottom: 0; }
+
+  .summary p strong {
+    color: var(--accent-bright);
+    font-weight: 600;
+  }
+
+  .category-section {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: 18px;
+    padding: 32px 36px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    transition: all 0.3s ease;
+    overflow: hidden;
+  }
+
+  .category-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 2px;
+    opacity: 0.6;
+  }
+
+  .category-section.llm { border-color: rgba(56, 189, 248, 0.25); box-shadow: 0 0 25px rgba(56, 189, 248, 0.08); }
+  .category-section.llm::before { background: linear-gradient(90deg, transparent, var(--tag-llm), transparent); }
+  .category-section.os { border-color: rgba(52, 211, 153, 0.25); box-shadow: 0 0 25px rgba(52, 211, 153, 0.08); }
+  .category-section.os::before { background: linear-gradient(90deg, transparent, var(--tag-os), transparent); }
+  .category-section.product { border-color: rgba(251, 146, 60, 0.25); box-shadow: 0 0 25px rgba(251, 146, 60, 0.08); }
+  .category-section.product::before { background: linear-gradient(90deg, transparent, var(--tag-product), transparent); }
+  .category-section.policy { border-color: rgba(248, 113, 113, 0.25); box-shadow: 0 0 25px rgba(248, 113, 113, 0.08); }
+  .category-section.policy::before { background: linear-gradient(90deg, transparent, var(--tag-policy), transparent); }
+  .category-section.research { border-color: rgba(192, 132, 252, 0.25); box-shadow: 0 0 25px rgba(192, 132, 252, 0.08); }
+  .category-section.research::before { background: linear-gradient(90deg, transparent, var(--tag-research), transparent); }
+
+  .category-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .category-header .icon { font-size: 22px; }
+  .category-header h3 { font-size: 18px; font-weight: 700; color: var(--text-bright); }
+  .category-header .count {
+    font-size: 12px;
+    color: var(--text-dim);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 2px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .news-item {
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .news-item:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .news-item .title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .news-item .title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-bright);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .news-item .title:hover { color: var(--accent-bright); }
+
+  .news-item .meta {
+    font-size: 13px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+  .news-item .meta .source a { color: var(--text-dim); text-decoration: none; transition: color 0.2s; }
+  .news-item .meta .source a:hover { color: var(--accent-bright); }
+  .news-item .summary-text {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    line-height: 1.7;
+  }
+
+  .tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 5px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+  .tag.heat-high { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.25); }
+  .tag.heat-mid { background: rgba(251, 191, 36, 0.12); color: #fcd34d; border: 1px solid rgba(251, 191, 36, 0.2); }
+  .tag.heat-low { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.15); }
+  .tag.cat-llm { background: rgba(56, 189, 248, 0.1); color: var(--tag-llm); }
+  .tag.cat-os { background: rgba(52, 211, 153, 0.1); color: var(--tag-os); }
+  .tag.cat-product { background: rgba(251, 146, 60, 0.1); color: var(--tag-product); }
+  .tag.cat-policy { background: rgba(248, 113, 113, 0.1); color: var(--tag-policy); }
+  .tag.cat-research { background: rgba(192, 132, 252, 0.1); color: var(--tag-research); }
+
+  .footer {
+    text-align: center;
+    margin-top: 40px;
+    font-size: 13px;
+    color: var(--text-dim);
+    opacity: 0.4;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .header { animation: fadeInUp 0.6s ease-out; }
+  .summary { animation: fadeInUp 0.6s ease-out 0.1s both; }
+  .category-section:nth-child(3) { animation: fadeInUp 0.6s ease-out 0.2s both; }
+  .category-section:nth-child(4) { animation: fadeInUp 0.6s ease-out 0.3s both; }
+  .category-section:nth-child(5) { animation: fadeInUp 0.6s ease-out 0.4s both; }
+  .category-section:nth-child(6) { animation: fadeInUp 0.6s ease-out 0.5s both; }
+  .category-section:nth-child(7) { animation: fadeInUp 0.6s ease-out 0.6s both; }
+
+  @media (max-width: 640px) {
+    .container { padding: 16px 12px 48px; }
+    .header { padding: 32px 24px 28px; border-radius: 16px; }
+    .header h1 { font-size: 26px; }
+    .header .stats { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .header .stat-card { padding: 12px 10px; }
+    .header .stat-card .num { font-size: 24px; }
+    .summary { padding: 24px 20px; border-radius: 14px; }
+    .category-section { padding: 24px 20px; border-radius: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="header">
+    <div class="badge">Live Daily Briefing</div>
+    <h1>AI 新闻日报</h1>
+    <div class="date">2026年5月25日 · 星期一</div>
+    <div class="stats">
+      <div class="stat-card">
+        <div class="num">15</div>
+        <div class="label">条新闻</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">5</div>
+        <div class="label">个类别</div>
+      </div>
+      <div class="stat-card">
+        <div class="num">8</div>
+        <div class="label">头条热点</div>
+      </div>
+    </div>
+  </header>
+
+  <section class="summary">
+    <h2>今日概览</h2>
+    <p>
+      2026年5月，AI 领域迎来<strong>"超级更新月"</strong>。国内方面，<strong>阿里通义千问 Qwen3.7-Max</strong> 在 Arena 全球盲测中位列国产第一，与 GPT、Claude、Gemini 同处第一梯队；<strong>百度文心大模型 5.1</strong> 以仅为业界 6% 的预训练成本实现顶级性能，LM Arena 搜索榜全球第四、国内第一；<strong>腾讯混元 Hy3</strong> 上线两周 Token 调用量暴增 10 倍，中国大模型周调用量连续三周超越美国。海外，<strong>OpenAI 发布 GPT-5.5 Instant</strong> 并设为默认免费模型，幻觉率较上代骤降 52.5%。大模型竞争正从"参数竞赛"全面转向"成本效率 + 用户体验"的新阶段。
+    </p>
+    <p>
+      资本市场同样进入<strong>"超级周期"</strong>。<strong>DeepSeek 以 700 亿元人民币首轮融资</strong> 创下中国科技初创公司纪录，估值约 450 亿美元；<strong>阶跃星辰获约 170 亿融资</strong> 加速港股 IPO，估值直奔 100 亿美元；仅 5 月份，国产大模型企业融资总额即超过 <strong>300 亿元</strong>。产业资本带订单、带场景、带生产线的深度参与，标志着 AI 投资从"押注技术"转向"验证商业闭环"。
+    </p>
+    <p>
+      政策端密集发力，监管体系加速成型。<strong>三部门联合印发《智能体规范应用与创新发展实施意见》</strong>，覆盖 19 个典型应用场景并实行分类分级治理；<strong>国务院将 AI 综合性立法纳入 2026 年度立法计划</strong>；<strong>工信部启动 AI 科技伦理审查与服务先导计划</strong>——监管正从"事后应对"升级为"体系化前瞻布局"。学术前沿方面，ICML 2026 严肃论证 Agentic AI 是通向 AGI 的可行路径，类比推理技术将 LLM 的科学创造力提升了 173%。
+    </p>
+  </section>
+
+  <section class="category-section llm">
+    <div class="category-header">
+      <span class="icon">&#x1f916;</span>
+      <h3>大模型</h3>
+      <span class="count">5 条</span>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://www.chinaz.com/2026/0523/1754066.shtml" target="_blank">阿里通义千问 Qwen3.7-Max 发布</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">阿里云峰会发布全新千问旗舰模型，Arena 全球盲测国产第一，与 GPT、Claude、Gemini 同处第一梯队，免费开放使用。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://www.chinaz.com/2026/0523/1754066.shtml" target="_blank">站长之家</a></span>
+        <span class="tag cat-llm">大模型</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://developer.baidu.com/article/detail.html?id=6975575" target="_blank">百度文心大模型 5.1 发布，训练成本仅为业界 6%</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">新一代旗舰大模型，预训练成本仅为业界同规模的 6%，LM Arena 搜索榜全球第四、国内第一，采用"多维弹性预训练"技术实现极致降本增效。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://developer.baidu.com/article/detail.html?id=6975575" target="_blank">百度开发者</a></span>
+        <span class="tag cat-llm">大模型</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605131822276519" target="_blank">OpenAI 发布 GPT-5.5 Instant 并免费开放</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">设为 ChatGPT 默认模型面向所有用户免费，幻觉率较上代下降约 52.5%，准确性与个性化能力显著提升。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605131822276519" target="_blank">东方财富</a></span>
+        <span class="tag cat-llm">大模型</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605201822473543" target="_blank">腾讯混元 Hy3 Token 调用量暴增 10 倍</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">上线两周周调用量达 2.66 万亿 Token，中国大模型周调用量连续三周超越美国，达到美国的 1.81 倍。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605201822473543" target="_blank">东方财富</a></span>
+        <span class="tag cat-llm">大模型</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605131822276519" target="_blank">字节推出 Doubao-Seed-2.0-lite 全模态模型</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">火山引擎推出首款全模态理解模型，Agent、Coding 与 GUI 能力同步升级。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://data.eastmoney.com/report/zw_industry.jshtml?infocode=AP202605131822276519" target="_blank">东方财富</a></span>
+        <span class="tag cat-llm">大模型</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="category-section os">
+    <div class="category-header">
+      <span class="icon">&#x1f4bb;</span>
+      <h3>开源</h3>
+      <span class="count">2 条</span>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://m.ithome.com/html/948106.htm" target="_blank">百度开源 LoongForge 全模态训练框架</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">以 Megatron 为核心引擎，覆盖 LLM/VLM/VLA/Diffusion 等场景，多模态训练提速 45%，兼容 NVIDIA GPU 与昆仑芯 XPU。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://m.ithome.com/html/948106.htm" target="_blank">IT之家</a></span>
+        <span class="tag cat-os">开源</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://developer.baidu.com/article/detail.html?id=7142868" target="_blank">GitHub 开源 AI 生态 2026 全景：MoE 主流化</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">MoE 混合专家架构成主流，Rust 进入 AI Agent 框架推理提速 3.8 倍，模型蒸馏可将大模型压缩至 15% 大小同时保持 85% 精度。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://developer.baidu.com/article/detail.html?id=7142868" target="_blank">百度开发者</a></span>
+        <span class="tag cat-os">开源</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="category-section product">
+    <div class="category-header">
+      <span class="icon">&#x1f4f1;</span>
+      <h3>产品与商业</h3>
+      <span class="count">3 条</span>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://finance.sina.cn/2026-05-22/detail-inhyumqm7691948.d.html" target="_blank">DeepSeek 首轮融资 700 亿元创纪录</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">创中国科技初创公司首轮融资纪录，估值约 450 亿美元。国家大基金约 100 亿参投，腾讯、IDG、砺思资本跟投，仍优先专注 AI 突破性研究。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://finance.sina.cn/2026-05-22/detail-inhyumqm7691948.d.html" target="_blank">新浪财经</a></span>
+        <span class="tag cat-product">产品</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://www.sohu.com/a/1026350421_122014422" target="_blank">阶跃星辰获约 170 亿融资，加速港股 IPO</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">估值直奔 100 亿美元，华勤技术、龙旗科技、豪威集团、中兴通讯等产业资本入场，腾讯加码，港投公司入局。模型装机量超 4200 万台。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://www.sohu.com/a/1026350421_122014422" target="_blank">搜狐</a></span>
+        <span class="tag cat-product">产品</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://finance.sina.com.cn/jjxw/2026-05-25/doc-inhzamvr5188953.shtml" target="_blank">国产大模型 5 月融资总额超 300 亿元</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">月之暗面、阶跃星辰等头部企业密集融资，AI 正成为推动全球贸易增长的重要引擎，规模化盈利拐点预计比互联网时代来得更快。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://finance.sina.com.cn/jjxw/2026-05-25/doc-inhzamvr5188953.shtml" target="_blank">新浪财经</a></span>
+        <span class="tag cat-product">产品</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="category-section policy">
+    <div class="category-header">
+      <span class="icon">&#x1f4cb;</span>
+      <h3>政策与监管</h3>
+      <span class="count">3 条</span>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://cpc.people.com.cn/BIG5/n1/2026/0509/c64387-40716233.html" target="_blank">三部门印发《智能体规范应用与创新发展实施意见》</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">网信办、发改委、工信部联合发文，提出 19 个典型应用场景，覆盖金融、医疗、教育、政务等领域，实行分类分级治理，保障用户知情权和最终决策权。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://cpc.people.com.cn/BIG5/n1/2026/0509/c64387-40716233.html" target="_blank">人民网</a></span>
+        <span class="tag cat-policy">政策</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://www.iii.tsinghua.edu.cn/info/1242/5248.htm" target="_blank">国务院 2026 立法计划：加快推进 AI 综合性立法</a>
+        <span class="tag heat-high">高热度</span>
+      </div>
+      <div class="summary-text">明确加快完善数据、算力、算法、产权、网络安全、供应链安全等 AI 共性要素立法，预备制定网络交易平台监督管理条例、网络安全等级保护条例。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://www.iii.tsinghua.edu.cn/info/1242/5248.htm" target="_blank">清华大学互联网产业研究院</a></span>
+        <span class="tag cat-policy">政策</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://cpc.people.com.cn/BIG5/n1/2026/0510/c64387-40716847.html" target="_blank">工信部启动 AI 科技伦理审查与服务先导计划</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">在国家级 AI 先导区省份率先探索伦理审查落地路径，建设省级 AI 科技伦理委员会和全国风险监测服务网络，常态化开设"伦理课堂"。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://cpc.people.com.cn/BIG5/n1/2026/0510/c64387-40716847.html" target="_blank">人民网</a></span>
+        <span class="tag cat-policy">政策</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="category-section research">
+    <div class="category-header">
+      <span class="icon">&#x1f52c;</span>
+      <h3>学术研究</h3>
+      <span class="count">2 条</span>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://browse-export.arxiv.org/abs/2605.11258" target="_blank">类比推理释放 LLM 科学创造力，多样性提升 173%</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">提出类比推理（AR）方法，将生成多样性指标提升 90-173%，新颖方案比例超 50%（基线仅 1.6%），在生物医学问题中扰动效应预测提升约 13 倍，达 SOTA。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://browse-export.arxiv.org/abs/2605.11258" target="_blank">arXiv</a></span>
+        <span class="tag cat-research">研究</span>
+      </div>
+    </div>
+    <div class="news-item">
+      <div class="title-row">
+        <a class="title" href="https://browse-export.arxiv.org/abs/2605.12966" target="_blank">ICML 2026：Agentic AI 是通向 AGI 的可行路径</a>
+        <span class="tag heat-mid">中热度</span>
+      </div>
+      <div class="summary-text">入选 ICML 2026 Position Track。从理论上证明 Agentic 系统相比单一模型在泛化能力与样本效率上实现指数级提升，挑战"单纯扩大单一模型即可实现 AGI"的主流假设。</div>
+      <div class="meta">
+        <span class="source">来源：<a href="https://browse-export.arxiv.org/abs/2605.12966" target="_blank">arXiv</a></span>
+        <span class="tag cat-research">研究</span>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    AI 新闻日报 · 由 Claude Code 自动生成 · 2026-05-25
+  </footer>
+
+</div>
+</body>
+</html>
