@@ -1,0 +1,59 @@
+{
+  "settings": {
+    "mode": "auto",
+    "viewport": { "width": 1440, "height": 900 },
+    "navigationTimeout": 90000,
+    "waitUntil": "networkidle0",
+    "initialWait": 3000,
+    "scrollToLoad": true,
+    "scrollWait": 800,
+    "cloudflareTimeout": 30000,
+    "hideWebdriver": true,
+    "screenshotType": "png",
+    "fullPage": true
+  },
+
+  "sites": [
+    {
+      "name": "哈尔滨工程大学信息化处",
+      "url": "https://nic.hrbeu.edu.cn",
+      "folder": "1-蓝色科技"
+    },
+    {
+      "name": "北京邮电大学数智化",
+      "url": "https://nic.bupt.edu.cn",
+      "folder": "1-蓝色科技"
+    },
+    {
+      "name": "中国美术学院信息技术中心",
+      "url": "https://itc.caa.edu.cn",
+      "folder": "2-现代简约"
+    },
+    {
+      "name": "Princeton-University-OIT",
+      "url": "https://oit.princeton.edu",
+      "folder": "2-现代简约"
+    },
+    {
+      "name": "京都大学",
+      "url": "https://www.kyoto-u.ac.jp",
+      "folder": "2-现代简约"
+    },
+    {
+      "name": "武汉大学信息中心",
+      "url": "https://nic.whu.edu.cn",
+      "folder": "3-清晰导航"
+    },
+    {
+      "name": "南京大学信息化建设管理服务中心",
+      "url": "https://itsc.nju.edu.cn",
+      "folder": "3-清晰导航"
+    },
+    {
+      "name": "伦敦大学学院-UCL",
+      "url": "https://www.ucl.ac.uk",
+      "folder": "4-色彩独特",
+      "cloudflareTimeout": 60000
+    }
+  ]
+}

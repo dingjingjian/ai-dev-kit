@@ -1,0 +1,9 @@
+# Dependencies
+node_modules/
+
+# Generated screenshots
+output/
+
+# OS files
+.DS_Store
+Thumbs.db
