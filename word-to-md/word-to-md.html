@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word 转 Markdown 工具</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px;
+        }
+        .container {
+            max-width: 1200px; margin: 0 auto; background: white;
+            border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 30px; text-align: center;
+        }
+        .header h1 { font-size: 32px; margin-bottom: 10px; }
+        .header p { font-size: 16px; opacity: 0.9; }
+        .main-content { display: flex; height: auto; min-height: 600px; }
+        .left-panel, .right-panel {
+            flex: 1; min-width: 0; padding: 30px; display: flex; flex-direction: column;
+        }
+        .left-panel { border-right: 2px solid #e0e0e0; }
+        .panel-title { font-size: 20px; font-weight: 600; margin-bottom: 20px; color: #333; }
+        .upload-area {
+            border: 3px dashed #667eea; border-radius: 12px; padding: 60px 20px;
+            text-align: center; cursor: pointer; transition: all 0.3s;
+            height: 360px; flex: none; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+        }
+        .upload-area:hover { border-color: #764ba2; background: #f5f5ff; }
+        .upload-area.drag-over { border-color: #764ba2; background: #f0f0ff; }
+        .upload-icon { font-size: 64px; margin-bottom: 20px; }
+        .upload-text { font-size: 18px; color: #667eea; margin-bottom: 10px; }
+        .upload-hint { font-size: 14px; color: #999; }
+        #fileInput { display: none; }
+        .file-info {
+            margin-top: 20px; padding: 15px; background: #f5f5ff;
+            border-radius: 8px; display: none;
+        }
+        .file-info.show { display: block; }
+        .file-name { font-weight: 600; color: #667eea; margin-bottom: 5px; }
+        .file-size { font-size: 14px; color: #666; }
+        .btn-group { margin-top: 20px; display: flex; gap: 10px; }
+        .btn {
+            flex: 1; padding: 15px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102,126,234,0.4); }
+        .btn-primary:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+        .btn-secondary { background: #f0f0f0; color: #333; }
+        .btn-secondary:hover { background: #e0e0e0; }
+        .panel-options {
+            margin-top: 15px; min-height: 22px; display: flex; align-items: center; gap: 8px;
+        }
+        .panel-options input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; margin: 0; }
+        .panel-options label { cursor: pointer; font-size: 14px; color: #666; }
+        .preview-area {
+            height: 360px; flex: none; border: 2px solid #e0e0e0; border-radius: 8px;
+            padding: 15px; overflow-y: auto; overflow-x: hidden; background: #fafafa;
+            font-family: 'Monaco','Menlo','Ubuntu Mono',monospace; font-size: 14px;
+            line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; word-break: break-word;
+        }
+        .preview-placeholder { color: #999; text-align: center; margin-top: 200px; }
+        .status { margin-top: 15px; padding: 12px; border-radius: 8px; display: none; }
+        .status.show { display: block; }
+        .status.success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .spinner {
+            display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite;
+            margin-right: 10px; vertical-align: middle;
+        }
+        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        .features {
+            display: grid; grid-template-columns: repeat(3,1fr); gap: 15px;
+            margin-top: 20px; padding: 20px; background: #f9f9f9;
+        }
+        .feature-item {
+            display: flex; align-items: center; gap: 10px; padding: 10px;
+            background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .feature-icon { font-size: 24px; }
+        .feature-text { font-size: 14px; color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 Word 转 Markdown 工具</h1>
+            <p>轻松将 .docx 文件转换为 Markdown 格式</p>
+        </div>
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="panel-title">📁 上传文件</div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📄</div>
+                    <div class="upload-text">点击或拖拽文件到此处</div>
+                    <div class="upload-hint">支持 .docx 格式</div>
+                </div>
+                <input type="file" id="fileInput" accept=".docx">
+                <div class="file-info" id="fileInfo">
+                    <div class="file-name" id="fileName"></div>
+                    <div class="file-size" id="fileSize"></div>
+                </div>
+                <div class="panel-options">
+                    <input type="checkbox" id="exportImageCheck" checked>
+                    <label for="exportImageCheck">导出图片（仅 ≤200KB 的图片转 Base64）</label>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="convertBtn" disabled>🔄 开始转换</button>
+                    <button class="btn btn-secondary" id="resetBtn">🔄 重置</button>
+                </div>
+                <div class="status" id="status"></div>
+            </div>
+            <div class="right-panel">
+                <div class="panel-title">📝 Markdown 预览</div>
+                <div class="preview-area" id="previewArea">
+                    <div class="preview-placeholder">转换后的 Markdown 内容将显示在这里...</div>
+                </div>
+                <div class="panel-options" aria-hidden="true"></div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" id="downloadBtn" disabled>⬇️ 下载 MD 文件</button>
+                    <button class="btn btn-secondary" id="copyBtn" disabled>📋 复制内容</button>
+                </div>
+            </div>
+        </div>
+        <div class="features">
+            <div class="feature-item"><span class="feature-icon">✅</span><span class="feature-text">标题转换</span></div>
+            <div class="feature-item"><span class="feature-icon">✅</span><span class="feature-text">段落格式</span></div>
+            <div class="feature-item"><span class="feature-icon">✅</span><span class="feature-text">加粗/斜体</span></div>
+            <div class="feature-item"><span class="feature-icon">✅</span><span class="feature-text">列表支持</span></div>
+            <div class="feature-item"><span class="feature-icon">✅</span><span class="feature-text">链接转换</span></div>
+            <div class="feature-item"><span class="feature-icon">🔒</span><span class="feature-text">本地处理，安全可靠</span></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/mammoth@1.5.1/mammoth.browser.min.js"></script>
+    <script src="https://unpkg.com/turndown@7.1.1/dist/turndown.js"></script>
+    <script>
+        // ========== 配置常量 ==========
+        const MAX_PREVIEW_CHARS = 50000;       // 预览区最大字符数（约50KB文本）
+        const MAX_IMAGE_BASE64_KB = 200;      // 单张图片最大Base64大小(KB)
+        const LARGE_FILE_THRESHOLD = 10 * 1024 * 1024; // 10MB 大文件预警阈值
+
+        // ========== DOM 元素 ==========
+        const uploadArea     = document.getElementById('uploadArea');
+        const fileInput      = document.getElementById('fileInput');
+        const fileInfo       = document.getElementById('fileInfo');
+        const fileName       = document.getElementById('fileName');
+        const fileSize       = document.getElementById('fileSize');
+        const convertBtn     = document.getElementById('convertBtn');
+        const resetBtn       = document.getElementById('resetBtn');
+        const downloadBtn    = document.getElementById('downloadBtn');
+        const copyBtn        = document.getElementById('copyBtn');
+        const previewArea    = document.getElementById('previewArea');
+        const status         = document.getElementById('status');
+        const exportImageCheck = document.getElementById('exportImageCheck');
+
+        let selectedFile = null;
+        let convertedMarkdown = '';
+        let imageCounter = 0;
+        let skippedImageCounter = 0;
+
+        // ========== 文件选择 & 拖拽 ==========
+        uploadArea.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) handleFile(e.target.files[0]);
+        });
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('drag-over');
+        });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('drag-over'));
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('drag-over');
+            if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+        });
+
+        function handleFile(file) {
+            if (!file.name.endsWith('.docx')) {
+                showStatus('error', '❌ 请选择 .docx 格式的文件');
+                return;
+            }
+            selectedFile = file;
+            fileName.textContent = `📄 ${file.name}`;
+            fileSize.textContent = `文件大小: ${formatFileSize(file.size)}`;
+            fileInfo.classList.add('show');
+            convertBtn.disabled = false;
+
+            // ✅ 新增：大文件预警
+            if (file.size > LARGE_FILE_THRESHOLD && exportImageCheck.checked) {
+                showStatus('info', `⚠️ 文件较大（${formatFileSize(file.size)}），开启图片导出可能耗时较长。建议关闭图片导出或拆分文档。`);
+            } else {
+                showStatus('success', '✅ 文件已就绪，点击"开始转换"按钮');
+            }
+        }
+
+        // ========== 核心转换逻辑 ==========
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            convertBtn.disabled = true;
+            convertBtn.innerHTML = '<span class="spinner"></span>转换中...';
+            showStatus('info', '⏳ 正在转换，请稍候...');
+            imageCounter = 0;
+            skippedImageCounter = 0;
+            previewArea.textContent = '';
+            downloadBtn.disabled = true;
+            copyBtn.disabled = true;
+
+            try {
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                const exportImages = exportImageCheck.checked;
+
+                let result;
+                if (exportImages) {
+                    // ✅ 修复：仅对小图片转Base64，大图片用占位符替代
+                    const imageOptions = {
+                        convertImage: mammoth.images.imgElement(function(image) {
+                            return image.read("base64").then(function(imageBuffer) {
+                                // base64字符串长度 × 0.75 ≈ 原始字节数
+                                const approxSizeKB = (imageBuffer.length * 0.75) / 1024;
+                                if (approxSizeKB > MAX_IMAGE_BASE64_KB) {
+                                    skippedImageCounter++;
+                                    return { src: "" }; // 返回空src，turndown会生成 ![alt]()
+                                }
+                                imageCounter++;
+                                return {
+                                    src: "data:" + image.contentType + ";base64," + imageBuffer
+                                };
+                            });
+                        })
+                    };
+                    result = await mammoth.convertToHtml({ arrayBuffer }, imageOptions);
+                } else {
+                    result = await mammoth.convertToHtml({ arrayBuffer });
+                }
+
+                let html = result.value;
+
+                // 不导出图片时，移除所有 img 标签
+                if (!exportImageCheck.checked) {
+                    html = html.replace(/<img[^>]*>/gi, '');
+                }
+
+                const turndownService = new TurndownService({
+                    headingStyle: 'atx',
+                    codeBlockStyle: 'fenced',
+                    emDelimiter: '*'
+                });
+
+                convertedMarkdown = turndownService.turndown(html);
+
+                // ✅ 修复：截断预览，避免DOM渲染巨型文本导致卡死
+                if (convertedMarkdown.length > MAX_PREVIEW_CHARS) {
+                    previewArea.textContent = convertedMarkdown.substring(0, MAX_PREVIEW_CHARS)
+                        + '\n\n⚠️ ... [内容过长（共 ' + formatFileSize(new Blob([convertedMarkdown]).size)
+                        + '），已截断预览。请点击"下载 MD 文件"获取完整内容] ...';
+                } else {
+                    previewArea.textContent = convertedMarkdown;
+                }
+
+                downloadBtn.disabled = false;
+                copyBtn.disabled = false;
+
+                // 构建成功消息
+                let msg = '✅ 转换成功！';
+                const parts = [];
+                if (exportImages && imageCounter > 0) parts.push(`${imageCounter} 张图片已嵌入`);
+                if (skippedImageCounter > 0) parts.push(`${skippedImageCounter} 张大图已跳过（>${MAX_IMAGE_BASE64_KB}KB）`);
+                if (parts.length > 0) msg += `（${parts.join('，')}）`;
+                if (convertedMarkdown.length > MAX_PREVIEW_CHARS) msg += ' | 预览已截断，请下载完整文件';
+                showStatus('success', msg);
+
+                // 滚动到预览区顶部
+                previewArea.scrollTop = 0;
+
+            } catch (error) {
+                console.error('转换错误:', error);
+                showStatus('error', `❌ 转换失败: ${error.message}`);
+            } finally {
+                convertBtn.disabled = false;
+                convertBtn.innerHTML = '🔄 开始转换';
+            }
+        });
+
+        // ========== 重置 ==========
+        resetBtn.addEventListener('click', () => {
+            selectedFile = null;
+            convertedMarkdown = '';
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            convertBtn.disabled = true;
+            downloadBtn.disabled = true;
+            copyBtn.disabled = true;
+            previewArea.innerHTML = '<div class="preview-placeholder">转换后的 Markdown 内容将显示在这里...</div>';
+            status.classList.remove('show');
+        });
+
+        // ========== 下载 ==========
+        downloadBtn.addEventListener('click', () => {
+            if (!convertedMarkdown) return;
+            const blob = new Blob([convertedMarkdown], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = selectedFile.name.replace('.docx', '.md');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showStatus('success', '✅ 文件已下载');
+        });
+
+        // ========== 复制（带大内容保护）==========
+        copyBtn.addEventListener('click', async () => {
+            if (!convertedMarkdown) return;
+
+            // ✅ 修复：超大内容警告，避免clipboard API长时间阻塞
+            if (convertedMarkdown.length > MAX_PREVIEW_CHARS) {
+                const confirmCopy = confirm(
+                    `当前内容较大（${formatFileSize(new Blob([convertedMarkdown]).size)}），复制到剪贴板可能导致浏览器短暂卡顿。\n\n是否继续？\n（建议直接下载文件）`
+                );
+                if (!confirmCopy) return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(convertedMarkdown);
+                showStatus('success', '✅ 内容已复制到剪贴板');
+            } catch (error) {
+                console.error('复制失败:', error);
+                // ✅ 降级方案：使用传统方式复制
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = convertedMarkdown;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showStatus('success', '✅ 内容已复制到剪贴板（降级模式）');
+                } catch (fallbackError) {
+                    showStatus('error', '❌ 复制失败，请手动下载文件');
+                }
+            }
+        });
+
+        // ========== 工具函数 ==========
+        function showStatus(type, message) {
+            status.className = `status show ${type}`;
+            status.textContent = message;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+    </script>
+</body>
+</html>
