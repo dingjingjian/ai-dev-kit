@@ -239,7 +239,7 @@ const passwordOps = {
       ...p,
       category_name: categories.find(c => c.id === p.category_id)?.name || null,
       category_color: categories.find(c => c.id === p.category_id)?.color || null
-    })).sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+    })).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   },
   
   getById(id) {
@@ -258,6 +258,7 @@ const passwordOps = {
     const data = readData();
     const newId = data.nextPasswordId++;
     const now = new Date().toISOString();
+    const maxSortOrder = data.passwords.reduce((max, p) => Math.max(max, p.sort_order ?? 0), 0);
     data.passwords.push({
       id: newId,
       category_id,
@@ -266,6 +267,7 @@ const passwordOps = {
       password,
       url,
       notes,
+      sort_order: maxSortOrder + 1,
       created_at: now,
       updated_at: now
     });
@@ -294,8 +296,20 @@ const passwordOps = {
     const data = readData();
     const before = data.passwords.length;
     data.passwords = data.passwords.filter(p => p.id !== id);
+    // 重新排序
+    data.passwords.forEach((p, i) => { p.sort_order = i + 1; });
     saveData(data);
     return { changes: before - data.passwords.length };
+  },
+  
+  updateOrder(idOrderMap) {
+    const data = readData();
+    idOrderMap.forEach(({ id, order }) => {
+      const p = data.passwords.find(pw => pw.id === id);
+      if (p) p.sort_order = order;
+    });
+    saveData(data);
+    return { changes: idOrderMap.length };
   },
   
   search(pattern) {
@@ -314,7 +328,7 @@ const passwordOps = {
         category_name: categories.find(c => c.id === p.category_id)?.name || null,
         category_color: categories.find(c => c.id === p.category_id)?.color || null
       }))
-      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   },
   
   getByCategory(categoryId) {
@@ -327,7 +341,7 @@ const passwordOps = {
         category_name: categories.find(c => c.id === p.category_id)?.name || null,
         category_color: categories.find(c => c.id === p.category_id)?.color || null
       }))
-      .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   }
 };
 

@@ -14,6 +14,12 @@ node_modules/
 .uploads/
 .cursor/
 .aider/
-.workbuddy/
-.trae/
 /copilot/
+
+# IDE/Tool config
+.trae/
+
+# Password manager sensitive files
+data.enc
+hint.txt
+backups/

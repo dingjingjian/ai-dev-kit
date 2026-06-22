@@ -121,6 +121,16 @@ app.get('/api/passwords', requireAuth, (req, res) => {
   res.json(passwords);
 });
 
+// 批量更新排序（必须在 /:id 之前定义，否则会被 :id 参数路由遮蔽）
+app.put('/api/passwords/reorder', requireAuth, (req, res) => {
+  const { order } = req.body;
+  if (!order || !Array.isArray(order)) {
+    return res.status(400).json({ error: '请提供排序数据' });
+  }
+  const result = passwordOps.updateOrder(order);
+  res.json({ success: true, changes: result.changes });
+});
+
 app.get('/api/passwords/:id', requireAuth, (req, res) => {
   const password = passwordOps.getById(parseInt(req.params.id));
   if (!password) {
