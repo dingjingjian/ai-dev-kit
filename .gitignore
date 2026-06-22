@@ -7,3 +7,13 @@ Thumbs.db
 
 # Dependencies
 node_modules/
+
+# AI Agent memory & config
+.mimocode/
+.claude/
+.uploads/
+.cursor/
+.aider/
+.workbuddy/
+.trae/
+/copilot/
