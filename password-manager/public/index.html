@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>密码管理器</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #333; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    
+    /* 登录页面 */
+    .auth-container { display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .auth-box { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.2); width: 100%; max-width: 400px; }
+    .auth-box h1 { text-align: center; margin-bottom: 10px; color: #333; }
+    .auth-box p { text-align: center; color: #666; margin-bottom: 30px; }
+    .form-group { margin-bottom: 20px; }
+    .form-group label { display: block; margin-bottom: 8px; font-weight: 500; color: #555; }
+    .form-group input { width: 100%; padding: 12px 16px; border: 2px solid #e1e5eb; border-radius: 8px; font-size: 16px; transition: border-color 0.3s; }
+    .form-group input:focus { outline: none; border-color: #667eea; }
+    .btn { width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(102,126,234,0.4); }
+    .btn:active { transform: translateY(0); }
+    .error-msg { color: #e74c3c; text-align: center; margin-top: 15px; display: none; }
+    
+    /* 主界面 */
+    .main-app { display: none; }
+    .header { background: white; padding: 20px; border-radius: 12px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .header h1 { font-size: 24px; margin-bottom: 15px; }
+    .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .search-box { flex: 1; min-width: 200px; padding: 10px 16px; border: 2px solid #e1e5eb; border-radius: 8px; font-size: 14px; }
+    .search-box:focus { outline: none; border-color: #667eea; }
+    .btn-sm { padding: 10px 20px; font-size: 14px; width: auto; }
+    .btn-secondary { background: #f5f7fa; color: #333; border: 2px solid #e1e5eb; }
+    .btn-secondary:hover { background: #e8ecf1; box-shadow: none; }
+    .btn-danger { background: #e74c3c; }
+    .btn-danger:hover { background: #c0392b; box-shadow: 0 4px 12px rgba(231,76,60,0.4); }
+    .btn-success { background: #27ae60; }
+    .btn-success:hover { background: #219a52; box-shadow: 0 4px 12px rgba(39,174,96,0.4); }
+    
+    .content { display: grid; grid-template-columns: 250px 1fr; gap: 20px; }
+    .sidebar { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); height: fit-content; }
+    .sidebar h3 { margin-bottom: 15px; color: #555; font-size: 14px; text-transform: uppercase; }
+    .category-list { list-style: none; }
+    .category-item { padding: 10px 15px; margin-bottom: 5px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s; }
+    .category-item:hover { background: #f5f7fa; }
+    .category-item.active { background: #667eea; color: white; }
+    .category-icon { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; }
+    .category-count { margin-left: auto; background: rgba(0,0,0,0.1); padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+    .category-item.active .category-count { background: rgba(255,255,255,0.3); }
+    
+    .password-list { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+    .password-item { padding: 15px; border: 2px solid #e1e5eb; border-radius: 8px; margin-bottom: 10px; transition: border-color 0.2s, box-shadow 0.2s; }
+    .password-item:hover { border-color: #667eea; box-shadow: 0 2px 8px rgba(102,126,234,0.15); }
+    .password-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .password-title { font-size: 18px; font-weight: 600; }
+    .password-category { font-size: 12px; padding: 4px 10px; border-radius: 12px; color: white; }
+    .password-details { display: grid; gap: 8px; }
+    .password-field { display: flex; align-items: center; gap: 10px; padding: 8px; background: #f5f7fa; border-radius: 6px; }
+    .password-field label { font-weight: 500; color: #666; min-width: 80px; }
+    .password-field value { flex: 1; font-family: monospace; }
+    .password-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .btn-icon { padding: 8px 12px; font-size: 12px; width: auto; }
+    
+    /* 模态框 */
+    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
+    .modal.active { display: flex; }
+    .modal-content { background: white; padding: 30px; border-radius: 12px; width: 100%; max-width: 500px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .modal-header h2 { font-size: 20px; }
+    .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: #666; }
+    .modal-close:hover { color: #333; }
+    .form-group select { width: 100%; padding: 12px 16px; border: 2px solid #e1e5eb; border-radius: 8px; font-size: 16px; }
+    .form-group textarea { width: 100%; padding: 12px 16px; border: 2px solid #e1e5eb; border-radius: 8px; font-size: 14px; resize: vertical; min-height: 80px; }
+    
+    /* 密码强度指示器 */
+    .strength-indicator { margin-top: 8px; height: 4px; background: #e1e5eb; border-radius: 2px; overflow: hidden; }
+    .strength-bar { height: 100%; width: 0; transition: width 0.3s, background 0.3s; }
+    .strength-text { font-size: 12px; margin-top: 5px; }
+    
+    /* 空状态 */
+    .empty-state { text-align: center; padding: 60px 20px; color: #999; }
+    .empty-state svg { width: 80px; height: 80px; margin-bottom: 20px; opacity: 0.5; }
+    
+    /* 响应式 */
+    @media (max-width: 768px) {
+      .content { grid-template-columns: 1fr; }
+      .sidebar { margin-bottom: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <!-- 认证页面 -->
+  <div class="auth-container" id="authContainer">
+    <div class="auth-box">
+      <h1>🔐 密码管理器</h1>
+      <p id="authSubtitle">请输入主密码以继续</p>
+      <form id="authForm">
+        <div class="form-group">
+          <label for="masterPassword">主密码</label>
+          <input type="password" id="masterPassword" placeholder="输入主密码" required>
+        </div>
+        <div class="form-group" id="confirmPasswordGroup" style="display: none;">
+          <label for="confirmPassword">确认主密码</label>
+          <input type="password" id="confirmPassword" placeholder="再次输入主密码">
+        </div>
+        <div class="form-group" id="hintGroup" style="display: none;">
+          <label for="masterHint">密码提示（可选）</label>
+          <input type="text" id="masterHint" placeholder="帮助你回忆主密码的提示">
+        </div>
+        <div id="loginHint" style="display: none; background: #fff3cd; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 14px; color: #856404;"></div>
+        <button type="submit" class="btn" id="authBtn">登录</button>
+        <div class="error-msg" id="authError"></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 主应用 -->
+  <div class="main-app" id="mainApp">
+    <div class="container">
+      <div class="header">
+        <h1>🔐 密码管理器</h1>
+        <div class="header-actions">
+          <input type="text" class="search-box" id="searchBox" placeholder="搜索密码记录...">
+          <button class="btn btn-sm" onclick="openAddModal()">+ 添加密码</button>
+          <button class="btn btn-sm btn-secondary" onclick="exportPasswords()">导出</button>
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('importFile').click()">导入</button>
+          <input type="file" id="importFile" accept=".json" style="display: none;" onchange="importPasswords(event)">
+          <button class="btn btn-sm btn-secondary" onclick="openBackupModal()">备份恢复</button>
+          <button class="btn btn-sm btn-secondary" onclick="openHintModal()">密码提示</button>
+          <button class="btn btn-sm btn-secondary" onclick="logout()">退出</button>
+        </div>
+      </div>
+      
+      <div class="content">
+        <div class="sidebar">
+          <h3>分类</h3>
+          <ul class="category-list" id="categoryList"></ul>
+          <button class="btn btn-sm btn-secondary" style="width: 100%; margin-top: 15px;" onclick="openCategoryModal()">+ 新建分类</button>
+        </div>
+        
+        <div class="password-list" id="passwordList">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <p>暂无密码记录</p>
+            <p style="font-size: 14px; margin-top: 10px;">点击"添加密码"开始管理您的密码</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加/编辑密码模态框 -->
+  <div class="modal" id="passwordModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="passwordModalTitle">添加密码</h2>
+        <button class="modal-close" onclick="closePasswordModal()">&times;</button>
+      </div>
+      <form id="passwordForm">
+        <input type="hidden" id="passwordId">
+        <div class="form-group">
+          <label for="pwdTitle">标题 *</label>
+          <input type="text" id="pwdTitle" placeholder="例如：GitHub账号" required>
+        </div>
+        <div class="form-group">
+          <label for="pwdCategory">分类</label>
+          <select id="pwdCategory"></select>
+        </div>
+        <div class="form-group">
+          <label for="pwdUsername">用户名/邮箱</label>
+          <input type="text" id="pwdUsername" placeholder="username@example.com">
+        </div>
+        <div class="form-group">
+          <label for="pwdPassword">密码 *</label>
+          <input type="text" id="pwdPassword" placeholder="输入密码" required oninput="checkPasswordStrength(this.value)">
+          <div class="strength-indicator">
+            <div class="strength-bar" id="strengthBar"></div>
+          </div>
+          <div class="strength-text" id="strengthText"></div>
+        </div>
+        <div class="form-group">
+          <label for="pwdUrl">网址</label>
+          <input type="text" id="pwdUrl" placeholder="https://example.com">
+        </div>
+        <div class="form-group">
+          <label for="pwdNotes">备注</label>
+          <textarea id="pwdNotes" placeholder="添加备注信息..."></textarea>
+        </div>
+        <button type="submit" class="btn">保存</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 添加分类模态框 -->
+  <div class="modal" id="categoryModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>新建分类</h2>
+        <button class="modal-close" onclick="closeCategoryModal()">&times;</button>
+      </div>
+      <form id="categoryForm">
+        <div class="form-group">
+          <label for="catName">分类名称 *</label>
+          <input type="text" id="catName" placeholder="例如：社交媒体" required>
+        </div>
+        <div class="form-group">
+          <label for="catIcon">图标</label>
+          <select id="catIcon">
+            <option value="folder">📁 文件夹</option>
+            <option value="globe">🌐 网站</option>
+            <option value="app">📱 应用</option>
+            <option value="mail">📧 邮箱</option>
+            <option value="credit-card">💳 金融</option>
+            <option value="users">👥 社交</option>
+            <option value="briefcase">💼 工作</option>
+            <option value="game">🎮 游戏</option>
+            <option value="shopping">🛒 购物</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="catColor">颜色</label>
+          <input type="color" id="catColor" value="#4A90D9">
+        </div>
+        <button type="submit" class="btn">创建</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = '/api';
+    let currentCategory = 'all';
+    let editingPasswordId = null;
+
+    // 初始化
+    async function init() {
+      const res = await fetch(`${API_BASE}/auth/status`);
+      const data = await res.json();
+      
+      if (!data.isSet) {
+        document.getElementById('authSubtitle').textContent = '首次使用，请设置主密码';
+        document.getElementById('authBtn').textContent = '设置主密码';
+        document.getElementById('confirmPasswordGroup').style.display = 'block';
+        document.getElementById('hintGroup').style.display = 'block';
+      } else {
+        // 已设置过密码，显示提示（如果有）
+        const hintRes = await fetch(`${API_BASE}/auth/hint`);
+        const hintData = await hintRes.json();
+        if (hintData.hint) {
+          document.getElementById('loginHint').textContent = `💡 提示：${hintData.hint}`;
+          document.getElementById('loginHint').style.display = 'block';
+        }
+      }
+    }
+
+    // 认证表单
+    document.getElementById('authForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('masterPassword').value;
+      const confirm = document.getElementById('confirmPassword').value;
+      const errorEl = document.getElementById('authError');
+      
+      if (document.getElementById('confirmPasswordGroup').style.display !== 'none') {
+        if (password !== confirm) {
+          errorEl.textContent = '两次输入的密码不一致';
+          errorEl.style.display = 'block';
+          return;
+        }
+        const hint = document.getElementById('masterHint').value;
+        const res = await fetch(`${API_BASE}/auth/setup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password, hint })
+        });
+        const data = await res.json();
+        if (data.error) {
+          errorEl.textContent = data.error;
+          errorEl.style.display = 'block';
+          return;
+        }
+      } else {
+        const res = await fetch(`${API_BASE}/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password })
+        });
+        const data = await res.json();
+        if (data.error) {
+          errorEl.textContent = data.error;
+          errorEl.style.display = 'block';
+          return;
+        }
+      }
+      
+      showMainApp();
+    });
+
+    // 显示主应用
+    async function showMainApp() {
+      document.getElementById('authContainer').style.display = 'none';
+      document.getElementById('mainApp').style.display = 'block';
+      await loadCategories();
+      await loadPasswords();
+    }
+
+    // 加载分类
+    async function loadCategories() {
+      const res = await fetch(`${API_BASE}/categories`);
+      const categories = await res.json();
+      
+      const listEl = document.getElementById('categoryList');
+      listEl.innerHTML = `
+        <li class="category-item ${currentCategory === 'all' ? 'active' : ''}" onclick="filterByCategory('all')">
+          <span class="category-icon">📋</span>
+          <span>全部</span>
+        </li>
+      `;
+      
+      categories.forEach(cat => {
+        listEl.innerHTML += `
+          <li class="category-item ${currentCategory === cat.id ? 'active' : ''}" onclick="filterByCategory(${cat.id})">
+            <span class="category-icon">${getIconEmoji(cat.icon)}</span>
+            <span>${cat.name}</span>
+            <span class="category-count" id="count-${cat.id}">0</span>
+          </li>
+        `;
+      });
+    }
+
+    // 加载密码列表
+    async function loadPasswords() {
+      let url = `${API_BASE}/passwords`;
+      if (currentCategory !== 'all') {
+        url = `${API_BASE}/passwords/category/${currentCategory}`;
+      }
+      
+      const res = await fetch(url);
+      const passwords = await res.json();
+      
+      const listEl = document.getElementById('passwordList');
+      
+      if (passwords.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <p>暂无密码记录</p>
+            <p style="font-size: 14px; margin-top: 10px;">点击"添加密码"开始管理您的密码</p>
+          </div>
+        `;
+        return;
+      }
+      
+      listEl.innerHTML = passwords.map(pwd => `
+        <div class="password-item">
+          <div class="password-header">
+            <span class="password-title">${escapeHtml(pwd.title)}</span>
+            ${pwd.category_name ? `<span class="password-category" style="background: ${pwd.category_color}">${pwd.category_name}</span>` : ''}
+          </div>
+          <div class="password-details">
+            ${pwd.username ? `<div class="password-field"><label>用户名:</label><span>${escapeHtml(pwd.username)}</span></div>` : ''}
+            <div class="password-field"><label>密码:</label><span id="pwd-${pwd.id}">••••••••</span><button class="btn btn-sm btn-icon" onclick="togglePassword(${pwd.id}, '${escapeHtml(pwd.password)}')">显示</button><button class="btn btn-sm btn-icon" onclick="copyToClipboard('${escapeHtml(pwd.password)}')">复制</button></div>
+            ${pwd.url ? `<div class="password-field"><label>网址:</label><span>${escapeHtml(pwd.url)}</span></div>` : ''}
+            ${pwd.notes ? `<div class="password-field"><label>备注:</label><span>${escapeHtml(pwd.notes)}</span></div>` : ''}
+          </div>
+          <div class="password-actions">
+            <button class="btn btn-sm btn-icon btn-secondary" onclick="editPassword(${pwd.id})">编辑</button>
+            <button class="btn btn-sm btn-icon btn-danger" onclick="deletePassword(${pwd.id})">删除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 过滤分类
+    function filterByCategory(categoryId) {
+      currentCategory = categoryId;
+      loadCategories();
+      loadPasswords();
+    }
+
+    // 搜索
+    document.getElementById('searchBox').addEventListener('input', async (e) => {
+      const q = e.target.value;
+      if (!q) {
+        loadPasswords();
+        return;
+      }
+      const res = await fetch(`${API_BASE}/passwords/search?q=${encodeURIComponent(q)}`);
+      const passwords = await res.json();
+      renderPasswordList(passwords);
+    });
+
+    // 渲染密码列表
+    function renderPasswordList(passwords) {
+      const listEl = document.getElementById('passwordList');
+      if (passwords.length === 0) {
+        listEl.innerHTML = '<div class="empty-state"><p>未找到匹配的记录</p></div>';
+        return;
+      }
+      listEl.innerHTML = passwords.map(pwd => `
+        <div class="password-item">
+          <div class="password-header">
+            <span class="password-title">${escapeHtml(pwd.title)}</span>
+            ${pwd.category_name ? `<span class="password-category" style="background: ${pwd.category_color}">${pwd.category_name}</span>` : ''}
+          </div>
+          <div class="password-details">
+            ${pwd.username ? `<div class="password-field"><label>用户名:</label><span>${escapeHtml(pwd.username)}</span></div>` : ''}
+            <div class="password-field"><label>密码:</label><span id="pwd-${pwd.id}">••••••••</span><button class="btn btn-sm btn-icon" onclick="togglePassword(${pwd.id}, '${escapeHtml(pwd.password)}')">显示</button><button class="btn btn-sm btn-icon" onclick="copyToClipboard('${escapeHtml(pwd.password)}')">复制</button></div>
+            ${pwd.url ? `<div class="password-field"><label>网址:</label><span>${escapeHtml(pwd.url)}</span></div>` : ''}
+            ${pwd.notes ? `<div class="password-field"><label>备注:</label><span>${escapeHtml(pwd.notes)}</span></div>` : ''}
+          </div>
+          <div class="password-actions">
+            <button class="btn btn-sm btn-icon btn-secondary" onclick="editPassword(${pwd.id})">编辑</button>
+            <button class="btn btn-sm btn-icon btn-danger" onclick="deletePassword(${pwd.id})">删除</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // 切换密码显示
+    function togglePassword(id, password) {
+      const el = document.getElementById(`pwd-${id}`);
+      if (el.textContent === '••••••••') {
+        el.textContent = password;
+      } else {
+        el.textContent = '••••••••';
+      }
+    }
+
+    // 复制到剪贴板
+    async function copyToClipboard(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        alert('已复制到剪贴板');
+      } catch (err) {
+        const input = document.createElement('input');
+        input.value = text;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        alert('已复制到剪贴板');
+      }
+    }
+
+    // 打开添加密码模态框
+    async function openAddModal() {
+      editingPasswordId = null;
+      document.getElementById('passwordModalTitle').textContent = '添加密码';
+      document.getElementById('passwordForm').reset();
+      document.getElementById('passwordId').value = '';
+      
+      const res = await fetch(`${API_BASE}/categories`);
+      const categories = await res.json();
+      const select = document.getElementById('pwdCategory');
+      select.innerHTML = '<option value="">无分类</option>' + categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      
+      document.getElementById('passwordModal').classList.add('active');
+    }
+
+    // 编辑密码
+    async function editPassword(id) {
+      const res = await fetch(`${API_BASE}/passwords/${id}`);
+      const pwd = await res.json();
+      
+      editingPasswordId = id;
+      document.getElementById('passwordModalTitle').textContent = '编辑密码';
+      document.getElementById('passwordId').value = id;
+      document.getElementById('pwdTitle').value = pwd.title;
+      document.getElementById('pwdUsername').value = pwd.username || '';
+      document.getElementById('pwdPassword').value = pwd.password;
+      document.getElementById('pwdUrl').value = pwd.url || '';
+      document.getElementById('pwdNotes').value = pwd.notes || '';
+      
+      const catRes = await fetch(`${API_BASE}/categories`);
+      const categories = await catRes.json();
+      const select = document.getElementById('pwdCategory');
+      select.innerHTML = '<option value="">无分类</option>' + categories.map(c => `<option value="${c.id}" ${c.id === pwd.category_id ? 'selected' : ''}>${c.name}</option>`).join('');
+      
+      document.getElementById('passwordModal').classList.add('active');
+    }
+
+    // 关闭密码模态框
+    function closePasswordModal() {
+      document.getElementById('passwordModal').classList.remove('active');
+    }
+
+    // 保存密码
+    document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const data = {
+        title: document.getElementById('pwdTitle').value,
+        category_id: document.getElementById('pwdCategory').value || null,
+        username: document.getElementById('pwdUsername').value,
+        password: document.getElementById('pwdPassword').value,
+        url: document.getElementById('pwdUrl').value,
+        notes: document.getElementById('pwdNotes').value
+      };
+      
+      const url = editingPasswordId ? `${API_BASE}/passwords/${editingPasswordId}` : `${API_BASE}/passwords`;
+      const method = editingPasswordId ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (res.ok) {
+        closePasswordModal();
+        loadPasswords();
+        loadCategories();
+      } else {
+        const err = await res.json();
+        alert(err.error);
+      }
+    });
+
+    // 删除密码
+    async function deletePassword(id) {
+      if (!confirm('确定要删除这条密码记录吗？')) return;
+      
+      const res = await fetch(`${API_BASE}/passwords/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        loadPasswords();
+        loadCategories();
+      }
+    }
+
+    // 打开分类模态框
+    function openCategoryModal() {
+      document.getElementById('categoryForm').reset();
+      document.getElementById('categoryModal').classList.add('active');
+    }
+
+    // 关闭分类模态框
+    function closeCategoryModal() {
+      document.getElementById('categoryModal').classList.remove('active');
+    }
+
+    // 创建分类
+    document.getElementById('categoryForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const data = {
+        name: document.getElementById('catName').value,
+        icon: document.getElementById('catIcon').value,
+        color: document.getElementById('catColor').value
+      };
+      
+      const res = await fetch(`${API_BASE}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      
+      if (res.ok) {
+        closeCategoryModal();
+        loadCategories();
+      } else {
+        const err = await res.json();
+        alert(err.error);
+      }
+    });
+
+    // 导出密码
+    async function exportPasswords() {
+      const res = await fetch(`${API_BASE}/export`);
+      const data = await res.json();
+      
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `passwords_export_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 导入密码
+    async function importPasswords(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        try {
+          const data = JSON.parse(e.target.result);
+          const res = await fetch(`${API_BASE}/import`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+          });
+          const result = await res.json();
+          alert(`导入完成！成功: ${result.imported}, 跳过: ${result.skipped}`);
+          loadPasswords();
+          loadCategories();
+        } catch (err) {
+          alert('导入失败：文件格式错误');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // 退出登录
+    async function logout() {
+      await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+      location.reload();
+    }
+
+    // 密码强度检测
+    function checkPasswordStrength(password) {
+      const bar = document.getElementById('strengthBar');
+      const text = document.getElementById('strengthText');
+      
+      let strength = 0;
+      if (password.length >= 8) strength++;
+      if (password.length >= 12) strength++;
+      if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength++;
+      if (/\d/.test(password)) strength++;
+      if (/[^a-zA-Z0-9]/.test(password)) strength++;
+      
+      const levels = [
+        { width: '0%', color: '#e1e5eb', text: '' },
+        { width: '20%', color: '#e74c3c', text: '非常弱' },
+        { width: '40%', color: '#e67e22', text: '弱' },
+        { width: '60%', color: '#f1c40f', text: '中等' },
+        { width: '80%', color: '#27ae60', text: '强' },
+        { width: '100%', color: '#2ecc71', text: '非常强' }
+      ];
+      
+      const level = levels[strength];
+      bar.style.width = level.width;
+      bar.style.background = level.color;
+      text.textContent = level.text;
+      text.style.color = level.color;
+    }
+
+    // 工具函数
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function getIconEmoji(icon) {
+      const icons = {
+        'folder': '📁',
+        'globe': '🌐',
+        'app': '📱',
+        'mail': '📧',
+        'credit-card': '💳',
+        'users': '👥',
+        'briefcase': '💼',
+        'game': '🎮',
+        'shopping': '🛒',
+        'ellipsis': '•••'
+      };
+      return icons[icon] || '📁';
+    }
+
+    // 启动
+    init();
+  </script>
+
+  <!-- 密码提示模态框 -->
+  <div class="modal" id="hintModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>设置密码提示</h2>
+        <button class="modal-close" onclick="closeHintModal()">&times;</button>
+      </div>
+      <p style="color: #666; font-size: 14px; margin-bottom: 15px;">设置一个提示帮助你回忆主密码。注意：提示会明文存储，不要直接写密码本身。</p>
+      <div class="form-group">
+        <label for="hintInput">密码提示</label>
+        <input type="text" id="hintInput" placeholder="例如：我的生日+名字首字母">
+      </div>
+      <button class="btn" onclick="saveHint()">保存提示</button>
+    </div>
+  </div>
+
+  <!-- 备份恢复模态框 -->
+  <div class="modal" id="backupModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>备份与恢复</h2>
+        <button class="modal-close" onclick="closeBackupModal()">&times;</button>
+      </div>
+      <div style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 10px; font-size: 16px;">📦 自动备份</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">每次修改数据时会自动创建备份，保留最近7天的备份。</p>
+        <h3 style="margin-bottom: 10px; font-size: 16px;">📋 备份列表</h3>
+        <div id="backupList" style="max-height: 300px; overflow-y: auto;"></div>
+      </div>
+      <div style="border-top: 1px solid #e1e5eb; padding-top: 20px; margin-top: 20px;">
+        <h3 style="margin-bottom: 10px; font-size: 16px;">🔄 从备份恢复</h3>
+        <p style="color: #666; font-size: 14px; margin-bottom: 15px;">选择备份文件并输入主密码进行恢复。</p>
+        <div class="form-group">
+          <label>选择备份文件</label>
+          <select id="backupFileSelect"></select>
+        </div>
+        <div class="form-group">
+          <label>主密码</label>
+          <input type="password" id="restorePassword" placeholder="输入主密码">
+        </div>
+        <button class="btn" onclick="restoreBackup()">恢复</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 打开密码提示模态框
+    async function openHintModal() {
+      document.getElementById('hintModal').classList.add('active');
+      const res = await fetch('/api/auth/hint');
+      const data = await res.json();
+      document.getElementById('hintInput').value = data.hint || '';
+    }
+
+    // 关闭密码提示模态框
+    function closeHintModal() {
+      document.getElementById('hintModal').classList.remove('active');
+    }
+
+    // 保存密码提示
+    async function saveHint() {
+      const hint = document.getElementById('hintInput').value;
+      const res = await fetch('/api/auth/hint', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hint })
+      });
+      const data = await res.json();
+      if (data.success) {
+        alert('提示已保存');
+        closeHintModal();
+      }
+    }
+
+    // 打开备份模态框
+    async function openBackupModal() {
+      document.getElementById('backupModal').classList.add('active');
+      await loadBackupList();
+    }
+
+    // 关闭备份模态框
+    function closeBackupModal() {
+      document.getElementById('backupModal').classList.remove('active');
+    }
+
+    // 加载备份列表
+    async function loadBackupList() {
+      const res = await fetch('/api/backups');
+      const backups = await res.json();
+      
+      const listEl = document.getElementById('backupList');
+      const selectEl = document.getElementById('backupFileSelect');
+      
+      if (backups.length === 0) {
+        listEl.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无备份</p>';
+        selectEl.innerHTML = '<option value="">无可用备份</option>';
+        return;
+      }
+      
+      listEl.innerHTML = backups.map(b => `
+        <div style="padding: 10px; border: 1px solid #e1e5eb; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span>📅 ${b.displayDate.replace(/-/g, '/')}</span>
+          <button class="btn btn-sm btn-icon" onclick="selectBackup('${b.path}')">选择</button>
+        </div>
+      `).join('');
+      
+      selectEl.innerHTML = '<option value="">选择备份...</option>' + 
+        backups.map(b => `<option value="${b.path}">${b.displayDate.replace(/-/g, '/')}</option>`).join('');
+    }
+
+    // 选择备份文件
+    function selectBackup(path) {
+      document.getElementById('backupFileSelect').value = path;
+    }
+
+    // 恢复备份
+    async function restoreBackup() {
+      const backupFile = document.getElementById('backupFileSelect').value;
+      const password = document.getElementById('restorePassword').value;
+      
+      if (!backupFile) {
+        alert('请选择备份文件');
+        return;
+      }
+      if (!password) {
+        alert('请输入主密码');
+        return;
+      }
+      if (!confirm('确定要从备份恢复吗？当前数据将被覆盖。')) {
+        return;
+      }
+      
+      const res = await fetch('/api/backups/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backupFile, password })
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        alert('恢复成功！页面将刷新。');
+        closeBackupModal();
+        location.reload();
+      } else {
+        alert(result.error);
+      }
+    }
+  </script>
+</body>
+</html>
