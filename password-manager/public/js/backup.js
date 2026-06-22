@@ -28,9 +28,12 @@ async function saveHint() {
   }
 }
 
+let selectedBackupPath = null;
+
 // 打开备份模态框
 async function openBackupModal() {
   document.getElementById('backupModal').classList.add('active');
+  selectedBackupPath = null;
   await loadBackupList();
 }
 
@@ -45,39 +48,40 @@ async function loadBackupList() {
   const backups = await res.json();
   
   const listEl = document.getElementById('backupList');
-  const selectEl = document.getElementById('backupFileSelect');
   
   if (backups.length === 0) {
     listEl.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无备份</p>';
-    selectEl.innerHTML = '<option value="">无可用备份</option>';
     return;
   }
   
-  listEl.innerHTML = backups.map(b => `
-    <div style="padding: 10px; border: 1px solid #e1e5eb; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+  listEl.innerHTML = backups.map(b => {
+    const escapedPath = b.path.replace(/\\/g, '\\\\');
+    return `
+    <div class="backup-item" data-path="${escapedPath}" style="padding: 10px; border: 1px solid #e1e5eb; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="selectBackup(this, '${escapedPath}')">
       <span>📅 ${b.displayDate.replace(/-/g, '/')}</span>
-      <button class="btn btn-sm btn-icon" onclick="selectBackup('${b.path}')">选择</button>
+      <span class="backup-select-hint" style="font-size: 12px; color: #999;">点击选择</span>
     </div>
-  `).join('');
-  
-  selectEl.innerHTML = '<option value="">选择备份...</option>' + 
-    backups.map(b => `<option value="${b.path}">${b.displayDate.replace(/-/g, '/')}</option>`).join('');
+  `}).join('');
 }
 
 // 选择备份文件
-function selectBackup(path) {
-  document.getElementById('backupFileSelect').value = path;
+function selectBackup(el, path) {
+  document.querySelectorAll('.backup-item').forEach(item => {
+    item.style.borderColor = '#e1e5eb';
+    item.style.background = '';
+  });
+  el.style.borderColor = '#667eea';
+  el.style.background = '#f0f3ff';
+  selectedBackupPath = path;
 }
 
 // 恢复备份
 async function restoreBackup() {
-  const backupFile = document.getElementById('backupFileSelect').value;
-  const password = document.getElementById('restorePassword').value;
-  
-  if (!backupFile) {
-    alert('请选择备份文件');
+  if (!selectedBackupPath) {
+    alert('请先点击选择一个备份');
     return;
   }
+  const password = document.getElementById('restorePassword').value;
   if (!password) {
     alert('请输入主密码');
     return;
@@ -89,7 +93,7 @@ async function restoreBackup() {
   const res = await fetch('/api/backups/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backupFile, password })
+    body: JSON.stringify({ backupFile: selectedBackupPath, password })
   });
   
   const result = await res.json();

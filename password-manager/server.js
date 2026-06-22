@@ -121,7 +121,22 @@ app.get('/api/passwords', requireAuth, (req, res) => {
   res.json(passwords);
 });
 
-// 批量更新排序（必须在 /:id 之前定义，否则会被 :id 参数路由遮蔽）
+// 固定路径必须在 /:id 之前定义，否则会被 :id 参数路由遮蔽
+app.get('/api/passwords/search', requireAuth, (req, res) => {
+  const { q } = req.query;
+  if (!q) {
+    return res.json([]);
+  }
+  const passwords = passwordOps.search(`%${q}%`);
+  res.json(passwords);
+});
+
+app.get('/api/passwords/category/:categoryId', requireAuth, (req, res) => {
+  const passwords = passwordOps.getByCategory(parseInt(req.params.categoryId));
+  res.json(passwords);
+});
+
+// 批量更新排序
 app.put('/api/passwords/reorder', requireAuth, (req, res) => {
   const { order } = req.body;
   if (!order || !Array.isArray(order)) {
@@ -159,20 +174,6 @@ app.put('/api/passwords/:id', requireAuth, (req, res) => {
 app.delete('/api/passwords/:id', requireAuth, (req, res) => {
   const result = passwordOps.delete(parseInt(req.params.id));
   res.json({ success: true, changes: result.changes });
-});
-
-app.get('/api/passwords/search', requireAuth, (req, res) => {
-  const { q } = req.query;
-  if (!q) {
-    return res.json([]);
-  }
-  const passwords = passwordOps.search(`%${q}%`);
-  res.json(passwords);
-});
-
-app.get('/api/passwords/category/:categoryId', requireAuth, (req, res) => {
-  const passwords = passwordOps.getByCategory(parseInt(req.params.categoryId));
-  res.json(passwords);
 });
 
 // ===== 导入导出 API =====
