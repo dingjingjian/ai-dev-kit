@@ -1,107 +1,117 @@
-// 备份与密码提示模块
+// ============================================================
+// 备份与密码提示模块 - 桌面端优化版
+// 事件委托 / 路径安全处理(不再注入 onclick)
+// ============================================================
 
-// 打开密码提示模态框
+let selectedBackupPath = null;
+
+// ---------- 密码提示 ----------
 async function openHintModal() {
   document.getElementById('hintModal').classList.add('active');
-  const res = await fetch('/api/auth/hint');
-  const data = await res.json();
-  document.getElementById('hintInput').value = data.hint || '';
+  try {
+    const res = await fetch(`${API_BASE}/auth/hint`);
+    const data = await res.json();
+    document.getElementById('hintInput').value = data.hint || '';
+  } catch (err) {
+    showToast('加载提示失败', 'error');
+  }
 }
 
-// 关闭密码提示模态框
 function closeHintModal() {
   document.getElementById('hintModal').classList.remove('active');
 }
 
-// 保存密码提示
 async function saveHint() {
   const hint = document.getElementById('hintInput').value;
-  const res = await fetch('/api/auth/hint', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ hint })
-  });
-  const data = await res.json();
-  if (data.success) {
-    alert('提示已保存');
-    closeHintModal();
+  try {
+    const res = await fetch(`${API_BASE}/auth/hint`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hint })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('提示已保存', 'success');
+      closeHintModal();
+    }
+  } catch (err) {
+    showToast('保存失败', 'error');
   }
 }
 
-let selectedBackupPath = null;
-
-// 打开备份模态框
+// ---------- 备份恢复 ----------
 async function openBackupModal() {
   document.getElementById('backupModal').classList.add('active');
   selectedBackupPath = null;
   await loadBackupList();
 }
 
-// 关闭备份模态框
 function closeBackupModal() {
   document.getElementById('backupModal').classList.remove('active');
 }
 
-// 加载备份列表
+// ---------- 加载备份列表 ----------
 async function loadBackupList() {
-  const res = await fetch('/api/backups');
-  const backups = await res.json();
-  
-  const listEl = document.getElementById('backupList');
-  
-  if (backups.length === 0) {
-    listEl.innerHTML = '<p style="color: #999; text-align: center; padding: 20px;">暂无备份</p>';
-    return;
+  try {
+    const res = await fetch(`${API_BASE}/backups`);
+    const backups = await res.json();
+    const listEl = document.getElementById('backupList');
+
+    if (backups.length === 0) {
+      listEl.innerHTML = '<p class="text-muted" style="text-align:center;padding:20px;">暂无备份</p>';
+      return;
+    }
+
+    // 安全:路径仅存入 data-path 属性(经 escapeAttr 转义),不写入 onclick
+    listEl.innerHTML = backups.map(b => `
+      <div class="backup-item" data-path="${escapeAttr(b.path)}">
+        <span>📅 ${escapeHtml(b.displayDate.replace(/-/g, '/'))}</span>
+        <span class="select-hint">点击选择</span>
+      </div>
+    `).join('');
+  } catch (err) {
+    showToast('加载备份列表失败', 'error');
   }
-  
-  listEl.innerHTML = backups.map(b => {
-    const escapedPath = b.path.replace(/\\/g, '\\\\');
-    return `
-    <div class="backup-item" data-path="${escapedPath}" style="padding: 10px; border: 1px solid #e1e5eb; border-radius: 6px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="selectBackup(this, '${escapedPath}')">
-      <span>📅 ${b.displayDate.replace(/-/g, '/')}</span>
-      <span class="backup-select-hint" style="font-size: 12px; color: #999;">点击选择</span>
-    </div>
-  `}).join('');
 }
 
-// 选择备份文件
-function selectBackup(el, path) {
-  document.querySelectorAll('.backup-item').forEach(item => {
-    item.style.borderColor = '#e1e5eb';
-    item.style.background = '';
+// ---------- 备份列表事件委托 ----------
+function setupBackupListDelegation() {
+  document.getElementById('backupList').addEventListener('click', (e) => {
+    const item = e.target.closest('.backup-item');
+    if (!item) return;
+    document.querySelectorAll('.backup-item').forEach(el => el.classList.remove('selected'));
+    item.classList.add('selected');
+    selectedBackupPath = item.dataset.path;
   });
-  el.style.borderColor = '#667eea';
-  el.style.background = '#f0f3ff';
-  selectedBackupPath = path;
 }
 
-// 恢复备份
+// ---------- 恢复备份 ----------
 async function restoreBackup() {
   if (!selectedBackupPath) {
-    alert('请先点击选择一个备份');
+    showToast('请先点击选择一个备份', 'warning');
     return;
   }
   const password = document.getElementById('restorePassword').value;
   if (!password) {
-    alert('请输入主密码');
+    showToast('请输入主密码', 'warning');
     return;
   }
-  if (!confirm('确定要从备份恢复吗？当前数据将被覆盖。')) {
-    return;
-  }
-  
-  const res = await fetch('/api/backups/restore', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ backupFile: selectedBackupPath, password })
-  });
-  
-  const result = await res.json();
-  if (result.success) {
-    alert('恢复成功！页面将刷新。');
-    closeBackupModal();
-    location.reload();
-  } else {
-    alert(result.error);
+  if (!confirm('确定要从备份恢复吗?当前数据将被覆盖。')) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/backups/restore`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ backupFile: selectedBackupPath, password })
+    });
+    const result = await res.json();
+    if (result.success) {
+      showToast('恢复成功,页面将刷新', 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(result.error || '恢复失败', 'error');
+    }
+  } catch (err) {
+    showToast('恢复失败', 'error');
   }
 }

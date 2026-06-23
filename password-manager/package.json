@@ -17,6 +17,7 @@
     },
     "files": [
       "main.js",
+      "routes.js",
       "database.js",
       "public/**/*",
       "node_modules/**/*"
