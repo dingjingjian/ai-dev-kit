@@ -250,7 +250,21 @@ app.post('/api/backups/restore', requireAuth, (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`密码管理器已启动: http://localhost:${PORT}`);
-  console.log(`数据文件: ${path.join(__dirname, 'data.enc')}`);
-});
+function tryListen(port) {
+  const s = app.listen(port, () => {
+    console.log(`密码管理器已启动: http://localhost:${port}`);
+    console.log(`数据文件: ${path.join(__dirname, 'data.enc')}`);
+    fs.writeFileSync(path.join(__dirname, '.port'), String(port), 'utf8');
+  });
+  s.on('error', (err) => {
+    if (err.code === 'EADDRINUSE' && port < 3010) {
+      console.log(`端口 ${port} 已被占用，尝试端口 ${port + 1}...`);
+      tryListen(port + 1);
+    } else {
+      console.error(`启动失败: ${err.message}`);
+      process.exit(1);
+    }
+  });
+}
+
+tryListen(PORT);

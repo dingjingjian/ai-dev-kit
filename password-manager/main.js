@@ -7,8 +7,23 @@ const {
   setMasterPassword, 
   verifyMasterPassword,
   categoryOps,
-  passwordOps 
+  passwordOps,
+  getPasswordHint,
+  setPasswordHint,
+  getBackupList,
+  restoreFromBackup
 } = require('./database');
+
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
 
 // 创建 Express 服务器
 const expressApp = express();
@@ -33,11 +48,11 @@ expressApp.get('/api/auth/status', (req, res) => {
 });
 
 expressApp.post('/api/auth/setup', (req, res) => {
-  const { password } = req.body;
+  const { password, hint } = req.body;
   if (!password || password.length < 4) {
     return res.status(400).json({ error: '主密码至少需要4个字符' });
   }
-  setMasterPassword(password);
+  setMasterPassword(password, hint);
   isAuthenticated = true;
   res.json({ success: true });
 });
@@ -66,6 +81,16 @@ expressApp.post('/api/auth/change-password', requireAuth, (req, res) => {
 
 expressApp.post('/api/auth/logout', (req, res) => {
   isAuthenticated = false;
+  res.json({ success: true });
+});
+
+expressApp.get('/api/auth/hint', (req, res) => {
+  res.json({ hint: getPasswordHint() });
+});
+
+expressApp.post('/api/auth/hint', requireAuth, (req, res) => {
+  const { hint } = req.body;
+  setPasswordHint(hint || '');
   res.json({ success: true });
 });
 
@@ -121,6 +146,15 @@ expressApp.delete('/api/passwords/:id', requireAuth, (req, res) => {
   res.json({ success: true, changes: result.changes });
 });
 
+expressApp.put('/api/passwords/reorder', requireAuth, (req, res) => {
+  const { order } = req.body;
+  if (!order || !Array.isArray(order)) {
+    return res.status(400).json({ error: '无效的排序数据' });
+  }
+  const result = passwordOps.updateOrder(order);
+  res.json({ success: true, changes: result.changes });
+});
+
 expressApp.get('/api/passwords/search', requireAuth, (req, res) => {
   const { q } = req.query;
   if (!q) return res.json([]);
@@ -161,13 +195,51 @@ expressApp.post('/api/import', requireAuth, (req, res) => {
   res.json({ success: true, imported, skipped });
 });
 
-// 启动 Express 服务器
-const server = expressApp.listen(PORT, () => {
-  console.log(`本地服务器已启动: http://localhost:${PORT}`);
+// 备份 API
+expressApp.get('/api/backups', requireAuth, (req, res) => {
+  const backups = getBackupList();
+  res.json(backups);
 });
+
+expressApp.post('/api/backups/restore', requireAuth, (req, res) => {
+  const { backupFile, password } = req.body;
+  if (!backupFile) {
+    return res.status(400).json({ error: '请指定备份文件' });
+  }
+  const result = restoreFromBackup(backupFile, password);
+  if (result.success) {
+    res.json({ success: true, message: '恢复成功' });
+  } else {
+    res.status(400).json({ error: result.error });
+  }
+});
+
+// 启动 Express 服务器
+
+function startServer() {
+  return new Promise((resolve, reject) => {
+    const tryListen = (port) => {
+      const s = expressApp.listen(port, () => {
+        console.log(`本地服务器已启动: http://localhost:${port}`);
+        resolve(s);
+      });
+      s.on('error', (err) => {
+        if (err.code === 'EADDRINUSE' && port < 3010) {
+          console.log(`端口 ${port} 已被占用，尝试端口 ${port + 1}...`);
+          tryListen(port + 1);
+        } else {
+          reject(err);
+        }
+      });
+      return s;
+    };
+    tryListen(PORT);
+  });
+}
 
 // 创建 Electron 窗口
 let mainWindow;
+let server;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -250,7 +322,16 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+  try {
+    server = await startServer();
+  } catch (err) {
+    console.error('端口 3000-3010 均被占用，请关闭占用端口的程序后重试');
+    app.quit();
+    return;
+  }
+  createWindow();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -266,5 +347,7 @@ app.on('activate', () => {
 
 // 应用退出时关闭服务器
 app.on('quit', () => {
-  server.close();
+  if (server) server.close();
 });
+
+} // end of gotTheLock

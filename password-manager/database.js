@@ -2,9 +2,17 @@ const fs = require('fs');
 const path = require('path');
 const CryptoJS = require('crypto-js');
 
-const dataPath = path.join(__dirname, 'data.enc');
-const hintPath = path.join(__dirname, 'hint.txt');
-const backupDir = path.join(__dirname, 'backups');
+let userDataPath;
+try {
+  const { app } = require('electron');
+  userDataPath = app.getPath('userData');
+} catch {
+  userDataPath = __dirname;
+}
+
+const dataPath = path.join(userDataPath, 'data.enc');
+const hintPath = path.join(userDataPath, 'hint.txt');
+const backupDir = path.join(userDataPath, 'backups');
 let masterKey = null;
 
 // 确保备份目录存在

@@ -19,6 +19,10 @@ node_modules/
 # IDE/Tool config
 .trae/
 
+# Build output
+dist/
+release/
+
 # Password manager sensitive files
 data.enc
 hint.txt

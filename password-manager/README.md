@@ -9,21 +9,37 @@ cd password-manager
 npm install
 ```
 
-## 启动
+## 启动方式
 
-**Web 模式**（推荐）：
+### Electron 桌面版（推荐）
+
+独立桌面应用，无需浏览器，适合日常使用。
+
+```bash
+npm start
+```
+
+打包为 exe：
+
+```bash
+npm run build
+```
+
+打包后在 `dist/` 目录生成可执行文件，可直接运行或拷贝到其他电脑使用。
+
+### Web 版
+
+通过浏览器访问，适合临时使用或局域网内其他设备访问。
 
 ```bash
 npm run web
 ```
 
-打开浏览器访问 `http://localhost:3000`
+打开浏览器访问 `http://localhost:3000`（端口被占用时自动切换到下一个可用端口）。
 
-**Electron 桌面模式**：
-
-```bash
-npm start
-```
+Web 版提供了便捷启动脚本：
+- `启动密码管理器.vbs` — 双击启动服务并自动打开浏览器（后台运行，无黑窗口）
+- `创建桌面快捷方式.ps1` — 运行后在桌面创建快捷方式，之后双击快捷方式即可启动
 
 ## 首次使用
 
@@ -67,15 +83,21 @@ npm start
 | `hint.txt` | 密码提示（明文） |
 | `backups/` | 自动备份目录 |
 
+数据存储位置：
+- **Electron 版**：`%APPDATA%/password-manager/`
+- **Web 版**：项目目录下
+
 ## 项目结构
 
 ```
 password-manager/
-├── main.js          # Electron 主进程 + Express 服务器
-├── server.js        # 独立 Express 服务器（Web 模式）
-├── database.js      # 数据加密/解密、CRUD 操作
+├── main.js              # Electron 主进程 + Express 服务器
+├── server.js            # 独立 Express 服务器（Web 模式）
+├── database.js          # 数据加密/解密、CRUD 操作
 ├── public/
-│   └── index.html   # 前端界面
+│   └── index.html       # 前端界面
+├── 启动密码管理器.vbs    # Web 版便捷启动脚本
+├── 创建桌面快捷方式.ps1  # 创建桌面快捷方式
 ├── package.json
 └── README.md
 ```
