@@ -14,6 +14,7 @@ node_modules/
 .uploads/
 .cursor/
 .aider/
+.workbuddy/
 /copilot/
 
 # IDE/Tool config
