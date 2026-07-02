@@ -3,8 +3,9 @@
 // 事件委托 / 减少冗余请求
 // ============================================================
 
-// 缓存分类,避免重复请求
+// 缓存分类和密码,避免重复请求
 let categoryCache = [];
+let allPasswords = [];
 
 // ---------- 加载分类列表 ----------
 async function loadCategories() {
@@ -14,7 +15,7 @@ async function loadCategories() {
       fetch(`${API_BASE}/passwords`)
     ]);
     const categories = await catRes.json();
-    const passwords = await pwdRes.json();
+    allPasswords = await pwdRes.json();
     categoryCache = categories;
 
     const listEl = document.getElementById('categoryList');
@@ -22,16 +23,17 @@ async function loadCategories() {
       <li class="category-item ${currentCategory === 'all' ? 'active' : ''}" data-cat="all">
         <span class="category-icon">📋</span>
         <span>全部</span>
-        <span class="category-count">${passwords.length}</span>
+        <span class="category-count">${allPasswords.length}</span>
       </li>
     `;
     categories.forEach(cat => {
-      const count = passwords.filter(p => p.category_id === cat.id).length;
+      const count = allPasswords.filter(p => p.category_id === cat.id).length;
       html += `
         <li class="category-item ${currentCategory === cat.id ? 'active' : ''}" data-cat="${cat.id}">
           <span class="category-icon">${getIconEmoji(cat.icon)}</span>
-          <span>${escapeHtml(cat.name)}</span>
+          <span class="category-name">${escapeHtml(cat.name)}</span>
           <span class="category-count">${count}</span>
+          <button class="btn-delete-cat" data-id="${cat.id}" title="删除分类">×</button>
         </li>
       `;
     });
@@ -50,7 +52,40 @@ function filterByCategory(categoryId) {
 
 // ---------- 分类列表事件委托 ----------
 function setupCategoryListDelegation() {
-  document.getElementById('categoryList').addEventListener('click', (e) => {
+  document.getElementById('categoryList').addEventListener('click', async (e) => {
+    // 删除分类按钮
+    const deleteBtn = e.target.closest('.btn-delete-cat');
+    if (deleteBtn) {
+      e.stopPropagation();
+      const catId = parseInt(deleteBtn.dataset.id);
+      const cat = categoryCache.find(c => c.id === catId);
+      if (!cat) return;
+
+      const count = allPasswords.filter(p => p.category_id === catId).length;
+      const msg = count > 0
+        ? `确定要删除分类"${cat.name}"吗？该分类下的 ${count} 条密码将变为"无分类"。`
+        : `确定要删除分类"${cat.name}"吗？`;
+
+      if (!confirm(msg)) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/categories/${catId}`, { method: 'DELETE' });
+        const result = await res.json();
+        if (result.success) {
+          showToast('分类已删除', 'success');
+          if (currentCategory === catId) currentCategory = 'all';
+          await loadCategories();
+          loadPasswords();
+        } else {
+          showToast('删除失败', 'error');
+        }
+      } catch (err) {
+        showToast('网络错误', 'error');
+      }
+      return;
+    }
+
+    // 点击分类项筛选
     const item = e.target.closest('[data-cat]');
     if (!item) return;
     const cat = item.dataset.cat;

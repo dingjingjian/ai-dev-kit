@@ -180,14 +180,25 @@ function createApp() {
       return res.status(400).json({ error: '无效的导入数据' });
     }
     let imported = 0, skipped = 0;
+    // 记录旧分类 id 到新分类 id 的映射
+    const catIdMap = {};
     if (categories && Array.isArray(categories)) {
       for (const cat of categories) {
-        try { categoryOps.create(cat.name, cat.icon || 'folder', cat.color || '#4A90D9'); } catch (err) {}
+        try {
+          const existing = categoryOps.findByName(cat.name);
+          if (existing) {
+            catIdMap[cat.id] = existing.id;
+          } else {
+            const result = categoryOps.create(cat.name, cat.icon || 'folder', cat.color || '#4A90D9');
+            catIdMap[cat.id] = result.lastInsertRowid;
+          }
+        } catch (err) {}
       }
     }
     for (const pwd of passwords) {
       try {
-        passwordOps.create(pwd.category_id || null, pwd.title, pwd.username || '', pwd.password, pwd.url || '', pwd.notes || '');
+        const categoryId = pwd.category_id ? (catIdMap[pwd.category_id] || null) : null;
+        passwordOps.create(categoryId, pwd.title, pwd.username || '', pwd.password, pwd.url || '', pwd.notes || '');
         imported++;
       } catch (err) { skipped++; }
     }

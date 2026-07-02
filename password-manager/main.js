@@ -21,7 +21,7 @@ if (!gotTheLock) {
 
   // ---------- 启动本地 Express 服务器 ----------
   const { app: expressApp } = createApp();
-  const PORT = 3000;
+  const PORT = 3456;
   let server = null;
 
   function startServer() {
@@ -215,7 +215,7 @@ if (!gotTheLock) {
     try {
       server = await startServer();
     } catch (err) {
-      console.error('端口 3000-3010 均被占用,请关闭占用端口的程序后重试');
+      console.error('端口 3456-3466 均被占用,请关闭占用端口的程序后重试');
       app.quit();
       return;
     }

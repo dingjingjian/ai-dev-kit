@@ -319,6 +319,27 @@ button { font-family: inherit; }
   background: var(--accent);
   color: #fff;
 }
+.category-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn-delete-cat {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.category-item:hover .btn-delete-cat { display: flex; align-items: center; justify-content: center; }
+.btn-delete-cat:hover { background: var(--danger); color: #fff; }
 
 /* 密码列表区 */
 .password-list {

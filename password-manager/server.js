@@ -7,7 +7,7 @@ const path = require('path');
 const { createApp } = require('./routes');
 
 const { app } = createApp();
-const PORT = 3000;
+const PORT = 3456;
 
 function tryListen(port) {
   const s = app.listen(port, () => {

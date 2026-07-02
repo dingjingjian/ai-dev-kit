@@ -70,10 +70,24 @@ function getBackupList() {
       .map(f => {
         const dateStr = f.replace('backup_', '').replace('.enc', '');
         const [date, time] = dateStr.split('_');
+        // 将 UTC 时间转换为本地时间显示
+        // time 格式: "08-31-20-250Z" -> "08:31:20.250"
+        const parts = time.replace('Z', '').split('-');
+        const utcTime = `${parts[0]}:${parts[1]}:${parts[2]}.${parts[3]}`;
+        const localDate = new Date(`${date}T${utcTime}Z`);
+        const displayDate = localDate.toLocaleString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
         return {
           filename: f,
           date: dateStr,
-          displayDate: `${date.replace(/-/g, '/')} ${time.replace(/-/g, ':')}`,
+          displayDate,
           path: path.join(backupDir, f)
         };
       });
@@ -204,7 +218,12 @@ const categoryOps = {
     const data = readData();
     return data.categories.find(c => c.id === id);
   },
-  
+
+  findByName(name) {
+    const data = readData();
+    return data.categories.find(c => c.name === name);
+  },
+
   create(name, icon, color) {
     const data = readData();
     const newId = data.nextCategoryId++;
