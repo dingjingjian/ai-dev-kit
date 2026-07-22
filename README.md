@@ -13,6 +13,7 @@ AI 开发工具集合，包含多个实用脚本和工具。
 | Word 转 Markdown | `word-to-md/` | Word 文档转 Markdown 格式工具 |
 | 密码管理器 | `password-manager/` | 本地密码管理器，AES 加密存储，自动备份，支持 Web 和 Electron 双模式 |
 | 像素画编辑器 | `pixel-art-editor/` | 浏览器端像素画绘制工具，支持多种画笔、图层、撤销重做、导出 PNG |
+| 拼豆设计工具 | `perler-bead-designer/` | 浏览器端拼豆图案设计工具，行业标准色卡、多种钉板形状、用料统计、图纸导出 |
 
 ## 快速开始
 

@@ -15,7 +15,7 @@ node_modules/
 .cursor/
 .aider/
 .workbuddy/
-/copilot/
+.codeartsdoer/
 
 # IDE/Tool config
 .trae/

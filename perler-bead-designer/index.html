@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>拼豆设计工具 - Perler Bead Designer</title>
+<style>
+:root {
+  --bg-base: #1e1e2e;
+  --bg-mantle: #181825;
+  --bg-crust: #11111b;
+  --bg-surface0: #313244;
+  --bg-surface1: #45475a;
+  --bg-surface2: #585b70;
+  --fg-text: #cdd6f4;
+  --fg-subtext: #a6adc8;
+  --fg-overlay: #6c7086;
+  --accent-blue: #89b4fa;
+  --accent-green: #a6e3a1;
+  --accent-red: #f38ba8;
+  --accent-yellow: #f9e2af;
+  --accent-peach: #fab387;
+  --accent-mauve: #cba6f7;
+  --accent-teal: #94e2d5;
+  --border: #313244;
+  --radius: 8px;
+  --toolbar-h: 52px;
+  --bottombar-h: 60px;
+  --sidebar-w: 260px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: var(--bg-base);
+  color: var(--fg-text);
+  display: flex;
+  flex-direction: column;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+button { font-family: inherit; }
+.header {
+  background: var(--bg-mantle);
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+  height: var(--toolbar-h);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  z-index: 10;
+}
+.header h1 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--accent-peach);
+  white-space: nowrap;
+}
+.header h1 span { color: var(--accent-yellow); font-weight: 400; font-size: 13px; }
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  flex: 1;
+}
+.hbtn {
+  background: var(--bg-surface0);
+  color: var(--fg-text);
+  border: 1px solid var(--bg-surface1);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.hbtn:hover { background: var(--bg-surface1); }
+.hbtn:disabled { opacity: 0.4; cursor: default; }
+.hbtn.active { background: var(--accent-blue); color: var(--bg-base); border-color: var(--accent-blue); }
+.hbtn.danger { background: var(--accent-red); color: var(--bg-base); border-color: var(--accent-red); }
+.hselect {
+  background: var(--bg-surface0);
+  color: var(--fg-text);
+  border: 1px solid var(--bg-surface1);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.hselect:focus { outline: none; border-color: var(--accent-blue); }
+.main-wrap {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--bg-mantle);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sidebar-scroll::-webkit-scrollbar { width: 4px; }
+.sidebar-scroll::-webkit-scrollbar-thumb { background: var(--bg-surface1); border-radius: 2px; }
+.panel-label {
+  font-size: 11px;
+  color: var(--fg-overlay);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.tools-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+}
+.tool-btn {
+  background: var(--bg-surface0);
+  border: 1px solid var(--bg-surface1);
+  color: var(--fg-text);
+  padding: 8px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  transition: all 0.15s;
+}
+.tool-btn .tool-label { font-size: 9px; color: var(--fg-subtext); }
+.tool-btn:hover { background: var(--bg-surface1); }
+.tool-btn.active { background: var(--accent-blue); color: var(--bg-base); border-color: var(--accent-blue); }
+.tool-btn.active .tool-label { color: var(--bg-base); }
+.color-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.color-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-surface1);
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.color-swatch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(#ccc 25%, #fff 25% 50%, #ccc 50% 75%, #fff 75%);
+  background-size: 8px 8px;
+  z-index: 0;
+}
+.color-swatch-inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  z-index: 1;
+}
+.color-name {
+  font-size: 12px;
+  color: var(--fg-subtext);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.color-input-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--bg-surface1);
+  flex-shrink: 0;
+}
+.color-input-wrap input[type="color"] {
+  width: 36px;
+  height: 36px;
+  margin: -4px;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+}
+.palette-section { margin-bottom: 4px; }
+.palette-section-title {
+  font-size: 10px;
+  color: var(--fg-overlay);
+  padding: 2px 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.palette-section-title::before { content: '▾'; font-size: 8px; transition: transform 0.2s; }
+.palette-section-title.collapsed::before { transform: rotate(-90deg); }
+.palette-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+  margin-top: 4px;
+}
+.palette-grid.collapsed { display: none; }
+.palette-bead {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.12s;
+  position: relative;
+}
+.palette-bead:hover { transform: scale(1.2); z-index: 2; border-color: var(--accent-yellow); }
+.palette-bead.selected { border-color: var(--accent-yellow); box-shadow: 0 0 0 2px var(--accent-yellow); }
+.canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  background:
+    linear-gradient(45deg, var(--bg-crust) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--bg-crust) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--bg-crust) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--bg-crust) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+  background-color: var(--bg-base);
+  position: relative;
+}
+#beadCanvas {
+  image-rendering: auto;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  cursor: crosshair;
+  touch-action: none;
+}
+.right-panel {
+  width: 280px;
+  background: var(--bg-mantle);
+  border-left: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.right-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.right-scroll::-webkit-scrollbar { width: 4px; }
+.right-scroll::-webkit-scrollbar-thumb { background: var(--bg-surface1); border-radius: 2px; }
+.info-box {
+  background: var(--bg-surface0);
+  border-radius: var(--radius);
+  padding: 10px;
+  font-size: 12px;
+  color: var(--fg-subtext);
+  line-height: 1.6;
+}
+.info-box strong { color: var(--fg-text); }
+.btn-primary {
+  background: var(--accent-green);
+  color: var(--bg-base);
+  border: none;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  width: 100%;
+  transition: background 0.15s;
+}
+.btn-primary:hover { background: #94d88f; }
+.btn-secondary {
+  background: var(--bg-surface0);
+  color: var(--fg-text);
+  border: 1px solid var(--bg-surface1);
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  width: 100%;
+  transition: background 0.15s;
+}
+.btn-secondary:hover { background: var(--bg-surface1); }
+.btn-danger {
+  background: var(--accent-red);
+  color: var(--bg-base);
+  border: none;
+  padding: 9px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  width: 100%;
+}
+.material-list {
+  max-height: 240px;
+  overflow-y: auto;
+  font-size: 11px;
+}
+.material-list::-webkit-scrollbar { width: 3px; }
+.material-list::-webkit-scrollbar-thumb { background: var(--bg-surface1); border-radius: 2px; }
+.material-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.material-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.material-name { flex: 1; color: var(--fg-subtext); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.material-count { color: var(--accent-yellow); font-weight: 600; min-width: 28px; text-align: right; }
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 0;
+}
+.checkbox-row input { cursor: pointer; accent-color: var(--accent-blue); }
+.hint-text { font-size: 10px; color: var(--fg-overlay); line-height: 1.5; margin-top: 4px; }
+
+/* Mobile bottom bar */
+.mobile-bottom {
+  display: none;
+  background: var(--bg-mantle);
+  border-top: 1px solid var(--border);
+  height: var(--bottombar-h);
+  padding: 0 8px;
+  align-items: center;
+  justify-content: space-around;
+  flex-shrink: 0;
+  z-index: 20;
+}
+.m-tool-btn {
+  background: none;
+  border: none;
+  color: var(--fg-subtext);
+  font-size: 20px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  transition: all 0.15s;
+}
+.m-tool-btn .m-label { font-size: 9px; }
+.m-tool-btn.active { color: var(--accent-blue); background: rgba(137,180,250,0.12); }
+.m-tool-btn:active { transform: scale(0.92); }
+
+/* Mobile slide-up panels */
+.slide-panel {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-mantle);
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  z-index: 50;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 16px;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+.slide-panel.open { transform: translateY(0); }
+.slide-panel-handle {
+  width: 36px;
+  height: 4px;
+  background: var(--bg-surface1);
+  border-radius: 2px;
+  margin: 0 auto 12px;
+}
+.slide-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 40;
+}
+.slide-overlay.open { display: block; }
+
+/* Mobile header menu */
+.mobile-menu-btn { display: none; }
+
+@media (max-width: 1024px) {
+  .right-panel { display: none; }
+  .mobile-menu-btn { display: inline-flex; }
+}
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .mobile-bottom { display: flex; }
+  .header h1 span { display: none; }
+  .header-controls .hbtn.hide-mobile { display: none; }
+  :root { --toolbar-h: 44px; --bottombar-h: 56px; }
+  .hbtn { padding: 4px 8px; font-size: 11px; }
+  .hselect { padding: 4px 6px; font-size: 11px; }
+}
+@media (max-width: 480px) {
+  .header h1 { font-size: 14px; }
+}
+
+/* Zoom controls */
+.zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
+}
+.zoom-btn {
+  width: 32px;
+  height: 32px;
+  background: var(--bg-mantle);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg-text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.zoom-btn:hover { background: var(--bg-surface0); }
+
+/* Toast */
+.toast {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-20px);
+  background: var(--accent-green);
+  color: var(--bg-base);
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 100;
+  opacity: 0;
+  transition: all 0.3s;
+  pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>拼豆设计 <span>Perler Bead Designer</span></h1>
+  <div class="header-controls">
+    <select class="hselect" id="shapeSelect">
+      <option value="square">正方形钉板</option>
+      <option value="circle">圆形钉板</option>
+      <option value="heart">心形钉板</option>
+      <option value="hexagon">六边形钉板</option>
+    </select>
+    <select class="hselect" id="sizeSelect">
+      <option value="14">14 × 14</option>
+      <option value="20">20 × 20</option>
+      <option value="29" selected>29 × 29 (1块钉板)</option>
+      <option value="40">40 × 40</option>
+      <option value="58">58 × 58 (2×2拼板)</option>
+      <option value="80">80 × 80</option>
+      <option value="87">87 × 87 (3×3拼板)</option>
+      <option value="100">100 × 100</option>
+      <option value="116">116 × 116 (4×4拼板)</option>
+      <option value="150">150 × 150</option>
+    </select>
+    <button class="hbtn hide-mobile" id="undoBtn" title="撤销 Ctrl+Z">↶ 撤销</button>
+    <button class="hbtn hide-mobile" id="redoBtn" title="重做 Ctrl+Y">↷ 重做</button>
+    <button class="hbtn hide-mobile" id="mirrorHBtn" title="水平镜像">⟷ 镜像</button>
+    <button class="hbtn hide-mobile" id="mirrorVBtn" title="垂直镜像">↕ 镜像</button>
+    <button class="hbtn hide-mobile" id="rotateBtn" title="顺时针旋转90°">↻ 旋转</button>
+    <button class="hbtn danger hide-mobile" id="clearBtn">清空</button>
+    <button class="hbtn mobile-menu-btn" id="mobileMenuBtn">☰</button>
+  </div>
+</div>
+
+<div class="main-wrap">
+  <aside class="sidebar">
+    <div class="sidebar-scroll">
+      <div>
+        <div class="panel-label">工具</div>
+        <div class="tools-grid">
+          <button class="tool-btn active" data-tool="pencil" title="放置拼豆 (B)"><span>●</span><span class="tool-label">放置</span></button>
+          <button class="tool-btn" data-tool="eraser" title="移除拼豆 (E)"><span>○</span><span class="tool-label">移除</span></button>
+          <button class="tool-btn" data-tool="bucket" title="填充 (G)"><span>◉</span><span class="tool-label">填充</span></button>
+          <button class="tool-btn" data-tool="picker" title="取色 (I)"><span>◐</span><span class="tool-label">取色</span></button>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">当前颜色</div>
+        <div class="color-current">
+          <div class="color-swatch" id="colorSwatch"><div class="color-swatch-inner" id="colorSwatchInner"></div></div>
+          <div class="color-name" id="colorNameDisplay">纯白</div>
+          <div class="color-input-wrap"><input type="color" id="colorInput" value="#ffffff"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">拼豆色卡</div>
+        <div id="paletteContainer"></div>
+      </div>
+
+      <div>
+        <div class="panel-label">显示选项</div>
+        <label class="checkbox-row"><input type="checkbox" id="gridToggle" checked> 显示网格线</label>
+        <label class="checkbox-row"><input type="checkbox" id="beadStyleToggle" checked> 圆形拼豆样式</label>
+        <label class="checkbox-row"><input type="checkbox" id="ironedToggle"> 熨烫效果预览</label>
+        <label class="checkbox-row"><input type="checkbox" id="mirrorDrawToggle"> 对称绘制模式</label>
+      </div>
+    </div>
+  </aside>
+
+  <div class="canvas-area" id="canvasArea">
+    <canvas id="beadCanvas"></canvas>
+    <div class="zoom-controls">
+      <button class="zoom-btn" id="zoomInBtn" title="放大">+</button>
+      <button class="zoom-btn" id="zoomOutBtn" title="缩小">−</button>
+      <button class="zoom-btn" id="zoomFitBtn" title="适配">⊡</button>
+    </div>
+  </div>
+
+  <aside class="right-panel">
+    <div class="right-scroll">
+      <div>
+        <div class="panel-label">作品信息</div>
+        <div class="info-box" id="infoBox">
+          <strong>29 × 29</strong> 正方形钉板<br>
+          拼豆数量: <strong>0</strong> 颗<br>
+          成品尺寸: 约 <strong>14.5 × 14.5</strong> cm
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">用料清单</div>
+        <div class="material-list" id="materialList">
+          <div style="color:var(--fg-overlay);font-size:11px;padding:8px 0;">尚未放置拼豆</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel-label">导入图片</div>
+        <button class="btn-primary" id="importImgBtn">选择图片导入</button>
+        <input type="file" id="imgFileInput" accept="image/*" style="display:none">
+        <label class="checkbox-row"><input type="checkbox" id="quantizeToggle" checked> 量化到拼豆色卡</label>
+        <label class="checkbox-row"><input type="checkbox" id="transparentToggle"> 白色背景设为透明</label>
+        <div class="hint-text">导入后图片将按比例缩放并居中放置到钉板。建议先选择合适尺寸再导入。</div>
+      </div>
+
+      <div>
+        <div class="panel-label">导出</div>
+        <button class="btn-primary" id="exportPngBtn">下载 PNG 图片</button>
+        <button class="btn-secondary" id="exportSvgBtn" style="margin-top:6px">下载 SVG 文件</button>
+        <button class="btn-secondary" id="exportPatternBtn" style="margin-top:6px">下载拼豆图纸 (PNG)</button>
+        <div class="hint-text">PNG 为高清光栅图；SVG 为矢量格式可无损缩放；图纸含颜色标注和用量统计。</div>
+      </div>
+
+      <div>
+        <div class="panel-label">快捷键</div>
+        <div class="hint-text" style="margin-top:0">
+          B - 放置　E - 移除　G - 填充　I - 取色<br>
+          Ctrl+Z - 撤销　Ctrl+Y - 重做<br>
+          +/- - 缩放　0 - 适配画布<br>
+          鼠标拖动连续放置/移除
+        </div>
+      </div>
+
+      <button class="btn-danger" id="clearBtn2">清空钉板</button>
+    </div>
+  </aside>
+</div>
+
+<div class="mobile-bottom">
+  <button class="m-tool-btn active" data-tool="pencil"><span>●</span><span class="m-label">放置</span></button>
+  <button class="m-tool-btn" data-tool="eraser"><span>○</span><span class="m-label">移除</span></button>
+  <button class="m-tool-btn" data-tool="bucket"><span>◉</span><span class="m-label">填充</span></button>
+  <button class="m-tool-btn" data-tool="picker"><span>◐</span><span class="m-label">取色</span></button>
+  <button class="m-tool-btn" id="mColorBtn"><span style="font-size:16px">🎨</span><span class="m-label">色卡</span></button>
+  <button class="m-tool-btn" id="mPanelBtn"><span style="font-size:16px">📋</span><span class="m-label">更多</span></button>
+</div>
+
+<div class="slide-overlay" id="slideOverlay"></div>
+<div class="slide-panel" id="colorPanel">
+  <div class="slide-panel-handle"></div>
+  <div class="panel-label" style="margin-bottom:8px">拼豆色卡</div>
+  <div id="mobilePaletteContainer"></div>
+</div>
+<div class="slide-panel" id="morePanel">
+  <div class="slide-panel-handle"></div>
+  <div style="display:flex;flex-direction:column;gap:10px;">
+    <div class="panel-label">显示选项</div>
+    <label class="checkbox-row"><input type="checkbox" id="mGridToggle" checked> 显示网格线</label>
+    <label class="checkbox-row"><input type="checkbox" id="mBeadStyleToggle" checked> 圆形拼豆样式</label>
+    <label class="checkbox-row"><input type="checkbox" id="mIronedToggle"> 熨烫效果预览</label>
+    <label class="checkbox-row"><input type="checkbox" id="mMirrorDrawToggle"> 对称绘制模式</label>
+    <div class="panel-label" style="margin-top:8px">操作</div>
+    <button class="btn-secondary" id="mUndoBtn">↶ 撤销</button>
+    <button class="btn-secondary" id="mRedoBtn">↷ 重做</button>
+    <button class="btn-secondary" id="mMirrorHBtn">⟷ 水平镜像</button>
+    <button class="btn-secondary" id="mMirrorVBtn">↕ 垂直镜像</button>
+    <button class="btn-secondary" id="mRotateBtn">↻ 旋转90°</button>
+    <button class="btn-primary" id="mImportBtn">导入图片</button>
+    <button class="btn-primary" id="mExportPngBtn">导出 PNG</button>
+    <button class="btn-secondary" id="mExportSvgBtn">导出 SVG</button>
+    <button class="btn-secondary" id="mExportPatternBtn">导出图纸</button>
+    <button class="btn-danger" id="mClearBtn">清空钉板</button>
+    <div class="panel-label" style="margin-top:8px">用料清单</div>
+    <div class="material-list" id="mobileMaterialList">
+      <div style="color:var(--fg-overlay);font-size:11px;padding:8px 0;">尚未放置拼豆</div>
+    </div>
+    <div class="panel-label" style="margin-top:8px">作品信息</div>
+    <div class="info-box" id="mobileInfoBox">
+      <strong>29 × 29</strong> 正方形钉板<br>
+      拼豆数量: <strong>0</strong> 颗<br>
+      成品尺寸: 约 <strong>14.5 × 14.5</strong> cm
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  var BEAD_DIAMETER_MM = 5;
+  var BEAD_DIAMETER_IRONED_MM = 5.5;
+
+  var BEAD_COLORS = [
+    { name: '纯白', hex: '#FFFFFF', group: '白色系' },
+    { name: '奶白', hex: '#FFF8E7', group: '白色系' },
+    { name: '米色', hex: '#F5E6C8', group: '白色系' },
+    { name: '珍珠白', hex: '#F0EAD6', group: '白色系' },
+    { name: '柠檬黄', hex: '#FFF44F', group: '黄色系' },
+    { name: '明黄', hex: '#FFD700', group: '黄色系' },
+    { name: '浅黄', hex: '#FFFACD', group: '黄色系' },
+    { name: '橙黄', hex: '#FFA500', group: '黄色系' },
+    { name: '奶油黄', hex: '#FDA428', group: '黄色系' },
+    { name: '橙色', hex: '#FF8C00', group: '橙色系' },
+    { name: '浅橙', hex: '#FFCC99', group: '橙色系' },
+    { name: '杏色', hex: '#FBCEB1', group: '橙色系' },
+    { name: '大红', hex: '#FF0000', group: '红色系' },
+    { name: '浅红', hex: '#FF6B6B', group: '红色系' },
+    { name: '酒红', hex: '#722F37', group: '红色系' },
+    { name: '砖红', hex: '#B7410E', group: '红色系' },
+    { name: '玫红', hex: '#FF007F', group: '红色系' },
+    { name: '粉色', hex: '#FF69B4', group: '粉色系' },
+    { name: '浅粉', hex: '#FFB6C1', group: '粉色系' },
+    { name: '肉粉', hex: '#FFDAB9', group: '粉色系' },
+    { name: '腮红', hex: '#DE5D83', group: '粉色系' },
+    { name: '桃红', hex: '#FF47A3', group: '粉色系' },
+    { name: '品红', hex: '#FF00FF', group: '粉色系' },
+    { name: '紫色', hex: '#800080', group: '紫色系' },
+    { name: '浅紫', hex: '#D8BFD8', group: '紫色系' },
+    { name: '薰衣草', hex: '#E6E6FA', group: '紫色系' },
+    { name: '梅紫', hex: '#8E4585', group: '紫色系' },
+    { name: '蓝紫', hex: '#7B68EE', group: '紫色系' },
+    { name: '深蓝', hex: '#00008B', group: '蓝色系' },
+    { name: '蓝色', hex: '#4169E1', group: '蓝色系' },
+    { name: '天蓝', hex: '#87CEEB', group: '蓝色系' },
+    { name: '浅蓝', hex: '#ADD8E6', group: '蓝色系' },
+    { name: '湖蓝', hex: '#1E90FF', group: '蓝色系' },
+    { name: '青色', hex: '#00CED1', group: '蓝色系' },
+    { name: '深绿', hex: '#006400', group: '绿色系' },
+    { name: '绿色', hex: '#228B22', group: '绿色系' },
+    { name: '浅绿', hex: '#90EE90', group: '绿色系' },
+    { name: '草绿', hex: '#32CD32', group: '绿色系' },
+    { name: '翠绿', hex: '#00FF00', group: '绿色系' },
+    { name: '橄榄绿', hex: '#808000', group: '绿色系' },
+    { name: '深棕', hex: '#654321', group: '棕色系' },
+    { name: '棕色', hex: '#8B4513', group: '棕色系' },
+    { name: '浅棕', hex: '#A0522D', group: '棕色系' },
+    { name: '驼色', hex: '#C2B280', group: '棕色系' },
+    { name: '卡其', hex: '#D2B48C', group: '棕色系' },
+    { name: '肤色', hex: '#FFCBA4', group: '棕色系' },
+    { name: '黑色', hex: '#000000', group: '灰黑色系' },
+    { name: '深灰', hex: '#404040', group: '灰黑色系' },
+    { name: '灰色', hex: '#808080', group: '灰黑色系' },
+    { name: '浅灰', hex: '#C0C0C0', group: '灰黑色系' }
+  ];
+
+  var canvas = document.getElementById('beadCanvas');
+  var ctx = canvas.getContext('2d');
+
+  var gridSize = 29;
+  var boardShape = 'square';
+  var cellSize = 16;
+  var zoomLevel = 1;
+  var pixels = [];
+  var pegMask = [];
+  var currentTool = 'pencil';
+  var currentColor = '#FFFFFF';
+  var currentColorName = '纯白';
+  var isDrawing = false;
+  var showGrid = true;
+  var beadStyle = true;
+  var ironedView = false;
+  var mirrorDraw = false;
+  var history = [];
+  var historyIndex = -1;
+  var MAX_HISTORY = 50;
+  var lastDrawnCell = null;
+
+  function hexToRgb(hex) {
+    var h = hex.replace('#', '');
+    return [parseInt(h.substring(0, 2), 16), parseInt(h.substring(2, 4), 16), parseInt(h.substring(4, 6), 16)];
+  }
+
+  function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(function(v) { return Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function colorDistance(c1, c2) {
+    var dr = c1[0] - c2[0], dg = c1[1] - c2[1], db = c1[2] - c2[2];
+    return dr * dr + dg * dg + db * db;
+  }
+
+  function quantizeToBeadPalette(r, g, b) {
+    var target = [r, g, b];
+    var best = BEAD_COLORS[0];
+    var bestDist = Infinity;
+    for (var i = 0; i < BEAD_COLORS.length; i++) {
+      var rgb = hexToRgb(BEAD_COLORS[i].hex);
+      var d = colorDistance(target, rgb);
+      if (d < bestDist) { bestDist = d; best = BEAD_COLORS[i]; }
+    }
+    return best;
+  }
+
+  function isPegValid(x, y) {
+    if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) return false;
+    return pegMask[y] && pegMask[y][x] ? true : false;
+  }
+
+  function buildPegMask() {
+    pegMask = [];
+    var center = (gridSize - 1) / 2;
+    for (var y = 0; y < gridSize; y++) {
+      pegMask[y] = [];
+      for (var x = 0; x < gridSize; x++) {
+        switch (boardShape) {
+          case 'square':
+            pegMask[y][x] = true;
+            break;
+          case 'circle':
+            pegMask[y][x] = Math.sqrt(Math.pow(x - center, 2) + Math.pow(y - center, 2)) <= center;
+            break;
+          case 'heart':
+            var nx = (x - center) / (gridSize * 0.44);
+            var ny = -(y - center * 0.8) / (gridSize * 0.44);
+            var val = Math.pow(nx * nx + ny * ny - 1, 3) - nx * nx * ny * ny * ny;
+            pegMask[y][x] = val <= 0.02;
+            break;
+          case 'hexagon':
+            var ax = Math.abs(x - center);
+            var ay = Math.abs(y - center);
+            var s = gridSize / 2;
+            pegMask[y][x] = (ax <= s && ay <= s && (s - ay) >= (ax - s * 0.5) * Math.tan(Math.PI / 3));
+            break;
+          default:
+            pegMask[y][x] = true;
+        }
+      }
+    }
+  }
+
+  function initPixels() {
+    pixels = [];
+    for (var y = 0; y < gridSize; y++) {
+      pixels[y] = [];
+      for (var x = 0; x < gridSize; x++) {
+        pixels[y][x] = null;
+      }
+    }
+  }
+
+  function calcCellSize() {
+    var area = document.getElementById('canvasArea');
+    var maxW = area.clientWidth - 40;
+    var maxH = area.clientHeight - 40;
+    var isMobile = window.innerWidth <= 768;
+    if (isMobile) { maxW = window.innerWidth - 20; maxH = window.innerHeight - 120; }
+    var ideal = Math.floor(Math.min(maxW, maxH) / gridSize);
+    return Math.max(4, ideal);
+  }
+
+  function resizeCanvas() {
+    cellSize = calcCellSize();
+    var displaySize = Math.round(cellSize * gridSize * zoomLevel);
+    canvas.width = displaySize;
+    canvas.height = displaySize;
+    canvas.style.width = displaySize + 'px';
+    canvas.style.height = displaySize + 'px';
+    redraw();
+  }
+
+  function lightenColor(hex, amount) {
+    var rgb = hexToRgb(hex);
+    return rgbToHex(
+      Math.min(255, rgb[0] + amount),
+      Math.min(255, rgb[1] + amount),
+      Math.min(255, rgb[2] + amount)
+    );
+  }
+
+  function darkenColor(hex, amount) {
+    var rgb = hexToRgb(hex);
+    return rgbToHex(
+      Math.max(0, rgb[0] - amount),
+      Math.max(0, rgb[1] - amount),
+      Math.max(0, rgb[2] - amount)
+    );
+  }
+
+  function redraw() {
+    var sz = cellSize * zoomLevel;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = '#e8e0d4';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        var px = x * sz;
+        var py = y * sz;
+
+        if (!isPegValid(x, y)) {
+          ctx.fillStyle = '#d5cdc1';
+          ctx.fillRect(px, py, sz, sz);
+          continue;
+        }
+
+        if (ironedView && pixels[y][x]) {
+          ctx.fillStyle = pixels[y][x];
+          ctx.fillRect(px, py, sz, sz);
+        } else if (beadStyle && !ironedView) {
+          ctx.fillStyle = '#d8d0c4';
+          ctx.fillRect(px, py, sz, sz);
+
+          var pegR = Math.max(1, sz * 0.08);
+          ctx.fillStyle = '#c8c0b4';
+          ctx.beginPath();
+          ctx.arc(px + sz / 2, py + sz / 2, pegR, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (pixels[y][x]) {
+            var beadR = Math.max(2, sz * 0.42);
+            var cx = px + sz / 2;
+            var cy = py + sz / 2;
+
+            var grad = ctx.createRadialGradient(cx - beadR * 0.2, cy - beadR * 0.2, beadR * 0.1, cx, cy, beadR);
+            grad.addColorStop(0, lightenColor(pixels[y][x], 40));
+            grad.addColorStop(0.7, pixels[y][x]);
+            grad.addColorStop(1, darkenColor(pixels[y][x], 30));
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(cx, cy, beadR, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (sz > 10) {
+              var holeR = Math.max(1, sz * 0.08);
+              ctx.fillStyle = darkenColor(pixels[y][x], 50);
+              ctx.globalAlpha = 0.5;
+              ctx.beginPath();
+              ctx.arc(cx, cy, holeR, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.globalAlpha = 1;
+            }
+
+            if (sz > 14) {
+              var hlR = Math.max(1, sz * 0.12);
+              ctx.fillStyle = 'rgba(255,255,255,0.35)';
+              ctx.beginPath();
+              ctx.arc(cx - beadR * 0.25, cy - beadR * 0.25, hlR, 0, Math.PI * 2);
+              ctx.fill();
+            }
+          }
+        } else {
+          ctx.fillStyle = '#d8d0c4';
+          ctx.fillRect(px, py, sz, sz);
+          if (pixels[y][x]) {
+            ctx.fillStyle = pixels[y][x];
+            ctx.fillRect(px + 1, py + 1, sz - 2, sz - 2);
+          }
+        }
+      }
+    }
+
+    if (showGrid && sz >= 6) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (var i = 0; i <= gridSize; i++) {
+        var pos = Math.round(i * sz) + 0.5;
+        ctx.moveTo(pos, 0);
+        ctx.lineTo(pos, canvas.height);
+        ctx.moveTo(0, pos);
+        ctx.lineTo(canvas.width, pos);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function getPixelCoord(e) {
+    var rect = canvas.getBoundingClientRect();
+    var scaleX = canvas.width / rect.width;
+    var scaleY = canvas.height / rect.height;
+    var clientX = e.clientX !== undefined ? e.clientX : e.touches[0].clientX;
+    var clientY = e.clientY !== undefined ? e.clientY : e.touches[0].clientY;
+    var sz = cellSize * zoomLevel;
+    var x = Math.floor((clientX - rect.left) * scaleX / sz);
+    var y = Math.floor((clientY - rect.top) * scaleY / sz);
+    return { x: Math.max(0, Math.min(gridSize - 1, x)), y: Math.max(0, Math.min(gridSize - 1, y)) };
+  }
+
+  function drawPixel(x, y) {
+    if (!isPegValid(x, y)) return;
+    if (currentTool === 'pencil') {
+      pixels[y][x] = currentColor;
+      if (mirrorDraw) {
+        var mx = gridSize - 1 - x;
+        if (isPegValid(mx, y)) pixels[y][mx] = currentColor;
+      }
+    } else if (currentTool === 'eraser') {
+      pixels[y][x] = null;
+      if (mirrorDraw) {
+        var mx2 = gridSize - 1 - x;
+        if (isPegValid(mx2, y)) pixels[y][mx2] = null;
+      }
+    } else if (currentTool === 'bucket') {
+      floodFill(x, y, pixels[y][x], currentColor);
+    } else if (currentTool === 'picker') {
+      if (pixels[y][x]) setColor(pixels[y][x]);
+    }
+  }
+
+  function floodFill(x, y, targetColor, replaceColor) {
+    if (targetColor === replaceColor) return;
+    var stack = [[x, y]];
+    var visited = {};
+    while (stack.length > 0) {
+      var item = stack.pop();
+      var cx = item[0], cy = item[1];
+      var key = cx + ',' + cy;
+      if (visited[key]) continue;
+      if (!isPegValid(cx, cy)) continue;
+      if (pixels[cy][cx] !== targetColor) continue;
+      visited[key] = true;
+      pixels[cy][cx] = replaceColor;
+      stack.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+    }
+  }
+
+  function saveHistory() {
+    history = history.slice(0, historyIndex + 1);
+    var snapshot = [];
+    for (var y = 0; y < gridSize; y++) snapshot.push(pixels[y].slice());
+    history.push(snapshot);
+    if (history.length > MAX_HISTORY) { history.shift(); } else { historyIndex++; }
+    updateHistoryButtons();
+  }
+
+  function undo() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      restoreFromHistory();
+    }
+  }
+
+  function redo() {
+    if (historyIndex < history.length - 1) {
+      historyIndex++;
+      restoreFromHistory();
+    }
+  }
+
+  function restoreFromHistory() {
+    var snap = history[historyIndex];
+    pixels = [];
+    for (var y = 0; y < gridSize; y++) pixels.push(snap[y].slice());
+    redraw();
+    updateMaterialList();
+    updateInfoBox();
+    updateHistoryButtons();
+  }
+
+  function updateHistoryButtons() {
+    var ub = document.getElementById('undoBtn');
+    var rb = document.getElementById('redoBtn');
+    if (ub) ub.disabled = historyIndex <= 0;
+    if (rb) rb.disabled = historyIndex >= history.length - 1;
+  }
+
+  function setColor(hex) {
+    currentColor = hex;
+    var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex.toUpperCase(); });
+    currentColorName = found ? found.name : '自定义';
+    document.getElementById('colorSwatchInner').style.background = hex;
+    document.getElementById('colorNameDisplay').textContent = currentColorName;
+    document.getElementById('colorInput').value = hex;
+    updatePaletteSelection();
+  }
+
+  function updatePaletteSelection() {
+    document.querySelectorAll('.palette-bead').forEach(function(el) {
+      el.classList.toggle('selected', el.dataset.color.toUpperCase() === currentColor.toUpperCase());
+    });
+  }
+
+  function buildPalette(containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = '';
+    var groups = {};
+    BEAD_COLORS.forEach(function(c) {
+      if (!groups[c.group]) groups[c.group] = [];
+      groups[c.group].push(c);
+    });
+    Object.keys(groups).forEach(function(groupName) {
+      var section = document.createElement('div');
+      section.className = 'palette-section';
+      var title = document.createElement('div');
+      title.className = 'palette-section-title';
+      title.textContent = groupName;
+      section.appendChild(title);
+      var grid = document.createElement('div');
+      grid.className = 'palette-grid';
+      groups[groupName].forEach(function(c) {
+        var bead = document.createElement('div');
+        bead.className = 'palette-bead';
+        bead.style.background = c.hex;
+        bead.dataset.color = c.hex;
+        bead.title = c.name + ' (' + c.hex + ')';
+        if (c.hex.toUpperCase() === currentColor.toUpperCase()) bead.classList.add('selected');
+        bead.addEventListener('click', function() { setColor(c.hex); closeSlidePanels(); });
+        grid.appendChild(bead);
+      });
+      section.appendChild(grid);
+      title.addEventListener('click', function() {
+        title.classList.toggle('collapsed');
+        grid.classList.toggle('collapsed');
+      });
+      container.appendChild(section);
+    });
+  }
+
+  function countBeads() {
+    var counts = {};
+    var total = 0;
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        if (pixels[y][x] && isPegValid(x, y)) {
+          var c = pixels[y][x].toUpperCase();
+          counts[c] = (counts[c] || 0) + 1;
+          total++;
+        }
+      }
+    }
+    return { counts: counts, total: total };
+  }
+
+  function updateMaterialList() {
+    var result = countBeads();
+    var html = '';
+    if (result.total === 0) {
+      html = '<div style="color:var(--fg-overlay);font-size:11px;padding:8px 0;">尚未放置拼豆</div>';
+    } else {
+      var entries = Object.keys(result.counts).map(function(hex) {
+        var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex; });
+        return { hex: hex, name: found ? found.name : '自定义', count: result.counts[hex] };
+      }).sort(function(a, b) { return b.count - a.count; });
+      entries.forEach(function(e) {
+        html += '<div class="material-row">' +
+          '<div class="material-dot" style="background:' + e.hex + '"></div>' +
+          '<div class="material-name">' + e.name + '</div>' +
+          '<div class="material-count">' + e.count + '</div></div>';
+      });
+      html += '<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:11px;color:var(--fg-text);">合计: <strong>' + result.total + '</strong> 颗</div>';
+    }
+    var ml = document.getElementById('materialList');
+    var mml = document.getElementById('mobileMaterialList');
+    if (ml) ml.innerHTML = html;
+    if (mml) mml.innerHTML = html;
+  }
+
+  function updateInfoBox() {
+    var result = countBeads();
+    var shapeNames = { square: '正方形', circle: '圆形', heart: '心形', hexagon: '六边形' };
+    var wCm = (gridSize * BEAD_DIAMETER_MM / 10).toFixed(1);
+    var hCm = wCm;
+    var wI = (gridSize * BEAD_DIAMETER_IRONED_MM / 10).toFixed(1);
+    var text = '<strong>' + gridSize + ' × ' + gridSize + '</strong> ' + (shapeNames[boardShape] || boardShape) + '钉板<br>' +
+      '拼豆数量: <strong>' + result.total + '</strong> 颗<br>' +
+      '成品尺寸: 约 <strong>' + wCm + ' × ' + hCm + '</strong> cm<br>' +
+      '熨烫后: 约 <strong>' + wI + ' × ' + wI + '</strong> cm';
+    var ib = document.getElementById('infoBox');
+    var mib = document.getElementById('mobileInfoBox');
+    if (ib) ib.innerHTML = text;
+    if (mib) mib.innerHTML = text;
+  }
+
+  function mirrorHorizontal() {
+    var newPixels = [];
+    for (var y = 0; y < gridSize; y++) {
+      newPixels[y] = [];
+      for (var x = 0; x < gridSize; x++) {
+        newPixels[y][x] = pixels[y][gridSize - 1 - x];
+      }
+    }
+    pixels = newPixels;
+    saveHistory();
+    redraw();
+    updateMaterialList();
+    updateInfoBox();
+  }
+
+  function mirrorVertical() {
+    var newPixels = [];
+    for (var y = 0; y < gridSize; y++) {
+      newPixels[y] = pixels[gridSize - 1 - y].slice();
+    }
+    pixels = newPixels;
+    saveHistory();
+    redraw();
+    updateMaterialList();
+    updateInfoBox();
+  }
+
+  function rotateClockwise() {
+    var newPixels = [];
+    for (var y = 0; y < gridSize; y++) {
+      newPixels[y] = [];
+      for (var x = 0; x < gridSize; x++) {
+        newPixels[y][x] = pixels[gridSize - 1 - x][y];
+      }
+    }
+    pixels = newPixels;
+    buildPegMask();
+    saveHistory();
+    redraw();
+    updateMaterialList();
+    updateInfoBox();
+  }
+
+  function clearCanvas() {
+    if (!confirm('确定清空整个钉板吗？')) return;
+    initPixels();
+    saveHistory();
+    redraw();
+    updateMaterialList();
+    updateInfoBox();
+  }
+
+  function generateSVG() {
+    var rects = [];
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        if (pixels[y][x] && isPegValid(x, y)) {
+          if (beadStyle && !ironedView) {
+            rects.push('  <circle cx="' + (x + 0.5) + '" cy="' + (y + 0.5) + '" r="0.42" fill="' + pixels[y][x] + '"/>');
+          } else {
+            rects.push('  <rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + pixels[y][x] + '"/>');
+          }
+        }
+      }
+    }
+    return '<svg xmlns="http://www.w3.org/2000/svg" width="' + gridSize + '" height="' + gridSize + '" viewBox="0 0 ' + gridSize + ' ' + gridSize + '" shape-rendering="crispEdges">\n' + rects.join('\n') + '\n</svg>';
+  }
+
+  function downloadSVG() {
+    var svg = generateSVG();
+    var blob = new Blob([svg], { type: 'image/svg+xml' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'perler-bead-' + gridSize + 'x' + gridSize + '-' + Date.now() + '.svg';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('SVG 已下载');
+  }
+
+  function downloadPNG(scaleOpts) {
+    var scale = scaleOpts || 10;
+    var tmp = document.createElement('canvas');
+    tmp.width = gridSize * scale;
+    tmp.height = gridSize * scale;
+    var tctx = tmp.getContext('2d');
+    tctx.imageSmoothingEnabled = false;
+
+    tctx.fillStyle = '#e8e0d4';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        if (!isPegValid(x, y)) {
+          tctx.fillStyle = '#d5cdc1';
+          tctx.fillRect(x * scale, y * scale, scale, scale);
+          continue;
+        }
+        if (pixels[y][x]) {
+          if (beadStyle && !ironedView) {
+            tctx.fillStyle = '#d8d0c4';
+            tctx.fillRect(x * scale, y * scale, scale, scale);
+            var beadR = scale * 0.42;
+            var cx = x * scale + scale / 2;
+            var cy = y * scale + scale / 2;
+            var grad = tctx.createRadialGradient(cx - beadR * 0.2, cy - beadR * 0.2, beadR * 0.1, cx, cy, beadR);
+            grad.addColorStop(0, lightenColor(pixels[y][x], 40));
+            grad.addColorStop(0.7, pixels[y][x]);
+            grad.addColorStop(1, darkenColor(pixels[y][x], 30));
+            tctx.fillStyle = grad;
+            tctx.beginPath();
+            tctx.arc(cx, cy, beadR, 0, Math.PI * 2);
+            tctx.fill();
+          } else {
+            tctx.fillStyle = pixels[y][x];
+            tctx.fillRect(x * scale, y * scale, scale, scale);
+          }
+        } else {
+          tctx.fillStyle = '#d8d0c4';
+          tctx.fillRect(x * scale, y * scale, scale, scale);
+        }
+      }
+    }
+
+    tmp.toBlob(function(blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'perler-bead-' + gridSize + 'x' + gridSize + '-' + Date.now() + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('PNG 已下载');
+    });
+  }
+
+  function downloadPattern() {
+    var scale = 20;
+    var margin = 80;
+    var legendH = 0;
+    var result = countBeads();
+    var entries = Object.keys(result.counts).map(function(hex) {
+      var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex; });
+      return { hex: hex, name: found ? found.name : '自定义', count: result.counts[hex] };
+    }).sort(function(a, b) { return b.count - a.count; });
+    legendH = Math.ceil(entries.length / 4) * 24 + 40;
+
+    var tmp = document.createElement('canvas');
+    tmp.width = gridSize * scale + margin * 2;
+    tmp.height = gridSize * scale + margin * 2 + legendH;
+    var tctx = tmp.getContext('2d');
+
+    tctx.fillStyle = '#ffffff';
+    tctx.fillRect(0, 0, tmp.width, tmp.height);
+
+    tctx.fillStyle = '#333';
+    tctx.font = 'bold 16px "Microsoft YaHei", sans-serif';
+    tctx.textAlign = 'center';
+    tctx.fillText('拼豆图纸 - ' + gridSize + '×' + gridSize + ' ' + ({ square: '正方形', circle: '圆形', heart: '心形', hexagon: '六边形' }[boardShape] || '') + '钉板', tmp.width / 2, 30);
+    tctx.font = '12px "Microsoft YaHei", sans-serif';
+    tctx.fillText('拼豆总数: ' + result.total + ' 颗 | 成品尺寸: 约 ' + (gridSize * BEAD_DIAMETER_MM / 10).toFixed(1) + 'cm', tmp.width / 2, 52);
+
+    var ox = margin;
+    var oy = margin;
+
+    tctx.fillStyle = '#f0ebe3';
+    tctx.fillRect(ox, oy, gridSize * scale, gridSize * scale);
+
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        if (!isPegValid(x, y)) {
+          tctx.fillStyle = '#e0dbd3';
+          tctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+          continue;
+        }
+        if (pixels[y][x]) {
+          tctx.fillStyle = pixels[y][x];
+          tctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
+        }
+      }
+    }
+
+    tctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    tctx.lineWidth = 0.5;
+    for (var i = 0; i <= gridSize; i++) {
+      tctx.beginPath();
+      tctx.moveTo(ox + i * scale, oy);
+      tctx.lineTo(ox + i * scale, oy + gridSize * scale);
+      tctx.stroke();
+      tctx.beginPath();
+      tctx.moveTo(ox, oy + i * scale);
+      tctx.lineTo(ox + gridSize * scale, oy + i * scale);
+      tctx.stroke();
+    }
+
+    tctx.fillStyle = '#999';
+    tctx.font = '9px sans-serif';
+    tctx.textAlign = 'center';
+    for (var i2 = 0; i2 < gridSize; i2 += 5) {
+      tctx.fillText(i2 + 1, ox + i2 * scale + scale / 2, oy - 4);
+      tctx.fillText(i2 + 1, ox - 8, oy + i2 * scale + scale / 2 + 3);
+    }
+
+    var legendY = oy + gridSize * scale + 20;
+    tctx.fillStyle = '#333';
+    tctx.font = 'bold 13px "Microsoft YaHei", sans-serif';
+    tctx.textAlign = 'left';
+    tctx.fillText('用料清单', ox, legendY);
+    legendY += 8;
+
+    tctx.font = '11px "Microsoft YaHei", sans-serif';
+    entries.forEach(function(e, idx) {
+      var col = idx % 4;
+      var row = Math.floor(idx / 4);
+      var lx = ox + col * (gridSize * scale / 4);
+      var ly = legendY + row * 24;
+      tctx.fillStyle = e.hex;
+      tctx.beginPath();
+      tctx.arc(lx + 8, ly + 8, 7, 0, Math.PI * 2);
+      tctx.fill();
+      tctx.strokeStyle = '#999';
+      tctx.lineWidth = 0.5;
+      tctx.stroke();
+      tctx.fillStyle = '#333';
+      tctx.textAlign = 'left';
+      tctx.fillText(e.name + ' ×' + e.count, lx + 20, ly + 12);
+    });
+
+    tmp.toBlob(function(blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'perler-pattern-' + gridSize + 'x' + gridSize + '-' + Date.now() + '.png';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('图纸已下载');
+    });
+  }
+
+  function importImage(file) {
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var img = new Image();
+      img.onload = function() {
+        var scale = Math.min(gridSize / img.width, gridSize / img.height);
+        var drawW = Math.max(1, Math.round(img.width * scale));
+        var drawH = Math.max(1, Math.round(img.height * scale));
+        var offsetX = Math.floor((gridSize - drawW) / 2);
+        var offsetY = Math.floor((gridSize - drawH) / 2);
+
+        var tmp = document.createElement('canvas');
+        tmp.width = drawW;
+        tmp.height = drawH;
+        var tctx = tmp.getContext('2d');
+        tctx.imageSmoothingEnabled = true;
+        tctx.imageSmoothingQuality = 'high';
+        tctx.drawImage(img, 0, 0, drawW, drawH);
+
+        var imgData = tctx.getImageData(0, 0, drawW, drawH);
+        var data = imgData.data;
+        var quantize = document.getElementById('quantizeToggle').checked;
+        var transparentBg = document.getElementById('transparentToggle').checked;
+
+        initPixels();
+
+        for (var y = 0; y < drawH; y++) {
+          for (var x = 0; x < drawW; x++) {
+            var idx = (y * drawW + x) * 4;
+            var r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
+            if (a < 128) continue;
+            if (transparentBg && r > 240 && g > 240 && b > 240) continue;
+            var hex;
+            if (quantize) {
+              hex = quantizeToBeadPalette(r, g, b).hex;
+            } else {
+              hex = rgbToHex(r, g, b);
+            }
+            var px = offsetX + x;
+            var py = offsetY + y;
+            if (isPegValid(px, py)) {
+              pixels[py][px] = hex;
+            }
+          }
+        }
+
+        saveHistory();
+        redraw();
+        updateMaterialList();
+        updateInfoBox();
+        showToast('图片已导入');
+      };
+      img.onerror = function() { alert('图片加载失败'); };
+      img.src = e.target.result;
+    };
+    reader.onerror = function() { alert('文件读取失败'); };
+    reader.readAsDataURL(file);
+  }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 1800);
+  }
+
+  function closeSlidePanels() {
+    document.getElementById('colorPanel').classList.remove('open');
+    document.getElementById('morePanel').classList.remove('open');
+    document.getElementById('slideOverlay').classList.remove('open');
+  }
+
+  function openSlidePanel(id) {
+    closeSlidePanels();
+    var panel = document.getElementById(id);
+    var overlay = document.getElementById('slideOverlay');
+    panel.style.display = 'block';
+    overlay.style.display = 'block';
+    requestAnimationFrame(function() {
+      panel.classList.add('open');
+      overlay.classList.add('open');
+    });
+  }
+
+  function setTool(tool) {
+    currentTool = tool;
+    document.querySelectorAll('.tool-btn, .m-tool-btn').forEach(function(btn) {
+      btn.classList.toggle('active', btn.dataset.tool === tool);
+    });
+    canvas.style.cursor = tool === 'picker' ? 'cell' : 'crosshair';
+  }
+
+  function syncCheckboxes(sourceId, targetIds) {
+    var source = document.getElementById(sourceId);
+    if (!source) return;
+    targetIds.forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.checked = source.checked;
+    });
+  }
+
+  canvas.addEventListener('mousedown', function(e) {
+    isDrawing = true;
+    lastDrawnCell = null;
+    var coord = getPixelCoord(e);
+    lastDrawnCell = coord;
+    drawPixel(coord.x, coord.y);
+    redraw();
+  });
+
+  canvas.addEventListener('mousemove', function(e) {
+    if (!isDrawing) return;
+    if (currentTool === 'bucket' || currentTool === 'picker') return;
+    var coord = getPixelCoord(e);
+    if (lastDrawnCell && coord.x === lastDrawnCell.x && coord.y === lastDrawnCell.y) return;
+    lastDrawnCell = coord;
+    drawPixel(coord.x, coord.y);
+    redraw();
+  });
+
+  canvas.addEventListener('mouseup', function() {
+    if (isDrawing) { isDrawing = false; saveHistory(); updateMaterialList(); updateInfoBox(); }
+  });
+
+  canvas.addEventListener('mouseleave', function() {
+    if (isDrawing) { isDrawing = false; saveHistory(); updateMaterialList(); updateInfoBox(); }
+  });
+
+  canvas.addEventListener('touchstart', function(e) {
+    e.preventDefault();
+    isDrawing = true;
+    lastDrawnCell = null;
+    var coord = getPixelCoord(e);
+    lastDrawnCell = coord;
+    drawPixel(coord.x, coord.y);
+    redraw();
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', function(e) {
+    e.preventDefault();
+    if (!isDrawing) return;
+    if (currentTool === 'bucket' || currentTool === 'picker') return;
+    var coord = getPixelCoord(e);
+    if (lastDrawnCell && coord.x === lastDrawnCell.x && coord.y === lastDrawnCell.y) return;
+    lastDrawnCell = coord;
+    drawPixel(coord.x, coord.y);
+    redraw();
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', function(e) {
+    e.preventDefault();
+    if (isDrawing) { isDrawing = false; saveHistory(); updateMaterialList(); updateInfoBox(); }
+  }, { passive: false });
+
+  document.querySelectorAll('.tool-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() { setTool(btn.dataset.tool); });
+  });
+  document.querySelectorAll('.m-tool-btn[data-tool]').forEach(function(btn) {
+    btn.addEventListener('click', function() { setTool(btn.dataset.tool); });
+  });
+
+  document.getElementById('colorInput').addEventListener('input', function(e) { setColor(e.target.value); });
+
+  document.getElementById('shapeSelect').addEventListener('change', function(e) {
+    boardShape = e.target.value;
+    buildPegMask();
+    initPixels();
+    history = []; historyIndex = -1;
+    saveHistory();
+    resizeCanvas();
+    updateMaterialList();
+    updateInfoBox();
+  });
+
+  document.getElementById('sizeSelect').addEventListener('change', function(e) {
+    gridSize = parseInt(e.target.value);
+    buildPegMask();
+    initPixels();
+    history = []; historyIndex = -1;
+    saveHistory();
+    resizeCanvas();
+    updateMaterialList();
+    updateInfoBox();
+  });
+
+  function handleGridToggle() {
+    showGrid = this.checked;
+    var otherId = this.id === 'gridToggle' ? 'mGridToggle' : 'gridToggle';
+    var other = document.getElementById(otherId);
+    if (other) other.checked = showGrid;
+    redraw();
+  }
+  function handleBeadStyleToggle() {
+    beadStyle = this.checked;
+    var otherId = this.id === 'beadStyleToggle' ? 'mBeadStyleToggle' : 'beadStyleToggle';
+    var other = document.getElementById(otherId);
+    if (other) other.checked = beadStyle;
+    redraw();
+  }
+  function handleIronedToggle() {
+    ironedView = this.checked;
+    var otherId = this.id === 'ironedToggle' ? 'mIronedToggle' : 'ironedToggle';
+    var other = document.getElementById(otherId);
+    if (other) other.checked = ironedView;
+    redraw();
+  }
+  function handleMirrorDrawToggle() {
+    mirrorDraw = this.checked;
+    var otherId = this.id === 'mirrorDrawToggle' ? 'mMirrorDrawToggle' : 'mirrorDrawToggle';
+    var other = document.getElementById(otherId);
+    if (other) other.checked = mirrorDraw;
+  }
+
+  document.getElementById('gridToggle').addEventListener('change', handleGridToggle);
+  document.getElementById('mGridToggle').addEventListener('change', handleGridToggle);
+  document.getElementById('beadStyleToggle').addEventListener('change', handleBeadStyleToggle);
+  document.getElementById('mBeadStyleToggle').addEventListener('change', handleBeadStyleToggle);
+  document.getElementById('ironedToggle').addEventListener('change', handleIronedToggle);
+  document.getElementById('mIronedToggle').addEventListener('change', handleIronedToggle);
+  document.getElementById('mirrorDrawToggle').addEventListener('change', handleMirrorDrawToggle);
+  document.getElementById('mMirrorDrawToggle').addEventListener('change', handleMirrorDrawToggle);
+
+  document.getElementById('undoBtn').addEventListener('click', undo);
+  document.getElementById('redoBtn').addEventListener('click', redo);
+  document.getElementById('mUndoBtn').addEventListener('click', undo);
+  document.getElementById('mRedoBtn').addEventListener('click', redo);
+  document.getElementById('clearBtn').addEventListener('click', clearCanvas);
+  document.getElementById('clearBtn2').addEventListener('click', clearCanvas);
+  document.getElementById('mClearBtn').addEventListener('click', clearCanvas);
+  document.getElementById('mirrorHBtn').addEventListener('click', mirrorHorizontal);
+  document.getElementById('mMirrorHBtn').addEventListener('click', mirrorHorizontal);
+  document.getElementById('mirrorVBtn').addEventListener('click', mirrorVertical);
+  document.getElementById('mMirrorVBtn').addEventListener('click', mirrorVertical);
+  document.getElementById('rotateBtn').addEventListener('click', rotateClockwise);
+  document.getElementById('mRotateBtn').addEventListener('click', rotateClockwise);
+
+  document.getElementById('exportPngBtn').addEventListener('click', function() { downloadPNG(10); });
+  document.getElementById('mExportPngBtn').addEventListener('click', function() { downloadPNG(10); });
+  document.getElementById('exportSvgBtn').addEventListener('click', downloadSVG);
+  document.getElementById('mExportSvgBtn').addEventListener('click', downloadSVG);
+  document.getElementById('exportPatternBtn').addEventListener('click', downloadPattern);
+  document.getElementById('mExportPatternBtn').addEventListener('click', downloadPattern);
+
+  document.getElementById('importImgBtn').addEventListener('click', function() { document.getElementById('imgFileInput').click(); });
+  document.getElementById('mImportBtn').addEventListener('click', function() { document.getElementById('imgFileInput').click(); });
+  document.getElementById('imgFileInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) { importImage(file); e.target.value = ''; }
+  });
+
+  document.getElementById('zoomInBtn').addEventListener('click', function() {
+    zoomLevel = Math.min(3, zoomLevel + 0.25);
+    resizeCanvas();
+  });
+  document.getElementById('zoomOutBtn').addEventListener('click', function() {
+    zoomLevel = Math.max(0.5, zoomLevel - 0.25);
+    resizeCanvas();
+  });
+  document.getElementById('zoomFitBtn').addEventListener('click', function() {
+    zoomLevel = 1;
+    resizeCanvas();
+  });
+
+  document.getElementById('mColorBtn').addEventListener('click', function() { openSlidePanel('colorPanel'); });
+  document.getElementById('mPanelBtn').addEventListener('click', function() { openSlidePanel('morePanel'); });
+  document.getElementById('slideOverlay').addEventListener('click', closeSlidePanels);
+
+  document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+    var rp = document.querySelector('.right-panel');
+    if (rp) {
+      var visible = rp.style.display === 'flex';
+      rp.style.display = visible ? 'none' : 'flex';
+      rp.style.position = visible ? '' : 'fixed';
+      rp.style.right = visible ? '' : '0';
+      rp.style.top = visible ? '' : 'var(--toolbar-h)';
+      rp.style.bottom = visible ? '' : '0';
+      rp.style.zIndex = visible ? '' : '30';
+      rp.style.width = visible ? '' : '300px';
+    }
+  });
+
+  document.addEventListener('keydown', function(e) {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 'z') { e.preventDefault(); undo(); }
+      else if (e.key === 'y') { e.preventDefault(); redo(); }
+      return;
+    }
+    var keyMap = { b: 'pencil', e: 'eraser', g: 'bucket', i: 'picker' };
+    var tool = keyMap[e.key.toLowerCase()];
+    if (tool) setTool(tool);
+    if (e.key === '=' || e.key === '+') { zoomLevel = Math.min(3, zoomLevel + 0.25); resizeCanvas(); }
+    if (e.key === '-') { zoomLevel = Math.max(0.5, zoomLevel - 0.25); resizeCanvas(); }
+    if (e.key === '0') { zoomLevel = 1; resizeCanvas(); }
+  });
+
+  window.addEventListener('resize', function() { resizeCanvas(); });
+
+  buildPalette('paletteContainer');
+  buildPalette('mobilePaletteContainer');
+  setColor('#FFFFFF');
+  buildPegMask();
+  initPixels();
+  resizeCanvas();
+  saveHistory();
+  updateMaterialList();
+  updateInfoBox();
+})();
+</script>
+</body>
+</html>
