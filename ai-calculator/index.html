@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>人工智能计算器</title>
+<style>
+:root {
+  --bg-body: #1a1a2e;
+  --bg-calc: #16213e;
+  --bg-btn-num: #2a2a4a;
+  --bg-btn-num-hover: #3a3a5a;
+  --bg-btn-op: #e94560;
+  --bg-btn-op-hover: #ff6b81;
+  --bg-btn-func: #1a1a3e;
+  --bg-btn-func-hover: #2a2a4e;
+  --bg-btn-eq: #00d2d3;
+  --bg-btn-eq-hover: #48dbfb;
+  --fg-display: #e0e0e0;
+  --fg-display-dim: #6a6a8a;
+  --fg-btn-num: #ffffff;
+  --fg-btn-op: #ffffff;
+  --fg-btn-func: #a0a0c0;
+  --fg-btn-eq: #1a1a2e;
+  --accent-ai: #e94560;
+  --accent-correct: #00d2d3;
+  --accent-wrong: #ff6b6b;
+  --shadow: 0 8px 32px rgba(0,0,0,0.4);
+  --radius: 14px;
+  --radius-btn: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: -apple-system, "SF Pro Display", "Microsoft YaHei", "PingFang SC", sans-serif;
+  background: var(--bg-body);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.calc-wrapper {
+  width: 100%;
+  max-width: 400px;
+  padding: 16px;
+}
+.calc {
+  background: var(--bg-calc);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px 8px;
+}
+.header-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-ai);
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.header-title .ai-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-ai);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.header-score {
+  font-size: 12px;
+  color: var(--accent-correct);
+  font-weight: 600;
+}
+.screen {
+  padding: 8px 20px 16px;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+}
+.expression {
+  font-size: 16px;
+  color: var(--fg-display-dim);
+  min-height: 24px;
+  word-break: break-all;
+  text-align: right;
+  line-height: 1.4;
+  max-width: 100%;
+}
+.result {
+  font-size: 48px;
+  font-weight: 300;
+  color: var(--fg-display);
+  line-height: 1.2;
+  margin-top: 4px;
+  word-break: break-all;
+  text-align: right;
+  max-width: 100%;
+  transition: color 0.3s;
+}
+.result.flash-correct { color: var(--accent-correct); }
+.result.flash-wrong { color: var(--accent-wrong); }
+.feedback-line {
+  font-size: 13px;
+  font-weight: 600;
+  min-height: 20px;
+  margin-top: 4px;
+  text-align: right;
+  max-width: 100%;
+  word-break: break-all;
+  transition: opacity 0.3s;
+}
+.feedback-line:empty { opacity: 0; }
+.feedback-line.correct { color: var(--accent-correct); }
+.feedback-line.wrong { color: var(--accent-wrong); }
+.buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  padding: 0 8px 8px;
+  background: rgba(0,0,0,0.1);
+}
+.btn {
+  height: 64px;
+  border: none;
+  border-radius: var(--radius-btn);
+  font-size: 22px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+  position: relative;
+  overflow: hidden;
+  margin: 3px;
+}
+.btn:active { transform: scale(0.93); }
+.btn-num { background: var(--bg-btn-num); color: var(--fg-btn-num); }
+.btn-num:hover { background: var(--bg-btn-num-hover); }
+.btn-op { background: var(--bg-btn-op); color: var(--fg-btn-op); font-size: 24px; }
+.btn-op:hover { background: var(--bg-btn-op-hover); }
+.btn-func { background: var(--bg-btn-func); color: var(--fg-btn-func); font-size: 18px; }
+.btn-func:hover { background: var(--bg-btn-func-hover); }
+.btn-eq { background: var(--bg-btn-eq); color: var(--fg-btn-eq); font-size: 28px; font-weight: 600; }
+.btn-eq:hover { background: var(--bg-btn-eq-hover); }
+.btn-zero { grid-column: span 2; }
+.btn-judge-correct {
+  background: rgba(0,210,211,0.2);
+  color: var(--accent-correct);
+  font-size: 18px;
+  font-weight: 600;
+  border: 1.5px solid rgba(0,210,211,0.4);
+}
+.btn-judge-correct:hover { background: rgba(0,210,211,0.3); }
+.btn-judge-wrong {
+  background: rgba(255,107,107,0.2);
+  color: var(--accent-wrong);
+  font-size: 18px;
+  font-weight: 600;
+  border: 1.5px solid rgba(255,107,107,0.4);
+}
+.btn-judge-wrong:hover { background: rgba(255,107,107,0.3); }
+.btn-next {
+  grid-column: span 3;
+  background: rgba(255,255,255,0.08);
+  color: var(--fg-display);
+  font-size: 17px;
+  font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+.btn-next:hover { background: rgba(255,255,255,0.14); }
+.btn-disabled {
+  opacity: 0.25;
+  pointer-events: none;
+}
+.stats-bar {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 20px 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+.stat-item { text-align: center; }
+.stat-value { font-size: 18px; font-weight: 600; color: var(--fg-display); }
+.stat-label { font-size: 10px; color: var(--fg-display-dim); margin-top: 2px; }
+.stat-value.score { color: var(--accent-correct); }
+.stat-value.streak { color: #f9e2af; }
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
+  transform: scale(0);
+  animation: ripple-anim 0.5s ease-out;
+  pointer-events: none;
+}
+@keyframes ripple-anim { to { transform: scale(4); opacity: 0; } }
+@media (max-height: 700px) {
+  .btn { height: 54px; font-size: 20px; }
+  .result { font-size: 40px; }
+  .screen { min-height: 100px; }
+}
+@media (max-height: 600px) {
+  .btn { height: 46px; font-size: 18px; }
+  .result { font-size: 34px; }
+  .screen { min-height: 80px; }
+  .stats-bar { padding: 8px 20px 12px; }
+}
+</style>
+</head>
+<body>
+<div class="calc-wrapper">
+  <div class="calc">
+    <div class="header">
+      <div class="header-title">
+        <span class="ai-dot"></span>
+        AI CALCULATOR
+      </div>
+      <div class="header-score" id="headerScore">0 分</div>
+    </div>
+    <div class="screen">
+      <div class="expression" id="expression"></div>
+      <div class="result" id="result">0</div>
+      <div class="feedback-line" id="feedbackLine"></div>
+    </div>
+    <div class="buttons" id="buttonsGrid">
+      <button class="btn btn-func" data-key="AC">AC</button>
+      <button class="btn btn-func" data-key="±">±</button>
+      <button class="btn btn-func" data-key="%">%</button>
+      <button class="btn btn-op" data-key="÷">÷</button>
+      <button class="btn btn-num" data-key="7">7</button>
+      <button class="btn btn-num" data-key="8">8</button>
+      <button class="btn btn-num" data-key="9">9</button>
+      <button class="btn btn-op" data-key="×">×</button>
+      <button class="btn btn-num" data-key="4">4</button>
+      <button class="btn btn-num" data-key="5">5</button>
+      <button class="btn btn-num" data-key="6">6</button>
+      <button class="btn btn-op" data-key="-">−</button>
+      <button class="btn btn-num" data-key="1">1</button>
+      <button class="btn btn-num" data-key="2">2</button>
+      <button class="btn btn-num" data-key="3">3</button>
+      <button class="btn btn-op" data-key="+">+</button>
+      <button class="btn btn-num btn-zero" data-key="0">0</button>
+      <button class="btn btn-num" data-key=".">.</button>
+      <button class="btn btn-eq" data-key="=">=</button>
+    </div>
+    <div class="stats-bar">
+      <div class="stat-item">
+        <div class="stat-value score" id="statScore">0</div>
+        <div class="stat-label">得分</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statTotal">0</div>
+        <div class="stat-label">答题</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value streak" id="statStreak">0</div>
+        <div class="stat-label">连对</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statAccuracy">--%</div>
+        <div class="stat-label">正确率</div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+var currentInput = '0';
+var expression = '';
+var operator = null;
+var prevValue = null;
+var waitingForOperand = false;
+var justCalculated = false;
+var currentCorrectResult = null;
+var isCurrentWrong = false;
+var isJudged = false;
+var score = 0;
+var totalJudged = 0;
+var correctJudged = 0;
+var streak = 0;
+var ERROR_PROBABILITY = 0.5;
+var mode = 'calc';
+
+var expressionEl = document.getElementById('expression');
+var resultEl = document.getElementById('result');
+var feedbackLine = document.getElementById('feedbackLine');
+var buttonsGrid = document.getElementById('buttonsGrid');
+
+var encouragements = [
+  '火眼金睛！', '心算达人！', '太厉害了！',
+  '完美判断！', '真准！', '大脑超频！',
+  '验算高手！', '无人能挡！', '绝了！'
+];
+
+function randomEncouragement() {
+  return encouragements[Math.floor(Math.random() * encouragements.length)];
+}
+
+function updateDisplay() {
+  resultEl.textContent = currentInput;
+  expressionEl.textContent = expression;
+  updateStats();
+}
+
+function updateStats() {
+  document.getElementById('headerScore').textContent = score + ' 分';
+  document.getElementById('statScore').textContent = score;
+  document.getElementById('statTotal').textContent = totalJudged;
+  document.getElementById('statStreak').textContent = streak;
+  var acc = totalJudged === 0 ? '--' : Math.round(correctJudged / totalJudged * 100);
+  document.getElementById('statAccuracy').textContent = acc + '%';
+}
+
+function calculate(a, op, b) {
+  switch (op) {
+    case '+': return a + b;
+    case '-': return a - b;
+    case '×': return a * b;
+    case '÷': return b !== 0 ? a / b : 'Error';
+    default: return b;
+  }
+}
+
+function formatNumber(num) {
+  if (typeof num === 'string') return num;
+  if (!isFinite(num)) return 'Error';
+  var s = parseFloat(num.toPrecision(12)).toString();
+  if (s.length > 14) s = num.toExponential(6);
+  return s;
+}
+
+function introduceError(correctResult) {
+  if (correctResult === 'Error' || correctResult === 0) return correctResult;
+  var isInt = correctResult === Math.floor(correctResult);
+  var absVal = Math.abs(correctResult);
+  var wrongResult;
+
+  if (isInt) {
+    var errorType = Math.random();
+    if (errorType < 0.5) {
+      var offset = Math.floor(Math.random() * 5) + 1;
+      wrongResult = correctResult + (Math.random() < 0.5 ? offset : -offset);
+    } else if (errorType < 0.8) {
+      var str = Math.abs(correctResult).toString();
+      if (str.length >= 2) {
+        var digits = str.split('');
+        var idx = Math.floor(Math.random() * digits.length);
+        var old = parseInt(digits[idx]);
+        var nw = (old + Math.floor(Math.random() * 9) + 1) % 10;
+        digits[idx] = nw.toString();
+        wrongResult = parseInt(digits.join('')) * (correctResult < 0 ? -1 : 1);
+      } else {
+        wrongResult = correctResult + (Math.random() < 0.5 ? 1 : -1);
+      }
+    } else {
+      var offset2 = Math.floor(Math.random() * 3) + 1;
+      wrongResult = correctResult + (Math.random() < 0.5 ? offset2 : -offset2);
+    }
+    wrongResult = Math.round(wrongResult);
+  } else {
+    var str = correctResult.toString();
+    var dotIdx = str.indexOf('.');
+    var decLen = str.length - dotIdx - 1;
+    var errorType2 = Math.random();
+    if (errorType2 < 0.5) {
+      var offset3 = Math.random() < 0.5 ? 1 : -1;
+      offset3 *= Math.random() < 0.5 ? Math.pow(10, -decLen) : Math.pow(10, -(decLen > 1 ? decLen - 1 : 1));
+      wrongResult = correctResult + offset3 * (Math.floor(Math.random() * 5) + 1);
+    } else {
+      var parts = str.split('.');
+      var intPart = parts[0];
+      var decPart = parts[1];
+      if (decPart && decPart.length > 0) {
+        var decimals = decPart.split('');
+        var idx2 = Math.floor(Math.random() * decimals.length);
+        var old2 = parseInt(decimals[idx2]);
+        var nw2 = (old2 + Math.floor(Math.random() * 9) + 1) % 10;
+        decimals[idx2] = nw2.toString();
+        wrongResult = parseFloat(intPart + '.' + decimals.join(''));
+      } else {
+        wrongResult = correctResult + (Math.random() < 0.5 ? 1 : -1);
+      }
+    }
+    wrongResult = parseFloat(wrongResult.toFixed(decLen));
+  }
+
+  if (wrongResult === correctResult) wrongResult = correctResult + (isInt ? 1 : 0.01);
+  return wrongResult;
+}
+
+function renderCalcButtons() {
+  mode = 'calc';
+  buttonsGrid.innerHTML =
+    '<button class="btn btn-func" data-key="AC">AC</button>' +
+    '<button class="btn btn-func" data-key="±">±</button>' +
+    '<button class="btn btn-func" data-key="%">%</button>' +
+    '<button class="btn btn-op" data-key="÷">÷</button>' +
+    '<button class="btn btn-num" data-key="7">7</button>' +
+    '<button class="btn btn-num" data-key="8">8</button>' +
+    '<button class="btn btn-num" data-key="9">9</button>' +
+    '<button class="btn btn-op" data-key="×">×</button>' +
+    '<button class="btn btn-num" data-key="4">4</button>' +
+    '<button class="btn btn-num" data-key="5">5</button>' +
+    '<button class="btn btn-num" data-key="6">6</button>' +
+    '<button class="btn btn-op" data-key="-">−</button>' +
+    '<button class="btn btn-num" data-key="1">1</button>' +
+    '<button class="btn btn-num" data-key="2">2</button>' +
+    '<button class="btn btn-num" data-key="3">3</button>' +
+    '<button class="btn btn-op" data-key="+">+</button>' +
+    '<button class="btn btn-num btn-zero" data-key="0">0</button>' +
+    '<button class="btn btn-num" data-key=".">.</button>' +
+    '<button class="btn btn-eq" data-key="=">=</button>';
+  bindButtonEvents();
+}
+
+function renderJudgeButtons() {
+  mode = 'judge';
+  buttonsGrid.innerHTML =
+    '<button class="btn btn-func btn-disabled">AC</button>' +
+    '<button class="btn btn-func btn-disabled">±</button>' +
+    '<button class="btn btn-func btn-disabled">%</button>' +
+    '<button class="btn btn-op btn-disabled">÷</button>' +
+    '<button class="btn btn-num btn-disabled">7</button>' +
+    '<button class="btn btn-num btn-disabled">8</button>' +
+    '<button class="btn btn-num btn-disabled">9</button>' +
+    '<button class="btn btn-op btn-disabled">×</button>' +
+    '<button class="btn btn-num btn-disabled">4</button>' +
+    '<button class="btn btn-num btn-disabled">5</button>' +
+    '<button class="btn btn-num btn-disabled">6</button>' +
+    '<button class="btn btn-op btn-disabled">−</button>' +
+    '<button class="btn btn-num btn-disabled">1</button>' +
+    '<button class="btn btn-num btn-disabled">2</button>' +
+    '<button class="btn btn-num btn-disabled">3</button>' +
+    '<button class="btn btn-op btn-disabled">+</button>' +
+    '<button class="btn btn-judge-correct" style="grid-column:span 2" data-action="correct">✓ 正确</button>' +
+    '<button class="btn btn-judge-wrong" style="grid-column:span 2" data-action="wrong">✗ 错误</button>';
+  bindButtonEvents();
+}
+
+function renderNextButton() {
+  mode = 'next';
+  buttonsGrid.innerHTML =
+    '<button class="btn btn-func btn-disabled">AC</button>' +
+    '<button class="btn btn-func btn-disabled">±</button>' +
+    '<button class="btn btn-func btn-disabled">%</button>' +
+    '<button class="btn btn-op btn-disabled">÷</button>' +
+    '<button class="btn btn-num btn-disabled">7</button>' +
+    '<button class="btn btn-num btn-disabled">8</button>' +
+    '<button class="btn btn-num btn-disabled">9</button>' +
+    '<button class="btn btn-op btn-disabled">×</button>' +
+    '<button class="btn btn-num btn-disabled">4</button>' +
+    '<button class="btn btn-num btn-disabled">5</button>' +
+    '<button class="btn btn-num btn-disabled">6</button>' +
+    '<button class="btn btn-op btn-disabled">−</button>' +
+    '<button class="btn btn-num btn-disabled">1</button>' +
+    '<button class="btn btn-num btn-disabled">2</button>' +
+    '<button class="btn btn-num btn-disabled">3</button>' +
+    '<button class="btn btn-op btn-disabled">+</button>' +
+    '<button class="btn btn-next" style="grid-column:span 4" data-action="next">下一题 →</button>';
+  bindButtonEvents();
+}
+
+function bindButtonEvents() {
+  buttonsGrid.querySelectorAll('.btn:not(.btn-disabled)').forEach(function(btn) {
+    btn.addEventListener('click', function(e) {
+      var key = btn.getAttribute('data-key');
+      var action = btn.getAttribute('data-action');
+      if (key) press(key);
+      else if (action === 'correct') judge(true);
+      else if (action === 'wrong') judge(false);
+      else if (action === 'next') nextQuestion();
+
+      var ripple = document.createElement('span');
+      ripple.className = 'ripple';
+      var rect = btn.getBoundingClientRect();
+      var size = Math.max(rect.width, rect.height);
+      ripple.style.width = ripple.style.height = size + 'px';
+      ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+      ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+      btn.appendChild(ripple);
+      setTimeout(function() { ripple.remove(); }, 500);
+    });
+  });
+}
+
+function judge(userSaysCorrect) {
+  if (isJudged) return;
+  isJudged = true;
+  totalJudged++;
+
+  var actuallyCorrect = !isCurrentWrong;
+  var userIsRight = (userSaysCorrect === actuallyCorrect);
+
+  if (userIsRight) {
+    correctJudged++;
+    streak++;
+    var bonus = streak >= 5 ? 3 : streak >= 3 ? 2 : 1;
+    score += bonus;
+    resultEl.classList.add('flash-correct');
+    setTimeout(function() { resultEl.classList.remove('flash-correct'); }, 800);
+
+    var msg = randomEncouragement();
+    if (bonus > 1) msg += ' +' + bonus + '分（' + streak + '连对加成）';
+    else msg += ' +1分';
+
+    feedbackLine.textContent = msg;
+    feedbackLine.className = 'feedback-line correct';
+  } else {
+    streak = 0;
+    resultEl.classList.add('flash-wrong');
+    setTimeout(function() { resultEl.classList.remove('flash-wrong'); }, 800);
+
+    var correctStr = formatNumber(currentCorrectResult);
+    if (isCurrentWrong) {
+      feedbackLine.textContent = '判断失误！正确答案：' + correctStr;
+    } else {
+      feedbackLine.textContent = '判断失误！结果就是 ' + correctStr;
+    }
+    feedbackLine.className = 'feedback-line wrong';
+  }
+
+  renderNextButton();
+  updateStats();
+}
+
+function nextQuestion() {
+  currentInput = '0';
+  expression = '';
+  operator = null;
+  prevValue = null;
+  waitingForOperand = false;
+  justCalculated = false;
+  currentCorrectResult = null;
+  isCurrentWrong = false;
+  isJudged = false;
+  feedbackLine.textContent = '';
+  feedbackLine.className = 'feedback-line';
+  renderCalcButtons();
+  updateDisplay();
+}
+
+function press(key) {
+  if (isJudged) return;
+
+  if (key === 'AC') {
+    currentInput = '0';
+    expression = '';
+    operator = null;
+    prevValue = null;
+    waitingForOperand = false;
+    justCalculated = false;
+    currentCorrectResult = null;
+    isCurrentWrong = false;
+    feedbackLine.textContent = '';
+    feedbackLine.className = 'feedback-line';
+    updateDisplay();
+    return;
+  }
+
+  if (key === '±') {
+    if (currentInput !== '0' && currentInput !== 'Error') {
+      currentInput = currentInput.charAt(0) === '-' ? currentInput.substring(1) : '-' + currentInput;
+    }
+    updateDisplay();
+    return;
+  }
+
+  if (key === '%') {
+    var val = parseFloat(currentInput);
+    if (!isNaN(val)) currentInput = formatNumber(val / 100);
+    updateDisplay();
+    return;
+  }
+
+  if ('0123456789.'.indexOf(key) !== -1) {
+    if (justCalculated && key !== '.') {
+      currentInput = '0';
+      expression = '';
+      prevValue = null;
+      operator = null;
+      justCalculated = false;
+    }
+    if (waitingForOperand) {
+      currentInput = key === '.' ? '0.' : key;
+      waitingForOperand = false;
+    } else {
+      if (key === '.') {
+        if (currentInput.indexOf('.') === -1) currentInput += '.';
+      } else {
+        if (currentInput === '0') currentInput = key;
+        else if (currentInput.length < 15) currentInput += key;
+      }
+    }
+    justCalculated = false;
+    updateDisplay();
+    return;
+  }
+
+  if ('+-×÷'.indexOf(key) !== -1) {
+    var current = parseFloat(currentInput);
+    if (prevValue !== null && operator && !waitingForOperand) {
+      var result = calculate(prevValue, operator, current);
+      currentInput = formatNumber(result);
+      prevValue = result;
+    } else {
+      prevValue = current;
+    }
+    operator = key;
+    expression = currentInput + ' ' + key;
+    waitingForOperand = true;
+    justCalculated = false;
+    updateDisplay();
+    return;
+  }
+
+  if (key === '=') {
+    if (operator && prevValue !== null) {
+      var current = parseFloat(currentInput);
+      var correctResult = calculate(prevValue, operator, current);
+      if (correctResult === 'Error') {
+        currentInput = 'Error';
+        currentCorrectResult = 'Error';
+        isCurrentWrong = false;
+      } else {
+        currentCorrectResult = correctResult;
+        if (Math.random() < ERROR_PROBABILITY) {
+          var wrongResult = introduceError(correctResult);
+          currentInput = formatNumber(wrongResult);
+          isCurrentWrong = true;
+        } else {
+          currentInput = formatNumber(correctResult);
+          isCurrentWrong = false;
+        }
+      }
+      expression = prevValue + ' ' + operator + ' ' + current + ' =';
+      prevValue = null;
+      operator = null;
+      waitingForOperand = true;
+      justCalculated = true;
+      updateDisplay();
+      renderJudgeButtons();
+    }
+    return;
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (mode === 'judge') {
+    if (e.key === 'ArrowLeft' || e.key === 'c' || e.key === 'C') { judge(true); e.preventDefault(); }
+    else if (e.key === 'ArrowRight' || e.key === 'x' || e.key === 'X') { judge(false); e.preventDefault(); }
+    return;
+  }
+  if (mode === 'next') {
+    if (e.key === 'Enter' || e.key === ' ') { nextQuestion(); e.preventDefault(); }
+    return;
+  }
+  var key = e.key;
+  if (key >= '0' && key <= '9') press(key);
+  else if (key === '.') press('.');
+  else if (key === '+') press('+');
+  else if (key === '-') press('-');
+  else if (key === '*') press('×');
+  else if (key === '/') { e.preventDefault(); press('÷'); }
+  else if (key === 'Enter' || key === '=') press('=');
+  else if (key === 'Escape') press('AC');
+  else if (key === 'Backspace') {
+    if (currentInput.length > 1 && currentInput !== 'Error') currentInput = currentInput.slice(0, -1);
+    else currentInput = '0';
+    updateDisplay();
+  }
+  else if (key === '%') press('%');
+});
+
+renderCalcButtons();
+updateDisplay();
+</script>
+</body>
+</html>
