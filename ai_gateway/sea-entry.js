@@ -37,6 +37,17 @@ const GATEWAY_KEY = config.apiKey;
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 // In-memory static file serving (for SEA mode)
 const staticFiles = {
   '/': indexHtml,

@@ -29,7 +29,17 @@ const GATEWAY_KEY = config.apiKey;
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 
-// Serve static files from public/ (works in both normal and pkg mode)
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS, PUT, DELETE');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Auth middleware for management API ---
@@ -55,6 +65,11 @@ function proxyAuth(req, res, next) {
 
 app.post('/v1/chat/completions', proxyAuth, proxyChatCompletion);
 app.get('/v1/models', proxyAuth, proxyListModels);
+
+// Health check endpoint for testing connection
+app.post('/v1', proxyAuth, (req, res) => {
+  res.json({ status: 'ok', message: 'AI Gateway is running' });
+});
 
 // ============================================================
 // Management API
