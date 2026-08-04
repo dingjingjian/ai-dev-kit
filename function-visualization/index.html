@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>初高中函数可视化</title>
+<style>
+:root{
+  --bg:#f4f6fa;
+  --panel:#ffffff;
+  --border:#e2e8f0;
+  --ink:#1e293b;
+  --mut:#64748b;
+  --bg-tertiary:#eef1f7;
+  --text-muted:#8a96a8;
+  --acc:#0284c7;
+  --acc-deep:#0369a1;
+  --acc-bg:rgba(2,132,199,0.08);
+  --acc-line:rgba(2,132,199,0.35);
+  --acc2:#b45309;
+  --acc2-bg:rgba(217,119,6,0.08);
+  --acc2-line:rgba(217,119,6,0.28);
+  --pri:#059669;
+  --pri-deep:#047857;
+  --pri-bg:rgba(5,150,105,0.10);
+  --pri-line:rgba(5,150,105,0.28);
+  --danger:#dc2626;
+  --danger-bg:rgba(220,38,38,0.08);
+  --danger-line:rgba(220,38,38,0.28);
+  --safe-top:max(80px, calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 44px));
+  --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{touch-action:manipulation;-webkit-text-size-adjust:100%;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  background:var(--bg);
+  color:var(--ink);min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+header{padding-top:var(--safe-top);padding-right:28px;padding-bottom:10px;padding-left:28px;max-width:1400px;margin:0 auto;}
+h1{font-size:26px;font-weight:700;margin:0;letter-spacing:.5px;}
+h1 .tag{font-size:14px;font-weight:600;color:var(--acc-deep);margin-left:10px;}
+.sub{font-size:16px;color:var(--mut);margin:6px 0 0;line-height:1.6;max-width:920px;}
+.wrap{display:flex;gap:18px;padding:14px 28px 30px;flex-wrap:wrap;max-width:1400px;margin:0 auto;align-items:flex-start;}
+.stage{flex:2 1 580px;min-width:320px;position:relative;overflow:hidden;border-radius:14px;}
+.stage-canvas-wrap{position:relative;width:100%;max-width:900px;margin:0 auto;}
+canvas{
+  display:block;width:100%;max-width:100%;height:auto;border-radius:14px;background:#f5f8fb;
+  border:1px solid var(--border);box-shadow:0 1px 3px rgba(15,23,42,0.05);
+  touch-action:none;
+}
+@media(min-width:921px){
+  body{overflow:hidden;}
+  .wrap{height:calc(100vh - var(--header-h,120px));overflow:hidden;flex-wrap:nowrap;align-items:stretch;padding:14px 28px 16px;}
+  .stage{height:100%;min-height:0;display:flex;align-items:stretch;justify-content:center;}
+  .stage-canvas-wrap{max-width:none;height:100%;flex:1;min-width:0;}
+  canvas{width:100%!important;height:100%!important;max-width:none!important;}
+  .side{overflow-y:auto;height:100%;min-height:0;padding-bottom:14px;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;}
+}
+.side{flex:1 1 300px;display:flex;flex-direction:column;gap:14px;}
+.panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  padding:18px 20px;box-shadow:0 1px 3px rgba(15,23,42,0.04);
+}
+.panel h2{
+  font-size:17px;margin:0 0 14px;position:relative;padding-left:12px;
+  color:var(--ink);font-weight:600;letter-spacing:.3px;
+}
+.panel h2::before{
+  content:'';position:absolute;left:0;top:3px;bottom:3px;width:4px;border-radius:2px;
+  background:var(--acc);
+}
+.mode-row{display:flex;gap:8px;}
+.mode-btn{
+  flex:1;padding:10px 12px;font-size:15px;font-family:inherit;
+  border:1px solid var(--border);border-radius:10px;
+  background:#ffffff;color:var(--mut);cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,box-shadow .18s,opacity .1s;
+  min-height:44px;
+}
+.mode-btn:hover{background:var(--acc-bg);border-color:var(--acc);color:var(--ink);}
+.mode-btn:active{opacity:.7;}
+.mode-btn.active{
+  background:var(--acc-bg);border-color:var(--acc);color:var(--acc-deep);font-weight:600;
+  box-shadow:inset 0 0 0 1px var(--acc);
+}
+.read{font-size:15px;line-height:2.1;color:var(--ink);}
+.read .lbl{color:var(--mut);display:inline-block;width:auto;}
+.read b{font-size:16px;color:var(--acc-deep);font-weight:600;font-variant-numeric:tabular-nums;}
+.read .val-real{color:var(--pri);}
+.read .val-virt{color:var(--danger);}
+.tag{
+  display:inline-block;padding:4px 14px;border-radius:999px;font-size:13px;font-weight:600;
+  margin-top:10px;letter-spacing:.3px;
+}
+.tag-real{background:var(--pri-bg);color:var(--pri-deep);border:1px solid var(--pri-line);}
+.tag-virt{background:var(--danger-bg);color:var(--danger);border:1px solid var(--danger-line);}
+.tag-info{background:var(--acc-bg);color:var(--acc-deep);border:1px solid var(--acc-line);}
+.row{margin:14px 0;}
+label{font-size:14px;color:var(--mut);display:flex;justify-content:space-between;margin-bottom:8px;}
+label span{color:var(--acc-deep);font-weight:600;font-variant-numeric:tabular-nums;}
+input[type=range]{
+  width:100%;height:6px;border-radius:3px;background:var(--border);
+  -webkit-appearance:none;appearance:none;outline:none;cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:18px;height:18px;border-radius:50%;
+  background:var(--acc);border:2px solid #ffffff;
+  box-shadow:0 1px 4px rgba(15,23,42,0.25);cursor:pointer;
+}
+input[type=range]::-moz-range-thumb{
+  width:18px;height:18px;border-radius:50%;background:var(--acc);
+  border:2px solid #ffffff;box-shadow:0 1px 4px rgba(15,23,42,0.25);cursor:pointer;
+}
+.btn-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+.btn{
+  padding:9px 18px;font-size:15px;font-family:inherit;border:1px solid var(--border);
+  border-radius:10px;background:#ffffff;color:var(--ink);cursor:pointer;
+  transition:background .18s,border-color .18s,color .18s,transform .1s,opacity .1s;
+  min-height:44px;
+}
+.btn:hover{background:var(--acc-bg);border-color:var(--acc);color:var(--acc-deep);}
+.btn:active{transform:scale(.97);opacity:.85;}
+.btn.primary{background:var(--acc);border-color:var(--acc);color:#ffffff;font-weight:600;}
+.btn.primary:hover{background:var(--acc-deep);border-color:var(--acc-deep);color:#ffffff;}
+button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--acc-line);outline-offset:2px;}
+.row.disabled{opacity:.35;pointer-events:none;}
+.row.disabled input[type=range]{background:#cbd5e1;cursor:not-allowed;}
+.explain{font-size:14px;line-height:1.8;color:var(--mut);margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+.explain strong{color:var(--ink);}
+.explain .hl{color:var(--acc-deep);font-weight:600;}
+.formula{
+  background:var(--acc-bg);border:1px solid var(--acc-line);
+  border-radius:10px;padding:10px 14px;margin-top:12px;
+  font-size:13px;color:var(--mut);line-height:1.7;
+}
+.formula code{color:var(--acc-deep);font-family:"SF Mono",monospace;font-size:13px;}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--mut);}
+.legend span{display:flex;align-items:center;gap:5px;}
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+.hint-box{
+  background:var(--acc2-bg);border:1px solid var(--acc2-line);
+  border-radius:10px;padding:10px 14px;margin-top:12px;
+  font-size:13px;color:var(--acc2);line-height:1.6;
+}
+.narr{font-size:16px;line-height:1.75;color:var(--ink);min-height:80px;margin-top:8px;}
+.narr .hl{color:var(--acc-deep);font-weight:600;}
+.narr .hl2{color:var(--acc2);font-weight:600;}
+.narr .ev{color:var(--danger);font-weight:600;}
+.kp{font-size:15px;color:var(--mut);line-height:1.65;margin-top:14px;}
+.kp ul{margin:0;padding-left:18px;}
+.kp li{margin:6px 0;}
+.kp b{color:var(--acc2);font-weight:600;}
+.kp b.g{color:var(--pri-deep);}
+.kp .grp{font-size:13px;color:var(--acc-deep);letter-spacing:1px;margin:8px 0 4px;font-weight:600;}
+.kpts{margin-top:16px;display:flex;flex-direction:column;gap:10px;}
+.kpt{display:flex;gap:10px;align-items:flex-start;font-size:15px;color:var(--mut);line-height:1.6;}
+.kpt i{
+  flex:none;width:19px;height:19px;border-radius:6px;margin-top:1px;
+  background:var(--pri-bg);color:var(--pri-deep);font-style:normal;font-size:12px;
+  display:flex;align-items:center;justify-content:center;font-weight:700;
+}
+.divider{height:1px;background:var(--border);margin:12px 0;}
+.stat{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:12px;font-size:15px;color:var(--ink);}
+.stat .k{color:var(--mut);}
+.stat .v{color:var(--acc-deep);font-weight:600;font-variant-numeric:tabular-nums;}
+.stat .v.b{color:var(--acc2);}
+.stat .v.r{color:var(--danger);}
+.hud{display:none;}
+.progress{margin-top:16px;}
+.progress .lbl{font-size:14px;color:var(--mut);margin-bottom:6px;display:flex;justify-content:space-between;}
+.progress .bar{height:6px;border-radius:6px;background:rgba(15,23,42,0.06);overflow:hidden;}
+.progress .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc-deep));border-radius:6px;transition:width .15s;}
+.chips{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;}
+.chip{
+  display:inline-block;font-size:13px;padding:5px 10px;border-radius:20px;
+  border:1px solid var(--border);background:#f8fafc;color:var(--mut);
+}
+.chip.hi{border-color:var(--acc);color:var(--acc-deep);background:var(--acc-bg);}
+
+@media (max-width:920px){
+  :root{--safe-top:max(80px, calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 44px));}
+  .side{flex:1 1 100%;gap:12px;}
+  .wrap{padding:12px 14px 22px;gap:14px;}
+  header{padding-right:14px;padding-left:14px;padding-bottom:8px;}
+  h1{font-size:22px;}
+  h1 .tag{font-size:12px;margin-left:8px;}
+  .sub{font-size:14px;}
+  .panel{padding:14px 16px;border-radius:12px;}
+  .panel h2{font-size:16px;margin-bottom:12px;}
+  .mode-btn{padding:11px 10px;font-size:14px;min-height:44px;}
+  .btn{padding:11px 16px;font-size:14px;min-height:44px;flex:1;justify-content:center;display:flex;align-items:center;}
+  .btn-row{gap:8px;}
+  .narr{font-size:15px;line-height:1.7;min-height:60px;}
+  .explain{font-size:13px;line-height:1.75;}
+  .formula{font-size:12px;padding:9px 12px;}
+  .kp{font-size:14px;line-height:1.6;}
+  .kp li{margin:5px 0;}
+  .kpt{font-size:14px;line-height:1.55;}
+  .hint-box{font-size:12px;padding:9px 12px;}
+  .row{margin:12px 0;}
+  label{font-size:13px;margin-bottom:10px;}
+  input[type=range]{height:8px;}
+  input[type=range]::-webkit-slider-thumb{width:22px;height:22px;}
+  input[type=range]::-moz-range-thumb{width:22px;height:22px;}
+  .stage{min-width:0;flex:1 1 100%;}
+  .stage-canvas-wrap{max-width:100%;}
+  canvas{border-radius:12px;}
+  .side{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;}
+}
+
+@media (max-width:480px){
+  h1{font-size:20px;letter-spacing:0;}
+  h1 .tag{display:none;}
+  .sub{font-size:13px;}
+  .panel{padding:12px 14px;}
+  .panel h2{font-size:15px;}
+  .mode-btn{padding:10px 8px;font-size:13px;}
+  .mode-row{gap:6px;}
+  .narr{font-size:14px;}
+  .explain{font-size:12.5px;}
+  .formula{font-size:11.5px;}
+  .kp{font-size:13px;}
+  .kpt{font-size:13px;}
+  .hint-box{font-size:11.5px;}
+}
+
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--panel);}
+::-webkit-scrollbar-thumb{background:var(--bg-tertiary);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--text-muted);}
+</style>
+</head>
+<body>
+<header>
+  <h1>初高中函数可视化 <span class="tag">数学 · 互动课堂</span></h1>
+  <p class="sub">在统一坐标系下绘制常见函数图像，滑块调节参数实时观察图像变化与关键特征。</p>
+</header>
+<div class="wrap">
+  <div class="stage">
+    <div class="stage-canvas-wrap">
+    <canvas id="cv"></canvas>
+    <div id="hud" style="display:none"><span id="hud-type"></span></div>
+  </div>
+  </div>
+  <div class="side">
+    <div class="panel">
+      <h2>函数类型</h2>
+      <div class="mode-row" style="flex-wrap:wrap;">
+        <button class="mode-btn active" data-f="linear">一次</button>
+        <button class="mode-btn" data-f="quadratic">二次</button>
+        <button class="mode-btn" data-f="inverse">反比例</button>
+      </div>
+      <div class="mode-row" style="flex-wrap:wrap;margin-top:8px;">
+        <button class="mode-btn" data-f="exp">指数</button>
+        <button class="mode-btn" data-f="log">对数</button>
+        <button class="mode-btn" data-f="trig">三角</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>参数调节</h2>
+      <div class="row" data-p="a"><label>参数 a <span id="va">1.0</span></label><input id="pa" type="range" min="-30" max="30" step="1" value="10"></div>
+      <div class="row" data-p="b"><label>参数 b <span id="vb">0.0</span></label><input id="pb" type="range" min="-30" max="30" step="1" value="0"></div>
+      <div class="row" data-p="c"><label>参数 c <span id="vc">0.0</span></label><input id="pc" type="range" min="-30" max="30" step="1" value="0"></div>
+      <div class="btn-row">
+        <button class="btn" id="reset">重置参数</button>
+        <button class="btn primary" id="toggle-grid">网格开/关</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>教学叙事</h2>
+      <div class="narr" id="narr">函数描述了两个变量之间的<span class="hl">对应关系</span>。调节参数观察图像如何变化：参数决定<span class="hl2">形状、位置与方向</span>。<span class="ev">易错：反比例函数定义域 x≠0，分段单调。</span></div>
+      <div class="explain" id="explain"><strong>关键特征</strong>：选择函数类型后，此处显示零点、顶点、渐近线、周期等特征。</div>
+      <div class="formula" id="formula">当前公式：<code>y = ax + b</code></div>
+      <div class="hint-box">💡 提示：上方按钮切换函数，滑块调节 a/b/c 参数；移动鼠标或手指到图上读坐标。</div>
+    </div>
+    <div class="panel">
+      <h2>知识点</h2>
+      <div class="kp">
+        <div class="grp">函数族特征</div>
+        <ul>
+          <li><b>一次函数</b>：直线，斜率 a 决定倾斜方向</li>
+          <li><b class="g">二次函数</b>：抛物线，a 决定开口方向</li>
+          <li><b>反比例</b>：双曲线，以坐标轴为渐近线</li>
+          <li><b class="g">指数/对数</b>：互为反函数，单调递增/减</li>
+          <li><b>三角函数</b>：周期波形，ω 影响周期</li>
+        </ul>
+      </div>
+      <div class="kpts">
+        <div class="kpt"><i>✓</i><span>参数变化 → 图像变换（平移、缩放、翻转）</span></div>
+        <div class="kpt"><i>✓</i><span>关键点：零点、顶点、渐近线、周期、对称轴</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="./main.js"></script>
+</body>
+</html>
