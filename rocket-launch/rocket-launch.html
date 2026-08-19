@@ -47,12 +47,14 @@ canvas{
   border:1px solid var(--border);box-shadow:0 1px 3px rgba(15,23,42,0.05);
 }
 @media(min-width:921px){
-  body{overflow:hidden;}
-  .wrap{height:calc(100vh - var(--header-h,120px));overflow:hidden;flex-wrap:nowrap;align-items:stretch;padding:14px 28px 16px;}
+  html,body{height:100%;}
+  body{overflow:hidden;display:flex;flex-direction:column;}
+  header{flex:0 0 auto;}
+  .wrap{flex:1 1 auto;min-height:0;height:auto;overflow:hidden;flex-wrap:nowrap;align-items:stretch;padding:14px 28px 16px;}
   .stage{height:100%;min-height:0;display:flex;align-items:stretch;justify-content:center;}
-  .stage-canvas-wrap{max-width:none;height:100%;flex:1;min-width:0;}
+  .stage-canvas-wrap{max-width:none;height:100%;flex:1;min-width:0;width:100%;}
   canvas{width:100%!important;height:100%!important;max-width:none!important;}
-  .side{overflow-y:auto;height:100%;min-height:0;padding-bottom:14px;}
+  .side{overflow-y:auto;height:auto;min-height:0;padding-bottom:14px;}
 }
 .side{flex:1 1 300px;display:flex;flex-direction:column;gap:14px;}
 .panel{
@@ -187,7 +189,7 @@ button:focus-visible,input[type=range]:focus-visible{outline:2px solid var(--acc
   <div class="stage">
     <div class="stage-canvas-wrap">
     <canvas id="cv"></canvas>
-    <div class="hud" id="hud">火箭待命中，点击右侧「发射」开始</div>
+    <div class="hud" id="hud">火箭待命中，点击「发射」开始</div>
     </div>
   </div>
   <div class="side">
@@ -410,6 +412,7 @@ function setTag(txt,cls){if(txt){tag.textContent=txt;tag.className='tag '+cls;re
  case 'coast':tag.textContent=karman?'跨越卡门线 · 惯性滑行':'惯性滑行';tag.className=karman?'tag tag-real':'tag tag-info';break;
  case 'end':tag.textContent='任务结束';tag.className='tag tag-info';break;}}
 function setChip(n){for(var j=0;j<6;j++)chips[j].classList.toggle('hi',j===n);}
+function idleHud(){return '火箭待命中，点击'+(window.innerWidth<921?'下方':'右侧')+'「发射」开始';}
 var mode='view';
 $('m1').onclick=function(){mode='view';this.classList.add('active');$('m2').classList.remove('active');arT.visible=arW.visible=false;};
 $('m2').onclick=function(){mode='force';this.classList.add('active');$('m1').classList.remove('active');};
@@ -610,13 +613,12 @@ function loop(){
  if(phase==='count')hud.innerHTML='<b style="font-size:24px">'+Math.ceil(cd)+'</b>　点火程序启动…';
  else if(phase==='pad'&&throttle>0&&twr<=1)hud.innerHTML='<b class="r">推力不足！</b>推重比 <b class="r">'+twr.toFixed(2)+'</b> &lt; 1，请加大油门';
  else if(phase==='pad')hud.innerHTML='油门为零，推动滑块增加推力';
- else if(phase==='idle')hud.innerHTML='火箭待命中，点击右侧「发射」开始';
+ else if(phase==='idle')hud.innerHTML=idleHud();
  else hud.innerHTML='高度 <b>'+(alt/1000).toFixed(1)+' km</b> · 速度 <b>'+v.toFixed(0)+' m/s</b> · 燃料 <b class="b">'+Math.round((s1On?fuel1/S1.fuel0:fuel2/S2.fuel0)*100)+'%</b>'+(karman?' · <b>已越过卡门线</b>':'');
  renderer.render(scene,camera);
 }
 loop();
 })();
 </script>
-<script>!function(){function f(){var h=document.querySelector('header');if(h)document.documentElement.style.setProperty('--header-h',h.offsetHeight+'px')}f();addEventListener('resize',f);addEventListener('load',f)}();</script>
 </body>
 </html>

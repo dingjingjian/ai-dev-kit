@@ -15,12 +15,19 @@ const fix = (m) => { log.push(m); console.log('  [fix] ' + m); };
 
 let html = fs.readFileSync(SRC, 'utf8');
 
-// ---------- 1. 提取三段内联脚本 ----------
+// ---------- 1. 提取内联脚本（兼容 2 段 / 3 段） ----------
 const re = /<script([^>]*)>([\s\S]*?)<\/script>/g;
 const scripts = [...html.matchAll(re)].map((m) => m[2]);
-if (scripts.length !== 3) throw new Error('预期 3 段脚本，实际 ' + scripts.length);
+if (scripts.length < 1) throw new Error('未找到任何 <script> 块');
 
-let [threeJs, mainJs, layoutJs] = scripts;
+// 约定：第 1 段为 three.js 库，最后一段为业务主逻辑，中间段为 layout 等辅助脚本。
+// 兼容「3 段（含 layout.js）」与「2 段（three + main）」两种源文件结构。
+const scriptNames = scripts.map((_, i) => {
+  if (i === 0) return 'three.min.js';
+  if (i === scripts.length - 1) return 'main.js';
+  return scripts.length === 3 ? 'layout.js' : `layout${i}.js`;
+});
+let [threeJs, mainJs] = [scripts[0], scripts[scripts.length - 1]];
 
 // ---------- 2. main.js: on* 属性赋值 → addEventListener ----------
 const evtMap = { onclick: 'click', oninput: 'input', onchange: 'change' };
@@ -52,10 +59,8 @@ if (leftover) throw new Error('仍有 on* 赋值残留: ' + leftover.join(','));
 // ---------- 3. 写出 assets ----------
 fs.rmSync(DIST, { recursive: true, force: true });
 fs.mkdirSync(ASSETS, { recursive: true });
-fs.writeFileSync(path.join(ASSETS, 'three.min.js'), threeJs.trim() + '\n', 'utf8');
-fs.writeFileSync(path.join(ASSETS, 'main.js'), mainJs.trim() + '\n', 'utf8');
-fs.writeFileSync(path.join(ASSETS, 'layout.js'), layoutJs.trim() + '\n', 'utf8');
-fix('脚本全部外置：assets/three.min.js + assets/main.js + assets/layout.js');
+scripts.forEach((s, i) => fs.writeFileSync(path.join(ASSETS, scriptNames[i]), s.trim() + '\n', 'utf8'));
+fix('脚本全部外置：' + scriptNames.map((n) => 'assets/' + n).join(' + '));
 
 // ---------- 4. HTML: 移除内联脚本，替换为外链 ----------
 const parts = html.split(re);
@@ -63,11 +68,7 @@ const parts = html.split(re);
 let out = html;
 const blocks = [...html.matchAll(re)].map((m) => ({ full: m[0], idx: m.index }));
 // 从后往前替换，避免索引偏移
-const replacements = [
-  '<script src="./assets/three.min.js"></script>',
-  '<script src="./assets/main.js"></script>',
-  '<script src="./assets/layout.js"></script>',
-];
+const replacements = scriptNames.map((n) => `<script src="./assets/${n}"></script>`);
 for (let i = blocks.length - 1; i >= 0; i--) {
   out = out.slice(0, blocks[i].idx) + replacements[i] + out.slice(blocks[i].idx + blocks[i].full.length);
 }
