@@ -106,11 +106,25 @@ async function logout() {
 // ---------- 绑定顶部工具栏按钮 ----------
 function setupHeaderButtons() {
   document.getElementById('btnAdd').addEventListener('click', openAddModal);
-  document.getElementById('btnExport').addEventListener('click', exportPasswords);
-  document.getElementById('btnImport').addEventListener('click', () => {
-    document.getElementById('importFile').click();
+  document.getElementById('btnExport').addEventListener('click', (e) => {
+    e.stopPropagation();
+    document.getElementById('exportMenu').classList.toggle('open');
   });
-  document.getElementById('importFile').addEventListener('change', importPasswords);
+  document.getElementById('exportMenu').addEventListener('click', (e) => {
+    const item = e.target.closest('[data-export]');
+    if (!item) return;
+    const fmt = item.dataset.export;
+    document.getElementById('exportMenu').classList.remove('open');
+    if (fmt === 'json') exportPasswords();
+    else if (fmt === 'csv') exportPasswordsCsv();
+  });
+  // 点击外部关闭导出菜单
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#exportDropdown')) {
+      document.getElementById('exportMenu').classList.remove('open');
+    }
+  });
+  document.getElementById('btnImport').addEventListener('click', openImportModal);
   document.getElementById('btnBackup').addEventListener('click', openBackupModal);
   document.getElementById('btnHint').addEventListener('click', openHintModal);
   document.getElementById('btnLogout').addEventListener('click', logout);

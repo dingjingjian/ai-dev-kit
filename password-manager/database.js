@@ -369,6 +369,57 @@ const passwordOps = {
         category_color: categories.find(c => c.id === p.category_id)?.color || null
       }))
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+  },
+
+  // 批量创建密码(一次性保存,避免每条都写文件+备份)
+  // items: [{ title, username, password, url, notes, category_name }]
+  bulkCreate(items) {
+    const data = readData();
+    let imported = 0, skipped = 0;
+    const errors = [];
+    const now = new Date().toISOString();
+    let baseSortOrder = data.passwords.reduce((max, p) => Math.max(max, p.sort_order ?? 0), 0);
+
+    items.forEach((item, idx) => {
+      const rowNo = idx + 1;
+      const title = (item.title || '').toString().trim();
+      const password = item.password == null ? '' : String(item.password);
+      if (!title || !password) {
+        skipped++;
+        errors.push({ row: rowNo, reason: '标题或密码为空' });
+        return;
+      }
+      // 按 category_name 自动查找/创建分类
+      let categoryId = null;
+      const categoryName = (item.category_name || '').toString().trim();
+      if (categoryName) {
+        let cat = data.categories.find(c => c.name === categoryName);
+        if (!cat) {
+          const newId = data.nextCategoryId++;
+          cat = { id: newId, name: categoryName, icon: 'folder', color: '#4A90D9' };
+          data.categories.push(cat);
+        }
+        categoryId = cat.id;
+      }
+      const newId = data.nextPasswordId++;
+      baseSortOrder++;
+      data.passwords.push({
+        id: newId,
+        category_id: categoryId,
+        title,
+        username: (item.username || '').toString(),
+        password,
+        url: (item.url || '').toString(),
+        notes: (item.notes || '').toString(),
+        sort_order: baseSortOrder,
+        created_at: now,
+        updated_at: now
+      });
+      imported++;
+    });
+
+    saveData(data);
+    return { imported, skipped, errors };
   }
 };
 

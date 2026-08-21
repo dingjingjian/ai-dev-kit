@@ -205,6 +205,20 @@ function createApp() {
     res.json({ success: true, imported, skipped });
   });
 
+  // ===== 批量导入 API(按 category_name 自动创建/查找分类) =====
+  // 接收 { passwords: [{ title, username, password, url, notes, category_name }] }
+  app.post('/api/import/batch', requireAuth, (req, res) => {
+    const { passwords } = req.body;
+    if (!passwords || !Array.isArray(passwords)) {
+      return res.status(400).json({ error: '无效的导入数据' });
+    }
+    if (passwords.length > 5000) {
+      return res.status(400).json({ error: '单次导入不能超过 5000 条' });
+    }
+    const result = passwordOps.bulkCreate(passwords);
+    res.json({ success: true, ...result });
+  });
+
   // ===== 备份恢复 API =====
   app.get('/api/backups', requireAuth, (req, res) => {
     res.json(getBackupList());

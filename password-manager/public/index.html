@@ -42,9 +42,20 @@
       <div class="header-actions">
         <input type="text" class="search-box" id="searchBox" placeholder="搜索密码记录... (Ctrl+F)" autocomplete="off">
         <button class="btn btn-sm" id="btnAdd" title="添加密码 (Ctrl+N)">+ 添加</button>
-        <button class="btn btn-sm btn-secondary" id="btnExport" title="导出 (Ctrl+E)">导出</button>
+        <div class="dropdown" id="exportDropdown">
+          <button class="btn btn-sm btn-secondary" id="btnExport" title="导出 (Ctrl+E)">导出 <span class="caret">▾</span></button>
+          <div class="dropdown-menu" id="exportMenu">
+            <button type="button" class="dropdown-item" data-export="json">
+              <span class="dropdown-label">导出 JSON</span>
+              <span class="dropdown-hint">完整备份,可还原</span>
+            </button>
+            <button type="button" class="dropdown-item" data-export="csv">
+              <span class="dropdown-label">导出 CSV</span>
+              <span class="dropdown-hint">跨工具通用格式</span>
+            </button>
+          </div>
+        </div>
         <button class="btn btn-sm btn-secondary" id="btnImport">导入</button>
-        <input type="file" id="importFile" accept=".json" class="hidden">
         <button class="btn btn-sm btn-secondary" id="btnBackup">备份恢复</button>
         <button class="btn btn-sm btn-secondary" id="btnHint">密码提示</button>
         <button class="btn btn-sm btn-secondary" id="btnLogout">退出</button>
@@ -189,12 +200,91 @@
     </div>
   </div>
 
+  <!-- 导入模态框(Tab: CSV 批量 / JSON) -->
+  <div class="modal" id="importModal">
+    <div class="modal-content modal-wide">
+      <div class="modal-header">
+        <h2>导入密码</h2>
+        <button class="modal-close" data-close="importModal" aria-label="关闭">&times;</button>
+      </div>
+
+      <!-- Tab 切换 -->
+      <div class="import-tabs">
+        <button type="button" class="import-tab active" data-tab="csv">CSV 批量导入</button>
+        <button type="button" class="import-tab" data-tab="json">JSON 导入</button>
+      </div>
+
+      <!-- ===== CSV 批量导入 Tab ===== -->
+      <div class="import-tab-pane active" id="importTabCsv">
+        <div class="modal-section">
+          <h3>1. 选择文件</h3>
+          <p class="desc">支持 Chrome / Edge / Firefox / Bitwarden / LastPass / KeePass 导出的 CSV,也可 <a href="#" id="importDownloadTemplate">下载模板</a> 按格式填写。</p>
+          <div class="import-file-row">
+            <input type="file" id="importFileInput" accept=".csv,text/csv" class="import-file-input">
+          </div>
+          <div class="form-row">
+            <div class="form-group form-group-grow">
+              <label for="importPreset">来源格式预设</label>
+              <select id="importPreset">
+                <option value="auto">自动识别</option>
+                <option value="custom">自定义</option>
+                <option value="chrome">Chrome / Edge</option>
+                <option value="firefox">Firefox</option>
+                <option value="bitwarden">Bitwarden</option>
+                <option value="lastpass">LastPass</option>
+                <option value="keepass">KeePass</option>
+              </select>
+            </div>
+            <div class="form-group" id="importDelimiterGroup">
+              <label for="importDelimiter">分隔符</label>
+              <select id="importDelimiter">
+                <option value="auto">自动</option>
+                <option value=",">逗号 ,</option>
+                <option value=";">分号 ;</option>
+                <option value="\t">制表符</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-section" id="importPreviewWrap">
+          <h3>2. 字段映射</h3>
+          <p class="desc">将 CSV 每列映射到对应字段(标题、密码为必填)。</p>
+          <div id="importFieldMapping" class="import-mapping"></div>
+          <div id="importSummary" class="import-summary"></div>
+
+          <h3 style="margin-top:14px;">3. 数据预览(前 5 行)</h3>
+          <div class="import-preview-wrap">
+            <table id="importPreviewTable" class="import-preview-table"></table>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-block" id="importConfirmBtn" disabled>开始导入</button>
+      </div>
+
+      <!-- ===== JSON 导入 Tab ===== -->
+      <div class="import-tab-pane" id="importTabJson">
+        <div class="modal-section">
+          <h3>从 JSON 文件导入</h3>
+          <p class="desc">导入本应用导出的 JSON 备份,适合在不同设备或实例间迁移全部数据(含分类结构)。分类按名称自动合并,已存在的不会重复创建。</p>
+          <div class="import-file-row">
+            <input type="file" id="importJsonInput" accept=".json,application/json" class="import-file-input">
+          </div>
+        </div>
+        <div class="modal-section">
+          <p class="desc">💡 提示:如需从 Chrome / Bitwarden 等其他密码管理器迁入,请切到"CSV 批量导入"页签。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 引入模块化 JS -->
   <script src="js/utils.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/categories.js"></script>
   <script src="js/passwords.js"></script>
   <script src="js/backup.js"></script>
+  <script src="js/import.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

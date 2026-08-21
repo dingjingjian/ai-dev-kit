@@ -18,5 +18,6 @@ setupModalClose();
 setupPasswordListDelegation();
 setupCategoryListDelegation();
 setupBackupListDelegation();
+setupImportModal();
 setupGlobalShortcuts();
 initAuth();

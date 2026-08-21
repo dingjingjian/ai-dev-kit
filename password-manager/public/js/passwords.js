@@ -256,7 +256,7 @@ async function deletePassword(id) {
   }
 }
 
-// ---------- 导出密码 ----------
+// ---------- 导出密码(JSON,完整备份) ----------
 async function exportPasswords() {
   try {
     const res = await fetch(`${API_BASE}/export`);
@@ -274,31 +274,48 @@ async function exportPasswords() {
   }
 }
 
-// ---------- 导入密码 ----------
-async function importPasswords(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      const data = JSON.parse(e.target.result);
-      const res = await fetch(`${API_BASE}/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-      const result = await res.json();
-      showToast(`导入完成!成功:${result.imported},跳过:${result.skipped}`, 'success');
-      loadPasswords();
-      loadCategories();
-    } catch (err) {
-      showToast('导入失败:文件格式错误', 'error');
+// ---------- 导出密码(CSV,跨工具交换) ----------
+// 表头使用应用字段名,可被本应用 CSV 导入自动识别,也可在 Excel/其他密码器打开
+async function exportPasswordsCsv() {
+  try {
+    const res = await fetch(`${API_BASE}/passwords`);
+    if (!res.ok) throw new Error('加载失败');
+    const passwords = await res.json();
+    if (passwords.length === 0) {
+      showToast('没有可导出的密码记录', 'warning');
+      return;
     }
-  };
-  reader.readAsText(file);
-  // 重置 input,允许重复导入同一文件
-  event.target.value = '';
+    const headers = ['title', 'username', 'password', 'url', 'notes', 'category_name'];
+    const lines = [headers.join(',')];
+    for (const p of passwords) {
+      lines.push(headers.map(h => csvEscape(p[h] || '')).join(','));
+    }
+    // BOM 头让 Excel 正确识别 UTF-8;CRLF 兼容 Windows
+    const csv = '\uFEFF' + lines.join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `passwords_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast(`已导出 ${passwords.length} 条 (CSV)`, 'success');
+  } catch (err) {
+    showToast('导出失败', 'error');
+  }
 }
+
+// CSV 字段转义:含逗号/引号/换行时用引号包围,内部引号双写
+function csvEscape(field) {
+  if (field == null) field = '';
+  field = String(field);
+  if (/[",\n\r]/.test(field)) {
+    return '"' + field.replace(/"/g, '""') + '"';
+  }
+  return field;
+}
+
+// 注:导入逻辑已整合至 import.js 的导入中心(Tab: CSV 批量 / JSON)
 
 // ---------- 事件委托(替代内联 onclick) ----------
 // 统一在列表容器上监听,避免为每个按钮绑定监听器
