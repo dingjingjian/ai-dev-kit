@@ -308,6 +308,7 @@ button { font-family: inherit; }
   transition: background 0.15s;
 }
 .btn-secondary:hover { background: var(--bg-surface1); }
+.btn-secondary:disabled { opacity: 0.4; cursor: default; }
 .btn-danger {
   background: var(--accent-red);
   color: var(--bg-base);
@@ -385,7 +386,6 @@ button { font-family: inherit; }
 
 /* Mobile slide-up panels */
 .slide-panel {
-  display: none;
   position: fixed;
   left: 0;
   right: 0;
@@ -398,9 +398,15 @@ button { font-family: inherit; }
   overflow-y: auto;
   padding: 16px;
   transform: translateY(100%);
+  visibility: hidden;
+  touch-action: pan-y;
+  transition: transform 0.3s ease, visibility 0s linear 0.3s;
+}
+.slide-panel.open {
+  transform: translateY(0);
+  visibility: visible;
   transition: transform 0.3s ease;
 }
-.slide-panel.open { transform: translateY(0); }
 .slide-panel-handle {
   width: 36px;
   height: 4px;
@@ -409,13 +415,21 @@ button { font-family: inherit; }
   margin: 0 auto 12px;
 }
 .slide-overlay {
-  display: none;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
   z-index: 40;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.3s ease, visibility 0s linear 0.3s;
 }
-.slide-overlay.open { display: block; }
+.slide-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.3s ease;
+}
 
 /* Mobile header menu */
 .mobile-menu-btn { display: none; }
@@ -479,6 +493,43 @@ button { font-family: inherit; }
   pointer-events: none;
 }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Confirm dialog */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+.confirm-overlay.open {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity 0.2s ease;
+}
+.confirm-dialog {
+  width: 300px;
+  max-width: calc(100vw - 48px);
+  background: var(--bg-mantle);
+  border: 1px solid var(--bg-surface1);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.2s ease;
+}
+.confirm-overlay.open .confirm-dialog { transform: translateY(0) scale(1); }
+.confirm-title { font-size: 15px; font-weight: 600; color: var(--fg-text); }
+.confirm-msg { font-size: 12px; color: var(--fg-subtext); margin-top: 8px; line-height: 1.6; }
+.confirm-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+.confirm-actions button { min-width: 84px; }
 </style>
 </head>
 <body>
@@ -531,7 +582,7 @@ button { font-family: inherit; }
         <div class="panel-label">当前颜色</div>
         <div class="color-current">
           <div class="color-swatch" id="colorSwatch"><div class="color-swatch-inner" id="colorSwatchInner"></div></div>
-          <div class="color-name" id="colorNameDisplay">纯白</div>
+          <div class="color-name" id="colorNameDisplay">23号 白色</div>
           <div class="color-input-wrap"><input type="color" id="colorInput" value="#ffffff"></div>
         </div>
       </div>
@@ -657,6 +708,17 @@ button { font-family: inherit; }
   </div>
 </div>
 
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-dialog">
+    <div class="confirm-title" id="confirmTitle"></div>
+    <div class="confirm-msg" id="confirmMsg"></div>
+    <div class="confirm-actions">
+      <button class="btn-secondary" id="confirmCancelBtn">取消</button>
+      <button class="btn-danger" id="confirmOkBtn">确定</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -664,59 +726,56 @@ button { font-family: inherit; }
   'use strict';
 
   var BEAD_DIAMETER_MM = 5;
-  var BEAD_DIAMETER_IRONED_MM = 5.5;
 
   var BEAD_COLORS = [
-    { name: '纯白', hex: '#FFFFFF', group: '白色系' },
-    { name: '奶白', hex: '#FFF8E7', group: '白色系' },
-    { name: '米色', hex: '#F5E6C8', group: '白色系' },
-    { name: '珍珠白', hex: '#F0EAD6', group: '白色系' },
-    { name: '柠檬黄', hex: '#FFF44F', group: '黄色系' },
-    { name: '明黄', hex: '#FFD700', group: '黄色系' },
-    { name: '浅黄', hex: '#FFFACD', group: '黄色系' },
-    { name: '橙黄', hex: '#FFA500', group: '黄色系' },
-    { name: '奶油黄', hex: '#FDA428', group: '黄色系' },
-    { name: '橙色', hex: '#FF8C00', group: '橙色系' },
-    { name: '浅橙', hex: '#FFCC99', group: '橙色系' },
-    { name: '杏色', hex: '#FBCEB1', group: '橙色系' },
-    { name: '大红', hex: '#FF0000', group: '红色系' },
-    { name: '浅红', hex: '#FF6B6B', group: '红色系' },
-    { name: '酒红', hex: '#722F37', group: '红色系' },
-    { name: '砖红', hex: '#B7410E', group: '红色系' },
-    { name: '玫红', hex: '#FF007F', group: '红色系' },
-    { name: '粉色', hex: '#FF69B4', group: '粉色系' },
-    { name: '浅粉', hex: '#FFB6C1', group: '粉色系' },
-    { name: '肉粉', hex: '#FFDAB9', group: '粉色系' },
-    { name: '腮红', hex: '#DE5D83', group: '粉色系' },
-    { name: '桃红', hex: '#FF47A3', group: '粉色系' },
-    { name: '品红', hex: '#FF00FF', group: '粉色系' },
-    { name: '紫色', hex: '#800080', group: '紫色系' },
-    { name: '浅紫', hex: '#D8BFD8', group: '紫色系' },
-    { name: '薰衣草', hex: '#E6E6FA', group: '紫色系' },
-    { name: '梅紫', hex: '#8E4585', group: '紫色系' },
-    { name: '蓝紫', hex: '#7B68EE', group: '紫色系' },
-    { name: '深蓝', hex: '#00008B', group: '蓝色系' },
-    { name: '蓝色', hex: '#4169E1', group: '蓝色系' },
-    { name: '天蓝', hex: '#87CEEB', group: '蓝色系' },
-    { name: '浅蓝', hex: '#ADD8E6', group: '蓝色系' },
-    { name: '湖蓝', hex: '#1E90FF', group: '蓝色系' },
-    { name: '青色', hex: '#00CED1', group: '蓝色系' },
-    { name: '深绿', hex: '#006400', group: '绿色系' },
-    { name: '绿色', hex: '#228B22', group: '绿色系' },
-    { name: '浅绿', hex: '#90EE90', group: '绿色系' },
-    { name: '草绿', hex: '#32CD32', group: '绿色系' },
-    { name: '翠绿', hex: '#00FF00', group: '绿色系' },
-    { name: '橄榄绿', hex: '#808000', group: '绿色系' },
-    { name: '深棕', hex: '#654321', group: '棕色系' },
-    { name: '棕色', hex: '#8B4513', group: '棕色系' },
-    { name: '浅棕', hex: '#A0522D', group: '棕色系' },
-    { name: '驼色', hex: '#C2B280', group: '棕色系' },
-    { name: '卡其', hex: '#D2B48C', group: '棕色系' },
-    { name: '肤色', hex: '#FFCBA4', group: '棕色系' },
-    { name: '黑色', hex: '#000000', group: '灰黑色系' },
-    { name: '深灰', hex: '#404040', group: '灰黑色系' },
-    { name: '灰色', hex: '#808080', group: '灰黑色系' },
-    { name: '浅灰', hex: '#C0C0C0', group: '灰黑色系' }
+    { code: '23', name: '白色', hex: '#FFFFFF', group: '白色系' },
+    { code: '17', name: '月牙白', hex: '#F8F6EA', group: '白色系' },
+    { code: '7', name: '半透明', hex: '#E6F0EF', group: '白色系' },
+    { code: '8', name: '浅肤', hex: '#FFDFC4', group: '肤色系' },
+    { code: '18', name: '肤色粉', hex: '#F5C9BC', group: '肤色系' },
+    { code: '19', name: '肤色', hex: '#FFCBA4', group: '肤色系' },
+    { code: '16', name: '肤色红', hex: '#E8A08A', group: '肤色系' },
+    { code: '20', name: '月牙黄', hex: '#F5EEB8', group: '黄色系' },
+    { code: '43', name: '黄色', hex: '#FFD800', group: '黄色系' },
+    { code: '44', name: '荧光黄', hex: '#CCFF00', group: '黄色系' },
+    { code: '45', name: '橙黄', hex: '#FDA428', group: '黄色系' },
+    { code: '46', name: '姜黄', hex: '#DAA520', group: '黄色系' },
+    { code: '21', name: '橙色', hex: '#FF8C00', group: '橙色系' },
+    { code: '22', name: '橘红', hex: '#FF5722', group: '橙色系' },
+    { code: '47', name: '大红', hex: '#FF0000', group: '红色系' },
+    { code: '48', name: '嫣红', hex: '#E8465F', group: '红色系' },
+    { code: '39', name: '西瓜红', hex: '#FC6C85', group: '红色系' },
+    { code: '33', name: '淡粉', hex: '#FFB6C1', group: '粉色系' },
+    { code: '34', name: '粉桃', hex: '#F8A48B', group: '粉色系' },
+    { code: '35', name: '桃红', hex: '#FF47A3', group: '粉色系' },
+    { code: '36', name: '粉红', hex: '#FF69B4', group: '粉色系' },
+    { code: '37', name: '玫红', hex: '#FF007F', group: '粉色系' },
+    { code: '38', name: '亮粉', hex: '#FF7BAC', group: '粉色系' },
+    { code: '25', name: '淡紫', hex: '#D8BFD8', group: '紫色系' },
+    { code: '26', name: '紫色', hex: '#800080', group: '紫色系' },
+    { code: '27', name: '蓝紫', hex: '#7B68EE', group: '紫色系' },
+    { code: '28', name: '深紫', hex: '#4B0082', group: '紫色系' },
+    { code: '32', name: '紫红', hex: '#A0205E', group: '紫色系' },
+    { code: '9', name: '灰蓝', hex: '#7393B8', group: '蓝色系' },
+    { code: '10', name: '浅蓝', hex: '#A6D9F0', group: '蓝色系' },
+    { code: '11', name: '天蓝', hex: '#55B8E8', group: '蓝色系' },
+    { code: '12', name: '湖蓝', hex: '#1E9BD7', group: '蓝色系' },
+    { code: '13', name: '蓝色', hex: '#1666C4', group: '蓝色系' },
+    { code: '14', name: '普蓝', hex: '#0B3D91', group: '蓝色系' },
+    { code: '15', name: '宝蓝', hex: '#2B4FD8', group: '蓝色系' },
+    { code: '1', name: '淡绿', hex: '#C8E6A8', group: '绿色系' },
+    { code: '2', name: '草绿', hex: '#7CC24B', group: '绿色系' },
+    { code: '3', name: '深绿', hex: '#1C7A33', group: '绿色系' },
+    { code: '4', name: '绿色', hex: '#35A839', group: '绿色系' },
+    { code: '5', name: '墨绿', hex: '#14401F', group: '绿色系' },
+    { code: '6', name: '松石绿', hex: '#2FC2C5', group: '绿色系' },
+    { code: '24', name: '浅棕', hex: '#B07B4F', group: '棕色系' },
+    { code: '40', name: '棕色', hex: '#8B5A2B', group: '棕色系' },
+    { code: '41', name: '深棕', hex: '#5C3A21', group: '棕色系' },
+    { code: '42', name: '红棕', hex: '#7A3B2E', group: '棕色系' },
+    { code: '29', name: '浅灰', hex: '#C0C0C0', group: '灰黑色系' },
+    { code: '30', name: '灰色', hex: '#8C8C8C', group: '灰黑色系' },
+    { code: '31', name: '黑色', hex: '#1A1A1A', group: '灰黑色系' }
   ];
 
   var canvas = document.getElementById('beadCanvas');
@@ -730,7 +789,7 @@ button { font-family: inherit; }
   var pegMask = [];
   var currentTool = 'pencil';
   var currentColor = '#FFFFFF';
-  var currentColorName = '纯白';
+  var currentColorName = '23号 白色';
   var isDrawing = false;
   var showGrid = true;
   var beadStyle = true;
@@ -852,6 +911,82 @@ button { font-family: inherit; }
     );
   }
 
+  // 基于坐标的确定性伪随机数：每颗豆的明度抖动固定，重绘不闪烁
+  function beadHash(x, y) {
+    var h = (x * 374761393 + y * 668265263) ^ 0x5bf03635;
+    h = (h ^ (h >>> 13)) * 1274126177;
+    h = (h ^ (h >>> 16)) >>> 0;
+    return h / 4294967295;
+  }
+
+  function roundRectPath(c, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  // 熨烫后的拼豆：豆体融化成圆角方形，豆间有融合缝隙，中心孔半闭合，表面带熔融光泽
+  function drawIronedBead(c, px, py, sz, color, x, y) {
+    var variance = Math.round((beadHash(x, y) - 0.5) * 12);
+    var base = variance >= 0 ? lightenColor(color, variance) : darkenColor(color, -variance);
+    var cx = px + sz / 2, cy = py + sz / 2;
+
+    // 融合缝隙：豆与豆之间的深色熔接线
+    c.fillStyle = darkenColor(base, 32);
+    c.fillRect(px, py, sz, sz);
+
+    // 小尺寸快速路径
+    if (sz < 7) {
+      c.fillStyle = base;
+      c.fillRect(px + 0.5, py + 0.5, sz - 1, sz - 1);
+      return;
+    }
+
+    var inset = Math.max(0.6, sz * 0.045);
+    var bx = px + inset, by = py + inset;
+    var bw = sz - inset * 2;
+
+    // 豆体：融化后的圆角方形，熔融塑料渐变
+    if (sz >= 12) {
+      var grad = c.createRadialGradient(cx - bw * 0.2, cy - bw * 0.24, bw * 0.1, cx, cy, bw * 0.78);
+      grad.addColorStop(0, lightenColor(base, 16));
+      grad.addColorStop(0.55, base);
+      grad.addColorStop(1, darkenColor(base, 20));
+      c.fillStyle = grad;
+    } else {
+      c.fillStyle = base;
+    }
+    roundRectPath(c, bx, by, bw, bw, bw * 0.34);
+    c.fill();
+
+    // 中心孔：熨烫后半闭合，呈深色小孔
+    if (sz >= 8) {
+      var holeR = Math.max(0.8, sz * 0.105);
+      c.fillStyle = darkenColor(base, 45);
+      c.beginPath();
+      c.arc(cx, cy, holeR, 0, Math.PI * 2);
+      c.fill();
+      if (sz >= 14) {
+        c.fillStyle = 'rgba(0,0,0,0.25)';
+        c.beginPath();
+        c.arc(cx, cy, holeR * 0.55, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+
+    // 表面光泽：熔融塑料的斜上方高光
+    if (sz >= 14) {
+      c.fillStyle = 'rgba(255,255,255,0.15)';
+      roundRectPath(c, bx + bw * 0.16, by + bw * 0.12, bw * 0.42, bw * 0.2, bw * 0.1);
+      c.fill();
+    }
+  }
+
   function redraw() {
     var sz = cellSize * zoomLevel;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -871,8 +1006,7 @@ button { font-family: inherit; }
         }
 
         if (ironedView && pixels[y][x]) {
-          ctx.fillStyle = pixels[y][x];
-          ctx.fillRect(px, py, sz, sz);
+          drawIronedBead(ctx, px, py, sz, pixels[y][x], x, y);
         } else if (beadStyle && !ironedView) {
           ctx.fillStyle = '#d8d0c4';
           ctx.fillRect(px, py, sz, sz);
@@ -926,7 +1060,7 @@ button { font-family: inherit; }
       }
     }
 
-    if (showGrid && sz >= 6) {
+    if (showGrid && !ironedView && sz >= 6) {
       ctx.strokeStyle = 'rgba(0,0,0,0.1)';
       ctx.lineWidth = 1;
       ctx.beginPath();
@@ -1025,16 +1159,22 @@ button { font-family: inherit; }
   }
 
   function updateHistoryButtons() {
-    var ub = document.getElementById('undoBtn');
-    var rb = document.getElementById('redoBtn');
-    if (ub) ub.disabled = historyIndex <= 0;
-    if (rb) rb.disabled = historyIndex >= history.length - 1;
+    var canUndo = historyIndex > 0;
+    var canRedo = historyIndex < history.length - 1;
+    ['undoBtn', 'mUndoBtn'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !canUndo;
+    });
+    ['redoBtn', 'mRedoBtn'].forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.disabled = !canRedo;
+    });
   }
 
   function setColor(hex) {
     currentColor = hex;
     var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex.toUpperCase(); });
-    currentColorName = found ? found.name : '自定义';
+    currentColorName = found ? found.code + '号 ' + found.name : '自定义';
     document.getElementById('colorSwatchInner').style.background = hex;
     document.getElementById('colorNameDisplay').textContent = currentColorName;
     document.getElementById('colorInput').value = hex;
@@ -1070,7 +1210,7 @@ button { font-family: inherit; }
         bead.className = 'palette-bead';
         bead.style.background = c.hex;
         bead.dataset.color = c.hex;
-        bead.title = c.name + ' (' + c.hex + ')';
+        bead.title = c.code + '号 ' + c.name + ' (' + c.hex + ')';
         if (c.hex.toUpperCase() === currentColor.toUpperCase()) bead.classList.add('selected');
         bead.addEventListener('click', function() { setColor(c.hex); closeSlidePanels(); });
         grid.appendChild(bead);
@@ -1107,7 +1247,7 @@ button { font-family: inherit; }
     } else {
       var entries = Object.keys(result.counts).map(function(hex) {
         var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex; });
-        return { hex: hex, name: found ? found.name : '自定义', count: result.counts[hex] };
+        return { hex: hex, name: found ? found.code + '号 ' + found.name : '自定义', count: result.counts[hex] };
       }).sort(function(a, b) { return b.count - a.count; });
       entries.forEach(function(e) {
         html += '<div class="material-row">' +
@@ -1128,11 +1268,10 @@ button { font-family: inherit; }
     var shapeNames = { square: '正方形', circle: '圆形', heart: '心形', hexagon: '六边形' };
     var wCm = (gridSize * BEAD_DIAMETER_MM / 10).toFixed(1);
     var hCm = wCm;
-    var wI = (gridSize * BEAD_DIAMETER_IRONED_MM / 10).toFixed(1);
     var text = '<strong>' + gridSize + ' × ' + gridSize + '</strong> ' + (shapeNames[boardShape] || boardShape) + '钉板<br>' +
       '拼豆数量: <strong>' + result.total + '</strong> 颗<br>' +
       '成品尺寸: 约 <strong>' + wCm + ' × ' + hCm + '</strong> cm<br>' +
-      '熨烫后: 约 <strong>' + wI + ' × ' + wI + '</strong> cm';
+      '熨烫后: 尺寸基本不变，厚度变薄';
     var ib = document.getElementById('infoBox');
     var mib = document.getElementById('mobileInfoBox');
     if (ib) ib.innerHTML = text;
@@ -1183,12 +1322,14 @@ button { font-family: inherit; }
   }
 
   function clearCanvas() {
-    if (!confirm('确定清空整个钉板吗？')) return;
-    initPixels();
-    saveHistory();
-    redraw();
-    updateMaterialList();
-    updateInfoBox();
+    showConfirm('确定清空整个钉板吗？', '将移除画布上的所有拼豆，误操作可通过撤销恢复。', function() {
+      initPixels();
+      saveHistory();
+      redraw();
+      updateMaterialList();
+      updateInfoBox();
+      showToast('钉板已清空');
+    });
   }
 
   function generateSVG() {
@@ -1196,7 +1337,11 @@ button { font-family: inherit; }
     for (var y = 0; y < gridSize; y++) {
       for (var x = 0; x < gridSize; x++) {
         if (pixels[y][x] && isPegValid(x, y)) {
-          if (beadStyle && !ironedView) {
+          if (ironedView) {
+            rects.push('  <rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + darkenColor(pixels[y][x], 32) + '"/>');
+            rects.push('  <rect x="' + (x + 0.05) + '" y="' + (y + 0.05) + '" width="0.9" height="0.9" rx="0.3" fill="' + pixels[y][x] + '"/>');
+            rects.push('  <circle cx="' + (x + 0.5) + '" cy="' + (y + 0.5) + '" r="0.105" fill="' + darkenColor(pixels[y][x], 45) + '"/>');
+          } else if (beadStyle) {
             rects.push('  <circle cx="' + (x + 0.5) + '" cy="' + (y + 0.5) + '" r="0.42" fill="' + pixels[y][x] + '"/>');
           } else {
             rects.push('  <rect x="' + x + '" y="' + y + '" width="1" height="1" fill="' + pixels[y][x] + '"/>');
@@ -1223,6 +1368,7 @@ button { font-family: inherit; }
 
   function downloadPNG(scaleOpts) {
     var scale = scaleOpts || 10;
+    if (ironedView && scale < 16) scale = 16;
     var tmp = document.createElement('canvas');
     tmp.width = gridSize * scale;
     tmp.height = gridSize * scale;
@@ -1240,7 +1386,9 @@ button { font-family: inherit; }
           continue;
         }
         if (pixels[y][x]) {
-          if (beadStyle && !ironedView) {
+          if (ironedView) {
+            drawIronedBead(tctx, x * scale, y * scale, scale, pixels[y][x], x, y);
+          } else if (beadStyle) {
             tctx.fillStyle = '#d8d0c4';
             tctx.fillRect(x * scale, y * scale, scale, scale);
             var beadR = scale * 0.42;
@@ -1285,7 +1433,7 @@ button { font-family: inherit; }
     var result = countBeads();
     var entries = Object.keys(result.counts).map(function(hex) {
       var found = BEAD_COLORS.find(function(c) { return c.hex.toUpperCase() === hex; });
-      return { hex: hex, name: found ? found.name : '自定义', count: result.counts[hex] };
+      return { hex: hex, name: found ? found.code + '号 ' + found.name : '自定义', count: result.counts[hex] };
     }).sort(function(a, b) { return b.count - a.count; });
     legendH = Math.ceil(entries.length / 4) * 24 + 40;
 
@@ -1442,11 +1590,26 @@ button { font-family: inherit; }
     reader.readAsDataURL(file);
   }
 
+  var toastTimer = null;
   function showToast(msg) {
     var t = document.getElementById('toast');
     t.textContent = msg;
     t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 1800);
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function() { t.classList.remove('show'); }, 1800);
+  }
+
+  // 应用内确认弹窗：不依赖 window.confirm（浏览器拦截对话框后会静默失败）
+  var confirmCallback = null;
+  function showConfirm(title, msg, onOk) {
+    confirmCallback = onOk;
+    document.getElementById('confirmTitle').textContent = title;
+    document.getElementById('confirmMsg').textContent = msg;
+    document.getElementById('confirmOverlay').classList.add('open');
+  }
+  function hideConfirm() {
+    document.getElementById('confirmOverlay').classList.remove('open');
+    confirmCallback = null;
   }
 
   function closeSlidePanels() {
@@ -1457,14 +1620,8 @@ button { font-family: inherit; }
 
   function openSlidePanel(id) {
     closeSlidePanels();
-    var panel = document.getElementById(id);
-    var overlay = document.getElementById('slideOverlay');
-    panel.style.display = 'block';
-    overlay.style.display = 'block';
-    requestAnimationFrame(function() {
-      panel.classList.add('open');
-      overlay.classList.add('open');
-    });
+    document.getElementById(id).classList.add('open');
+    document.getElementById('slideOverlay').classList.add('open');
   }
 
   function setTool(tool) {
@@ -1473,15 +1630,6 @@ button { font-family: inherit; }
       btn.classList.toggle('active', btn.dataset.tool === tool);
     });
     canvas.style.cursor = tool === 'picker' ? 'cell' : 'crosshair';
-  }
-
-  function syncCheckboxes(sourceId, targetIds) {
-    var source = document.getElementById(sourceId);
-    if (!source) return;
-    targetIds.forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.checked = source.checked;
-    });
   }
 
   canvas.addEventListener('mousedown', function(e) {
@@ -1612,6 +1760,17 @@ button { font-family: inherit; }
   document.getElementById('clearBtn').addEventListener('click', clearCanvas);
   document.getElementById('clearBtn2').addEventListener('click', clearCanvas);
   document.getElementById('mClearBtn').addEventListener('click', clearCanvas);
+
+  document.getElementById('confirmOkBtn').addEventListener('click', function() {
+    var cb = confirmCallback;
+    hideConfirm();
+    closeSlidePanels();
+    if (cb) cb();
+  });
+  document.getElementById('confirmCancelBtn').addEventListener('click', hideConfirm);
+  document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+    if (e.target === this) hideConfirm();
+  });
   document.getElementById('mirrorHBtn').addEventListener('click', mirrorHorizontal);
   document.getElementById('mMirrorHBtn').addEventListener('click', mirrorHorizontal);
   document.getElementById('mirrorVBtn').addEventListener('click', mirrorVertical);
@@ -1651,20 +1810,24 @@ button { font-family: inherit; }
   document.getElementById('slideOverlay').addEventListener('click', closeSlidePanels);
 
   document.getElementById('mobileMenuBtn').addEventListener('click', function() {
+    closeSlidePanels();
     var rp = document.querySelector('.right-panel');
-    if (rp) {
-      var visible = rp.style.display === 'flex';
-      rp.style.display = visible ? 'none' : 'flex';
-      rp.style.position = visible ? '' : 'fixed';
-      rp.style.right = visible ? '' : '0';
-      rp.style.top = visible ? '' : 'var(--toolbar-h)';
-      rp.style.bottom = visible ? '' : '0';
-      rp.style.zIndex = visible ? '' : '30';
-      rp.style.width = visible ? '' : '300px';
+    if (!rp) return;
+    if (rp.style.display === 'flex') {
+      rp.style.cssText = '';
+    } else {
+      rp.style.display = 'flex';
+      rp.style.position = 'fixed';
+      rp.style.right = '0';
+      rp.style.top = 'var(--toolbar-h)';
+      rp.style.bottom = '0';
+      rp.style.zIndex = '30';
+      rp.style.width = '300px';
     }
   });
 
   document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') { closeSlidePanels(); hideConfirm(); return; }
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if (e.ctrlKey || e.metaKey) {
       if (e.key === 'z') { e.preventDefault(); undo(); }
@@ -1679,7 +1842,13 @@ button { font-family: inherit; }
     if (e.key === '0') { zoomLevel = 1; resizeCanvas(); }
   });
 
-  window.addEventListener('resize', function() { resizeCanvas(); });
+  window.addEventListener('resize', function() {
+    if (window.innerWidth > 1024) {
+      var rp = document.querySelector('.right-panel');
+      if (rp) rp.style.cssText = '';
+    }
+    resizeCanvas();
+  });
 
   buildPalette('paletteContainer');
   buildPalette('mobilePaletteContainer');
