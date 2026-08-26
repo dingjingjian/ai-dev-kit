@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>国风拼豆坊 · 掌上拼豆</title>
+<style>
+:root{
+  --paper:#F2EBDD; --ink:#2B2B2B;
+  --red:#C8362B; --red-deep:#9E2620;
+  --gold:#D4AF37; --gold-soft:#E6C65C;
+  --panel:#211a13; --panel-2:#2c231a;
+  --text:#F2EBDD; --text-dim:#C9B896;
+  --ease:cubic-bezier(.2,.7,.3,1); --ease-back:cubic-bezier(.2,1.4,.4,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  font-family:"KaiTi","STKaiti","Kaiti SC","楷体","Songti SC","STSong","SimSun","Microsoft YaHei",serif;
+  color:var(--text);
+  display:flex;flex-direction:column;
+  height:100vh;height:100dvh;
+  overflow:hidden;
+  -webkit-user-select:none;user-select:none;
+  touch-action:manipulation;
+  background:
+    radial-gradient(circle at 12% 6%, rgba(200,54,42,0.16), transparent 42%),
+    radial-gradient(circle at 88% 94%, rgba(212,175,55,0.13), transparent 46%),
+    linear-gradient(160deg, #241b14 0%, #16110c 100%);
+  padding-top:env(safe-area-inset-top,0px);
+}
+button{font-family:inherit;cursor:pointer;border:none;outline:none;background:none;color:inherit;}
+/* ---------- 顶栏 ---------- */
+.topbar{
+  flex-shrink:0;height:50px;display:flex;align-items:center;gap:10px;padding:0 14px;
+  background:linear-gradient(180deg, rgba(44,35,26,0.95), rgba(33,26,19,0.95));
+  border-bottom:1px solid rgba(212,175,55,0.22);
+}
+.seal{
+  width:34px;height:34px;border-radius:7px;flex-shrink:0;
+  background:linear-gradient(145deg,var(--red),var(--red-deep));
+  color:#fff;font-size:20px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+.title{display:flex;flex-direction:column;line-height:1.05;flex:1;min-width:0;}
+.title #patName{font-size:18px;font-weight:bold;color:var(--gold-soft);letter-spacing:1px;}
+.title .sub{font-size:10px;color:var(--text-dim);letter-spacing:2px;}
+.pct-box{display:flex;flex-direction:column;align-items:flex-end;line-height:1;}
+.pct-box #pct{font-size:19px;font-weight:bold;color:var(--gold);font-variant-numeric:tabular-nums;}
+.pct-box .pct-lab{font-size:9px;color:var(--text-dim);letter-spacing:1px;margin-top:2px;}
+/* ---------- 图案选择 ---------- */
+.patterns{
+  flex-shrink:0;height:44px;display:flex;gap:8px;align-items:center;
+  padding:0 12px;overflow-x:auto;overflow-y:hidden;
+  background:rgba(20,16,11,0.6);
+  scrollbar-width:none;
+}
+.patterns::-webkit-scrollbar{display:none;}
+.chip{
+  flex-shrink:0;height:30px;padding:0 13px;border-radius:16px;
+  font-size:13px;color:var(--text-dim);
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(212,175,55,0.18);
+  transition:all .2s var(--ease);
+  white-space:nowrap;
+}
+.chip.sel{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;box-shadow:0 2px 8px rgba(212,175,55,0.4);}
+/* ---------- 棋盘舞台 ---------- */
+.stage{
+  flex:1;position:relative;display:flex;align-items:center;justify-content:center;
+  min-height:0;padding:10px;
+}
+#board{
+  border-radius:12px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.55), 0 0 0 1px rgba(212,175,55,0.25);
+  touch-action:none;
+}
+#refThumb{
+  position:absolute;top:16px;right:16px;width:64px;height:64px;border-radius:9px;
+  box-shadow:0 3px 10px rgba(0,0,0,0.5), 0 0 0 1px rgba(212,175,55,0.45);
+  background:#211a13;
+}
+/* ---------- 调色珠串 ---------- */
+.palette{
+  flex-shrink:0;height:62px;display:flex;gap:9px;align-items:center;
+  padding:0 14px;overflow-x:auto;overflow-y:hidden;
+  background:rgba(20,16,11,0.7);
+  scrollbar-width:none;
+}
+.palette::-webkit-scrollbar{display:none;}
+.bead{
+  flex-shrink:0;width:38px;height:38px;border-radius:50%;
+  position:relative;transition:transform .18s var(--ease-back), box-shadow .2s;
+  box-shadow:0 3px 6px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.35), inset 0 -3px 5px rgba(0,0,0,0.35);
+}
+.bead.sel{transform:scale(1.18);box-shadow:0 0 0 3px var(--gold), 0 4px 10px rgba(0,0,0,0.5);}
+.bead.sel::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:2px solid var(--gold);}
+/* ---------- 工具条 ---------- */
+.toolbar{
+  flex-shrink:0;display:grid;grid-template-columns:repeat(6,1fr);
+  gap:4px;padding:6px 8px;
+  padding-bottom:calc(6px + env(safe-area-inset-bottom,0px));
+  background:linear-gradient(180deg, rgba(33,26,19,0.95), rgba(24,18,13,0.98));
+  border-top:1px solid rgba(212,175,55,0.22);
+}
+.tool{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  height:50px;border-radius:10px;color:var(--text-dim);
+  background:rgba(255,255,255,0.04);
+  border:1px solid transparent;
+  transition:all .18s var(--ease);
+}
+.tool .ic{font-size:19px;line-height:1;}
+.tool span{font-size:11px;letter-spacing:1px;}
+.tool.on{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;}
+/* ---------- 提示 ---------- */
+.toast{
+  position:fixed;left:50%;bottom:96px;transform:translateX(-50%) translateY(10px);
+  background:rgba(20,16,11,0.94);color:var(--gold-soft);
+  padding:9px 18px;border-radius:20px;font-size:13px;letter-spacing:1px;
+  border:1px solid rgba(212,175,55,0.3);
+  opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
+  z-index:40;white-space:nowrap;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+/* ---------- 印章成就 ---------- */
+.stamp{
+  position:fixed;left:50%;top:42%;transform:translate(-50%,-50%) scale(0.3) rotate(-18deg);
+  width:120px;height:120px;border-radius:14px;
+  background:linear-gradient(145deg,var(--red),var(--red-deep));
+  color:#fff;font-size:64px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 0 4px rgba(255,255,255,0.12), 0 12px 40px rgba(0,0,0,0.6);
+  opacity:0;pointer-events:none;z-index:50;
+  transition:opacity .35s, transform .5s var(--ease-back);
+}
+.stamp.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-8deg);}
+#petals{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:45;}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="seal">拼</div>
+    <div class="title"><span id="patName">福</span><span class="sub">国 风 拼 豆 坊</span></div>
+    <div class="pct-box"><span id="pct">0%</span><span class="pct-lab">完成</span></div>
+  </div>
+  <div class="patterns" id="patterns"></div>
+  <div class="stage">
+    <canvas id="board"></canvas>
+    <canvas id="refThumb" width="72" height="72"></canvas>
+  </div>
+  <div class="palette" id="palette"></div>
+  <div class="toolbar" id="toolbar">
+    <button class="tool on" id="tPen"  data-tool="pen"><span class="ic">✎</span><span>画笔</span></button>
+    <button class="tool"    id="tErase" data-tool="erase"><span class="ic">⌫</span><span>橡皮</span></button>
+    <button class="tool"    id="tRef"><span class="ic">👁</span><span>参照</span></button>
+    <button class="tool"    id="tCheck"><span class="ic">✓</span><span>校验</span></button>
+    <button class="tool"    id="tClear"><span class="ic">🗑</span><span>清空</span></button>
+    <button class="tool"    id="tSolve"><span class="ic">✦</span><span>示范</span></button>
+  </div>
+  <div class="toast" id="toast"></div>
+  <div class="stamp" id="stamp">成</div>
+  <canvas id="petals"></canvas>
+
+<script>
+(function(){
+  "use strict";
+  const N = 21;          // 棋盘格数
+  const S = 10;          // 离屏绘制每格像素
+  const FONT = "'KaiTi','STKaiti','Kaiti SC','楷体',serif";
+
+  // 国风十一色
+  const PAL = {
+    W:'#F2EBDD', K:'#2B2B2B', R:'#C8362B', B:'#2E5C8A', G:'#7BA05B',
+    Y:'#E8B23A', P:'#B5415B', O:'#9C6B3F', D:'#C9A24B', T:'#3FA89B', L:'#C9A0B4'
+  };
+  const PALETTE = [
+    {code:'W',name:'釉白',hex:PAL.W},{code:'K',name:'墨黑',hex:PAL.K},
+    {code:'R',name:'朱砂',hex:PAL.R},{code:'B',name:'青花',hex:PAL.B},
+    {code:'G',name:'豆青',hex:PAL.G},{code:'Y',name:'藤黄',hex:PAL.Y},
+    {code:'P',name:'胭脂',hex:PAL.P},{code:'O',name:'赭石',hex:PAL.O},
+    {code:'D',name:'描金',hex:PAL.D},{code:'T',name:'青碧',hex:PAL.T},
+    {code:'L',name:'藕荷',hex:PAL.L}
+  ];
+
+  // ---------- 颜色工具 ----------
+  function hexToRgb(h){h=h.replace('#','');return{r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};}
+  function clamp(v){return v<0?0:v>255?255:v|0;}
+  function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>clamp(x).toString(16).padStart(2,'0')).join('');}
+  function adjust(hex,f){const c=hexToRgb(hex);return rgbToHex(c.r+f*255,c.g+f*255,c.b+f*255);}
+  function lighten(hex,f){return adjust(hex,f);}
+  function darken(hex,f){return adjust(hex,-f);}
+  function nearestColor(r,g,b){
+    let best=null,bd=1e9;
+    for(const p of PALETTE){const c=hexToRgb(p.hex);const d=(c.r-r)**2+(c.g-g)**2+(c.b-b)**2;if(d<bd){bd=d;best=p.code;}}
+    return best;
+  }
+
+  // ---------- 离屏绘制助手（网格坐标 0..N） ----------
+  function fc(o,gx,gy,gr,hex){o.fillStyle=hex;o.beginPath();o.arc(gx*S,gy*S,gr*S,0,7);o.fill();}
+  function fr(o,gx,gy,gw,gh,hex){o.fillStyle=hex;o.fillRect(gx*S,gy*S,gw*S,gh*S);}
+  function ft(o,t,gx,gy,sz,hex){o.fillStyle=hex;o.font='bold '+(sz*S)+"px "+FONT;o.textAlign='center';o.textBaseline='middle';o.fillText(t,gx*S,gy*S);}
+  function ell(o,gx,gy,grx,gry,hex,rot){o.save();o.translate(gx*S,gy*S);if(rot)o.rotate(rot);o.fillStyle=hex;o.beginPath();o.ellipse(0,0,grx*S,gry*S,0,0,7);o.fill();o.restore();}
+
+  // ---------- 图案（透明底，仅画母题） ----------
+  const PATTERNS = [
+    { name:'福', draw(o){
+      fr(o,1,1,19,19,PAL.R);
+      ft(o,'福',10.5,10.8,14,PAL.W);
+    }},
+    { name:'青花瓶', draw(o){
+      o.fillStyle=PAL.B;
+      o.beginPath();
+      o.moveTo(8*S,5*S);o.lineTo(13*S,5*S);
+      o.lineTo(12.2*S,7*S);o.lineTo(14.5*S,9.5*S);
+      o.quadraticCurveTo(17*S,13*S,13.5*S,18.5*S);
+      o.lineTo(7.5*S,18.5*S);
+      o.quadraticCurveTo(4*S,13*S,6.5*S,9.5*S);
+      o.lineTo(8.8*S,7*S);o.closePath();o.fill();
+      fr(o,7.6,4.4,5.8,0.9,PAL.D);
+      o.strokeStyle=PAL.W;o.lineWidth=S*0.5;
+      o.beginPath();o.arc(10.5*S,12.5*S,3*S,0,7);o.stroke();
+      fc(o,10.5,12.5,1.1,PAL.W);
+      fc(o,8.5,9,0.7,PAL.W);fc(o,12.5,9,0.7,PAL.W);fc(o,8.5,16,0.7,PAL.W);fc(o,12.5,16,0.7,PAL.W);
+    }},
+    { name:'红灯笼', draw(o){
+      fr(o,10.2,1.5,0.6,3,PAL.K);
+      fr(o,7.5,4.2,6,1.1,PAL.D);
+      fr(o,7.5,17.2,6,1.1,PAL.D);
+      ell(o,10.5,10.7,6.2,6.0,PAL.R);
+      o.strokeStyle=PAL.D;o.lineWidth=S*0.2;
+      for(const off of [-2.6,-0.9,0.9,2.6]){
+        o.beginPath();
+        o.moveTo((10.5+off)*S,4.2*S);
+        o.quadraticCurveTo((10.5+off*1.8)*S,10.7*S,(10.5+off)*S,17.2*S);
+        o.stroke();
+      }
+      ft(o,'福',10.5,10.7,4,PAL.D);
+      fr(o,10.1,18.3,0.8,3.2,PAL.Y);
+    }},
+    { name:'锦鲤', draw(o){
+      o.strokeStyle=PAL.B;o.lineWidth=S*0.4;
+      o.beginPath();o.moveTo(1*S,18*S);o.quadraticCurveTo(6*S,16*S,11*S,18*S);o.quadraticCurveTo(16*S,20*S,20*S,18*S);o.stroke();
+      o.beginPath();o.moveTo(1*S,20*S);o.quadraticCurveTo(6*S,18*S,11*S,20*S);o.quadraticCurveTo(16*S,22*S,20*S,20*S);o.stroke();
+      ell(o,9,11,4.6,2.8,PAL.R);
+      o.fillStyle=PAL.R;o.beginPath();o.moveTo(13*S,11*S);o.lineTo(19*S,8*S);o.lineTo(18*S,11*S);o.lineTo(19*S,14*S);o.closePath();o.fill();
+      o.fillStyle=PAL.Y;o.beginPath();o.moveTo(8*S,13.5*S);o.quadraticCurveTo(10*S,16*S,12*S,13.5*S);o.closePath();o.fill();
+      fc(o,6.6,10.2,0.7,PAL.K);
+      fc(o,9,10,1.1,PAL.W);fc(o,11,12,0.9,PAL.W);
+    }},
+    { name:'墨竹', draw(o){
+      fr(o,6.5,2,0.9,17,PAL.K);
+      fr(o,11.5,3,0.9,16,PAL.K);
+      for(const y of [6,10,14,18]){fr(o,6.3,y,1.3,0.35,PAL.W);fr(o,11.3,y+1,1.3,0.35,PAL.W);}
+      function leaf(gx,gy,rot){o.save();o.translate(gx*S,gy*S);o.rotate(rot);o.fillStyle=PAL.G;o.beginPath();o.ellipse(0,0,2.2*S,0.5*S,0,0,7);o.fill();o.restore();}
+      leaf(5,3,-0.9);leaf(5.6,3.4,-0.5);leaf(8,2.5,-1.1);
+      leaf(10,4,0.9);leaf(10.6,4.4,0.5);leaf(13,3.5,1.1);
+      leaf(5.5,11,-0.7);leaf(13,12,0.7);
+    }},
+    { name:'牡丹', draw(o){
+      function leaf(gx,gy,rot){o.save();o.translate(gx*S,gy*S);o.rotate(rot);o.fillStyle=PAL.G;o.beginPath();o.ellipse(0,0,2.6*S,1.0*S,0,0,7);o.fill();o.restore();}
+      leaf(7,15,0.7);leaf(14,15,-0.7);leaf(10.5,17,0);
+      for(let a=0;a<8;a++){const ang=a/8*Math.PI*2;fc(o,10.5+Math.cos(ang)*2.6,11+Math.sin(ang)*2.6,1.7,PAL.P);}
+      for(let a=0;a<6;a++){const ang=a/6*Math.PI*2+0.3;fc(o,10.5+Math.cos(ang)*1.4,11+Math.sin(ang)*1.4,1.2,PAL.L);}
+      fc(o,10.5,11,1.1,PAL.Y);
+    }},
+    { name:'中国结', draw(o){
+      o.fillStyle=PAL.R;
+      o.save();o.translate(10.5*S,10.5*S);o.rotate(Math.PI/4);o.fillRect(-3.2*S,-3.2*S,6.4*S,6.4*S);o.restore();
+      o.strokeStyle=PAL.R;o.lineWidth=S*0.9;
+      o.beginPath();o.arc(5*S,10.5*S,2.2*S,0,7);o.stroke();
+      o.beginPath();o.arc(16*S,10.5*S,2.2*S,0,7);o.stroke();
+      fr(o,10.1,0.5,0.8,2.5,PAL.Y);
+      fr(o,10.1,18.5,0.8,2.5,PAL.Y);
+      o.fillStyle=PAL.W;o.save();o.translate(10.5*S,10.5*S);o.rotate(Math.PI/4);o.fillRect(-1.1*S,-1.1*S,2.2*S,2.2*S);o.restore();
+    }},
+    { name:'山水', draw(o){
+      fc(o,16,4.5,2.0,PAL.D);
+      o.fillStyle=PAL.K;
+      o.beginPath();o.moveTo(0,21*S);o.lineTo(0,13*S);o.lineTo(4*S,8*S);o.lineTo(8*S,13*S);o.lineTo(12*S,7*S);o.lineTo(16*S,13*S);o.lineTo(21*S,9*S);o.lineTo(21*S,21*S);o.closePath();o.fill();
+      o.strokeStyle=PAL.B;o.lineWidth=S*0.3;
+      for(let y=16;y<=20;y+=1.3){o.beginPath();o.moveTo(1*S,y*S);o.quadraticCurveTo(7*S,(y-0.8)*S,13*S,y*S);o.quadraticCurveTo(18*S,(y+0.8)*S,20*S,y*S);o.stroke();}
+    }},
+    { name:'祥云', draw(o){
+      o.strokeStyle=PAL.T;o.lineWidth=S*0.9;o.lineCap='round';
+      function cloud(gx,gy,s){o.beginPath();
+        o.arc((gx-1.2*s)*S,gy*S,s*S*0.9,Math.PI*0.5,Math.PI*1.5);
+        o.arc(gx*S,(gy-0.9*s)*S,s*S*0.9,Math.PI,Math.PI*2);
+        o.arc((gx+1.2*s)*S,gy*S,s*S*0.9,Math.PI*1.5,Math.PI*0.5);
+        o.stroke();
+      }
+      cloud(7,8,1.6);cloud(14,13,1.8);
+      o.strokeStyle=PAL.B;o.lineWidth=S*0.5;
+      function spiral(gx,gy){o.beginPath();for(let t=0;t<Math.PI*3;t+=0.2){const rr=0.15*S+t*0.18*S;const x=gx*S+Math.cos(t)*rr,y=gy*S+Math.sin(t)*rr;t?o.lineTo(x,y):o.moveTo(x,y);}o.stroke();}
+      spiral(7,8);spiral(14,13);
+    }}
+  ];
+
+  // ---------- 状态 ----------
+  let target = new Array(N*N).fill(null);
+  let state  = new Array(N*N).fill(null);
+  let curColor = 'R';
+  let tool = 'pen';
+  let showRef = false;
+  let checkUntil = 0;
+  let celebrated = false;
+  let curPattern = 0;
+
+  const board = document.getElementById('board');
+  const ctx = board.getContext('2d');
+  const refThumb = document.getElementById('refThumb');
+  const pctEl = document.getElementById('pct');
+  const patNameEl = document.getElementById('patName');
+  const toastEl = document.getElementById('toast');
+  const stamp = document.getElementById('stamp');
+  const petals = document.getElementById('petals');
+  const paletteEl = document.getElementById('palette');
+  const patternsEl = document.getElementById('patterns');
+
+  let cell = 0, boardPx = 0, dpr = 1;
+  let sprites = {};
+
+  function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+
+  // ---------- 构建目标 ----------
+  function buildTarget(pat){
+    const c = document.createElement('canvas');
+    c.width = c.height = N*S;
+    const o = c.getContext('2d');
+    o.clearRect(0,0,c.width,c.height);
+    pat.draw(o);
+    const img = o.getImageData(0,0,c.width,c.height).data;
+    target = new Array(N*N).fill(null);
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const px=((i*S+S/2)|0), py=((j*S+S/2)|0);
+      const idx=(py*c.width+px)*4;
+      if(img[idx+3]<128){target[j*N+i]=null;continue;}
+      target[j*N+i]=nearestColor(img[idx],img[idx+1],img[idx+2]);
+    }
+    state = new Array(N*N).fill(null);
+    celebrated = false;
+    renderRefThumb();
+  }
+
+  // ---------- 珠子贴图 ----------
+  function drawBeadSprite(g,s,hex){
+    const cx=s/2, cy=s/2, r=s*0.46;
+    g.clearRect(0,0,s,s);
+    const grad=g.createRadialGradient(cx-r*0.32,cy-r*0.34,r*0.12,cx,cy,r);
+    grad.addColorStop(0,lighten(hex,0.45));
+    grad.addColorStop(0.5,hex);
+    grad.addColorStop(0.86,darken(hex,0.22));
+    grad.addColorStop(1,darken(hex,0.42));
+    g.fillStyle=grad;g.beginPath();g.arc(cx,cy,r,0,Math.PI*2);g.fill();
+    g.lineWidth=Math.max(1,s*0.03);g.strokeStyle=darken(hex,0.5);g.globalAlpha=0.5;
+    g.beginPath();g.arc(cx,cy,r-g.lineWidth/2,0,Math.PI*2);g.stroke();g.globalAlpha=1;
+    const hr=r*0.30;
+    const hg=g.createRadialGradient(cx,cy,hr*0.2,cx,cy,hr);
+    hg.addColorStop(0,darken(hex,0.55));hg.addColorStop(0.7,darken(hex,0.28));hg.addColorStop(1,hex);
+    g.fillStyle=hg;g.beginPath();g.arc(cx,cy,hr,0,Math.PI*2);g.fill();
+    g.fillStyle='rgba(255,255,255,0.55)';
+    g.beginPath();g.ellipse(cx-r*0.28,cy-r*0.32,r*0.16,r*0.10,-0.6,0,Math.PI*2);g.fill();
+  }
+  function buildSprites(){
+    const s=Math.max(8,Math.round(cell*dpr));
+    sprites={};
+    for(const p of PALETTE){
+      const cv=document.createElement('canvas');cv.width=cv.height=s;
+      drawBeadSprite(cv.getContext('2d'),s,p.hex);
+      sprites[p.code]=cv;
+    }
+  }
+
+  // ---------- 布局 ----------
+  function computeLayout(){
+    const stage=document.querySelector('.stage');
+    const w=stage.clientWidth, h=stage.clientHeight;
+    boardPx=Math.floor(Math.min(w,h));
+    cell=Math.floor(boardPx/N);
+    boardPx=cell*N;
+    dpr=Math.min(window.devicePixelRatio||1,2.5);
+    board.width=board.height=Math.round(boardPx*dpr);
+    board.style.width=board.style.height=boardPx+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    buildSprites();
+    render();
+  }
+
+  // ---------- 绘制 ----------
+  function drawBoardBg(){
+    ctx.fillStyle='#211a13';
+    roundRect(ctx,0,0,boardPx,boardPx,12);ctx.fill();
+    const vg=ctx.createRadialGradient(boardPx/2,boardPx*0.4,boardPx*0.1,boardPx/2,boardPx/2,boardPx*0.7);
+    vg.addColorStop(0,'rgba(255,235,200,0.05)');vg.addColorStop(1,'rgba(0,0,0,0.18)');
+    ctx.fillStyle=vg;roundRect(ctx,0,0,boardPx,boardPx,12);ctx.fill();
+    ctx.lineWidth=2;ctx.strokeStyle='rgba(212,175,55,0.35)';
+    roundRect(ctx,1,1,boardPx-2,boardPx-2,12);ctx.stroke();
+  }
+  function drawPeg(i,j){
+    const cx=i*cell+cell/2, cy=j*cell+cell/2, pr=cell*0.20;
+    ctx.fillStyle='rgba(0,0,0,0.30)';ctx.beginPath();ctx.arc(cx,cy,pr,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,235,200,0.10)';ctx.beginPath();ctx.arc(cx,cy,pr*0.7,0,Math.PI*2);ctx.fill();
+  }
+  function drawBeadAt(i,j,code){
+    const sp=sprites[code];if(!sp)return;
+    ctx.drawImage(sp,i*cell,j*cell,cell,cell);
+  }
+  function drawCheck(){
+    ctx.lineWidth=Math.max(2,cell*0.10);
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const k=j*N+i;
+      const mismatch=(target[k]!=null&&state[k]!==target[k])||(target[k]==null&&state[k]!=null);
+      if(mismatch){
+        ctx.strokeStyle='rgba(200,54,42,0.95)';
+        ctx.beginPath();ctx.arc(i*cell+cell/2,j*cell+cell/2,cell*0.40,0,Math.PI*2);ctx.stroke();
+      }
+    }
+  }
+  function render(){
+    ctx.clearRect(0,0,boardPx,boardPx);
+    drawBoardBg();
+    if(showRef){
+      ctx.globalAlpha=0.30;
+      for(let j=0;j<N;j++)for(let i=0;i<N;i++){if(target[j*N+i])drawBeadAt(i,j,target[j*N+i]);}
+      ctx.globalAlpha=1;
+    }
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){
+      const s=state[j*N+i];
+      if(s)drawBeadAt(i,j,s);else drawPeg(i,j);
+    }
+    if(Date.now()<checkUntil)drawCheck();
+  }
+  function renderRefThumb(){
+    const sz=refThumb.width, c=sz/N, g=refThumb.getContext('2d');
+    g.clearRect(0,0,sz,sz);g.fillStyle='#211a13';g.fillRect(0,0,sz,sz);
+    for(let j=0;j<N;j++)for(let i=0;i<N;i++){const code=target[j*N+i];if(!code)continue;
+      g.fillStyle=PAL[code];g.beginPath();g.arc(i*c+c/2,j*c+c/2,c*0.46,0,7);g.fill();}
+  }
+
+  // ---------- 交互 ----------
+  function cellFromEvent(e){
+    const r=board.getBoundingClientRect();
+    const i=Math.floor((e.clientX-r.left)/cell), j=Math.floor((e.clientY-r.top)/cell);
+    if(i<0||i>=N||j<0||j>=N)return null;
+    return j*N+i;
+  }
+  let painting=false;
+  function applyAt(e){
+    const idx=cellFromEvent(e);if(idx==null)return;
+    if(tool==='pen'){if(state[idx]!==curColor){state[idx]=curColor;render();}}
+    else if(tool==='erase'){if(state[idx]!=null){state[idx]=null;render();}}
+  }
+  board.addEventListener('pointerdown',e=>{painting=true;try{board.setPointerCapture(e.pointerId);}catch(_){}applyAt(e);});
+  board.addEventListener('pointermove',e=>{if(painting)applyAt(e);});
+  function endPaint(){if(painting){painting=false;updatePct();}}
+  board.addEventListener('pointerup',endPaint);
+  board.addEventListener('pointercancel',endPaint);
+
+  // ---------- 完成度 ----------
+  function updatePct(){
+    let tot=0,ok=0;
+    for(let k=0;k<N*N;k++){if(target[k]!=null){tot++;if(state[k]===target[k])ok++;}}
+    const pct=tot?Math.round(ok/tot*100):0;
+    pctEl.textContent=pct+'%';
+    if(pct>=100&&tot>0)celebrate();
+    else celebrated=false;
+  }
+
+  // ---------- 成就特效 ----------
+  function celebrate(){
+    if(celebrated)return;celebrated=true;
+    stamp.classList.add('show');
+    setTimeout(()=>stamp.classList.remove('show'),2200);
+    spawnPetals();
+    showToast('拼成啦！国风佳作 ✦');
+  }
+  function spawnPetals(){
+    const c=petals,d=Math.min(window.devicePixelRatio||1,2);
+    c.width=window.innerWidth*d;c.height=window.innerHeight*d;
+    c.style.width=window.innerWidth+'px';c.style.height=window.innerHeight+'px';
+    const g=c.getContext('2d');g.setTransform(d,0,0,d,0,0);
+    const W=window.innerWidth,H=window.innerHeight;
+    const cols=['#C8362B','#D4AF37','#E6C65C','#C9A0B4'];
+    const ps=[];
+    for(let i=0;i<28;i++)ps.push({x:Math.random()*W,y:Math.random()*-H,vy:1.2+Math.random()*1.8,vr:(Math.random()-0.5)*0.2,ph:Math.random()*6,sz:6+Math.random()*7,col:cols[(Math.random()*cols.length)|0]});
+    const start=performance.now();
+    function frame(now){
+      const el=now-start;g.clearRect(0,0,W,H);
+      for(const p of ps){p.y+=p.vy;p.x+=Math.sin(el/600+p.ph)*0.6;p.rot=(p.rot||0)+p.vr;
+        g.save();g.translate(p.x,p.y);g.rotate(p.rot);g.fillStyle=p.col;
+        g.beginPath();g.ellipse(0,0,p.sz,p.sz*0.55,0,0,7);g.fill();g.restore();
+        if(p.y>H+20){p.y=-20;p.x=Math.random()*W;}}
+      if(el<2400)requestAnimationFrame(frame);else g.clearRect(0,0,W,H);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- 提示 ----------
+  let toastTimer=null;
+  function showToast(msg){
+    toastEl.textContent=msg;toastEl.classList.add('show');
+    clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1600);
+  }
+
+  // ---------- 调色珠串 ----------
+  function selectColor(code){
+    curColor=code;tool='pen';
+    setTool('pen');
+    [...paletteEl.children].forEach(b=>b.classList.toggle('sel',b.dataset.code===code));
+  }
+  PALETTE.forEach(p=>{
+    const b=document.createElement('button');
+    b.className='bead';b.dataset.code=p.code;b.style.background=p.hex;b.title=p.name;
+    b.addEventListener('click',()=>selectColor(p.code));
+    paletteEl.appendChild(b);
+  });
+
+  // ---------- 工具 ----------
+  function setTool(t){
+    tool=t;
+    document.querySelectorAll('.tool').forEach(el=>el.classList.toggle('on',el.dataset.tool===t));
+  }
+  document.getElementById('tPen').addEventListener('click',()=>setTool('pen'));
+  document.getElementById('tErase').addEventListener('click',()=>setTool('erase'));
+  document.getElementById('tRef').addEventListener('click',function(){showRef=!showRef;this.classList.toggle('on',showRef);render();});
+  document.getElementById('tCheck').addEventListener('click',function(){checkUntil=Date.now()+1600;render();setTimeout(render,1650);showToast('校验中…');});
+  let clearArmed=false,clearTimer=null;
+  document.getElementById('tClear').addEventListener('click',function(){
+    if(clearArmed){clearAll();clearArmed=false;clearTimeout(clearTimer);this.classList.remove('on');}
+    else{clearArmed=true;showToast('再点一次确认清空');clearTimer=setTimeout(()=>clearArmed=false,2000);}
+  });
+  document.getElementById('tSolve').addEventListener('click',function(){
+    state=target.slice();render();updatePct();showToast('已呈现示范拼法');
+  });
+  function clearAll(){state=new Array(N*N).fill(null);render();updatePct();showToast('已清空');}
+
+  // ---------- 图案选择 ----------
+  function selectPattern(i){
+    curPattern=i;
+    buildTarget(PATTERNS[i]);
+    patNameEl.textContent=PATTERNS[i].name;
+    [...patternsEl.children].forEach((c,k)=>c.classList.toggle('sel',k===i));
+    render();updatePct();
+  }
+  PATTERNS.forEach((pat,i)=>{
+    const c=document.createElement('button');
+    c.className='chip';c.textContent=pat.name;
+    c.addEventListener('click',()=>selectPattern(i));
+    patternsEl.appendChild(c);
+  });
+
+  // ---------- 初始化 ----------
+  function init(){
+    selectPattern(0);
+    selectColor('R');
+    requestAnimationFrame(computeLayout);
+    setTimeout(()=>showToast('点选色珠，照右上角参照图拼出图案'),400);
+  }
+  let rz=null;
+  window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(computeLayout,120);});
+  window.addEventListener('orientationchange',()=>setTimeout(computeLayout,250));
+  init();
+})();
+</script>
+</body>
+</html>
