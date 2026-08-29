@@ -16,7 +16,7 @@
 | 分子结构 | `molecule/` | 分子结构可视化（含构建/打包/校验脚本） |
 | 密码管理器 | `password-manager/` | 本地密码管理器，AES 加密存储，自动备份，支持 Web 和 Electron 双模式 |
 | 拼豆设计工具 | `perler-bead-designer/` | 浏览器端拼豆图案设计工具，行业标准色卡、多种钉板形状、用料统计、图纸导出 |
-| 拼豆游戏 | `perler-bead-game/` | 国风拼豆填色网页小游戏，纯前端单文件，逐格填豆拼图过关 |
+| 拼豆游戏 | `perler-bead-game/` | 国风拼豆填色网页小游戏，逐格填豆拼图过关；`_dev/build.py` 为唯一真源，产出 `index.html` + `main.js`；`_dev/build_zip.py` 校验并打包为小红书小工具 zip |
 | 像素画编辑器 | `pixel-art-editor/` | 浏览器端像素画绘制工具，支持多种画笔、图层、撤销重做、导出 PNG |
 | 火箭发射 | `rocket-launch/` | 火箭发射主题小工具，含构建/打包/校验脚本，生成可分发压缩包 |
 | 网站截图 | `screenshot/` | 多网站批量截图采集，自动处理懒加载/Cloudflare/字体，分类输出 |

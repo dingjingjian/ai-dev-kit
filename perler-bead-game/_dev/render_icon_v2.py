@@ -365,9 +365,94 @@ def style_glyph(with_paper=True, seal=True):
     return canvas
 
 
+# ---------------------------------------------------------------- 红灯笼
+
+# 17x17 原图稿（取自 patterns.json / lantern）
+LANTERN_GRID = [
+    "........k........",
+    "........k........",
+    ".....dyyyyyd.....",
+    ".....dvvvvvd.....",
+    ".....ddddddd.....",
+    "....vvvrvrvvv....",
+    "...vvvvrvrvvvv...",
+    "...vvvvryrvvvv...",
+    "...vvvvyyyvvvv...",
+    "...vvvvrkrvvvv...",
+    "...vvvvrvrvvvv...",
+    "....vvvrvrvvv....",
+    ".....vvvvvvv.....",
+    "......vdddv......",
+    ".....ddddddd.....",
+    ".....ddyyydd.....",
+    "......yyyyy......",
+]
+
+# 图标用色：原稿主色是绛紫（偏暗紫），提亮为朱砂才像「红灯笼」；
+# 原稿的朱砂竖纹改描金，成为灯笼骨架。
+LANTERN_COLORS = {
+    "v": hx("#C8382F"),   # 灯笼主体：绛紫 → 朱砂
+    "r": hx("#E9B23C"),   # 骨架竖纹：朱砂 → 藤黄
+    "y": hx("#E9B23C"),   # 藤黄（顶饰 / 流苏）
+    "d": hx("#C9A34B"),   # 描金（上下盖）
+    "k": hx("#221E1B"),   # 墨黑（提手 / 灯芯）
+}
+
+
+def style_lantern(with_paper=True):
+    """红灯笼：去钉板，让灯笼剪影本身当主角；加暖光晕体现灯火"""
+    canvas = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    if with_paper:
+        canvas.alpha_composite(paper(corner=True))
+
+    grid = center_grid(LANTERN_GRID)
+    n = len(grid)
+    span = int(852 * SS)
+    cell = int(round(span / n))
+    bs = cell * n
+    x0 = (S - bs) // 2
+    y0 = (S - bs) // 2
+
+    # 灯火暖晕（垫在豆阵之下，极淡）
+    canvas.alpha_composite(solid(
+        S, (255, 186, 84),
+        radial_alpha(S, S / 2, S / 2 + bs * 0.04, bs * 0.54, 0.22, power=2.2)))
+
+    L = build_bead_layers(cell)
+    board = Image.new("RGBA", (bs, bs), (0, 0, 0, 0))
+
+    shadow = Image.new("RGBA", (bs, bs), (0, 0, 0, 0))
+    sd = ImageDraw.Draw(shadow)
+    for r in range(n):
+        for c in range(n):
+            if grid[r][c] == ".":
+                continue
+            bx, by = cell * c, cell * r
+            sd.rounded_rectangle(
+                [bx + cell * 0.06, by + cell * 0.16, bx + cell * 0.96, by + cell * 1.02],
+                radius=int(cell * 0.28), fill=(74, 28, 20, 168))
+    board.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(cell * 0.085)))
+
+    # 豆子：左右两侧压暗，让灯笼有球体感
+    mid = (n - 1) / 2
+    for r in range(n):
+        for c in range(n):
+            ch = grid[r][c]
+            if ch == ".":
+                continue
+            col = LANTERN_COLORS.get(ch, C_CINNABAR)
+            t = abs(c - mid) / mid
+            col = mix(col, darken(col, 0.78), (t ** 1.6) * 0.42)
+            board.alpha_composite(make_bead(col, L), (cell * c, cell * r))
+
+    canvas.alpha_composite(board, (x0, y0))
+    return canvas
+
+
 # ---------------------------------------------------------------- 输出
 
 STYLES = {
+    "灯笼": style_lantern,
     "单豆": style_single,
     "大珠": style_beads,
     "印章": style_seal,

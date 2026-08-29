@@ -6,11 +6,12 @@
 ## 目录
 
 - §1 可用能力
-- §2 不可用能力（Web API）
-- §3 不可用行为
-- §4 WebGL / 图形计算边界
-- §5 常见交互怎么实现
-- §6 能力扫描清单
+- §2 Native 能力（JSBridge）
+- §3 不可用能力（Web API）
+- §4 不可用行为
+- §5 WebGL / 图形计算边界
+- §6 常见交互怎么实现
+- §7 能力扫描清单
 
 ---
 
@@ -41,7 +42,25 @@ Cookie 仅作本地存储：可读写、按 origin 隔离，但因不联网**不
 
 ---
 
-## 2. 不可用能力（Web API）
+## 2. Native 能力（JSBridge）
+
+容器会注入 **`window.xhs.miniTool.*`**，通过它调用 Native 能力（发笔记、存相册、跳 App 页等）。
+
+| 规则 | 说明 |
+| --- | --- |
+| 唯一入口 | 只用 `window.xhs.miniTool.<apiName>(options)`，**禁止**自行 `postMessage` 到 bridge |
+| 契约来源 | 以 [`jsbridge-api.md`](./jsbridge-api.md) 为准 |
+| 参数校验 | 必填项、长度、数组上限等以 [`jsbridge-api.md`](./jsbridge-api.md) 为准 |
+| 本地路径 | `saveImageToPhotosAlbum.filePath` 不支持网络 URL；base64 可先 `writeTempFile` 换 `filePath` |
+| data:uri | `writeTempFile.data` 必须是完整 `data:<mime>;base64,...`（`canvas.toDataURL()` 原样传），裸 base64 会失败 |
+| 发笔记 | `postNote.mediaInfo` 必填；图片走 `image_resources[].url`，视频走 `video_resources` |
+| 跳原生页 | `openRedPage.type` 须命中 Native 规则表白名单，`params` 为语义参数 |
+
+完整 API 列表、字段表与示例 → **[jsbridge-api.md](./jsbridge-api.md)**。
+
+---
+
+## 3. 不可用能力（Web API）
 
 以下 API 已禁用，调用会抛异常、返回空值或被拦截，必须移除或改用替代写法。
 
@@ -63,7 +82,7 @@ Cookie 仅作本地存储：可读写、按 origin 隔离，但因不联网**不
 
 ---
 
-## 3. 不可用行为
+## 4. 不可用行为
 
 | 行为 | 说明 | 替代方案 |
 | --- | --- | --- |
@@ -80,7 +99,7 @@ Cookie 仅作本地存储：可读写、按 origin 隔离，但因不联网**不
 
 ---
 
-## 4. WebGL / 图形计算边界
+## 5. WebGL / 图形计算边界
 
 纯 WebGL 渲染可用，组合能力受限：
 
@@ -96,7 +115,7 @@ WebGL 适合用包内资源做本地渲染；AI 图像处理等重计算（需�
 
 ---
 
-## 5. 常见交互怎么实现
+## 6. 常见交互怎么实现
 
 | 需求 | 实现 |
 | --- | --- |
@@ -107,10 +126,13 @@ WebGL 适合用包内资源做本地渲染；AI 图像处理等重计算（需�
 | 视觉全屏 | CSS 布局（`100vh` / flex + 隐藏滚动） |
 | 页面跳转 | 单页内用 JS 切换视图 DOM |
 | 输入弹窗 | 页内 Modal 组件 |
+| 保存图片到相册 | `writeTempFile({ data: canvas.toDataURL(...) })`（须完整 data:uri）→ `saveImageToPhotosAlbum({ filePath })`，见 [jsbridge-api.md](./jsbridge-api.md) |
+| 发布笔记 | `postNote({ mediaInfo, title?, content? })` |
+| 跳转 App 搜索 / 用户页等 | `openRedPage({ type, params? })`，`type` 须在白名单内 |
 
 ---
 
-## 6. 能力扫描清单
+## 7. 能力扫描清单
 
 扫描代码，命中下列模式则**必须删除或改用替代写法**：
 

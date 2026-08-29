@@ -97,6 +97,7 @@ zip 内仅允许以下类型：
 关键点：
 
 - **脚本必须外置**：容器 CSP 的 `script-src` 不含 `unsafe-inline`，内联 `<script>...</script>`、行内事件 `onclick="..."`、`javascript:` URI 均不可用。JS 写进包内 `.js` 用 `<script src>` 引入，事件用 `addEventListener` 绑定。
+- **脚本必须是经典脚本**：只用 `<script src="./app.js">`，**不要 `type="module"`**，JS 里也不要 `import` / `export`。zip 离线加载、无目录服务，module 的相对 `import` 解析不可靠，典型症状是「页面渲染出来但 JS 完全不执行」。要拆多个 JS 文件时按依赖顺序写多个 `<script src>`，靠 `window` 命名空间协作，并避免 top-level `await`。
 - **样式可内联**：`<style>` 与 `style="..."` 都能用，无需外置。
 - **选图预览**：`<img src>` 配 `data:`（`FileReader.readAsDataURL`）或 `blob:`（`URL.createObjectURL`）均可显示。
 - 外部 CDN 一律加载不到，所有资源全部打包进小工具。
@@ -173,6 +174,7 @@ zip 内仅允许以下类型：
 - [ ] viewport 含 `width=device-width, initial-scale=1.0, viewport-fit=cover`
 - [ ] 全部资源为相对路径，无 `http(s)://` 外部引用（图片、第三方库、字体等已打进 zip）
 - [ ] 脚本全部外置：无内联 `<script>`、无 `onclick=` 等行内事件、无 `javascript:` / `eval` / `new Function`
+- [ ] 脚本为经典脚本：无 `type="module"`，JS 内无 `import` / `export`
 - [ ] 图片可用包内文件 / `data:` / `blob:`；音视频、字体仅用包内文件
 - [ ] 无 `<base href>`、无 `<iframe>` / `<object>`、无自建 CSP `<meta>`
 
@@ -180,6 +182,7 @@ zip 内仅允许以下类型：
 
 - [ ] 未使用不可用能力（网络请求、定位、剪贴板、传感器、Worker、WebRTC 等）
 - [ ] 相机 / 麦克风 / 选图用法符合「用户手势触发 + 授权」
+- [ ] 若使用 JSBridge：仅调用 [jsbridge-api.md](./jsbridge-api.md) 列出的 API，参数符合 schema
 
 ### 正确性（静态自查）
 

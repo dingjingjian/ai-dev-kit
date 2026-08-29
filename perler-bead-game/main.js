@@ -1,436 +1,571 @@
-# -*- coding: utf-8 -*-
-import json, os, textwrap
-
-BASE = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(BASE, 'patterns.json'), 'r', encoding='utf-8') as f:
-    PATTERNS_JSON = f.read()
-
-HTML_TEMPLATE = r'''<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>国风拼豆坊 · 掌上拼豆</title>
-<style>
-:root{
-  --paper:#F3EDE0; --ink:#2B2B2B;
-  --red:#C8362B; --red-deep:#9E2620;
-  --gold:#D4AF37; --gold-soft:#E6C65C; --gold-deep:#A6821E;
-  --bg-1:#14100c; --bg-2:#241b14; --bg-3:#2e2218;
-  --panel:#2a1f16; --panel-2:#3a2b1e;
-  --text:#F2EBDD; --text-dim:#C9B896;
-  --glass:rgba(42,31,22,0.78);
-  --border-gold:rgba(212,175,55,0.28);
-  --shadow:rgba(0,0,0,0.45);
-  --ease:cubic-bezier(.2,.7,.3,1); --ease-back:cubic-bezier(.2,1.4,.4,1);
-  /* 安全区：PC 模拟器注入 --safe-area-inset-* 变量，真机走 env()，两者都要兼容 */
-  --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
-  --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-  --safe-l:0px;
-  --safe-r:0px;
-}
-body.in-app{
-  --safe-top:calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 40px);
-  --safe-l:48px;
-  --safe-r:92px;
-}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;}
-body{
-  font-family:"KaiTi","STKaiti","Kaiti SC","楷体","Songti SC","STSong","SimSun","Microsoft YaHei",serif;
-  color:var(--text);
-  display:flex;flex-direction:column;
-  height:100vh;height:100dvh;
-  overflow:hidden;
-  -webkit-user-select:none;user-select:none;
-  touch-action:manipulation;
-  background:var(--bg-1);
-  padding-top:var(--safe-top);
-}
-button{font-family:inherit;cursor:pointer;border:none;outline:none;background:none;color:inherit;}
-canvas{display:block;}
-/* 宣纸纹理 + 流光背景 */
-#bgCanvas{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
-.bg-noise{
-  position:fixed;inset:0;pointer-events:none;z-index:0;
-  background:
-    radial-gradient(circle at 18% 10%, rgba(200,54,42,0.10), transparent 34%),
-    radial-gradient(circle at 86% 90%, rgba(212,175,55,0.10), transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(255,235,200,0.03), transparent 60%),
-    linear-gradient(160deg, #1b140e 0%, #0f0b08 100%);
-}
-.bg-noise::after{
-  content:"";position:absolute;inset:0;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  opacity:0.5;
-}
-.corner-decor{
-  position:fixed;inset:0;pointer-events:none;z-index:1;
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M10,110 Q30,30 110,10' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M20,110 Q35,35 110,20' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") left top no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M110,110 Q90,30 10,10' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M100,110 Q85,35 10,20' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") right top no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M10,10 Q30,90 110,110' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M20,10 Q35,85 110,100' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") left bottom no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M110,10 Q90,90 10,110' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M100,10 Q85,85 10,100' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") right bottom no-repeat;
-  background-size:120px 120px;
-}
-
-/* 顶栏 */
-.topbar{
-  flex-shrink:0;min-height:48px;display:flex;align-items:center;gap:10px;
-  padding:6px calc(12px + var(--safe-r)) 6px calc(12px + var(--safe-l));
-  background:linear-gradient(180deg, rgba(44,35,26,0.95), rgba(34,25,18,0.95));
-  border-bottom:1px solid var(--border-gold);
-  box-shadow:0 2px 14px rgba(0,0,0,0.35);
-  z-index:10;
-}
-/* 顶部只放信息与视觉记录，不放任何可点按钮 */
-#refThumb{
-  width:34px;height:34px;border-radius:8px;flex-shrink:0;
-  background:#1b140e;
-  box-shadow:0 0 0 1px rgba(212,175,55,0.45), 0 2px 7px rgba(0,0,0,0.45);
-  transition:opacity .25s var(--ease), filter .25s var(--ease);
-}
-/* 挑战模式下只留轮廓，不给答案 */
-#refThumb.masked{opacity:.24;filter:blur(1.7px) grayscale(.45);}
-.topbar .rec{flex-shrink:0;display:flex;align-items:center;gap:9px;}
-.topbar .rec .col{text-align:right;line-height:1.15;}
-.topbar .rec .t{font-size:16px;font-weight:bold;color:var(--gold);font-variant-numeric:tabular-nums;}
-.topbar .rec .s{font-size:10px;color:var(--gold-soft);letter-spacing:2px;}
-.seal{
-  width:34px;height:34px;border-radius:7px;flex-shrink:0;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:22px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.18);
-  text-shadow:0 1px 2px rgba(0,0,0,0.3);
-}
-.title{flex:1;min-width:0;}
-.title .main{font-size:17px;font-weight:bold;letter-spacing:2px;
-  background:linear-gradient(90deg,var(--gold-soft),#fff6d4,var(--gold-soft));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  animation:shine 4s linear infinite;
-  background-size:200% 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-@keyframes shine{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
-.title .sub{font-size:10px;color:var(--text-dim);letter-spacing:1px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.progress-ring{width:38px;height:38px;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));}
-.progress-ring circle.bg{fill:none;stroke:rgba(255,255,255,0.08);stroke-width:4;}
-.progress-ring circle.fg{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;
-  transform:rotate(-90deg);transform-origin:50% 50%;
-  transition:stroke-dashoffset .35s var(--ease);
-}
-.icon-btn{
-  width:32px;height:32px;border-radius:50%;flex-shrink:0;
-  background:rgba(255,255,255,0.07);color:var(--text-dim);
-  display:flex;align-items:center;justify-content:center;transition:all .18s var(--ease);
-}
-.icon-btn svg{width:19px;height:19px;fill:currentColor;}
-.icon-btn.on{background:linear-gradient(145deg,var(--gold-soft),var(--gold));color:#1a120a;}
-/* 顶栏下拉菜单 */
-.menu{
-  position:absolute;bottom:calc(100% + 8px);right:calc(10px + var(--safe-r));width:210px;border-radius:13px;
-  background:linear-gradient(180deg,var(--panel-2),var(--panel));
-  border:1px solid var(--border-gold);
-  box-shadow:0 -8px 30px rgba(0,0,0,0.55), 0 10px 34px rgba(0,0,0,0.45);
-  overflow:hidden;opacity:0;transform:translateY(10px) scale(.97);pointer-events:none;
-  transition:opacity .18s var(--ease),transform .18s var(--ease);z-index:70;
-}
-.menu.show{opacity:1;transform:none;pointer-events:auto;}
-.menu-item{
-  width:100%;display:flex;align-items:center;justify-content:space-between;
-  padding:12px 14px;color:var(--text);font-size:14px;letter-spacing:1px;
-  border-bottom:1px solid rgba(212,175,55,0.12);transition:background .15s;
-}
-.menu-item:last-child{border-bottom:none;}
-.menu-item b{font-size:12px;color:var(--gold-soft);font-weight:normal;}
-.menu-item:active{background:rgba(212,175,55,0.14);}
-
-.stage{
-  flex:1;position:relative;display:flex;align-items:center;justify-content:center;
-  min-height:0;padding:12px;z-index:5;
-}
-/* 边框统一由 canvas 内部绘制，这里只保留外阴影，避免双描边与内阴影压暗边缘 */
-#board{
-  border-radius:16px;
-  box-shadow:0 14px 40px rgba(0,0,0,0.55);
-  touch-action:none;
-}
-
-/* 色板 */
-.palette-wrap{
-  flex-shrink:0;z-index:10;
-  background:linear-gradient(180deg, rgba(24,18,13,0.92), rgba(34,25,18,0.95));
-  border-top:1px solid var(--border-gold);
-}
-/* 色板区只放珠子，不放任何标题文字 */
-.palette{
-  display:flex;flex-wrap:wrap;align-content:flex-start;
-  gap:9px 12px;padding:10px 14px;
-  max-height:112px;overflow-y:auto;overflow-x:hidden;
-  scrollbar-width:thin;
-}
-.palette::-webkit-scrollbar{width:3px;}
-.palette::-webkit-scrollbar-thumb{background:rgba(212,175,55,0.25);border-radius:2px;}
-.swab{flex-shrink:0;width:38px;height:38px;border-radius:50%;position:relative;transition:transform .18s var(--ease-back),box-shadow .2s;
-  box-shadow:0 3px 8px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.38), inset 0 -3px 6px rgba(0,0,0,0.4);
-}
-.swab::after{content:"";position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 8px rgba(0,0,0,0.25);}
-.swab.sel{transform:scale(1.15);box-shadow:0 0 0 3px var(--gold), 0 5px 14px rgba(0,0,0,0.5);}
-.swab .hole{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 1px 2px rgba(0,0,0,0.55);}
-.swab .hole::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26%;height:26%;border-radius:50%;
-  background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), rgba(0,0,0,0.4));
-  box-shadow:inset 0 1px 2px rgba(0,0,0,0.5);
-}
-.swab .cnt{position:absolute;bottom:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:var(--panel-2);color:var(--gold-soft);font-size:9px;font-weight:bold;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-gold);}
-
-/* 工具条 */
-.toolbar{
-  flex-shrink:0;display:grid;grid-template-columns:repeat(6,1fr);
-  gap:6px;padding:8px 10px;
-  padding-bottom:calc(8px + var(--safe-bottom));
-  background:linear-gradient(180deg, rgba(34,25,18,0.95), rgba(24,18,13,0.98));
-  border-top:1px solid var(--border-gold);
-  z-index:20;position:relative;
-}
-.tool{
-  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  height:50px;border-radius:12px;color:var(--text-dim);
-  background:rgba(255,255,255,0.04);
-  border:1px solid transparent;
-  transition:all .18s var(--ease);
-}
-.tool svg{width:21px;height:21px;fill:currentColor;}
-.tool span{font-size:10px;letter-spacing:1px;white-space:nowrap;}
-.tool.on{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;box-shadow:0 2px 8px rgba(212,175,55,0.35);}
-.tool.on svg{fill:#1a120a;}
-@keyframes nudge{0%,100%{transform:translateX(0);}25%{transform:translateX(-3px);}75%{transform:translateX(3px);}}
-.tool.confirm{
-  color:#fff;background:linear-gradient(145deg,#D8483C,var(--red-deep));
-  border-color:transparent;font-weight:bold;
-  box-shadow:0 3px 12px rgba(200,54,42,0.5);
-  animation:nudge .26s var(--ease) 2;
-}
-.tool.confirm svg{fill:#fff;}
-
-
-/* Toast / Stamp */
-.toast{
-  position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);
-  background:rgba(20,16,11,0.94);color:var(--gold-soft);
-  padding:10px 20px;border-radius:22px;font-size:13px;letter-spacing:1px;
-  border:1px solid rgba(212,175,55,0.35);
-  opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
-  z-index:40;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,0.45);
-}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.stamp{
-  position:fixed;left:50%;top:38%;transform:translate(-50%,-50%) scale(0.3) rotate(-16deg);
-  width:130px;height:130px;border-radius:16px;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:68px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 5px rgba(255,255,255,0.12), 0 14px 50px rgba(0,0,0,0.65), inset 0 0 20px rgba(0,0,0,0.25);
-  opacity:0;pointer-events:none;z-index:50;
-  transition:opacity .4s, transform .6s var(--ease-back);
-}
-.stamp.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-8deg);}
-#petals{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:45;}
-
-/* 面板遮罩 */
-.sheet, .modal{
-  position:fixed;inset:0;z-index:60;background:rgba(8,6,4,0.75);
-  opacity:0;pointer-events:none;transition:opacity .25s;
-  display:flex;align-items:flex-end;justify-content:center;
-}
-.sheet.show, .modal.show{opacity:1;pointer-events:auto;}
-.sheet-panel{
-  width:100%;max-height:72vh;border-radius:18px 18px 0 0;
-  background:linear-gradient(180deg, var(--panel-2), var(--panel));
-  border-top:1px solid var(--border-gold);
-  transform:translateY(100%);transition:transform .3s var(--ease);
-  padding:16px 16px calc(16px + var(--safe-bottom));
-  overflow:auto;
-}
-.sheet.show .sheet-panel{transform:translateY(0);}
-.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.sheet-title{font-size:18px;font-weight:bold;color:var(--gold-soft);letter-spacing:1px;}
-.sheet-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;}
-
-.modal{align-items:center;padding:16px;}
-.modal-card{
-  width:100%;max-width:360px;border-radius:18px;
-  background:linear-gradient(180deg, var(--panel-2), var(--panel));
-  border:1px solid var(--border-gold);
-  box-shadow:0 14px 50px rgba(0,0,0,0.55);
-  transform:scale(0.92);transition:transform .25s var(--ease-back);
-  padding:22px;text-align:center;
-}
-.modal.show .modal-card{transform:scale(1);}
-.modal-card h2{font-size:22px;color:var(--gold-soft);margin-bottom:6px;letter-spacing:2px;}
-.modal-card p{font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:14px;}
-.modal-stars{font-size:24px;color:var(--gold);margin-bottom:10px;letter-spacing:3px;}
-.modal-stats{display:flex;justify-content:center;gap:20px;margin-bottom:16px;font-size:13px;color:var(--text-dim);}
-.modal-stats b{display:block;font-size:18px;color:var(--gold);}
-.modal-btns{display:flex;gap:10px;}
-.modal-btns button{flex:1;height:42px;border-radius:10px;background:linear-gradient(145deg,var(--gold-soft),var(--gold));color:#1a120a;font-weight:bold;font-size:14px;letter-spacing:1px;}
-.modal-btns button.secondary{background:rgba(255,255,255,0.08);color:var(--text);border:1px solid var(--border-gold);}
-
-/* 完成画廊 */
-.gallery-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.gal-item{border-radius:10px;background:#211a13;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center;position:relative;}
-.gal-item canvas{width:90%;height:90%;border-radius:6px;}
-.gal-item .name{position:absolute;bottom:4px;left:4px;right:4px;text-align:center;font-size:9px;color:var(--text-dim);background:rgba(0,0,0,0.55);border-radius:4px;}
-
-/* 视图容器：首页=图纸库，游戏页=拼豆台 */
-#playView{flex:1;min-height:0;display:flex;flex-direction:column;}
-#homeView{
-  position:fixed;inset:0;z-index:90;
-  background:linear-gradient(180deg,#231a12 0%,#14100c 100%);
-  display:flex;flex-direction:column;
-  transition:opacity .3s var(--ease),transform .3s var(--ease);
-}
-#homeView.hide{opacity:0;pointer-events:none;transform:translateY(-16px);}
-.home-head{
-  flex-shrink:0;
-  padding:calc(14px + var(--safe-top)) calc(14px + var(--safe-r)) 13px calc(14px + var(--safe-l));
-  display:flex;align-items:center;gap:12px;
-  border-bottom:1px solid var(--border-gold);
-  background:linear-gradient(180deg,rgba(44,35,26,0.96),rgba(34,25,18,0.9));
-}
-.home-seal{
-  width:46px;height:46px;border-radius:10px;flex-shrink:0;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:26px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 3px 10px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(255,255,255,0.18);
-}
-.home-title{flex:1;min-width:0;}
-.home-title .m{font-size:21px;font-weight:bold;letter-spacing:3px;
-  background:linear-gradient(90deg,var(--gold-soft),#fff6d4,var(--gold-soft));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  background-size:200% 100%;animation:shine 4s linear infinite;}
-.home-title .s{font-size:11px;color:var(--text-dim);letter-spacing:2px;margin-top:3px;}
-.home-stat{flex-shrink:0;text-align:right;font-size:10px;color:var(--text-dim);letter-spacing:1px;}
-.home-stat b{display:block;font-size:17px;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1.2;}
-.lib-tabs{flex-shrink:0;display:flex;gap:8px;padding:10px calc(12px + var(--safe-r)) 10px calc(12px + var(--safe-l));overflow-x:auto;scrollbar-width:none;}
-.lib-tabs::-webkit-scrollbar{display:none;}
-.lib-tab{
-  flex-shrink:0;height:30px;padding:0 14px;border-radius:15px;font-size:13px;
-  color:var(--text-dim);background:rgba(255,255,255,0.05);
-  border:1px solid rgba(212,175,55,0.18);white-space:nowrap;transition:all .18s var(--ease);
-}
-.lib-tab.sel{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;}
-.lib-body{flex:1;overflow-y:auto;padding:2px calc(12px + var(--safe-r)) calc(18px + var(--safe-bottom)) calc(12px + var(--safe-l));}
-.lib-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
-.lib-card{
-  border-radius:14px;background:var(--panel);border:1px solid rgba(212,175,55,0.15);
-  overflow:hidden;display:flex;flex-direction:column;transition:transform .2s var(--ease);
-}
-.lib-card:active{transform:scale(.97);}
-.lib-card.cur{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 4px 14px rgba(212,175,55,0.22);}
-.lib-thumb{width:100%;aspect-ratio:1/1;background:#1b140e;display:flex;align-items:center;justify-content:center;position:relative;}
-.lib-thumb canvas{width:86%;height:86%;border-radius:8px;}
-.lib-badge{position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:9px;font-size:9px;letter-spacing:1px;background:var(--gold);color:#1a120a;font-weight:bold;}
-.lib-info{padding:8px 9px 10px;display:flex;flex-direction:column;gap:2px;}
-.lib-name{font-size:14px;font-weight:bold;color:var(--text);letter-spacing:1px;}
-.lib-meta{font-size:10px;color:var(--text-dim);letter-spacing:.5px;}
-.lib-lore{font-size:10px;color:var(--gold-soft);opacity:.9;line-height:1.45;margin-top:3px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.lib-empty{grid-column:1/-1;text-align:center;color:var(--text-dim);padding:34px 0;font-size:13px;}
-</style>
-</head>
-<body>
-  <canvas id="bgCanvas"></canvas>
-  <div class="bg-noise"></div>
-  <div class="corner-decor"></div>
-
-  <div id="playView">
-  <div class="topbar">
-    <canvas id="refThumb" width="72" height="72"></canvas>
-    <div class="title">
-      <div class="main" id="patName">太极</div>
-      <div class="sub" id="patMeta">入门 · 13×13 · 128 豆</div>
-    </div>
-    <div class="rec">
-      <svg class="progress-ring" viewBox="0 0 42 42"><circle class="bg" cx="21" cy="21" r="17"/><circle class="fg" id="pctRing" cx="21" cy="21" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/></svg>
-      <div class="col">
-        <div class="t" id="timer">00:00</div>
-        <div class="s" id="stars">☆☆☆</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="stage">
-    <canvas id="board"></canvas>
-  </div>
-
-  <div class="palette-wrap">
-    <div class="palette" id="palette"></div>
-  </div>
-
-  <div class="toolbar" id="toolbar">
-    <button class="tool" data-tool="home"><svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg><span>图纸</span></button>
-    <button class="tool on" data-tool="pen"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span>画笔</span></button>
-    <button class="tool" data-tool="erase"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-6 14.5c-1.5 0-2.9-.6-3.9-1.6L5.5 13c-.5-.5-.5-1.3 0-1.8l6.8-6.8c.5-.5 1.3-.5 1.8 0l4.6 4.6c.5.5.5 1.3 0 1.8l-6.8 6.8c-1 1-2.4 1.6-3.9 1.6z"/></svg><span>橡皮</span></button>
-    <button class="tool" data-tool="hint"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg><span>提示</span></button>
-    <button class="tool" data-tool="clear"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg><span>清空</span></button>
-    <button class="tool" data-tool="more"><svg viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg><span>更多</span></button>
-    <div class="menu" id="moreMenu">
-      <button class="menu-item" data-act="mode"><span>模式</span><b id="modeLabel">临摹</b></button>
-      <button class="menu-item" data-act="gallery"><span>我的画廊</span><b id="galCount">0 幅</b></button>
-      <button class="menu-item" data-act="sfx"><span>音效</span><b id="sfxLabel">开</b></button>
-      <button class="menu-item" data-act="bgm"><span>背景音乐</span><b id="bgmLabel">开</b></button>
-      <button class="menu-item" data-act="info"><span>玩法说明</span><b>›</b></button>
-    </div>
-  </div>
-  </div><!-- /playView -->
-
-  <div id="homeView">
-    <div class="home-head">
-      <div class="home-seal">拼</div>
-      <div class="home-title">
-        <div class="m">国风拼豆坊</div>
-        <div class="s">二十幅国风纹样等你拼</div>
-      </div>
-      <div class="home-stat">已完成<b id="homeDone">0</b><span id="homeTotal">共 20 幅</span></div>
-    </div>
-    <div class="lib-tabs" id="libTabs"></div>
-    <div class="lib-body"><div class="lib-grid" id="libGrid"></div></div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-  <div class="stamp" id="stamp">成</div>
-  <canvas id="petals"></canvas>
-
-  <div class="sheet" id="sheetGallery">
-    <div class="sheet-panel">
-      <div class="sheet-head"><div class="sheet-title">我的画廊</div><button class="sheet-close" data-close>✕</button></div>
-      <div class="gallery-grid" id="galleryGrid"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="winModal">
-    <div class="modal-card">
-      <h2>拼成啦！</h2>
-      <div class="modal-stars" id="winStars">★★★</div>
-      <p id="winLore">国风佳作，收入画廊。</p>
-      <div class="modal-stats"><div>用时<br><b id="winTime">00:00</b></div><div>步数<br><b id="winMoves">0</b></div><div>失误<br><b id="winMistakes">0</b></div></div>
-      <div class="modal-btns">
-        <button id="winReplay">重玩</button>
-        <button class="secondary" id="winNext">下一幅</button>
-      </div>
-    </div>
-  </div>
-
-<script src="./main.js"></script>
-</body>
-</html>'''
-
-# 小工具容器 CSP 的 script-src 不含 unsafe-inline，脚本必须外置为经典脚本，
-# 由 index.html 用 <script src="./main.js"> 引入（勿改回内联，勿用 type="module"）。
-JS_TEMPLATE = r'''(function(){
+(function(){
 "use strict";
-const PATTERNS = __PATTERNS_JSON__;
+const PATTERNS = [
+ {
+  "id": "taiji",
+  "name": "太极",
+  "diff": 1,
+  "cat": "入门",
+  "lore": "阴阳相生，万物之始。",
+  "n": 13,
+  "grid": [
+   ".............",
+   "...kewwwek...",
+   "..kkwwkwwwk..",
+   ".kkkwkkkwwwk.",
+   ".ekkwwkwwwwe.",
+   ".kkkwwwwwwww.",
+   ".kkkkkwwwwww.",
+   ".kkkkkkkkwww.",
+   ".ekkkkwkkwwe.",
+   ".kkkkwwwkwwk.",
+   "..kkkkwkkwk..",
+   "...kekkkek...",
+   "............."
+  ]
+ },
+ {
+  "id": "coin",
+  "name": "铜钱",
+  "diff": 1,
+  "cat": "入门",
+  "lore": "天圆地方，招财进宝。",
+  "n": 13,
+  "grid": [
+   ".....yyy.....",
+   "...kyyyyyk...",
+   "..kyddddddk..",
+   ".kyddddddddk.",
+   ".yddoooooddo.",
+   "yyddo...oddoo",
+   "yyddo...oddoo",
+   "yyddo...oddoo",
+   ".yddoooooddo.",
+   ".kddddddddok.",
+   "..kddddddok..",
+   "...koooook...",
+   ".....ooo....."
+  ]
+ },
+ {
+  "id": "plum",
+  "name": "梅花",
+  "diff": 1,
+  "cat": "入门",
+  "lore": "凌寒独自开，报春第一枝。",
+  "n": 13,
+  "grid": [
+   ".............",
+   ".............",
+   ".....vvv.....",
+   "....ppppp....",
+   "..vpyylylpv..",
+   "..vplyyylpv..",
+   "..vpyyyyypv..",
+   "...lyyyyyp...",
+   "..mpplylpp...",
+   "..mvpplppv...",
+   ".mmmvvmvv....",
+   "mmm...m......",
+   "m............"
+  ]
+ },
+ {
+  "id": "peach",
+  "name": "寿桃",
+  "diff": 1,
+  "cat": "入门",
+  "lore": "三千年结实，祝寿绵长春。",
+  "n": 13,
+  "grid": [
+   ".......m.....",
+   "......mm...nn",
+   ".....lmm..ggg",
+   "....llplgggn.",
+   "...lllplnnn..",
+   "..llwwpllll..",
+   "..llllpllll..",
+   ".llpppplppll.",
+   ".lppppplppll.",
+   ".llpppplllll.",
+   "..llllpllll..",
+   ".lllllplllll.",
+   "..lllllllll.."
+  ]
+ },
+ {
+  "id": "lantern",
+  "name": "红灯笼",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "一夜鱼龙舞，灯明照岁寒。",
+  "n": 17,
+  "grid": [
+   "........k........",
+   "........k........",
+   ".....dyyyyyd.....",
+   ".....dvvvvvd.....",
+   ".....ddddddd.....",
+   "....vvvrvrvvv....",
+   "...vvvvrvrvvvv...",
+   "...vvvvryrvvvv...",
+   "...vvvvyyyvvvv...",
+   "...vvvvrkrvvvv...",
+   "...vvvvrvrvvvv...",
+   "....vvvrvrvvv....",
+   ".....vvvvvvv.....",
+   "......vdddv......",
+   ".....ddddddd.....",
+   ".....ddyyydd.....",
+   "......yyyyy......"
+  ]
+ },
+ {
+  "id": "bamboo",
+  "name": "墨竹",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "未出土时先有节，及凌云处尚虚心。",
+  "n": 17,
+  "grid": [
+   ".........g.......",
+   ".....gngg........",
+   ".....ggnnn.......",
+   "....wgnn...g...g.",
+   ".....nn....g.gg..",
+   "....nnn....gg....",
+   ".....gn....kk....",
+   "...w.gn.gg.gg....",
+   ".....kk.ggggg....",
+   ".....gngg..ggg...",
+   ".....gg....kk.g..",
+   "...w.g......g....",
+   "....kkk.nn..g....",
+   ".....g....nng....",
+   "...w.g......k....",
+   "....kkk.....g....",
+   "....gn......g...."
+  ]
+ },
+ {
+  "id": "koi",
+  "name": "锦鲤",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "锦鲤跃浪，年年有余。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".................",
+   ".................",
+   ".................",
+   ".......pp......v.",
+   ".....vvppp...vvv.",
+   "..weerveeerrvvrr.",
+   ".wkwerrvwwrrw.r..",
+   ".wkwerrwwrrww.r..",
+   ".kkwewwwrrrww.r..",
+   "...eewwwrrrwvvrr.",
+   "...e.llllrl..vvv.",
+   ".......ll.l....v.",
+   "......lcc........",
+   "ccccccccccccccccc",
+   "cccccccc.cccccccc",
+   "ccccccccccccccccc"
+  ]
+ },
+ {
+  "id": "vase",
+  "name": "青花瓶",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "素瓷雪色缥沫香，青花半隐见天光。",
+  "n": 17,
+  "grid": [
+   ".................",
+   "......bbbbb......",
+   ".......bbb.......",
+   ".......bbb.......",
+   ".......cwe.......",
+   ".......cwe.......",
+   "......bbbbb......",
+   "...bbbwbbbwbbb...",
+   "....bbbwwwbbb....",
+   "....cbbbbbwbe....",
+   "...bbbwbbbbbbb...",
+   "...bbwbwwwbwbb...",
+   ".....wwbbbww.....",
+   ".....bbbbbbb.....",
+   ".....cwwwwwe.....",
+   ".....wwwwwww.....",
+   ".....bbbbbbb....."
+  ]
+ },
+ {
+  "id": "lotus",
+  "name": "荷花",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "出淤泥而不染，濯清涟而不妖。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".................",
+   ".................",
+   "........p........",
+   "....pp.ppp.pp....",
+   "....pplwplwpp....",
+   ".....plwwlwp.....",
+   "...pwwlyyylllp...",
+   "...plllynnwwwp...",
+   "....pplynnlpp....",
+   "....ppwllwlpp....",
+   "....ppllpwwpp....",
+   ".......ppp.......",
+   "ggggnnn.....nn...",
+   "nnggggg..ngggggg.",
+   "..nnntttttttnnnn.",
+   "....ttttttttt...."
+  ]
+ },
+ {
+  "id": "cloud",
+  "name": "祥云",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "青云直上，瑞气东来。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".................",
+   ".................",
+   ".................",
+   "......ccc..c.....",
+   ".....ccccccccc...",
+   "....tttttttttt...",
+   "..cccctttttttcc..",
+   "..ccccctttbtcccc.",
+   "..tttttttcttbbtt.",
+   "..ttttbtcctttttb.",
+   "..tttbbtctttttbt.",
+   "..bbbbbbcccbccct.",
+   ".........tccctt..",
+   ".................",
+   ".................",
+   "................."
+  ]
+ },
+ {
+  "id": "knot",
+  "name": "中国结",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "一根丝线，千回百转，同心永结。",
+  "n": 17,
+  "grid": [
+   "........y........",
+   "........y........",
+   ".......rrr.......",
+   ".......r.r.......",
+   "......vr.rv......",
+   ".....yyrrr.v.....",
+   "....vyyrrr..v....",
+   "..rrrrrryrrrrrr..",
+   "..r..rryyyrr..r..",
+   "..rrrrrryrrrrrr..",
+   "....v..rrryyv....",
+   ".....v.rrryy.....",
+   "......vr.rv......",
+   ".......r.r.......",
+   ".......rrr.......",
+   ".......ydy.......",
+   "......yyyyy......"
+  ]
+ },
+ {
+  "id": "crane",
+  "name": "仙鹤",
+  "diff": 2,
+  "cat": "进阶",
+  "lore": "丹顶鹤唳，一品鸟也。",
+  "n": 17,
+  "grid": [
+   ".....r...........",
+   "....wrr..........",
+   "...dwkw..........",
+   "....ww...........",
+   "...www...........",
+   "...www...........",
+   "...www...........",
+   "....wkkwwww...ee.",
+   "....wkkwwwwweeee.",
+   "....wkkewwwwkkk..",
+   "....wwkeeweekkkk.",
+   "....wwweeeee.kkk.",
+   ".....wekkkk......",
+   ".......kkkk......",
+   ".......kkkk......",
+   ".......kkkkk.....",
+   "....nnnnnnnnnn..."
+  ]
+ },
+ {
+  "id": "fu",
+  "name": "福字斗方",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "福到万家，新春纳祥。",
+  "n": 21,
+  "grid": [
+   ".....................",
+   ".ddddddddddddddddddd.",
+   ".drrrrrrrrrrrrrrrrrd.",
+   ".drrrrrrrrrrrrrrrrrd.",
+   ".drrrrrrrrrrrrrrrrrd.",
+   ".ddddddrrrddddddddrd.",
+   ".ddrddrrrrrrrrrrrrrd.",
+   ".ddrddrrrrdddddddrrd.",
+   ".dddddrrrrd.....drrd.",
+   ".dddddrrrrd.....drrd.",
+   ".drdddrddrdddddddrrd.",
+   ".drdddrrrrrrrrrrrrrd.",
+   ".drrddrrrrdddddddrrd.",
+   ".drrddrrrrd..d..drrd.",
+   ".drrddrrrrdddddddrrd.",
+   ".drrddrrrrd..d..drrd.",
+   ".drrddrrrrdddddddrrd.",
+   ".drrddrrrrdddddddrrd.",
+   ".drrrrrrrrrrrrrrrrrd.",
+   ".ddddddddddddddddddd.",
+   "....................."
+  ]
+ },
+ {
+  "id": "peony",
+  "name": "牡丹",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "唯有牡丹真国色，花开时节动京城。",
+  "n": 21,
+  "grid": [
+   ".....................",
+   ".....................",
+   ".........vv..v.......",
+   "......vvvvvvvvv......",
+   "......vvvvvpvvvvv....",
+   "...vvvvppppppvvvv....",
+   "....vvvplpplpppvv....",
+   "...vvpppllllpppvvvv..",
+   "..vvvpplllylllppvvv..",
+   "...vvplllyoollpppv...",
+   "...vpppllyoolllpvv...",
+   "..vvvppllloollppvvv..",
+   "..vvvvpppllllpppvv...",
+   "....vvppplpplpvvv....",
+   "....vvvvppppppvvvv...",
+   "...nvvvvvpvvvvvnnn...",
+   ".mnnnnvvvvvvvvvnnnnm.",
+   "mnnnn..v..vv....nnnnm",
+   "mm.................mm",
+   ".....................",
+   "....................."
+  ]
+ },
+ {
+  "id": "goldfish",
+  "name": "金鱼",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "金玉满堂，连年有余。",
+  "n": 21,
+  "grid": [
+   ".....................",
+   ".....................",
+   ".....................",
+   "...................r.",
+   ".........pp......vv..",
+   "........ppp.....vvv..",
+   ".....rrrpppp..vvvrr..",
+   "....rrrrreeeevvvrrr..",
+   "...kwrrrrwwwrrrrrr...",
+   "..wkwwrrrwwwrrrwrr...",
+   "..kkwwrrrwrrrwwwrr...",
+   ".kkkwwwwrrrrrrvwrr...",
+   ".....wwrrrrrrrvrrr...",
+   ".......lrrrrrvvvvrr..",
+   "........ll..llvvvrr..",
+   ".......lll.ll...vvv..",
+   ".......lcccl.....vvcc",
+   "cccccclcccccccccccccc",
+   "ccccccccc..ccccccccc.",
+   "ccccccccccccccccccccc",
+   "ccccccccccccccccccccc"
+  ]
+ },
+ {
+  "id": "butterfly",
+  "name": "蝴蝶",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "庄周晓梦迷蝶，梁祝化蝶双飞。",
+  "n": 21,
+  "grid": [
+   "........kk.kk........",
+   ".........k.k.........",
+   ".........kmk.........",
+   ".........kmk.........",
+   ".....ddd..y..ddd.....",
+   "..dbbbbbbdmdbbbbbbd..",
+   ".dcbbbkkkkdkkkkbbbcd.",
+   "dccbbdbbbbdbbbbdbbccd",
+   "dccbbdbbbbdbbbbdbbccd",
+   "dcccbbbbbdmdbbbbbcccd",
+   ".dccbbbbd.k.dbbbbccd.",
+   "...ddd.p..k..p.ddd...",
+   ".....ppppkmkpppp.....",
+   "....ppwpkpmpkpwpp....",
+   "...llldwklmlkwdlll...",
+   "...llllkl.m.lkllll...",
+   "....llll.mmm.llll....",
+   "..........m..........",
+   ".....................",
+   ".....................",
+   "....................."
+  ]
+ },
+ {
+  "id": "fan",
+  "name": "团扇",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "轻罗小扇扑流萤，古典闺阁之雅。",
+  "n": 21,
+  "grid": [
+   "......mwwwmwwwm......",
+   ".....wwmwwmwwmww.....",
+   "...wwwwmwwmwwmwwww...",
+   "...mmwwmmwmwmmwwmm...",
+   "..mwwmwwmwmwmwwmwwm..",
+   "..cwwwmwmmppmwmwwww..",
+   ".mcwwwwmwmpkmmwwwwwm.",
+   ".mcwwwwwpmmmmmmwwwwm.",
+   ".ccwwwwpypmmwpymwwww.",
+   ".ccwwwmmpkmwwpykwwww.",
+   ".mcwwwmmwwwwwwwmmwwm.",
+   ".mcwwwwwwwwwyymmwwwm.",
+   "..cwwwwwwwwwwkmwwww..",
+   "..mwwwwwwwwwwwwwwwm..",
+   "...wwwwwwwwwwwwwww...",
+   "...eeeeeeeeeeeeeee...",
+   ".....eeeeeeeeeee.....",
+   "......meeeeeeem......",
+   ".........ddd.........",
+   ".........mmm.........",
+   ".........mym........."
+  ]
+ },
+ {
+  "id": "landscape",
+  "name": "山水",
+  "diff": 3,
+  "cat": "精工",
+  "lore": "远山如黛，落日熔金，一叶扁舟。",
+  "n": 21,
+  "grid": [
+   ".....................",
+   "bbbbbbbbbbbbbbbbbbbbb",
+   "bbbbbbbbbbbbbbbyybbbb",
+   "bbbbbbbbbbbbbbyyyybbb",
+   "ccccccccccccccyyyyccc",
+   "ccccccccccccccooooccc",
+   "cckkcccccckccccoocccc",
+   "wkkkbwwwwkkkwwwwwwwwk",
+   "kkkbbbwwkkkkkbbwwwwkk",
+   "kkbbbbbkkkkkbbbb.kkkk",
+   "kbbbbbbkkkkbbbbbbbkkk",
+   "bbbbbnnbkkbbbbbbbbbkk",
+   "bbbnnnnnbbbbbbbbbbbbn",
+   "bnnnnnnnnbbbbbbbbbnnn",
+   "nnnnnnnnnnbbbbwwwwwwn",
+   "nnwwwwwwwwnbbnwwwwwwn",
+   "nnwwwwwwwwnnnnmmmmnnn",
+   "nnnnnnnnnnnnnnnmmnnnn",
+   "ccccccwwwccccccwwwccc",
+   "wwwwwwwccwwwwwwwccwww",
+   "wwwwwccwwwwwwwccwwwww"
+  ]
+ },
+ {
+  "id": "medallion",
+  "name": "宝相花",
+  "diff": 4,
+  "cat": "传世",
+  "lore": "敦煌华盖，宝相庄严。",
+  "n": 25,
+  "grid": [
+   "........vvpppvv...v......",
+   "....vv..vpppppv.vvvv.....",
+   "...vvvv.vpppypvvvppvv....",
+   "..vvppvvvpppppvvppppvv...",
+   ".vvppppvvpppypvppppppvv..",
+   "vvpppyppvvlllvvppppypvv..",
+   ".vppppypvllddlllppypvv...",
+   ".vvpppplllddddlllppvv....",
+   "..vvpplllddddddllvvvvvvvv",
+   "vvvvvvllddddddddllvppppvv",
+   "vppppvldddyyrydddllpppppv",
+   "ppppplddddyrorddddlpppppv",
+   "ppypylddddrooyrdddlpypypv",
+   "ppppplldddyryrdddlvppppvv",
+   "vppppvllddddrdddllvvvvvvv",
+   "vvvvvvvllddddddlllppvv...",
+   "...vvpplllddddlllppppvv..",
+   "..vvpppplllddllvppppppv..",
+   ".vvpppyppvvlllvvppypppvv.",
+   ".vvppypppvpppppvvppypvv..",
+   "..vvppppvvppyppvvvppvv...",
+   "...vvppvvvpppppv.vvvv....",
+   "....vvvv.vppyppv..vv.....",
+   ".....v...vvpppvv.........",
+   ".........vvvvvvv........."
+  ]
+ },
+ {
+  "id": "magpie",
+  "name": "喜鹊登梅",
+  "diff": 4,
+  "cat": "传世",
+  "lore": "喜鹊登梅梢，喜上眉梢来。",
+  "n": 25,
+  "grid": [
+   "...................llm...",
+   ".mm...............pyyp...",
+   ".mmm..............pykp...",
+   "..mll..............pp....",
+   "..pyrp............mm.....",
+   "..pyrwwww....ll..mmm.....",
+   "...pwwwkkw..pyyp.mm......",
+   "...wwwwkkk..pykpmll......",
+   "....wkkkkkrw.ppmpyypmm...",
+   "......kkmwkwkkkepykpmmm..",
+   ".......kmpwwkwwkwpkkkmm..",
+   "........mpwwwkkkwkkk.....",
+   ".......mmmwwkwkww........",
+   "......mmmmmkkkkk.........",
+   ".....llmmm..k.k..........",
+   "....pyypm................",
+   "...mpykp.................",
+   "..mmmpp..................",
+   ".mmmm....................",
+   "mllm.....................",
+   "pyyp.....................",
+   "pykp.....................",
+   "mpp......................",
+   ".........................",
+   "........................."
+  ]
+ }
+];
 
 const PALETTE = [
   {code:'w',name:'月白',hex:'#F3EDE0'},{code:'e',name:'银灰',hex:'#BDB6A8'},
@@ -1455,18 +1590,3 @@ function init(){
 
 init();
 })();
-'''
-
-html = HTML_TEMPLATE.replace('__PATTERNS_JSON__', PATTERNS_JSON)
-js = JS_TEMPLATE.replace('__PATTERNS_JSON__', PATTERNS_JSON)
-
-out_html = os.path.join(BASE, '..', 'index.html')
-with open(out_html, 'w', encoding='utf-8') as f:
-    f.write(html)
-
-out_js = os.path.join(BASE, '..', 'main.js')
-with open(out_js, 'w', encoding='utf-8') as f:
-    f.write(js)
-
-print('generated', os.path.normpath(out_html), 'chars', len(html))
-print('generated', os.path.normpath(out_js), 'chars', len(js))
