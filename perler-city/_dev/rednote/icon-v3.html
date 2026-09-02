@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<script src="beads_data.js"></script>
+<script src="beads.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1024px; height:1024px; overflow:hidden; }
+  body {
+    width:1024px; height:1024px; border-radius:186px;
+    background: linear-gradient(180deg,#221b4a 0%,#43275a 48%,#8f4a3c 82%,#c86a3e 100%);
+    position:relative; display:flex; align-items:center; justify-content:center;
+    box-shadow: inset 0 0 0 3px rgba(255,220,150,.16);
+  }
+  .glow { position:absolute; left:50%; top:58%; transform:translate(-50%,-50%);
+    width:760px; height:760px; border-radius:50%;
+    background:radial-gradient(circle,rgba(255,190,120,.5) 0%,rgba(255,150,80,.18) 40%,transparent 68%);
+    pointer-events:none; }
+  .stage { position:relative; width:820px; height:560px; z-index:2; }
+  .bld { position:absolute; bottom:52px; filter:drop-shadow(0 14px 18px rgba(0,0,0,.42)); }
+  .ground { position:absolute; bottom:0; left:0; width:820px; text-align:center; }
+</style>
+</head>
+<body>
+  <div class="glow"></div>
+  <div class="stage" id="stage"></div>
+  <script>
+    var stage = document.getElementById('stage');
+    var SKY = [
+      { id:'house',    x:70,  bead:24 },
+      { id:'tower',    x:330, bead:24 },
+      { id:'windmill', x:580, bead:24 }
+    ];
+    SKY.forEach(function (s) {
+      var b = BEAD.byId(s.id);
+      var el = document.createElement('div');
+      el.className = 'bld';
+      el.style.left = s.x + 'px';
+      el.innerHTML = BEAD.renderSvg(b, s.bead);
+      stage.appendChild(el);
+    });
+    // 彩色拼豆地面带
+    var cols = ['#F0C24B','#D9542B','#4FA8C7','#7FB069','#E9A0B0','#5BC8E8','#F3E9D6','#B98FD0','#E0A03C'];
+    var ground = document.createElement('div');
+    ground.className = 'ground';
+    var svg = '';
+    var n = 30, size = 26, total = n * size;
+    var x0 = (820 - total) / 2;
+    svg += '<svg width="' + total + '" height="' + size + '" viewBox="0 0 ' + total + ' ' + size + '" shape-rendering="crispEdges">';
+    for (var i = 0; i < n; i++) {
+      var c = cols[i % cols.length];
+      var cx = i * size + size / 2;
+      svg += '<circle cx="' + cx + '" cy="' + (size / 2) + '" r="' + (size * 0.44) + '" fill="' + c + '"/>';
+      svg += '<circle cx="' + cx + '" cy="' + (size / 2 + size * 0.1) + '" r="' + (size * 0.3) + '" fill="rgba(0,0,0,0.16)"/>';
+      svg += '<circle cx="' + cx + '" cy="' + (size / 2) + '" r="' + (size * 0.14) + '" fill="rgba(20,20,35,0.5)"/>';
+    }
+    svg += '</svg>';
+    ground.innerHTML = svg;
+    stage.appendChild(ground);
+  </script>
+</body>
+</html>

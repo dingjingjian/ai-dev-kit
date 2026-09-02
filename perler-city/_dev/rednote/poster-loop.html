@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<script src="beads_data.js"></script>
+<script src="beads.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:900px; height:1200px; overflow:hidden; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    background: radial-gradient(130% 100% at 50% 108%, #e8864a 0%, #7a3f5e 38%, #2f2450 68%, #151838 100%);
+    position:relative; display:flex; flex-direction:column; align-items:center;
+  }
+  .dust { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .dust i { position:absolute; width:3px; height:3px; border-radius:50%;
+    background:radial-gradient(circle,#ffd98a,#f0c24b66); animation:fall linear infinite; }
+  @keyframes fall { from{transform:translateY(-20px);opacity:0;} 12%{opacity:.9;} to{transform:translateY(1200px);opacity:0;} }
+
+  .head { margin-top:42px; text-align:center; position:relative; z-index:2; }
+  .title { font-size:64px; font-weight:800; letter-spacing:12px;
+    background:linear-gradient(180deg,#fff3cf 0%,#ffd97a 38%,#e9a53a 66%,#b06e1f 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
+  .sub { margin-top:8px; font-size:22px; color:#f0ddb8; letter-spacing:2px; font-weight:600; }
+
+  .steps { position:relative; z-index:2; margin-top:26px; display:flex; flex-direction:column; align-items:center; }
+  .step { width:720px; height:168px; border-radius:20px; padding:18px 26px;
+    background:linear-gradient(165deg,rgba(34,38,70,.9),rgba(20,22,44,.93));
+    border:1px solid rgba(240,194,75,.22); box-shadow:0 10px 22px rgba(0,0,0,.35);
+    display:flex; align-items:center; gap:30px; }
+  .num { width:74px; height:74px; border-radius:50%; flex:0 0 auto;
+    background:linear-gradient(180deg,#ffd97a,#e9a53a);
+    color:#3a2a12; font-size:42px; font-weight:800;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 12px rgba(233,165,58,.5); }
+  .pat { width:150px; height:120px; flex:0 0 auto; display:flex; align-items:flex-end; justify-content:center; }
+  .pat svg { filter:drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+  .txt { flex:1; }
+  .st-title { font-size:30px; font-weight:800; color:#f4e9d2; letter-spacing:1px; }
+  .st-desc { margin-top:8px; font-size:19px; color:#c8b99a; line-height:1.5; }
+  .st-desc b { color:#ffd97a; font-weight:700; }
+  .arrow { width:720px; text-align:center; color:#e9a53a; font-size:34px; line-height:1; padding:9px 0; }
+  .arrow em { font-style:normal; opacity:.85; }
+
+  .foot { position:relative; z-index:2; margin-top:auto; margin-bottom:26px; text-align:center; }
+  .badges { display:flex; justify-content:center; gap:14px; margin-bottom:16px; }
+  .badge { font-size:20px; padding:8px 22px; border-radius:999px; font-weight:700; letter-spacing:1px;
+    background:rgba(10,12,26,.45); }
+  .badge.a { color:#ffd97a; border:1.5px solid rgba(240,194,75,.6); }
+  .badge.b { color:#9fd8ae; border:1.5px solid rgba(124,200,140,.5); }
+  .foot-line { font-size:18px; color:#cbb899; letter-spacing:1px; }
+  .foot-line b { color:#ffd97a; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="dust" id="dust"></div>
+
+  <div class="head">
+    <div class="title">第一次盖，必须亲手拼</div>
+    <div class="sub">核心循环 · 三分钟上手</div>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="num">1</div>
+      <div class="pat" data-b="cafe" data-bead="9"></div>
+      <div class="txt">
+        <div class="st-title">图纸册里挑一栋</div>
+        <div class="st-desc">15 张图纸 · 7 大类别，推荐位自动帮你挑最该盖的</div>
+      </div>
+    </div>
+    <div class="arrow"><em>▼</em></div>
+    <div class="step">
+      <div class="num">2</div>
+      <div class="pat" data-b="house" data-bead="9"></div>
+      <div class="txt">
+        <div class="st-title">钉板上点豆填满</div>
+        <div class="st-desc">照着淡底稿一颗颗点，<b>拼满 100%</b> 才触发熨烫</div>
+      </div>
+    </div>
+    <div class="arrow"><em>▼</em></div>
+    <div class="step">
+      <div class="num">3</div>
+      <div class="pat" data-b="tower" data-bead="8"></div>
+      <div class="txt">
+        <div class="st-title">熨烫落成 · 开始经营</div>
+        <div class="st-desc">落城后水电垃圾都要管，<b>幸福是总闸门</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="badges">
+      <div class="badge a">#小红书vibecoding大赛</div>
+      <div class="badge b">#vibegame</div>
+    </div>
+    <div class="foot-line">拼豆 → 落成 → 经营　｜　<b>纯前端 · 零依赖 · 点开即玩</b></div>
+  </div>
+
+  <script>
+    var dust = document.getElementById('dust');
+    for (var i = 0; i < 20; i++) {
+      var d = document.createElement('i');
+      var sz = 2 + Math.random()*3;
+      d.style.cssText = 'left:' + (Math.random()*100) + '%; top:' + (Math.random()*100) + '%; width:' + sz + 'px; height:' + sz + 'px;'
+        + 'animation-duration:' + (5+Math.random()*7) + 's; animation-delay:' + (Math.random()*8) + 's;';
+      dust.appendChild(d);
+    }
+    document.querySelectorAll('.pat').forEach(function (el) {
+      var b = BEAD.byId(el.getAttribute('data-b'));
+      el.innerHTML = BEAD.renderSvg(b, parseInt(el.getAttribute('data-bead'), 10));
+    });
+  </script>
+</body>
+</html>

@@ -77,7 +77,7 @@ zip 内仅允许以下类型：
 | `.js` | 脚本文件 |
 | `.png` / `.jpg` / `.jpeg` / `.gif` / `.webp` / `.svg` | 图片资源 |
 | `.woff` / `.woff2` | 字体文件 |
-| `.json` | 静态数据 / 配置 |
+| `.json` | 小型静态数据 / 配置；不得作为大型内置数据库，体积门禁见 [performance-budget.md](./performance-budget.md) |
 
 ---
 
@@ -98,8 +98,10 @@ zip 内仅允许以下类型：
 
 - **脚本必须外置**：容器 CSP 的 `script-src` 不含 `unsafe-inline`，内联 `<script>...</script>`、行内事件 `onclick="..."`、`javascript:` URI 均不可用。JS 写进包内 `.js` 用 `<script src>` 引入，事件用 `addEventListener` 绑定。
 - **脚本必须是经典脚本**：只用 `<script src="./app.js">`，**不要 `type="module"`**，JS 里也不要 `import` / `export`。zip 离线加载、无目录服务，module 的相对 `import` 解析不可靠，典型症状是「页面渲染出来但 JS 完全不执行」。要拆多个 JS 文件时按依赖顺序写多个 `<script src>`，靠 `window` 命名空间协作，并避免 top-level `await`。
+- **脚本须兼容目标 WebView**：直接交付的 JS 可使用 ES2017；已有构建链可使用更新语法，但最终须转译为面向 Chrome 61 的 ES2017 产物，见 [js-compatibility.md](./js-compatibility.md)。
 - **样式可内联**：`<style>` 与 `style="..."` 都能用，无需外置。
-- **选图预览**：`<img src>` 配 `data:`（`FileReader.readAsDataURL`）或 `blob:`（`URL.createObjectURL`）均可显示。
+- **样式须兼容目标 WebView**：使用 Chrome 61 基线层保证核心布局，并通过能力检测启用现代 CSS 增强；只做功能点级回退，不维护两套完整 CSS，见 [css-compatibility.md](./css-compatibility.md)。
+- **选图预览**：`<img src>` 配 `data:`（`FileReader.readAsDataURL`）或 `blob:`（`URL.createObjectURL`）均可显示；大图优先 `blob:` 并及时 `URL.revokeObjectURL()`。静态资源不得转成长 Base64 塞进源码，见 [performance-budget.md](./performance-budget.md)。
 - 外部 CDN 一律加载不到，所有资源全部打包进小工具。
 
 ---
@@ -175,6 +177,8 @@ zip 内仅允许以下类型：
 - [ ] 全部资源为相对路径，无 `http(s)://` 外部引用（图片、第三方库、字体等已打进 zip）
 - [ ] 脚本全部外置：无内联 `<script>`、无 `onclick=` 等行内事件、无 `javascript:` / `eval` / `new Function`
 - [ ] 脚本为经典脚本：无 `type="module"`，JS 内无 `import` / `export`
+- [ ] JS 兼容 [js-compatibility.md](./js-compatibility.md)：直接交付代码不超出 ES2017，或已有构建链生成面向 Chrome 61 的 ES2017 产物
+- [ ] CSS 兼容 [css-compatibility.md](./css-compatibility.md)：Chrome 61 基线可用，现代 CSS 通过合适的能力检测启用，并已检查最终构建产物
 - [ ] 图片可用包内文件 / `data:` / `blob:`；音视频、字体仅用包内文件
 - [ ] 无 `<base href>`、无 `<iframe>` / `<object>`、无自建 CSP `<meta>`
 
@@ -196,4 +200,7 @@ zip 内仅允许以下类型：
 ### 体积
 
 - [ ] 总包（zip）不超过 10MB（上限）；为获得更好的加载体验，建议控制在 2MB 以内
-- [ ] 明显超出建议值时应进行优化（压缩 JS、压缩图片等），在功能完整与加载体验之间取得平衡
+- [ ] 单条 Base64 解码后不超过 1MiB；超过 100KiB 时优先改为独立包内文件
+- [ ] 单个 HTML / CSS / JS / JSON 超过 2MiB、文本合计超过 5MiB 时已人工检查，确认没有把大型数据库 / 生成内容塞进代码包
+- [ ] 已按 [performance-budget.md](./performance-budget.md) 的环境分支审计产物目录与最终 zip；无运行时时已完成人工门禁并明确记录
+- [ ] 明显超出建议值时已按 [performance-budget.md](./performance-budget.md) 优化，而不是依赖高压缩率掩盖解压后的大源码 / 大数据

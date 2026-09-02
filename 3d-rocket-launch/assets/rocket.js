@@ -1,0 +1,284 @@
+(function (global) {
+  'use strict';
+  var M3D = global.M3D, mat4 = M3D.mat4, geom = M3D.geom;
+
+  var SEG = 32;
+  var COLORS = {
+    white: [0.90, 0.91, 0.93], boostWhite: [0.87, 0.88, 0.91], dark: [0.20, 0.22, 0.26],
+    red: [0.82, 0.16, 0.12], gold: [0.80, 0.62, 0.26], nozzle: [0.13, 0.13, 0.16],
+    silver: [0.72, 0.74, 0.78], stripe: [0.13, 0.14, 0.17], tower: [0.66, 0.68, 0.72],
+    capsule: [0.88, 0.88, 0.86], svc: [0.55, 0.60, 0.55], concrete: [0.23, 0.24, 0.27],
+    padSteel: [0.34, 0.36, 0.40], duct: [0.10, 0.10, 0.12], ember: [1.0, 0.45, 0.10]
+  };
+
+  var CORE_R = 0.50;
+  var BOOSTER_R = 0.335, BOOSTER_DIST = 0.90;
+  var ROCKET_HEIGHT = 10.05;
+  var ROCKET_CENTER = 5.0;
+
+  function sphereProfile(points) { return points; }
+
+  function buildCZ2F(renderer) {
+    var parts = [];
+    function addPart(def) {
+      var mesh = renderer.createMesh(def.geom, def.color, { group: def.group || 'rocket' });
+      var p = {
+        name: def.name, mesh: mesh,
+        baseY: def.y, ox: def.x || 0, oz: def.z || 0,
+        localRotY: def.rotY || 0, localRotX: def.rotX || 0,
+        centerY: def.centerY != null ? def.centerY : 0,
+        label: def.label || '', desc: def.desc || '',
+        detachGroup: def.detachGroup || null,
+        explodeOff: def.explodeOff || [0, 0, 0],
+        detached: false, detachT: 0, detachBaseY: 0,
+        detachV: [0, 0, 0], detachSpin: [0, 0, 0], detachOff: [0, 0, 0], detachRot: [0, 0, 0],
+        tmp: mat4.create()
+      };
+      parts.push(p);
+      return p;
+    }
+
+    // ---- 逃逸塔 ----
+    addPart({ name: 'towerTip', geom: geom.cone(0.075, 0.42, 16), color: COLORS.red, y: 9.63, centerY: 0.21,
+      label: '逃逸塔', desc: '发射段应急逃逸系统：一旦火箭出现致命故障，逃逸发动机点火，把飞船迅速拽离危险区。',
+      detachGroup: 'tower', explodeOff: [0, 5.0, 0] });
+    addPart({ name: 'towerNozzle', geom: geom.cylinder(0.10, 0.055, 0.10, 12), color: COLORS.nozzle, y: 9.53, centerY: 0.05, detachGroup: 'tower', explodeOff: [0, 5.0, 0] });
+    addPart({ name: 'towerBody', geom: geom.cylinder(0.085, 0.10, 0.72, 16), color: COLORS.white, y: 8.81, centerY: 0.36, detachGroup: 'tower', explodeOff: [0, 5.0, 0] });
+    addPart({ name: 'towerSkirt', geom: geom.cylinder(0.13, 0.085, 0.16, 16), color: COLORS.dark, y: 8.65, centerY: 0.08, detachGroup: 'tower', explodeOff: [0, 5.0, 0] });
+
+    // ---- 整流罩 + 飞船 ----
+    var FAIRING_R = 0.52, FAIRING_H = 1.15, FAIRING_CYL = 0.45;
+    var ogH = FAIRING_H - FAIRING_CYL;
+    var ogRho = (FAIRING_R * FAIRING_R + ogH * ogH) / (2 * FAIRING_R);
+    var ogOff = Math.sqrt(ogRho * ogRho - ogH * ogH);
+    var fairingProfile = [];
+    for (var fp = 0; fp <= 16; fp++) {
+      var fy = (fp / 16) * FAIRING_H;
+      var r;
+      if (fy <= FAIRING_CYL) {
+        r = FAIRING_R;
+      } else {
+        var fy2 = fy - FAIRING_CYL;
+        r = Math.sqrt(Math.max(0, ogRho * ogRho - fy2 * fy2)) - ogOff;
+      }
+      fairingProfile.push([r, fy]);
+    }
+    addPart({ name: 'fairing', geom: geom.lathe(fairingProfile, SEG), color: COLORS.white, y: 7.50, centerY: 0.58,
+      label: '整流罩', desc: '穿越稠密大气层时保护飞船的气动外壳，飞出大气层后不再需要，对半剖开抛离。',
+      detachGroup: 'fairing', explodeOff: [2.6, 3.2, 0] });
+    addPart({ name: 'fairingRing', geom: geom.torus(0.505, 0.018, SEG, 8), color: COLORS.gold, y: 7.50, detachGroup: 'fairing', explodeOff: [2.6, 3.2, 0] });
+
+    var capProfile = [[0.02, 0], [0.30, 0.10], [0.42, 0.30], [0.44, 0.52], [0.30, 0.72], [0.12, 0.82], [0.02, 0.84]];
+    addPart({ name: 'capsule', geom: geom.lathe(sphereProfile(capProfile), SEG), color: COLORS.capsule, y: 7.72, centerY: 0.42,
+      label: '飞船返回舱', desc: '载人飞船的核心舱段，航天员往返太空的“座舱”，再入大气层时独自返回地面。',
+      detachGroup: 'never', explodeOff: [0, 4.6, 0] });
+    addPart({ name: 'svcModule', geom: geom.cylinder(0.40, 0.40, 0.55, SEG), color: COLORS.svc, y: 7.72 - 0.55, centerY: 0.28,
+      label: '服务舱', desc: '为飞船提供推进、电源与环控保障的舱段，返回前与返回舱分离。',
+      detachGroup: 'never', explodeOff: [0, 3.9, 0] });
+
+    // ---- 二级 ----
+    addPart({ name: 'upper', geom: geom.cylinder(CORE_R, CORE_R, 2.40, SEG), color: COLORS.white, y: 5.30, centerY: 1.20,
+      label: '二级', desc: '芯二级：装有高空发动机与推进剂贮箱，负责把飞船加速到入轨速度。',
+      detachGroup: 'never', explodeOff: [0, 1.6, 0] });
+    addPart({ name: 'upperStripe1', geom: geom.cylinder(0.505, 0.505, 0.10, SEG), color: COLORS.stripe, y: 7.40, detachGroup: 'fairing', explodeOff: [0, 1.5, 0] });
+    addPart({ name: 'upperStripe2', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: 6.45, detachGroup: 'never', explodeOff: [0, 1.6, 0] });
+
+    // ---- 级间段 ----
+    addPart({ name: 'inter', geom: geom.cylinder(0.47, CORE_R, 0.22, SEG), color: COLORS.dark, y: 5.08, centerY: 0.11,
+      label: '级间段', desc: '连接一级与二级的锥段，一二级分离时在此断开，二级发动机在罩内点火。',
+      detachGroup: 'stage1', explodeOff: [0, 0.5, 0] });
+
+    // ---- 一级 ----
+    addPart({ name: 'lower', geom: geom.cylinder(CORE_R, CORE_R, 4.58, SEG), color: COLORS.white, y: 0.50, centerY: 2.29,
+      label: '一级', desc: '芯一级：全箭最大的推进模块，氧化剂与燃料贮箱加上发动机舱，提供上升主推力。',
+      detachGroup: 'stage1', explodeOff: [0, -2.6, 0] });
+    addPart({ name: 'lowerStripe1', geom: geom.cylinder(0.505, 0.505, 0.14, SEG), color: COLORS.stripe, y: 4.40, detachGroup: 'stage1', explodeOff: [0, -2.4, 0] });
+    addPart({ name: 'lowerStripe2', geom: geom.cylinder(0.505, 0.505, 0.14, SEG), color: COLORS.stripe, y: 1.35, detachGroup: 'stage1', explodeOff: [0, -2.8, 0] });
+    addPart({ name: 'badgeRed', geom: geom.torus(0.512, 0.016, SEG, 8), color: COLORS.red, y: 3.30, detachGroup: 'stage1', explodeOff: [0, -2.6, 0] });
+    addPart({ name: 'badgeGold', geom: geom.torus(0.512, 0.013, SEG, 8), color: COLORS.gold, y: 2.75, detachGroup: 'stage1', explodeOff: [0, -2.6, 0] });
+
+    // ---- 尾翼 ----
+    var finG = geom.fin(0.30, 1.50, 0.62, 0.18, 0.045);
+    for (var fi = 0; fi < 4; fi++) {
+      addPart({ name: 'fin' + fi, geom: finG, color: COLORS.red, y: 0.62, rotY: fi * Math.PI / 2 + Math.PI / 4, centerY: 0.90,
+        label: fi === 0 ? '尾翼' : '', desc: fi === 0 ? '四片气动稳定面，在大气层内飞行时保持箭体稳定。' : '',
+        detachGroup: 'stage1', explodeOff: [0, -2.8, 0] });
+    }
+
+    // ---- 主发动机群（1 主机 + 4 游机）----
+    addPart({ name: 'nozMain', geom: geom.cylinder(0.20, 0.36, 0.30, SEG), color: COLORS.nozzle, y: 0.20, centerY: 0.15,
+      label: '主发动机', desc: '芯一级主发动机喷管，起飞时与助推器一起产生巨大推力。',
+      detachGroup: 'stage1', explodeOff: [0, -3.6, 0] });
+    for (var vn = 0; vn < 4; vn++) {
+      var va = vn * Math.PI / 2 + Math.PI / 4, vrad = 0.34;
+      addPart({ name: 'vernier' + vn, geom: geom.cylinder(0.06, 0.10, 0.16, 12), color: COLORS.nozzle,
+        y: 0.30, x: Math.cos(va) * vrad, z: Math.sin(va) * vrad, detachGroup: 'stage1', explodeOff: [0, -3.5, 0] });
+    }
+
+    // ---- 四个助推器 ----
+    var boostBodyG = geom.cylinder(BOOSTER_R, BOOSTER_R, 2.30, SEG);
+    var boostConeG = geom.cone(BOOSTER_R, 0.42, SEG);
+    var boostNozG = geom.cylinder(0.14, 0.22, 0.22, SEG);
+    var boostRingG = geom.torus(BOOSTER_R + 0.01, 0.016, SEG, 8);
+    for (var bi = 0; bi < 4; bi++) {
+      var ba = bi * Math.PI / 2, bx = Math.cos(ba) * BOOSTER_DIST, bz = Math.sin(ba) * BOOSTER_DIST;
+      var suffix = ['前', '右', '后', '左'][bi];
+      addPart({ name: 'boostCone' + bi, geom: boostConeG, color: COLORS.silver, y: 2.55, x: bx, z: bz, centerY: 0.21,
+        detachGroup: 'booster', explodeOff: [0, 1.2, 0] });
+      addPart({ name: 'boostBody' + bi, geom: boostBodyG, color: COLORS.boostWhite, y: 0.25, x: bx, z: bz, centerY: 1.15,
+        label: bi === 0 ? '助推器' : '', desc: bi === 0 ? '四枚液体助推器围绕芯一级，提供起飞阶段的附加推力，燃料耗尽后分离坠落。' : '',
+        detachGroup: 'booster', explodeOff: [0, -2.2, 0] });
+      addPart({ name: 'boostRing' + bi, geom: boostRingG, color: COLORS.red, y: 2.50, x: bx, z: bz, detachGroup: 'booster', explodeOff: [0, 1.1, 0] });
+      addPart({ name: 'boostNoz' + bi, geom: boostNozG, color: COLORS.nozzle, y: 0.03, x: bx, z: bz, centerY: 0.11,
+        detachGroup: 'booster', explodeOff: [0, -2.9, 0] });
+    }
+
+    return { parts: parts, height: ROCKET_HEIGHT, center: ROCKET_CENTER, coreR: CORE_R, boosterDist: BOOSTER_DIST, boosterR: BOOSTER_R };
+  }
+
+  function buildPad(renderer) {
+    var pad = {};
+    pad.ground = renderer.createMesh(geom.disk(11, 64), COLORS.concrete, { group: 'pad' });
+    pad.platform = renderer.createMesh(geom.cylinder(1.15, 1.35, 0.16, 32), COLORS.padSteel, { group: 'pad' });
+    pad.ductRing = renderer.createMesh(geom.ring(0.42, 0.95, 32), COLORS.duct, { group: 'pad' });
+    pad.ductRing.modelMatrix[13] = 0.165;
+    pad.ember = renderer.createMesh(geom.disk(0.42, 24), COLORS.ember, { group: 'pad' });
+    pad.ember.modelMatrix[13] = 0.17;
+    pad.ember.glow = 0;
+
+    // 导流槽挡焰墙
+    pad.deflector = renderer.createMesh(geom.box(2.6, 0.55, 0.5), COLORS.concrete, { group: 'pad' });
+    mat4.identity(pad.deflector.modelMatrix);
+    mat4.translate(pad.deflector.modelMatrix, pad.deflector.modelMatrix, [0, 0, -2.1]);
+
+    // 勤务塔
+    var towerX = 2.35, towerZ = -0.4;
+    pad.towerBase = renderer.createMesh(geom.box(0.9, 0.3, 0.9), COLORS.concrete, { group: 'pad' });
+    mat4.identity(pad.towerBase.modelMatrix);
+    mat4.translate(pad.towerBase.modelMatrix, pad.towerBase.modelMatrix, [towerX - 0.45, 0, towerZ - 0.45]);
+    var railG = geom.box(0.10, 9.6, 0.10);
+    var railPos = [[-0.38, -0.38], [0.38, -0.38], [-0.38, 0.38], [0.38, 0.38]];
+    pad.towerRails = [];
+    for (var ri = 0; ri < 4; ri++) {
+      var rail = renderer.createMesh(railG, COLORS.tower, { group: 'pad' });
+      mat4.identity(rail.modelMatrix);
+      mat4.translate(rail.modelMatrix, rail.modelMatrix, [towerX + railPos[ri][0] - 0.05, 0.3, towerZ + railPos[ri][1] - 0.05]);
+      pad.towerRails.push(rail);
+    }
+    pad.towerBeams = [];
+    var beamG = geom.box(0.86, 0.07, 0.86);
+    for (var by = 1.4; by <= 9.4; by += 1.6) {
+      var beam = renderer.createMesh(beamG, COLORS.tower, { group: 'pad' });
+      mat4.identity(beam.modelMatrix);
+      mat4.translate(beam.modelMatrix, beam.modelMatrix, [towerX - 0.43, by, towerZ - 0.43]);
+      pad.towerBeams.push(beam);
+    }
+    pad.towerTop = renderer.createMesh(geom.box(0.5, 0.7, 0.5), COLORS.dark, { group: 'pad' });
+    mat4.identity(pad.towerTop.modelMatrix);
+    mat4.translate(pad.towerTop.modelMatrix, pad.towerTop.modelMatrix, [towerX - 0.25, 9.9, towerZ - 0.25]);
+    pad.towerAntenna = renderer.createMesh(geom.cylinder(0.015, 0.015, 1.1, 8), COLORS.red, { group: 'pad' });
+    mat4.identity(pad.towerAntenna.modelMatrix);
+    mat4.translate(pad.towerAntenna.modelMatrix, pad.towerAntenna.modelMatrix, [towerX, 10.6, towerZ]);
+
+    // 回转平台摆臂（连接勤务塔与火箭）
+    pad.arms = [];
+    var armG = geom.box(1.5, 0.09, 0.26);
+    var armHeights = [2.2, 4.6, 7.0];
+    for (var ai = 0; ai < armHeights.length; ai++) {
+      var arm = renderer.createMesh(armG, COLORS.tower, { group: 'pad' });
+      mat4.identity(arm.modelMatrix);
+      mat4.translate(arm.modelMatrix, arm.modelMatrix, [towerX - 0.4 - 1.45, armHeights[ai], towerZ - 0.13]);
+      pad.arms.push(arm);
+    }
+
+    // 支撑腿
+    pad.legs = [];
+    var legG = geom.box(0.14, 0.6, 0.14);
+    for (var li = 0; li < 6; li++) {
+      var la = (li / 6) * Math.PI * 2 + Math.PI / 6;
+      var leg = renderer.createMesh(legG, COLORS.padSteel, { group: 'pad' });
+      mat4.identity(leg.modelMatrix);
+      mat4.translate(leg.modelMatrix, leg.modelMatrix, [Math.cos(la) * 1.05 - 0.07, 0, Math.sin(la) * 1.05 - 0.07]);
+      pad.legs.push(leg);
+    }
+
+    pad.horizon = renderer.createMesh(geom.ring(30, 55, 72), [0.13, 0.33, 0.58], { group: 'pad' });
+    pad.horizon.alpha = 0;
+
+    // 地球：完整球体，fragment shader 程序化海陆/冰盖/云层纹理
+    var EARTH_R = 500;
+    var earthProfile = [];
+    for (var ep = 0; ep <= 48; ep++) {
+      var ea = (ep / 48) * Math.PI;
+      earthProfile.push([EARTH_R * Math.sin(ea), -EARTH_R + EARTH_R * Math.cos(ea)]);
+    }
+    var earthG = geom.lathe(earthProfile, 64);
+    for (var eni = 0; eni < earthG.normals.length; eni++) earthG.normals[eni] = -earthG.normals[eni];
+    for (var eti = 0; eti < earthG.indices.length; eti += 3) {
+      var eswap = earthG.indices[eti + 1]; earthG.indices[eti + 1] = earthG.indices[eti + 2]; earthG.indices[eti + 2] = eswap;
+    }
+    pad.earth = renderer.createMesh(earthG, [1.0, 1.0, 1.0], { group: 'pad', isEarth: true });
+    pad.earthR = EARTH_R;
+
+    pad.all = [pad.earth, pad.ground, pad.platform, pad.ductRing, pad.ember, pad.deflector, pad.towerBase, pad.towerTop, pad.towerAntenna, pad.horizon]
+      .concat(pad.towerRails, pad.towerBeams, pad.arms, pad.legs);
+    pad.towerX = towerX; pad.towerZ = towerZ;
+    return pad;
+  }
+
+  // env: { rotY, explode, launchY, launchX, pitch, launchT }
+  function updatePartTransforms(parts, env) {
+    var g = env.rotY, radScale = 1 + env.explode * 1.7;
+    var pitch = env.pitch || 0, launchX = env.launchX || 0;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      var detached = p.detached;
+      var launchY = detached ? p.detachBaseY : env.launchY;
+      var curPitch = detached ? (p.detachPitch || 0) : pitch;
+      var curX = detached ? (p.detachX || 0) : launchX;
+      var px = p.ox * radScale + p.detachOff[0] + p.explodeOff[0] * env.explode;
+      var pz = p.oz * radScale + p.detachOff[2] + p.explodeOff[2] * env.explode;
+      var py = p.baseY + p.detachOff[1] + p.explodeOff[1] * env.explode;
+      var m = p.tmp;
+      mat4.identity(m);
+      mat4.translate(m, m, [curX, launchY, 0]);
+      mat4.rotateZ(m, m, -curPitch);
+      mat4.rotateY(m, m, g);
+      mat4.translate(m, m, [px, py + p.centerY, pz]);
+      if (detached) {
+        mat4.rotateY(m, m, p.localRotY + p.detachRot[1]);
+        mat4.rotateX(m, m, p.detachRot[0]);
+      } else {
+        if (p.localRotY) mat4.rotateY(m, m, p.localRotY);
+        if (p.localRotX) mat4.rotateX(m, m, p.localRotX);
+      }
+      mat4.translate(m, m, [0, -p.centerY, 0]);
+      var mm = p.mesh.modelMatrix;
+      for (var k = 0; k < 16; k++) mm[k] = m[k];
+      if (detached) {
+        var since = env.launchT - p.detachT;
+        p.mesh.alpha = Math.max(0, 1 - since * 0.20);
+        if (p.mesh.alpha <= 0) p.mesh.visible = false;
+      }
+    }
+  }
+
+  function updateDetached(parts, dt) {
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (!p.detached) continue;
+      p.detachV[1] -= 4.2 * dt;
+      p.detachOff[0] += p.detachV[0] * dt;
+      p.detachOff[1] += p.detachV[1] * dt;
+      p.detachOff[2] += p.detachV[2] * dt;
+      p.detachRot[0] += p.detachSpin[0] * dt;
+      p.detachRot[1] += p.detachSpin[1] * dt;
+    }
+  }
+
+  M3D.buildCZ2F = buildCZ2F;
+  M3D.buildPad = buildPad;
+  M3D.updatePartTransforms = updatePartTransforms;
+  M3D.updateDetached = updateDetached;
+  M3D.COLORS = COLORS;
+})(typeof window !== 'undefined' ? window : this);

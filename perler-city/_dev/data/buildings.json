@@ -1,0 +1,626 @@
+{
+  "palette": [
+    {
+      "k": "W",
+      "name": "米白",
+      "hex": "#F3E9D6"
+    },
+    {
+      "k": "S",
+      "name": "银灰",
+      "hex": "#B9BEC4"
+    },
+    {
+      "k": "a",
+      "name": "水泥灰",
+      "hex": "#A8AEB8"
+    },
+    {
+      "k": "d",
+      "name": "烟灰",
+      "hex": "#5A6472"
+    },
+    {
+      "k": "K",
+      "name": "墨黑",
+      "hex": "#2A2E35"
+    },
+    {
+      "k": "G",
+      "name": "石灰",
+      "hex": "#8A9099"
+    },
+    {
+      "k": "B",
+      "name": "砖红",
+      "hex": "#C0503C"
+    },
+    {
+      "k": "R",
+      "name": "屋顶红",
+      "hex": "#D9542B"
+    },
+    {
+      "k": "O",
+      "name": "木棕",
+      "hex": "#A9713F"
+    },
+    {
+      "k": "Y",
+      "name": "暖黄",
+      "hex": "#F0C24B"
+    },
+    {
+      "k": "n",
+      "name": "草绿",
+      "hex": "#7FB069"
+    },
+    {
+      "k": "N",
+      "name": "松绿",
+      "hex": "#3F7A52"
+    },
+    {
+      "k": "T",
+      "name": "玻璃青",
+      "hex": "#4FA8C7"
+    },
+    {
+      "k": "t",
+      "name": "天蓝",
+      "hex": "#9FD0E3"
+    },
+    {
+      "k": "w",
+      "name": "水蓝",
+      "hex": "#5BC8E8"
+    },
+    {
+      "k": "P",
+      "name": "樱粉",
+      "hex": "#E9A0B0"
+    },
+    {
+      "k": "V",
+      "name": "暮紫",
+      "hex": "#6B5B95"
+    }
+  ],
+  "cats": [
+    {
+      "id": "res",
+      "name": "住宅",
+      "color": "#7FB069"
+    },
+    {
+      "id": "com",
+      "name": "商业",
+      "color": "#4FA8C7"
+    },
+    {
+      "id": "ind",
+      "name": "工业",
+      "color": "#E0A03C"
+    },
+    {
+      "id": "power",
+      "name": "电力",
+      "color": "#F0C24B"
+    },
+    {
+      "id": "water",
+      "name": "水利",
+      "color": "#5BC8E8"
+    },
+    {
+      "id": "trash",
+      "name": "环卫",
+      "color": "#B98FD0"
+    },
+    {
+      "id": "civ",
+      "name": "民生",
+      "color": "#E9A0B0"
+    }
+  ],
+  "titles": [
+    {
+      "pop": 0,
+      "name": "荒地"
+    },
+    {
+      "pop": 8,
+      "name": "村落"
+    },
+    {
+      "pop": 24,
+      "name": "小镇"
+    },
+    {
+      "pop": 60,
+      "name": "街区"
+    },
+    {
+      "pop": 130,
+      "name": "城区"
+    },
+    {
+      "pop": 260,
+      "name": "都会"
+    },
+    {
+      "pop": 500,
+      "name": "巨城"
+    }
+  ],
+  "buildings": [
+    {
+      "id": "house",
+      "name": "暖瓦小屋",
+      "cat": "res",
+      "cost": 60,
+      "popCap": 4,
+      "jobs": 0,
+      "income": 0,
+      "happy": 1,
+      "use": {
+        "power": 1,
+        "water": 1,
+        "trash": 1
+      },
+      "gen": {},
+      "unlockPop": 0,
+      "desc": "第一盏为你点亮的窗。一屋四人，水电都得管上。",
+      "rows": [
+        ".....d.....",
+        ".....d.....",
+        "....RRR....",
+        "...RRRRR...",
+        "..RRRRRRR..",
+        ".RRRRRRRRR.",
+        "..WWWWWWW..",
+        "..WTWWWTW..",
+        "..WWWWWWW..",
+        "..WWOOOWW..",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "park",
+      "name": "街心树",
+      "cat": "civ",
+      "cost": 30,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 5,
+      "use": {},
+      "gen": {},
+      "unlockPop": 0,
+      "desc": "不产能、不耗电，只负责让大家愿意住下来。",
+      "rows": [
+        "...........",
+        ".....n.....",
+        "....nnn....",
+        "...nnnnn...",
+        "..nNnnnNn..",
+        ".nnnnnnnnn.",
+        ".nNnnnnnNn.",
+        "..nnnnnnn..",
+        "...nnnnn...",
+        "....OOO....",
+        "..GGGGGGG.."
+      ]
+    },
+    {
+      "id": "cafe",
+      "name": "转角咖啡",
+      "cat": "com",
+      "cost": 90,
+      "popCap": 0,
+      "jobs": 3,
+      "income": 18,
+      "happy": 4,
+      "use": {
+        "power": 2,
+        "water": 1,
+        "trash": 2
+      },
+      "gen": {},
+      "unlockPop": 4,
+      "desc": "街角的香气，比租金更值钱。三个岗位，撑起一片人气。",
+      "rows": [
+        "...........",
+        "...........",
+        "..WYYYYYW..",
+        ".RWRWRWRWR.",
+        ".WRWRWRWRW.",
+        ".RWRWRWRWR.",
+        ".WWWWWWWWW.",
+        ".WTTWWWTTW.",
+        ".WTTWWWTTW.",
+        ".WWWOOOWWW.",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "watertower",
+      "name": "街角水塔",
+      "cat": "water",
+      "cost": 80,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 0,
+      "use": {},
+      "gen": {
+        "water": 7
+      },
+      "unlockPop": 8,
+      "desc": "先有水，才有人。供水 +7，够养一小片街区。",
+      "rows": [
+        "...........",
+        "....SSS....",
+        "...SSSSS...",
+        "...wwwww...",
+        "...wwwww...",
+        "...wwwww...",
+        "...SSSSS...",
+        "....SSS....",
+        "...SS.SS...",
+        "..SS...SS..",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "workshop",
+      "name": "手工工坊",
+      "cat": "ind",
+      "cost": 150,
+      "popCap": 0,
+      "jobs": 6,
+      "income": 22,
+      "happy": -1,
+      "use": {
+        "power": 3,
+        "water": 1,
+        "trash": 3
+      },
+      "gen": {},
+      "unlockPop": 12,
+      "desc": "六个岗位，一点烟。工业的味道从这里开始。",
+      "rows": [
+        "...........",
+        "...........",
+        "........d..",
+        ".......d...",
+        "aaaaaaaaaa.",
+        ".aaaaaaaa..",
+        "..WWWWWWW..",
+        "..WTTWTTW..",
+        "..WWWWWWW..",
+        "..WWOOOWW..",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "apartment",
+      "name": "豆荚公寓",
+      "cat": "res",
+      "cost": 180,
+      "popCap": 12,
+      "jobs": 0,
+      "income": 0,
+      "happy": 0,
+      "use": {
+        "power": 3,
+        "water": 3,
+        "trash": 3
+      },
+      "gen": {},
+      "unlockPop": 16,
+      "desc": "三层小楼，十二户人家。占地省，胃口不小。",
+      "rows": [
+        ".............",
+        "...aaaaaaa...",
+        "..SSSSSSSSS..",
+        "...WWWWWWW...",
+        "...WKTWTKW...",
+        "..SSSSSSSSS..",
+        "...WWWWWWW...",
+        "...WKTWTKW...",
+        "..SSSSSSSSS..",
+        "...WWWWWWW...",
+        "...WKTOTKW...",
+        "..aaaaaaaaa..",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "windmill",
+      "name": "风力豆机",
+      "cat": "power",
+      "cost": 140,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 1,
+      "use": {},
+      "gen": {
+        "power": 8
+      },
+      "unlockPop": 14,
+      "desc": "干净的电，不排一点垃圾。发电 +8，居民还挺喜欢。",
+      "rows": [
+        "....SSS....",
+        "....SSS....",
+        "....SSS....",
+        "....SYS....",
+        "...SSaSS...",
+        "..SS.a.SS..",
+        ".SS..a..SS.",
+        "....aaa....",
+        "....aaa....",
+        "...aaaaa...",
+        "..GGGGGGG.."
+      ]
+    },
+    {
+      "id": "market",
+      "name": "豆香市集",
+      "cat": "com",
+      "cost": 220,
+      "popCap": 0,
+      "jobs": 6,
+      "income": 34,
+      "happy": 2,
+      "use": {
+        "power": 3,
+        "water": 2,
+        "trash": 3
+      },
+      "gen": {},
+      "unlockPop": 28,
+      "desc": "六个岗位，人来人往。没人气就赚不到钱。",
+      "rows": [
+        ".............",
+        ".............",
+        ".............",
+        ".R.R.R.R.R.R.",
+        ".RRRRRRRRRRR.",
+        ".RWYWYWYWYWR.",
+        ".W.W.W.W.W.W.",
+        ".W.W.W.W.W.W.",
+        ".OYTnYTYnTYO.",
+        ".OYnTnYnTnYO.",
+        ".WWWWWWWWWWW.",
+        ".GnGnGnGnGnG.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "lighthouse",
+      "name": "临江灯塔",
+      "cat": "civ",
+      "cost": 260,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 3,
+      "use": {
+        "power": 1
+      },
+      "gen": {},
+      "unlockPop": 34,
+      "desc": "给晚归的人留一束光。城市有了它，就算有了地标。",
+      "rows": [
+        "...........",
+        "....YYY....",
+        ".YY.YYY.YY.",
+        "....SSS....",
+        "....BBB....",
+        "....WWW....",
+        "...BBBBB...",
+        "...WWWWW...",
+        "...BBBBB...",
+        "..aaaaaaa..",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "school",
+      "name": "巷口学堂",
+      "cat": "civ",
+      "cost": 300,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 6,
+      "use": {
+        "power": 3,
+        "water": 2
+      },
+      "gen": {},
+      "unlockPop": 40,
+      "desc": "读书声是城市最好的底噪。幸福 +6，水电照付。",
+      "rows": [
+        ".............",
+        ".....SSS.....",
+        "....aaaaa....",
+        "....aKYKa....",
+        "....aYYYa....",
+        "....aKYKa....",
+        "....aaaaa....",
+        ".BBBBBBBBBBB.",
+        ".BWKWKWKWKWB.",
+        ".BWWWWWWWWWB.",
+        ".BWKWKWKWKWB.",
+        ".BBBOOOOOBBB.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "waterworks",
+      "name": "自来水厂",
+      "cat": "water",
+      "cost": 200,
+      "popCap": 0,
+      "jobs": 0,
+      "income": 0,
+      "happy": 0,
+      "use": {
+        "power": 2
+      },
+      "gen": {
+        "water": 20
+      },
+      "unlockPop": 30,
+      "desc": "供水 +20，自己也要吃 2 度电。城市越大越离不开它。",
+      "rows": [
+        ".............",
+        ".............",
+        ".....aaa.....",
+        "....wwwww....",
+        "...wwwwwww...",
+        "...wwwwwww...",
+        "....wwwww....",
+        "....aaaaa....",
+        ".aaaaaaaaaaa.",
+        ".aaaaaaaaaaa.",
+        ".aWKaaaaaKWa.",
+        ".aaaaaOaaaaa.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "recycling",
+      "name": "回收中心",
+      "cat": "trash",
+      "cost": 170,
+      "popCap": 0,
+      "jobs": 2,
+      "income": 6,
+      "happy": -1,
+      "use": {
+        "power": 1
+      },
+      "gen": {
+        "trash": 14
+      },
+      "unlockPop": 12,
+      "desc": "处理能力 +14。垃圾不清运，幸福掉得比谁都快。",
+      "rows": [
+        "...........",
+        "....nnn....",
+        "...nn.nn...",
+        "...n...n...",
+        "..n.....n..",
+        ".nnn...nnn.",
+        ".nnnnnnnnn.",
+        ".GGGGGGGGG.",
+        ".GBBBBBBBG.",
+        ".GBBOOOBBG.",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "factory",
+      "name": "豆荚工坊",
+      "cat": "ind",
+      "cost": 300,
+      "popCap": 0,
+      "jobs": 14,
+      "income": 46,
+      "happy": -5,
+      "use": {
+        "power": 6,
+        "water": 3,
+        "trash": 6
+      },
+      "gen": {},
+      "unlockPop": 54,
+      "desc": "十四个岗位，收益最高，也是全城最脏的地方。",
+      "rows": [
+        "..SSS...SSS..",
+        "...d.....d...",
+        "..ddd...ddd..",
+        "..ddd...ddd..",
+        ".aaaaaaaaaaa.",
+        ".BBBBBBBBBBB.",
+        ".BWKWKWKWKWB.",
+        ".BWWWWWWWWWB.",
+        ".BWKWKWKWKWB.",
+        ".BWWWWWWWWWB.",
+        ".BBBOOOOOBBB.",
+        ".aaaaaaaaaaa.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "coalplant",
+      "name": "燃煤电厂",
+      "cat": "power",
+      "cost": 320,
+      "popCap": 0,
+      "jobs": 3,
+      "income": 0,
+      "happy": -7,
+      "use": {},
+      "gen": {
+        "power": 26
+      },
+      "unlockPop": 40,
+      "desc": "发电 +26，一口气压住全城用电。代价是幸福 −7。",
+      "rows": [
+        ".............",
+        ".....SSS.....",
+        "....SSSSS....",
+        "....aaaaa....",
+        ".....aaa.....",
+        ".....aaa.....",
+        "....aaaaa....",
+        "...aaaaaaa...",
+        "..aaaaaaaaa..",
+        ".aaaaaaaaaaa.",
+        ".ddddddddddd.",
+        ".dKdKdKdKdKd.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "tower",
+      "name": "云端大厦",
+      "cat": "res",
+      "cost": 600,
+      "popCap": 26,
+      "jobs": 0,
+      "income": 0,
+      "happy": -3,
+      "use": {
+        "power": 6,
+        "water": 5,
+        "trash": 5
+      },
+      "gen": {},
+      "unlockPop": 76,
+      "desc": "二十六人挤一栋楼。抬头看不见顶，低头看不见树。",
+      "rows": [
+        ".......Y.......",
+        "......SYS......",
+        ".....TTTTT.....",
+        ".....TKTKT.....",
+        ".....TSTST.....",
+        "....TKTKTKT....",
+        "....TSTSTST....",
+        "...TKTKTKTKT...",
+        "...TSTSTSTST...",
+        "..TKTKTKTKTKT..",
+        "..TSTSTSTSTST..",
+        ".aaaaaaaaaaaaa.",
+        ".aWKaaaOaaaKWa.",
+        ".aaaaaaaaaaaaa.",
+        ".GGGGGGGGGGGGG."
+      ]
+    }
+  ]
+}

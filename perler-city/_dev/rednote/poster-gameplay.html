@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:900px; height:1200px; overflow:hidden; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    background: radial-gradient(120% 95% at 50% 108%, #e8864a 0%, #8a4260 36%, #3a2a5c 66%, #171a3c 100%);
+    position:relative; display:flex; flex-direction:column; align-items:center;
+  }
+  .sky { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .sky i { position:absolute; width:3px; height:3px; border-radius:50%; background:#fff6; }
+  .dust { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .dust i { position:absolute; width:4px; height:4px; border-radius:50%;
+    background:radial-gradient(circle,#ffd98a,#f0c24b66); animation:fall linear infinite; }
+  @keyframes fall { from{transform:translateY(-20px);opacity:0;} 12%{opacity:.9;} to{transform:translateY(1200px);opacity:0;} }
+
+  .title-wrap { margin-top:44px; text-align:center; position:relative; z-index:3; }
+  .title { font-size:88px; font-weight:800; letter-spacing:16px;
+    background:linear-gradient(180deg,#fff3cf 0%,#ffd97a 38%,#e9a53a 66%,#b06e1f 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 5px 12px rgba(0,0,0,.5)); }
+  .title-en { margin-top:4px; font-size:19px; letter-spacing:12px; color:#e9c98a; font-weight:600; opacity:.9; }
+  .tagline { margin-top:12px; font-size:26px; color:#f4e3c0; letter-spacing:2px; font-weight:600;
+    text-shadow:0 2px 6px rgba(0,0,0,.5); }
+
+  .shot-card { position:relative; z-index:2; margin-top:26px;
+    width:348px; height:752px; border-radius:26px; overflow:hidden;
+    border:2px solid rgba(240,194,75,.55);
+    box-shadow:0 22px 50px rgba(0,0,0,.5), 0 0 34px rgba(233,165,58,.18), inset 0 0 0 1px rgba(255,255,255,.06);
+    background:#0d0f1c; }
+  .shot-card img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  .foot { position:relative; z-index:3; margin-top:auto; margin-bottom:26px; text-align:center; }
+  .badges { display:flex; justify-content:center; gap:14px; margin-bottom:16px; }
+  .badge { font-size:20px; padding:8px 22px; border-radius:999px; font-weight:700; letter-spacing:1px;
+    background:rgba(10,12,26,.45); backdrop-filter:blur(6px); }
+  .badge.a { color:#ffd97a; border:1.5px solid rgba(240,194,75,.6); }
+  .badge.b { color:#9fd8ae; border:1.5px solid rgba(124,200,140,.5); }
+  .foot-line { font-size:18px; color:#cbb899; letter-spacing:1px; }
+  .foot-line b { color:#ffd97a; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="sky" id="sky"></div>
+  <div class="dust" id="dust"></div>
+
+  <div class="title-wrap">
+    <div class="title">拼豆城市</div>
+    <div class="title-en">PERLER CITY</div>
+    <div class="tagline">第一次盖，必须亲手拼 · 11×11 拼豆板</div>
+  </div>
+
+  <div class="shot-card"><img src="../shots/builder.png" alt="game"></div>
+
+  <div class="foot">
+    <div class="badges">
+      <div class="badge a">#小红书vibecoding大赛</div>
+      <div class="badge b">#vibegame</div>
+    </div>
+    <div class="foot-line">照淡底稿点豆 · 拼满 100% 触发熨烫　｜　<b>真实拼豆台截图</b></div>
+  </div>
+
+  <script>
+    var sky = document.getElementById('sky');
+    for (var i = 0; i < 40; i++) {
+      var s = document.createElement('i');
+      s.style.cssText = 'left:' + (Math.random()*100) + '%; top:' + (Math.random()*46) + '%; opacity:' + (0.2+Math.random()*0.5) + ';';
+      sky.appendChild(s);
+    }
+    var dust = document.getElementById('dust');
+    for (var i = 0; i < 22; i++) {
+      var d = document.createElement('i');
+      var sz = 2 + Math.random()*4;
+      d.style.cssText = 'left:' + (Math.random()*100) + '%; top:' + (Math.random()*100) + '%; width:' + sz + 'px; height:' + sz + 'px;'
+        + 'animation-duration:' + (5+Math.random()*7) + 's; animation-delay:' + (Math.random()*8) + 's;';
+      dust.appendChild(d);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<script src="beads_data.js"></script>
+<script src="beads.js"></script>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:900px; height:1200px; overflow:hidden; }
+  body {
+    font-family:"Microsoft YaHei","PingFang SC",sans-serif;
+    background: radial-gradient(130% 100% at 50% 110%, #e8864a 0%, #7a3f5e 40%, #2f2450 70%, #151838 100%);
+    position:relative; display:flex; flex-direction:column; align-items:center;
+  }
+  .dust { position:absolute; inset:0; overflow:hidden; pointer-events:none; }
+  .dust i { position:absolute; width:3px; height:3px; border-radius:50%;
+    background:radial-gradient(circle,#ffd98a,#f0c24b66); animation:fall linear infinite; }
+  @keyframes fall { from{transform:translateY(-20px);opacity:0;} 12%{opacity:.9;} to{transform:translateY(1200px);opacity:0;} }
+
+  .head { margin-top:40px; text-align:center; position:relative; z-index:2; }
+  .title { font-size:60px; font-weight:800; letter-spacing:10px;
+    background:linear-gradient(180deg,#fff3cf 0%,#ffd97a 38%,#e9a53a 66%,#b06e1f 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter:drop-shadow(0 4px 10px rgba(0,0,0,.5)); }
+  .sub { margin-top:8px; font-size:22px; color:#f0ddb8; letter-spacing:2px; font-weight:600; }
+
+  .grid { position:relative; z-index:2; margin-top:22px; width:884px;
+    display:flex; flex-wrap:wrap; gap:13px; justify-content:center; }
+  .card { width:170px; height:232px; border-radius:16px; padding:10px 8px 8px;
+    background:linear-gradient(165deg,rgba(34,38,70,.92),rgba(20,22,44,.94));
+    border:1px solid rgba(240,194,75,.22); box-shadow:0 8px 18px rgba(0,0,0,.35);
+    display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .pat { height:104px; display:flex; align-items:flex-end; justify-content:center; }
+  .pat svg { filter:drop-shadow(0 4px 6px rgba(0,0,0,.35)); }
+  .nm { margin-top:6px; font-size:20px; font-weight:700; color:#f4e9d2; letter-spacing:1px; }
+  .ct { margin-top:3px; font-size:15px; color:#bdb2d8; }
+  .ct i { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .st { margin-top:5px; font-size:14px; color:#cbb899; font-variant-numeric:tabular-nums; line-height:1.3; }
+
+  .foot { position:relative; z-index:2; margin-top:auto; margin-bottom:26px; text-align:center; }
+  .badges { display:flex; justify-content:center; gap:14px; margin-bottom:16px; }
+  .badge { font-size:20px; padding:8px 22px; border-radius:999px; font-weight:700; letter-spacing:1px;
+    background:rgba(10,12,26,.45); }
+  .badge.a { color:#ffd97a; border:1.5px solid rgba(240,194,75,.6); }
+  .badge.b { color:#9fd8ae; border:1.5px solid rgba(124,200,140,.5); }
+  .foot-line { font-size:18px; color:#cbb899; letter-spacing:1px; }
+  .foot-line b { color:#ffd97a; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="dust" id="dust"></div>
+
+  <div class="head">
+    <div class="title">一栋一图一命运</div>
+    <div class="sub">15 张图纸 · 7 大类别 · 首次必须亲手拼</div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="foot">
+    <div class="badges">
+      <div class="badge a">#小红书vibecoding大赛</div>
+      <div class="badge b">#vibegame</div>
+    </div>
+    <div class="foot-line">暖瓦小屋 → 云端大厦　｜　<b>每一栋都是真实的拼豆图纸</b></div>
+  </div>
+
+  <script>
+    var dust = document.getElementById('dust');
+    for (var i = 0; i < 20; i++) {
+      var d = document.createElement('i');
+      var sz = 2 + Math.random()*3;
+      d.style.cssText = 'left:' + (Math.random()*100) + '%; top:' + (Math.random()*100) + '%; width:' + sz + 'px; height:' + sz + 'px;'
+        + 'animation-duration:' + (5+Math.random()*7) + 's; animation-delay:' + (Math.random()*8) + 's;';
+      dust.appendChild(d);
+    }
+    var ORDER = ['house','park','cafe','watertower','windmill',
+                 'workshop','recycling','apartment','market','waterworks',
+                 'lighthouse','school','coalplant','factory','tower'];
+    var grid = document.getElementById('grid');
+    ORDER.forEach(function (id) {
+      var b = BEAD.byId(id);
+      var bead = b.rows.length <= 11 ? 8 : (b.rows.length <= 13 ? 7 : 6);
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="pat">' + BEAD.renderSvg(b, bead) + '</div>' +
+        '<div class="nm">' + b.name + '</div>' +
+        '<div class="ct"><i style="background:' + BEAD.catColor(b.cat) + '"></i>' + BEAD.catName(b.cat) + '</div>' +
+        '<div class="st">' + BEAD.statLine(b) + '</div>';
+      grid.appendChild(card);
+    });
+  </script>
+</body>
+</html>

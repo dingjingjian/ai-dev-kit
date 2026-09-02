@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>3D 火箭发射模拟</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <span class="title">火箭发射 · 3D</span>
+    </header>
+    <main id="stage-wrap">
+      <canvas id="stage"></canvas>
+      <div id="countdown"></div>
+      <div id="telemetry"></div>
+      <div id="labels"></div>
+      <div id="desc-box">
+        <div id="desc-title"></div>
+        <div id="desc-text"></div>
+      </div>
+      <div id="fallback" class="fallback">
+        <svg class="fb-rocket" viewBox="0 0 64 120" width="64" height="120" aria-hidden="true">
+          <polygon points="32,4 20,40 44,40" fill="#cfd8e6"/>
+          <rect x="20" y="40" width="24" height="54" rx="4" fill="#e8edf4"/>
+          <polygon points="20,80 8,104 20,94" fill="#d94b3a"/>
+          <polygon points="44,80 56,104 44,94" fill="#d94b3a"/>
+          <rect x="26" y="94" width="12" height="18" rx="2" fill="#3a3f47"/>
+          <polygon points="26,112 32,120 38,112" fill="#ffb347"/>
+        </svg>
+        <p class="fb-text">当前环境不支持 WebGL</p>
+        <p class="fb-sub">无法显示 3D 内容，请升级浏览器或更换设备</p>
+      </div>
+    </main>
+    <footer class="bottombar">
+      <div id="phase-text" class="phase-text">静态展示 · 拖动旋转</div>
+      <nav class="modes">
+        <button id="btn-show" class="mode-btn active" type="button">展示</button>
+        <button id="btn-explode" class="mode-btn" type="button">拆解</button>
+        <button id="btn-launch" class="mode-btn" type="button">发射</button>
+      </nav>
+      <div id="launch-panel" class="launch-panel">
+        <button id="btn-ignite" class="ignite-btn" type="button">点火发射</button>
+        <button id="btn-reset" class="reset-btn" type="button">重置</button>
+      </div>
+      <div class="progress"><div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div></div>
+    </footer>
+  </div>
+  <script src="./assets/math.js"></script>
+  <script src="./assets/engine.js"></script>
+  <script src="./assets/rocket.js"></script>
+  <script src="./assets/launch.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:900px; height:1200px; overflow:hidden; }
+  body {
+    font-family: "Microsoft YaHei","PingFang SC",sans-serif;
+    background: radial-gradient(120% 90% at 50% 118%, #e8864a 0%, #7a3f5e 34%, #3a2a5c 62%, #171a3c 100%);
+    position:relative;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  /* 金色微尘 */
+  .dust { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+  .dust i { position:absolute; display:block; width:4px; height:4px; border-radius:50%;
+    background:radial-gradient(circle,#ffd98a,#f0c24b66); animation:fall linear infinite; }
+  @keyframes fall { from{ transform:translateY(-20px); opacity:0; } 10%{opacity:.9;} to{ transform:translateY(1200px); opacity:0; } }
+
+  .title-wrap { margin-top:58px; text-align:center; z-index:2; }
+  .title {
+    font-size:92px; font-weight:800; letter-spacing:14px;
+    background: linear-gradient(180deg,#fff3cf 0%, #ffd97a 38%, #e9a53a 66%, #b06e1f 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,.45));
+  }
+  .title-en {
+    margin-top:6px; font-size:20px; letter-spacing:10px; color:#e9c98a; font-weight:600;
+    text-transform:uppercase; opacity:.85;
+  }
+  .tagline {
+    margin-top:16px; font-size:26px; color:#f4e3c0; letter-spacing:2px; font-weight:600;
+    text-shadow:0 2px 6px rgba(0,0,0,.5);
+  }
+
+  /* 手机实机框 */
+  .phone {
+    margin-top:34px; width:372px; height:806px; border-radius:52px;
+    background:linear-gradient(160deg,#3b3f55,#171a2e);
+    padding:14px; position:relative; z-index:2;
+    box-shadow: 0 26px 60px rgba(0,0,0,.55), inset 0 0 0 2px rgba(255,255,255,.08);
+  }
+  .phone::before {
+    content:""; position:absolute; top:20px; left:50%; transform:translateX(-50%);
+    width:84px; height:14px; border-radius:10px; background:#0d0f1c; z-index:3;
+  }
+  .screen {
+    width:100%; height:100%; border-radius:38px; overflow:hidden; position:relative;
+    background:#0d0f1c;
+  }
+  .screen img { width:100%; height:100%; object-fit:cover; display:block; }
+
+  .badges { margin-top:34px; z-index:2; display:flex; gap:12px; }
+  .badge {
+    font-size:20px; padding:8px 22px; border-radius:999px; font-weight:700; letter-spacing:1px;
+  }
+  .badge.a { background:rgba(240,194,75,.16); color:#ffd97a; border:1.5px solid rgba(240,194,75,.55); }
+  .badge.b { background:rgba(124,200,140,.12); color:#9fd8ae; border:1.5px solid rgba(124,200,140,.45); }
+
+  .foot {
+    margin-top:auto; margin-bottom:30px; z-index:2; text-align:center;
+    font-size:18px; color:#cbb899; letter-spacing:1px;
+  }
+  .foot b { color:#ffd97a; font-weight:700; }
+</style>
+</head>
+<body>
+  <div class="dust" id="dust"></div>
+
+  <div class="title-wrap">
+    <div class="title">拼豆城市</div>
+    <div class="title-en">PERLER CITY</div>
+    <div class="tagline">每一栋楼，都是你亲手拼出来的一块拼豆</div>
+  </div>
+
+  <div class="phone"><div class="screen"><img src="../shots/city-full.png" alt="game"></div></div>
+
+  <div class="badges">
+    <div class="badge a">#小红书vibecoding大赛</div>
+    <div class="badge b">#vibegame</div>
+  </div>
+
+  <div class="foot">纯前端 · 零依赖 · 点开即玩　｜　<b>互动游戏赛道</b></div>
+
+  <script>
+    var dust = document.getElementById('dust');
+    for (var i = 0; i < 26; i++) {
+      var s = document.createElement('i');
+      var size = 2 + Math.random() * 4;
+      s.style.cssText = 'left:' + (Math.random()*100) + '%; top:' + (Math.random()*100) + '%;' +
+        'width:' + size + 'px; height:' + size + 'px;' +
+        'animation-duration:' + (5 + Math.random()*7) + 's; animation-delay:' + (Math.random()*8) + 's;';
+      dust.appendChild(s);
+    }
+  </script>
+</body>
+</html>
