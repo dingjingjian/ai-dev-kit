@@ -1,61 +1,74 @@
 (function (global) {
   'use strict';
   var M3D = global.M3D, mat4 = M3D.mat4;
+  var E = M3D.EARTH;
+  var R_E = E.R, MU = E.mu, G0 = E.g0, H_ORB = E.alt, R_ORB = E.r;
+  var V_ORB = Math.sqrt(MU / R_ORB);
+  var DEG = Math.PI / 180;
 
-  // ---- 物理参数（场景单位）参照 rocket-launch 的真实物理模型 ----
-  // a = (F - m·g·cos(pitch)) / m，燃料消耗驱动质量变化，重力随高度衰减
-  var G0 = 1.6;            // 地表重力加速度
-  var RE = 600;            // 地球半径（场景单位）
-  var S1 = { F: 5.5, mdot: 0.011, fuel0: 0.15, dry: 1.5 };  // 芯一级
-  var BOOST = { F: 0.35, mdot: 0.005, fuel0: 0.05, dry: 0.2 }; // 单枚助推器（共4枚）
-  var S2 = { F: 1.2, mdot: 0.02, fuel0: 0.15, dry: 0.5 };   // 芯二级
-  var PAY = 0.08;          // 载荷（飞船）
-  var TOWER_MASS = 0.02;   // 逃逸塔质量
-  var FAIRING_MASS = 0.04; // 整流罩质量
-  var IGNITION_RAMP = 1.5; // 点火推力上升时间(s)
-  var SEP_DELAY = 1.0;     // 一二级分离到二级点火的延迟(s)
-  var TOWER_SEP_ALT = 8;   // 逃逸塔分离高度
-  var FAIRING_SEP_ALT = 20;// 整流罩分离高度
-  var LAUNCH_END = 28;
+  // ---- 质量模型（归一化，起飞总质量 1.02）----
+  var PAY = 0.040, FAIR = 0.018, TOW = 0.012;
+  var S2D = 0.045, S2F0 = 0.150;
+  var S1D = 0.110, S1F0 = 0.285;
+  var BD = 0.015, BF0 = 0.075;                 // 单枚助推器 干 / 燃（共 4 枚）
+  // ---- 推力与比冲（有效排气速度）----
+  var F1 = 0.220, FB = 0.106, F2 = 0.134;
+  var VE1 = 18.0, VE2 = 19.5;
+  // ---- 制导参数（弹道倾角 γ 程序 + 高度外环）----
+  var T_VERT = 8.0, TURN_H = 0.60, TURN_P = 1.5;
+  var KG = 1.6, KH = 0.004, A_RATE = 7 * DEG;
+  var A_MIN = -6 * DEG, A_MAX = 115 * DEG;
+  // ---- 时序 ----
+  var IGN_RAMP = 1.2, SEP_DELAY = 1.5;
+  var TOWER_ALT = 45, FAIRING_ALT = 115;
+  var WARP = 10;                                // 在轨时间加速
+  var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;   // 二级喷口位于二级箭体底部（级间段随一级分离）
 
-  // 二级发动机在箭体局部 y≈5.08（级间段位置）；一级喷口在 y≈0.1
-  var NOZZLE_STAGE1_Y = 0.12;
-  var NOZZLE_STAGE2_Y = 5.08;
+  // ---- 显示换算（地球半径按真实 6371 km）----
+  var KM_PER_UNIT = 6371 / R_E;
+  var TIME_SCALE = 11.0;                        // 1 场景秒 ≈ 11 任务秒
+  var MS_PER_UNIT = KM_PER_UNIT * 1000 / TIME_SCALE;
 
-  var PHASE_MAP = {
-    ignition: { key: 'ignition', text: '点火 · 发动机启动，尾焰喷涌' },
-    liftoff: { key: 'liftoff', text: '起飞 · 离开发射台垂直升空' },
-    boosterSep: { key: 'boosterSep', text: '助推器分离 · 四枚助推器脱落' },
-    towerSep: { key: 'towerSep', text: '逃逸塔分离 · 抛离逃逸塔' },
-    stage1Sep: { key: 'stage1Sep', text: '一二级分离 · 一级脱落，二级即将点火' },
-    fairingSep: { key: 'fairingSep', text: '整流罩分离 · 飞船露出' },
-    stage2Burn: { key: 'stage2Burn', text: '二级燃烧 · 继续加速冲向太空' },
-    coast: { key: 'coast', text: '关机滑行 · 依靠惯性上升' },
-    done: { key: 'done', text: '发射成功 · 飞船入轨' }
+  var PHASES = {
+    ignition: '点火 · 发动机启动，尾焰喷涌',
+    liftoff: '起飞 · 离开发射台垂直上升',
+    maxQ: '程序转弯 · 穿越最大动压区',
+    towerSep: '逃逸塔分离 · 抛离逃逸塔',
+    boosterSep: '助推器分离 · 四枚助推器脱落',
+    stage1Sep: '一二级分离 · 一级箭体脱落',
+    stage2Ignition: '二级点火 · 继续加速爬升',
+    fairingSep: '整流罩分离 · 飞船露出太空',
+    seco: '二级关机 · 飞船精确入轨',
+    orbit: '在轨运行 · 环绕地球飞行'
   };
 
   function createLaunchSystem(renderer, rocketModel, pad, hooks) {
     hooks = hooks || {};
     var parts = rocketModel.parts;
     var state = {
-      phase: 'prelaunch', t: 0, x: 0, y: 0, v: 0, pitch: 0, ignited: false, done: false,
-      fuel1: S1.fuel0, fuel2: S2.fuel0, fuelBoost: BOOST.fuel0,
+      phase: 'prelaunch', t: 0,
+      r: R_E, theta: 0, vr: 0, vt: 0,
+      alpha: 0, gamma: Math.PI / 2, tilt: Math.PI / 2,
+      x: 0, y: 0, alt: 0, speed: 0, vCirc: V_ORB,
+      mass: 1.02, accel: 0, gForce: 1, met: 0,
+      fuel1: S1F0, fuel2: S2F0, fuelBoost: BF0,
       boostersAttached: true, stage1Attached: true, towerAttached: true, fairingAttached: true,
-      sepT: 0
+      ignited: false, inserted: false, orbitBlend: 0, warp: 1, scale: 1,
+      progress: 0, sepT: 0
     };
-    var fired = {};
-    var acc = { core: 0, boost: 0, smoke: 0 };
+    var fired = {}, acc = {};
+    var panels = [];
+    for (var pi = 0; pi < parts.length; pi++) if (parts[pi].detachGroup === 'panel') panels.push(parts[pi]);
 
     function firePhase(key) {
       if (fired[key]) return;
       fired[key] = true;
-      var ph = PHASE_MAP[key];
-      if (ph && hooks.onPhase) hooks.onPhase(ph);
+      if (PHASES[key] && hooks.onPhase) hooks.onPhase(key, PHASES[key]);
     }
 
-    // 常驻尾焰锥（粒子之外的持续喷流）
-    var flameCoreG = M3D.geom.cylinder(0.26, 0.0001, 1.8, 16);
-    var flameBoostG = M3D.geom.cylinder(0.18, 0.0001, 1.2, 12);
+    // ---- 常驻尾焰锥 ----
+    var flameCoreG = M3D.geom.cylinder(0.30, 0.0001, 2.0, 16);
+    var flameBoostG = M3D.geom.cylinder(0.19, 0.0001, 1.3, 12);
     var flameCore = renderer.createMesh(flameCoreG, [1.0, 0.55, 0.15], { group: 'fx' });
     flameCore.alpha = 0; flameCore.glow = 1; flameCore.visible = false;
     var flameBoost = [];
@@ -65,400 +78,435 @@
       flameBoost.push(fm);
     }
 
-    function isBurning() {
-      return state.phase === 'ignition' || state.phase === 'burn1' || state.phase === 'burn2';
+    // ---- 轨道参考圈 ----
+    var orbitRing = renderer.createMesh(M3D.geom.torus(R_ORB, 12, 220, 6), [0.25, 0.42, 1.0],
+      { group: 'fx', blend: 'add', depthWrite: false });
+    orbitRing.glow = 1;
+    mat4.identity(orbitRing.modelMatrix);
+    mat4.translate(orbitRing.modelMatrix, orbitRing.modelMatrix, E.center);
+    mat4.rotateX(orbitRing.modelMatrix, orbitRing.modelMatrix, Math.PI / 2);
+    orbitRing.alpha = 0; orbitRing.visible = false;
+
+    // ---- 局部坐标 → 世界坐标（Rz(-tilt)）----
+    var _lw = [0, 0, 0];
+    function localToWorld(lx, ly, lz, out) {
+      var c = Math.cos(state.tilt), s = Math.sin(state.tilt);
+      out = out || _lw;
+      out[0] = lx * c + ly * s + state.x;
+      out[1] = -lx * s + ly * c + state.y;
+      out[2] = lz;
+      return out;
+    }
+    function localDirToWorld(dx, dy, dz, out) {
+      var c = Math.cos(state.tilt), s = Math.sin(state.tilt);
+      out = out || _lw;
+      out[0] = dx * c + dy * s;
+      out[1] = -dx * s + dy * c;
+      out[2] = dz;
+      return out;
     }
 
-    function updateFlames(rotYG) {
-      var thrust = state.ignited && !state.done && isBurning();
-      var flick = 1 + Math.sin(state.t * 42) * 0.16 + Math.sin(state.t * 23 + 1.7) * 0.1;
-      var cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-      // 主火焰：一级分离前从一级底部喷出，分离后从二级底部喷出
-      var stage2 = !state.stage1Attached;
-      var localNozzleY = stage2 ? NOZZLE_STAGE2_Y : NOZZLE_STAGE1_Y;
-      var flameScale = stage2 ? 0.62 : 1.0;
-      var nx = localNozzleY * sp + state.x;
-      var ny = localNozzleY * cp + state.y;
-      var m = flameCore.modelMatrix;
-      mat4.identity(m);
-      mat4.translate(m, m, [nx, ny, 0]);
-      mat4.rotateZ(m, m, -state.pitch);
-      mat4.scale(m, m, [flameScale, flick * flameScale, flameScale]);
-      mat4.translate(m, m, [0, -1.8, 0]);
-      flameCore.visible = thrust; flameCore.alpha = thrust ? 0.8 : 0;
-      // 助推器火焰（助推器未分离时）
-      var boostOn = thrust && state.boostersAttached;
-      for (var i = 0; i < 4; i++) {
-        var ba = i * Math.PI / 2;
-        var lx = Math.cos(ba) * rocketModel.boosterDist;
-        var lz = Math.sin(ba) * rocketModel.boosterDist;
-        var ly = 0.08;
-        var bx = lx * cp + ly * sp + state.x;
-        var by = -lx * sp + ly * cp + state.y;
-        var bm = flameBoost[i].modelMatrix;
-        mat4.identity(bm);
-        mat4.translate(bm, bm, [bx, by, lz]);
-        mat4.rotateZ(bm, bm, -state.pitch);
-        mat4.scale(bm, bm, [1, flick, 1]);
-        mat4.translate(bm, bm, [0, -1.2, 0]);
-        flameBoost[i].visible = boostOn; flameBoost[i].alpha = boostOn ? 0.8 : 0;
-      }
+    function syncWorld() {
+      state.x = state.r * Math.sin(state.theta);
+      state.y = E.center[1] + state.r * Math.cos(state.theta);
+      state.tilt = state.theta + state.alpha;
+      state.alt = state.r - R_E;
+      state.speed = Math.sqrt(state.vr * state.vr + state.vt * state.vt);
+      state.vCirc = Math.sqrt(MU / state.r);
+      state.gForce = state.accel / G0;
+      state.met = state.t * TIME_SCALE;
     }
 
-    // 当前总质量 = 结构干重 + 剩余燃料
     function currentMass() {
-      var m = PAY + S2.dry + state.fuel2;
-      if (state.towerAttached) m += TOWER_MASS;
-      if (state.fairingAttached) m += FAIRING_MASS;
-      if (state.stage1Attached) m += S1.dry + state.fuel1;
-      if (state.boostersAttached) m += 4 * (BOOST.dry + state.fuelBoost);
+      var m = PAY + S2D + state.fuel2;
+      if (state.stage1Attached) m += S1D + state.fuel1;
+      if (state.boostersAttached) m += 4 * (BD + state.fuelBoost);
+      if (state.towerAttached) m += TOW;
+      if (state.fairingAttached) m += FAIR;
       return m;
     }
-
-    // 当前推力（点火阶段推力渐升）
     function currentThrust() {
-      var ramp = 1;
-      if (state.phase === 'ignition') ramp = Math.min(state.t / IGNITION_RAMP, 1);
-      if (state.phase === 'ignition' || state.phase === 'burn1') {
-        var F = S1.F;
-        if (state.boostersAttached) F += 4 * BOOST.F;
-        return F * ramp;
-      }
-      if (state.phase === 'burn2') return S2.F;
+      if (state.phase === 'ignition') return (F1 + 4 * FB) * Math.min(state.t / IGN_RAMP, 1);
+      if (state.phase === 'burn1') return F1 + (state.boostersAttached ? 4 * FB : 0);
+      if (state.phase === 'burn2') return F2;
       return 0;
     }
-
-    // 当前燃料消耗率
     function currentMdot() {
-      var ramp = 1;
-      if (state.phase === 'ignition') ramp = Math.min(state.t / IGNITION_RAMP, 1);
-      if (state.phase === 'ignition' || state.phase === 'burn1') {
-        var md = S1.mdot;
-        if (state.boostersAttached) md += 4 * BOOST.mdot;
-        return md * ramp;
-      }
-      if (state.phase === 'burn2') return S2.mdot;
+      if (state.phase === 'ignition') return currentThrust() / VE1;
+      if (state.phase === 'burn1') return (F1 + (state.boostersAttached ? 4 * FB : 0)) / VE1;
+      if (state.phase === 'burn2') return F2 / VE2;
       return 0;
     }
+    function isBurning() { return state.phase === 'ignition' || state.phase === 'burn1' || state.phase === 'burn2'; }
 
-    // 重力转弯程序：起飞数秒后开始倾斜，角度较小避免飞出视野
-    function pitchAt(t) {
-      if (t < 8) return 0;
-      if (t < 15) return (t - 8) / 7 * 0.15;
-      if (t < 24) return 0.15 + (t - 15) / 9 * 0.2;
-      return 0.35;
-    }
-
-    // 火箭局部坐标 → 世界坐标（Rz(-pitch) 让倾斜方向与飞行方向一致）
-    function localToWorld(lx, ly, lz) {
-      var cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-      return [lx * cp + ly * sp + state.x, -lx * sp + ly * cp + state.y, lz];
-    }
-    function localDirToWorld(dx, dy, dz) {
-      var cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-      return [dx * cp + dy * sp, -dx * sp + dy * cp, dz];
-    }
-
-    function rotY(x, z, g) {
-      var c = Math.cos(g), s = Math.sin(g);
-      return [x * c - z * s, z * c + x * s];
+    // ---- 分离 ----
+    function detach(group) {
+      var w = [0, 0, 0];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        if (p.detachGroup !== group || p.detached) continue;
+        p.detached = true; p.detachT = state.t;
+        p.detachBaseY = state.y; p.detachX = state.x; p.detachPitch = state.tilt;
+        p.detachOff = [0, 0, 0]; p.detachRot = [0, 0, 0];
+        if (group === 'booster') {
+          var len = Math.sqrt(p.ox * p.ox + p.oz * p.oz) || 1;
+          p.detachV = localDirToWorld((p.ox / len) * 2.2, -1.4, (p.oz / len) * 2.2, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2.0];
+        } else if (group === 'tower') {
+          p.detachV = localDirToWorld(0.8, 5.2, 0.3, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6];
+        } else if (group === 'fairing') {
+          p.detachV = localDirToWorld(1.9, 2.6, 0.6, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.4];
+        } else if (group === 'stage1') {
+          p.detachV = localDirToWorld((Math.random() - 0.5) * 0.5, -3.4, (Math.random() - 0.5) * 0.5, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 0.9];
+        }
+      }
+      // 分离火光
+      var n = group === 'tower' ? 22 : (group === 'stage1' ? 26 : 20);
+      var ly = group === 'tower' ? 9.4 : (group === 'stage1' ? 5.0 : (group === 'fairing' ? 8.1 : 1.6));
+      if (group === 'booster') {
+        for (var b = 0; b < 4; b++) {
+          var ba = b * Math.PI / 2;
+          localToWorld(Math.cos(ba) * rocketModel.boosterDist, 1.6, Math.sin(ba) * rocketModel.boosterDist, w);
+          flashAt(w[0], w[1], w[2], 16);
+        }
+      } else {
+        localToWorld(0, ly, 0, w);
+        flashAt(w[0], w[1], w[2], n);
+      }
     }
 
     function flashAt(x, y, z, n) {
       for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, r = Math.random() * 0.5;
-        var sp = 2 + Math.random() * 3;
+        var a = Math.random() * Math.PI * 2, rr = Math.random() * 0.5, sp = 2 + Math.random() * 3;
         renderer.particles.spawn(
-          x + Math.cos(a) * r, y + (Math.random() - 0.4) * 0.5, z + Math.sin(a) * r,
+          x + Math.cos(a) * rr, y + (Math.random() - 0.4) * 0.5, z + Math.sin(a) * rr,
           Math.cos(a) * sp, (Math.random() - 0.2) * sp, Math.sin(a) * sp,
-          1.0, 0.92, 0.6, 0.22 + Math.random() * 0.2, 1.4);
+          1.0, 0.92, 0.6, 0.22 + Math.random() * 0.2, 1.2);
       }
     }
 
-    function detach(group) {
-      for (var i = 0; i < parts.length; i++) {
-        var p = parts[i];
-        if (p.detachGroup !== group || p.detached) continue;
-        p.detached = true; p.detachT = state.t; p.detachBaseY = state.y;
-        p.detachX = state.x; p.detachPitch = state.pitch;
-        p.detachOff = [0, 0, 0]; p.detachRot = [0, 0, 0];
-        if (group === 'booster') {
-          var len = Math.sqrt(p.ox * p.ox + p.oz * p.oz) || 1;
-          p.detachV = [(p.ox / len) * 2.6, -1.2 + Math.random() * 0.4, (p.oz / len) * 2.6];
-          p.detachSpin = [(Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2.0];
-        } else if (group === 'tower') {
-          p.detachV = [1.1, 4.6, 0.4];
-          p.detachSpin = [(Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6];
-        } else if (group === 'fairing') {
-          p.detachV = [1.7, 2.4, 0.6];
-          p.detachSpin = [(Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.4];
-        } else if (group === 'stage1') {
-          // 一级沿箭体后方分离（局部 -Y），略带侧向扰动
-          p.detachV = [(Math.random() - 0.5) * 0.4, -3.2, (Math.random() - 0.5) * 0.4];
-          p.detachSpin = [(Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 0.9];
-        }
-      }
-      if (group === 'booster') {
-        for (var b = 0; b < 4; b++) {
-          var ba = b * Math.PI / 2;
-          var wp = localToWorld(Math.cos(ba) * rocketModel.boosterDist, 1.6, Math.sin(ba) * rocketModel.boosterDist);
-          flashAt(wp[0], wp[1], wp[2], 18);
-        }
-      } else if (group === 'tower') {
-        var wt = localToWorld(0, 9.4, 0); flashAt(wt[0], wt[1], wt[2], 22);
-      } else if (group === 'stage1') {
-        var ws = localToWorld(0, 5.0, 0); flashAt(ws[0], ws[1], ws[2], 24);
-      } else if (group === 'fairing') {
-        var wf = localToWorld(0, 8.1, 0); flashAt(wf[0], wf[1], wf[2], 20);
-      }
-    }
-
-    function spawnFlames(dt, rotYG) {
-      var ramp = Math.min(state.t / IGNITION_RAMP, 1);
-      var burning = isBurning();
+    // ---- 尾焰 / 烟 / 尾迹粒子 ----
+    function spawnFlames(dt, camDist) {
+      var burning = isBurning() && !state.inserted;
+      if (!burning) return;
+      var ramp = Math.min(state.t / IGN_RAMP, 1);
       var stage2 = !state.stage1Attached;
-      var coreOn = burning && !state.done;
-      var cp = Math.cos(state.pitch), sp = Math.sin(state.pitch);
-      var nozzleY = stage2 ? NOZZLE_STAGE2_Y : NOZZLE_STAGE1_Y;
-      var nozzleW = localToWorld(0, nozzleY, 0);
-      var downDir = [-sp, -cp, 0]; // 局部 -Y 方向旋转到世界（向后下方喷）
-      var coreRate = stage2 ? 38 : 60;
-      var hotRate = stage2 ? 16 : 26;
-      // 主火焰
-      acc.core += (coreOn ? coreRate : 0) * dt * ramp;
+      var nozzleY = stage2 ? NOZZLE_S2_Y : NOZZLE_S1_Y;
+      var noz = localToWorld(0, nozzleY, 0, [0, 0, 0]);
+      var down = localDirToWorld(0, -1, 0, [0, 0, 0]);
+      var thin = state.alt > 60;                 // 高空羽流膨胀变淡
+      var coreRate = (stage2 ? 34 : 58) * (thin ? 0.55 : 1);
+      acc.core = (acc.core || 0) + coreRate * dt * ramp;
       while (acc.core >= 1) {
         acc.core -= 1;
-        var a = Math.random() * Math.PI * 2, r = Math.random() * 0.16;
-        var lx = Math.cos(a) * r, lz = Math.sin(a) * r;
-        var ox = lx * cp, oy = -lx * sp;
-        var speed = (6 + Math.random() * 5) * ramp;
+        var a = Math.random() * Math.PI * 2, rr = Math.random() * 0.16 * (thin ? 2.2 : 1);
+        var lx = Math.cos(a) * rr, lz = Math.sin(a) * rr;
+        var off = localDirToWorld(lx, 0, lz, [0, 0, 0]);
+        var sp = (6 + Math.random() * 5) * ramp;
         renderer.particles.spawn(
-          nozzleW[0] + ox, nozzleW[1] + oy, nozzleW[2] + lz,
-          ox * 5 + (Math.random() - 0.5) * 1.4 + downDir[0] * speed,
-          downDir[1] * speed + (Math.random() - 0.5) * 0.5,
-          lz * 5 + (Math.random() - 0.5) * 1.4 + downDir[2] * speed,
-          1.0, 0.36 + Math.random() * 0.35, 0.05 + Math.random() * 0.12, 0.4 + Math.random() * 0.35, 1.2);
+          noz[0] + off[0], noz[1] + off[1], noz[2] + off[2],
+          off[0] * 4 + down[0] * sp + (Math.random() - 0.5) * 1.4,
+          down[1] * sp + (Math.random() - 0.5) * 0.5,
+          off[2] * 4 + down[2] * sp + (Math.random() - 0.5) * 1.4,
+          1.0, 0.36 + Math.random() * 0.35, 0.05 + Math.random() * 0.12, 0.4 + Math.random() * 0.35, thin ? 1.6 : 1.0);
       }
-      // 高温内焰
-      acc.hot = (acc.hot || 0) + (coreOn ? hotRate : 0) * dt * ramp;
+      acc.hot = (acc.hot || 0) + (stage2 ? 14 : 24) * dt * ramp;
       while (acc.hot >= 1) {
         acc.hot -= 1;
         var ha = Math.random() * Math.PI * 2, hr = Math.random() * 0.07;
-        var hlx = Math.cos(ha) * hr, hlz = Math.sin(ha) * hr;
-        var hox = hlx * cp, hoy = -hlx * sp;
-        var hspeed = (3.5 + Math.random() * 2.5) * ramp;
+        var off2 = localDirToWorld(Math.cos(ha) * hr, 0, Math.sin(ha) * hr, [0, 0, 0]);
+        var hs = (3.5 + Math.random() * 2.5) * ramp;
         renderer.particles.spawn(
-          nozzleW[0] + hox, nozzleW[1] + hoy, nozzleW[2] + hlz,
-          (Math.random() - 0.5) * 0.8 + downDir[0] * hspeed,
-          downDir[1] * hspeed + (Math.random() - 0.5) * 0.3,
-          (Math.random() - 0.5) * 0.8 + downDir[2] * hspeed,
-          1.0, 0.9, 0.72, 0.15 + Math.random() * 0.1, 0.9);
+          noz[0] + off2[0], noz[1] + off2[1], noz[2] + off2[2],
+          down[0] * hs + (Math.random() - 0.5) * 0.8,
+          down[1] * hs + (Math.random() - 0.5) * 0.3,
+          down[2] * hs + (Math.random() - 0.5) * 0.8,
+          1.0, 0.9, 0.72, 0.15 + Math.random() * 0.1, 0.8);
       }
-      // 助推器火焰
-      if (state.boostersAttached && burning) {
-        acc.boost += 46 * dt * ramp;
+      if (state.boostersAttached) {
+        acc.boost = (acc.boost || 0) + 44 * dt * ramp;
         while (acc.boost >= 1) {
           acc.boost -= 1;
           var bi = (Math.random() * 4) | 0, ba2 = bi * Math.PI / 2;
-          var blx = Math.cos(ba2) * rocketModel.boosterDist;
-          var blz = Math.sin(ba2) * rocketModel.boosterDist;
-          var bwp = localToWorld(blx, 0.12, blz);
+          var bw = localToWorld(Math.cos(ba2) * rocketModel.boosterDist, 0.12, Math.sin(ba2) * rocketModel.boosterDist, [0, 0, 0]);
           var a3 = Math.random() * Math.PI * 2, r3 = Math.random() * 0.11;
-          var olx = Math.cos(a3) * r3, olz = Math.sin(a3) * r3;
-          var box = olx * cp, boy = -olx * sp;
-          var bspeed = (5 + Math.random() * 4) * ramp;
+          var off3 = localDirToWorld(Math.cos(a3) * r3, 0, Math.sin(a3) * r3, [0, 0, 0]);
+          var bs = (5 + Math.random() * 4) * ramp;
           renderer.particles.spawn(
-            bwp[0] + box, bwp[1] + boy, bwp[2] + olz,
-            box * 3.4 + (Math.random() - 0.5) * 0.9 + downDir[0] * bspeed,
-            downDir[1] * bspeed + (Math.random() - 0.5) * 0.4,
-            olz * 3.4 + (Math.random() - 0.5) * 0.9 + downDir[2] * bspeed,
-            1.0, 0.32 + Math.random() * 0.3, 0.04 + Math.random() * 0.1, 0.4 + Math.random() * 0.3, 1.1);
+            bw[0] + off3[0], bw[1] + off3[1], bw[2] + off3[2],
+            off3[0] * 3 + down[0] * bs + (Math.random() - 0.5) * 0.9,
+            down[1] * bs + (Math.random() - 0.5) * 0.4,
+            off3[2] * 3 + down[2] * bs + (Math.random() - 0.5) * 0.9,
+            1.0, 0.32 + Math.random() * 0.3, 0.04 + Math.random() * 0.1, 0.4 + Math.random() * 0.3, 0.95);
         }
       }
-      // 烟气拖尾（沿喷流方向下方扩散，高空稀薄不再生成）
-      if (state.y < 35) {
-        acc.smoke += 14 * dt;
+      // 稠密大气内的烟气拖尾
+      if (state.alt < 45) {
+        acc.smoke = (acc.smoke || 0) + 16 * dt;
         while (acc.smoke >= 1) {
           acc.smoke -= 1;
           var sa = Math.random() * Math.PI * 2, sr = 0.2 + Math.random() * 0.3;
-          var slx = Math.cos(sa) * sr, slz = Math.sin(sa) * sr;
-          var smkW = localToWorld(slx, nozzleY - 0.5, slz);
-          var sms = 1 + Math.random();
-          renderer.particles.spawn(
-            smkW[0], smkW[1], smkW[2],
-            downDir[0] * sms * 0.5 + (Math.random() - 0.5) * 1.2,
-            downDir[1] * sms + (Math.random() - 0.5) * 0.5,
-            downDir[2] * sms * 0.5 + (Math.random() - 0.5) * 1.2,
-            0.36, 0.33, 0.31, 0.9 + Math.random() * 0.7, 1.8);
+          var sw = localToWorld(Math.cos(sa) * sr, nozzleY - 0.6, Math.sin(sa) * sr, [0, 0, 0]);
+          var ss = 1 + Math.random();
+          renderer.particles.spawn(sw[0], sw[1], sw[2],
+            down[0] * ss * 0.5 + (Math.random() - 0.5) * 1.2,
+            down[1] * ss + (Math.random() - 0.5) * 0.5,
+            down[2] * ss * 0.5 + (Math.random() - 0.5) * 1.2,
+            0.36, 0.33, 0.31, 0.9 + Math.random() * 0.7, 2.0);
         }
       }
     }
 
     function spawnPadSmoke(dt) {
-      acc.pad = (acc.pad || 0) + 40 * dt;
+      acc.pad = (acc.pad || 0) + 46 * dt;
       while (acc.pad >= 1) {
         acc.pad -= 1;
-        var a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 2.8;
-        renderer.particles.spawn(Math.cos(a) * r, 0.18, Math.sin(a) * r,
-          Math.cos(a) * (1.2 + Math.random() * 2.4), 0.6 + Math.random() * 1.4, Math.sin(a) * (1.2 + Math.random() * 2.4),
+        var a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 3.2;
+        renderer.particles.spawn(Math.cos(a) * r, 0.2, Math.sin(a) * r,
+          Math.cos(a) * (1.2 + Math.random() * 2.6), 0.6 + Math.random() * 1.5, Math.sin(a) * (1.2 + Math.random() * 2.6),
           0.56, 0.56, 0.59, 1.3 + Math.random() * 0.9, 2.4);
       }
     }
 
-    function directCamera(cam, dt) {
-      if (!state.ignited) return;
-      var centerW = localToWorld(0, rocketModel.center, 0);
-      var lookDown = Math.max(0, 1 - state.y / 5);
-      var lead = state.done ? 0 : state.v * 0.16;
-      var ty = centerW[1] - 0.6 - lookDown * 2.6 + lead;
-      cam.targetY += (ty - cam.targetY) * Math.min(1, dt * 6);
-      cam.targetX += (centerW[0] - cam.targetX) * Math.min(1, dt * 6);
-      var dist = state.done ? 42 : (13 + Math.min(state.y * 0.05, 6));
-      cam.distance += (dist - cam.distance) * Math.min(1, dt * 1.4);
-      cam.yaw += dt * (state.done ? 0.12 : 0.06);
-      var shake = 0;
-      if (state.t > IGNITION_RAMP && state.t < 11) shake = 0.055;
-      else if (state.t >= 11 && state.t < 17) shake = 0.03;
-      cam.shake = shake;
-      // 让主光随相机偏航，避免飞行中转到背光面
-      var la = cam.yaw + 0.8;
-      renderer.light.dir[0] = Math.cos(la) * 0.7;
-      renderer.light.dir[1] = 0.75;
-      renderer.light.dir[2] = Math.sin(la) * 0.7;
+    function spawnTrail(dt, camDist) {
+      acc.trail = (acc.trail || 0) + 40 * dt;
+      var sz = Math.max(2, Math.min(100, camDist * 0.017));
+      // 头部光点（每帧补一个短寿命亮点，形成发光标记）
+      var hw = localToWorld(0, rocketModel.center * state.scale, 0, [0, 0, 0]);
+      renderer.particles.spawn(hw[0], hw[1], hw[2], 0, 0, 0,
+        0.98, 1.0, 1.0, Math.max(dt * 2.4, 0.05), sz * 3.6, 0);
+      while (acc.trail >= 1) {
+        acc.trail -= 1;
+        var w = localToWorld((Math.random() - 0.5) * 0.4 * state.scale, rocketModel.center * state.scale, (Math.random() - 0.5) * 0.4 * state.scale, [0, 0, 0]);
+        renderer.particles.spawn(w[0], w[1], w[2], 0, 0, 0,
+          0.60, 0.88, 1.0, 10.0, sz, 0);
+      }
     }
 
-    // ---- 物理步进（参照 rocket-launch 的 step 函数）----
+    // ---- 尾焰锥网格同步 ----
+    function syncFlames() {
+      var thrust = isBurning() && !state.inserted;
+      var flick = 1 + Math.sin(state.t * 42) * 0.16 + Math.sin(state.t * 23 + 1.7) * 0.1;
+      var stage2 = !state.stage1Attached;
+      var localY = stage2 ? NOZZLE_S2_Y : NOZZLE_S1_Y;
+      var fs = stage2 ? 0.62 : 1.0;
+      var widen = 1 + Math.min(state.alt / 70, 1) * 1.4;   // 真空羽流膨胀
+      // 尾焰挂在“当前工作级”的喷口上：一二级分离后随二级喷口上移
+      var nozW = localToWorld(0, localY, 0, [0, 0, 0]);
+      var m = flameCore.modelMatrix;
+      mat4.identity(m);
+      mat4.translate(m, m, [nozW[0], nozW[1], nozW[2]]);
+      mat4.scale(m, m, [state.scale, state.scale, state.scale]);
+      mat4.rotateZ(m, m, -state.tilt);
+      mat4.scale(m, m, [fs * widen, flick * fs, fs * widen]);
+      mat4.translate(m, m, [0, -2.0, 0]);
+      flameCore.visible = thrust; flameCore.alpha = thrust ? 0.8 : 0;
+
+      var boostOn = thrust && state.boostersAttached;
+      for (var i = 0; i < 4; i++) {
+        var ba = i * Math.PI / 2;
+        var w = localToWorld(Math.cos(ba) * rocketModel.boosterDist, 0.1, Math.sin(ba) * rocketModel.boosterDist, [0, 0, 0]);
+        var bm = flameBoost[i].modelMatrix;
+        mat4.identity(bm);
+        mat4.translate(bm, bm, [w[0], w[1], w[2]]);
+        mat4.scale(bm, bm, [state.scale, state.scale, state.scale]);
+        mat4.rotateZ(bm, bm, -state.tilt);
+        mat4.scale(bm, bm, [widen, flick, widen]);
+        mat4.translate(bm, bm, [0, -1.3, 0]);
+        flameBoost[i].visible = boostOn; flameBoost[i].alpha = boostOn ? 0.8 : 0;
+      }
+    }
+
+    // ---- 物理步进（极坐标中心引力场）----
     function step(dt) {
       state.t += dt;
+      var m = state.mass = currentMass();
       var F = currentThrust();
-      var md = currentMdot();
-      var m = currentMass();
-      var g = G0 * Math.pow(RE / (RE + Math.max(0, state.y)), 2);
-      // 沿飞行方向加速度：推力沿飞行方向，重力在飞行方向反向分量 g·cos(pitch)
-      var a = (F - m * g * Math.cos(state.pitch)) / m;
+      var A = F / m;
+      var g = MU / (state.r * state.r);
+      var h = state.r - R_E;
+      var v = Math.sqrt(state.vr * state.vr + state.vt * state.vt) || 1e-6;
+      var gamma = Math.atan2(state.vr, state.vt);
 
-      // 点火阶段：推力渐升，未达起飞条件时留在台上
+      // 目标弹道倾角：低空近垂直，接近轨道高度转平，再由高度外环微调
+      var frac = Math.min(h / (TURN_H * H_ORB), 1);
+      var gCmd = 89 * DEG * Math.pow(1 - frac, TURN_P);
+      gCmd += Math.max(-6 * DEG, Math.min(20 * DEG, KH * (H_ORB - h)));
+      if (gCmd < -3 * DEG) gCmd = -3 * DEG;
+
+      var aCmd;
+      if (state.phase === 'orbit') aCmd = Math.PI / 2;              // 入轨后保持水平姿态（顺行）
+      else if (state.t < T_VERT || state.phase === 'ignition') aCmd = 0;
+      else aCmd = (Math.PI / 2 - gamma) + KG * (gamma - gCmd);
+      if (aCmd < A_MIN) aCmd = A_MIN;
+      if (aCmd > A_MAX) aCmd = A_MAX;
+      var dA = aCmd - state.alpha, lim = A_RATE * dt;
+      state.alpha += Math.max(-lim, Math.min(lim, dA));
+
+      // 点火段：推力未超过重量前留在台上
       if (state.phase === 'ignition') {
-        if (state.t >= IGNITION_RAMP && F > m * g) {
+        if (state.t >= IGN_RAMP && F > m * g) {
           state.phase = 'burn1';
           firePhase('liftoff');
         } else {
-          state.v = 0;
-          state.pitch = 0;
+          state.vr = 0; state.vt = 0; state.accel = 0;
           return;
         }
       }
 
-      // 速度、位置更新
-      state.v += a * dt;
-      if (state.v < 0) state.v = 0;
-      state.pitch = pitchAt(state.t);
-      state.x += state.v * Math.sin(state.pitch) * dt;
-      state.y += state.v * Math.cos(state.pitch) * dt;
-      if (state.y < 0) state.y = 0;
+      var burning = isBurning();
+      var ar = (burning ? A * Math.cos(state.alpha) : 0) - g + state.vt * state.vt / state.r;
+      var at = (burning ? A * Math.sin(state.alpha) : 0) - state.vr * state.vt / state.r;
+      state.accel = burning ? A : 0;
+      state.vr += ar * dt;
+      state.vt += at * dt;
+      state.r += state.vr * dt;
+      state.theta += (state.vt / state.r) * dt;
+      if (state.r < R_E) { state.r = R_E; state.vr = Math.max(0, state.vr); }
+      state.gamma = Math.atan2(state.vr, state.vt);
 
-      // 燃料消耗与阶段转换
+      // 燃料与级间转换
       if (state.phase === 'burn1') {
+        state.fuel1 -= F1 / VE1 * dt;
         if (state.boostersAttached) {
-          state.fuelBoost -= BOOST.mdot * dt;
+          state.fuelBoost -= FB / VE1 * dt;
           if (state.fuelBoost <= 0) {
-            state.fuelBoost = 0;
-            state.boostersAttached = false;
-            detach('booster');
-            firePhase('boosterSep');
+            state.fuelBoost = 0; state.boostersAttached = false;
+            detach('booster'); firePhase('boosterSep');
           }
         }
-        state.fuel1 -= S1.mdot * dt;
         if (state.fuel1 <= 0) {
-          state.fuel1 = 0;
-          state.stage1Attached = false;
-          detach('stage1');
-          firePhase('stage1Sep');
-          state.phase = 'sep';
-          state.sepT = SEP_DELAY;
+          state.fuel1 = 0; state.stage1Attached = false;
+          detach('stage1'); firePhase('stage1Sep');
+          state.phase = 'sep'; state.sepT = 0;
         }
       } else if (state.phase === 'sep') {
-        state.sepT -= dt;
-        if (state.sepT <= 0) {
-          state.phase = 'burn2';
-          firePhase('stage2Burn');
-        }
+        state.sepT += dt;
+        if (state.sepT >= SEP_DELAY) { state.phase = 'burn2'; firePhase('stage2Ignition'); }
       } else if (state.phase === 'burn2') {
-        state.fuel2 -= S2.mdot * dt;
-        if (state.fuel2 <= 0) {
-          state.fuel2 = 0;
-          state.phase = 'coast';
-          firePhase('coast');
-        }
-      } else if (state.phase === 'coast') {
-        // 惯性滑行，速度降至阈值或到 LAUNCH_END 即入轨
-        if (state.v < 4 || state.t > LAUNCH_END) {
-          state.done = true;
-          state.phase = 'done';
-          firePhase('done');
-        }
+        state.fuel2 -= F2 / VE2 * dt;
       }
 
-      // 高度触发的分离（逃逸塔、整流罩）
-      if (state.towerAttached && state.y > TOWER_SEP_ALT) {
-        state.towerAttached = false;
-        detach('tower');
-        firePhase('towerSep');
-      }
-      if (state.fairingAttached && state.y > FAIRING_SEP_ALT) {
-        state.fairingAttached = false;
-        detach('fairing');
-        firePhase('fairingSep');
+      // 高度触发分离
+      if (state.towerAttached && h > TOWER_ALT) { state.towerAttached = false; detach('tower'); firePhase('towerSep'); }
+      if (state.fairingAttached && h > FAIRING_ALT) { state.fairingAttached = false; detach('fairing'); firePhase('fairingSep'); }
+      if (!fired.maxQ && state.t > 16 && h > 40) firePhase('maxQ');
+
+      // 关机入轨：达到当地环绕速度且径向速度接近 0
+      if (state.phase === 'burn2') {
+        var vCirc = Math.sqrt(MU / state.r);
+        if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.6) {
+          state.phase = 'orbit'; state.inserted = true;
+          for (var k = 0; k < panels.length; k++) panels[k].mesh.visible = true;
+          firePhase('seco');
+        }
       }
     }
 
-    function update(dt, rotYG) {
-      if (!state.ignited) return;
-      if (state.done) {
-        // 入轨后保持位置，姿态缓慢趋于水平飞行
-        var targetPitch = 0.35;
-        state.pitch += (targetPitch - state.pitch) * Math.min(1, dt * 1.5);
-        return;
+    function update(dt, cam) {
+      if (!state.ignited) { syncFlames(); return; }
+      var warp = 1 + (WARP - 1) * state.orbitBlend;
+      state.warp = warp;
+      var simDt = dt * warp;
+      var remaining = simDt, hMax = 1 / 120;
+      var guard = 0;
+      while (remaining > 1e-6 && guard++ < 400) {
+        var hs = Math.min(hMax, remaining);
+        step(hs);
+        remaining -= hs;
       }
-      // 子步进积分（参照 rocket-launch：hMax=1/120 保证精度）
-      var remaining = dt, hMax = 1 / 120;
-      while (remaining > 1e-6 && !state.done) {
-        var h = Math.min(hMax, remaining);
-        step(h);
-        remaining -= h;
-      }
-      spawnFlames(dt, rotYG);
-      if (state.t < 3.2) spawnPadSmoke(dt);
+      syncWorld();
+
+      var camDist = cam ? cam.distance : 20;
+      spawnFlames(dt, camDist);
+      if (state.t < 3.4) spawnPadSmoke(dt);
+      if (state.inserted) spawnTrail(dt, camDist);
+
+      // 入轨后镜头过渡 + 视觉放大
+      var target = state.inserted ? 1 : 0;
+      state.orbitBlend += (target - state.orbitBlend) * Math.min(1, dt * 0.34);
+      state.scale = 1 + state.orbitBlend * 11.5;
+      if (state.orbitBlend > 0.92 && !fired.orbit) firePhase('orbit');
+
+      orbitRing.visible = state.orbitBlend > 0.01;
+      orbitRing.alpha = Math.min(0.5, state.orbitBlend * 0.5);
+
       if (pad.ember) {
-        var glow = state.t < IGNITION_RAMP ? state.t / IGNITION_RAMP : Math.max(0, 1 - (state.t - IGNITION_RAMP) / 2.5);
+        var glow = state.t < IGN_RAMP ? state.t / IGN_RAMP
+          : Math.max(0, 1 - (state.t - IGN_RAMP) / 2.5);
         pad.ember.glow = glow * 0.9;
       }
+      state.progress = Math.min(1, state.t / 48);
+      syncFlames();
+    }
+
+    function directCamera(cam, dt) {
+      if (!state.ignited) return;
+      var k = state.orbitBlend;
+      var s = state.scale;
+      var noseX = Math.sin(state.tilt), noseY = Math.cos(state.tilt);
+      var cx = state.x + noseX * rocketModel.center * s;
+      var cy = state.y + noseY * rocketModel.center * s;
+      var chaseDist = Math.max(20, Math.min(115, 20 + state.alt * 0.55));
+      var tx = cx + (E.center[0] - cx) * k;
+      var ty = cy + (E.center[1] - cy) * k;
+      var tz = 0 + (E.center[2] - 0) * k;
+      var dist = chaseDist + (cam.fitDist - chaseDist) * k;
+      var lerpK = Math.min(1, dt * 5);
+      cam.targetX += (tx - cam.targetX) * lerpK;
+      cam.targetY += (ty - cam.targetY) * lerpK;
+      cam.targetZ += (tz - cam.targetZ) * lerpK;
+      cam.distance += (dist - cam.distance) * Math.min(1, dt * 2.2);
+      cam.yaw += dt * (0.035 + 0.075 * k);
+      cam.pitch += ((0.05 + 0.20 * k) - cam.pitch) * Math.min(1, dt * 1.5);
+      var shake = 0;
+      if (state.t > IGN_RAMP && state.t < 12) shake = 0.05;
+      else if (state.t >= 12 && state.t < 20) shake = 0.028;
+      cam.shake = shake;
     }
 
     function reset() {
-      state.phase = 'prelaunch'; state.t = 0; state.x = 0; state.y = 0; state.v = 0; state.pitch = 0;
-      state.ignited = false; state.done = false;
-      state.fuel1 = S1.fuel0; state.fuel2 = S2.fuel0; state.fuelBoost = BOOST.fuel0;
+      state.phase = 'prelaunch'; state.t = 0;
+      state.r = R_E; state.theta = 0; state.vr = 0; state.vt = 0;
+      state.alpha = 0; state.gamma = Math.PI / 2; state.tilt = Math.PI / 2;
+      state.fuel1 = S1F0; state.fuel2 = S2F0; state.fuelBoost = BF0;
       state.boostersAttached = true; state.stage1Attached = true;
       state.towerAttached = true; state.fairingAttached = true;
-      state.sepT = 0;
-      fired = {}; acc.core = 0; acc.boost = 0; acc.smoke = 0; acc.hot = 0; acc.pad = 0;
+      state.ignited = false; state.inserted = false; state.orbitBlend = 0;
+      state.warp = 1; state.scale = 1; state.progress = 0; state.sepT = 0;
+      state.accel = 0; state.gForce = 1; state.met = 0;
+      syncWorld();
+      fired = {}; acc = {};
       if (pad.ember) pad.ember.glow = 0;
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i];
         p.detached = false; p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
         p.detachRot = [0, 0, 0]; p.detachSpin = [0, 0, 0];
-        p.mesh.visible = true; p.mesh.alpha = 1;
+        p.mesh.alpha = 1;
+        p.mesh.visible = p.detachGroup !== 'panel';
       }
+      orbitRing.visible = false; orbitRing.alpha = 0;
       renderer.particles.reset();
+      syncFlames();
     }
 
+    reset();
+
     return {
-      state: state, end: LAUNCH_END,
+      state: state, V_ORB: V_ORB, KM_PER_UNIT: KM_PER_UNIT, MS_PER_UNIT: MS_PER_UNIT, TIME_SCALE: TIME_SCALE,
       ignite: function () { state.ignited = true; state.phase = 'ignition'; firePhase('ignition'); },
-      update: update, reset: reset, directCamera: directCamera,
-      syncFlames: updateFlames,
-      updateDetachedParts: function (dt) { M3D.updateDetached(parts, dt); }
+      update: update, reset: reset, directCamera: directCamera, syncFlames: syncFlames,
+      updateDetachedParts: function (dt) {
+        // 箭体当前加速度（世界系），用于分离体相对运动
+        var A = (isBurning() && !state.inserted) ? currentThrust() / state.mass : 0;
+        var c = Math.cos(state.tilt), s = Math.sin(state.tilt);
+        M3D.updateDetached(parts, dt, MU, E.center[0], E.center[1], E.center[2],
+          s * A, c * A, 0);
+      },
+      setFitDistance: function (d) { /* 由 app 写入 cam.fitDist */ }
     };
   }
 

@@ -2,19 +2,29 @@
   'use strict';
   var M3D = global.M3D, mat4 = M3D.mat4, geom = M3D.geom;
 
+  // ---- 全局尺度（发射/在轨共用同一套物理尺度）----
+  var EARTH_R = 1800;                 // 地球半径（场景单位）
+  var EARTH_CENTER = [0, -EARTH_R, 0]; // 球心：地表发射点位于世界原点
+  var ORBIT_ALT = 130;                // 目标轨道高度
+  var G0 = 0.34;                      // 地表重力加速度
+  var MU = G0 * EARTH_R * EARTH_R;    // 引力常数
+  var ATMO_SCALE = 1.05;              // 大气层外壳相对地球半径
+
   var SEG = 32;
   var COLORS = {
     white: [0.90, 0.91, 0.93], boostWhite: [0.87, 0.88, 0.91], dark: [0.20, 0.22, 0.26],
     red: [0.82, 0.16, 0.12], gold: [0.80, 0.62, 0.26], nozzle: [0.13, 0.13, 0.16],
     silver: [0.72, 0.74, 0.78], stripe: [0.13, 0.14, 0.17], tower: [0.66, 0.68, 0.72],
     capsule: [0.88, 0.88, 0.86], svc: [0.55, 0.60, 0.55], concrete: [0.23, 0.24, 0.27],
-    padSteel: [0.34, 0.36, 0.40], duct: [0.10, 0.10, 0.12], ember: [1.0, 0.45, 0.10]
+    apron: [0.58, 0.50, 0.38], padSteel: [0.34, 0.36, 0.40], duct: [0.10, 0.10, 0.12],
+    ember: [1.0, 0.45, 0.10], sky: [0.36, 0.58, 1.0]
   };
 
   var CORE_R = 0.50;
   var BOOSTER_R = 0.335, BOOSTER_DIST = 0.90;
   var ROCKET_HEIGHT = 10.05;
   var ROCKET_CENTER = 5.0;
+  var APRON_R = 34;   // 场坪弧长半径
 
   function sphereProfile(points) { return points; }
 
@@ -30,7 +40,7 @@
         label: def.label || '', desc: def.desc || '',
         detachGroup: def.detachGroup || null,
         explodeOff: def.explodeOff || [0, 0, 0],
-        detached: false, detachT: 0, detachBaseY: 0,
+        detached: false, detachT: 0, detachBaseY: 0, detachX: 0, detachPitch: 0,
         detachV: [0, 0, 0], detachSpin: [0, 0, 0], detachOff: [0, 0, 0], detachRot: [0, 0, 0],
         tmp: mat4.create()
       };
@@ -75,6 +85,12 @@
     addPart({ name: 'svcModule', geom: geom.cylinder(0.40, 0.40, 0.55, SEG), color: COLORS.svc, y: 7.72 - 0.55, centerY: 0.28,
       label: '服务舱', desc: '为飞船提供推进、电源与环控保障的舱段，返回前与返回舱分离。',
       detachGroup: 'never', explodeOff: [0, 3.9, 0] });
+    // 在轨时展开的太阳翼（入轨后显现）
+    for (var sp = 0; sp < 2; sp++) {
+      var sgn = sp ? 1 : -1;
+      addPart({ name: 'panel' + sp, geom: geom.box(2.6, 0.035, 0.5), color: [0.10, 0.16, 0.36], y: 7.34, x: sgn * 1.7, centerY: 0.02,
+        detachGroup: 'panel', explodeOff: [0, 3.6, 0] });
+    }
 
     // ---- 二级 ----
     addPart({ name: 'upper', geom: geom.cylinder(CORE_R, CORE_R, 2.40, SEG), color: COLORS.white, y: 5.30, centerY: 1.20,
@@ -122,7 +138,6 @@
     var boostRingG = geom.torus(BOOSTER_R + 0.01, 0.016, SEG, 8);
     for (var bi = 0; bi < 4; bi++) {
       var ba = bi * Math.PI / 2, bx = Math.cos(ba) * BOOSTER_DIST, bz = Math.sin(ba) * BOOSTER_DIST;
-      var suffix = ['前', '右', '后', '左'][bi];
       addPart({ name: 'boostCone' + bi, geom: boostConeG, color: COLORS.silver, y: 2.55, x: bx, z: bz, centerY: 0.21,
         detachGroup: 'booster', explodeOff: [0, 1.2, 0] });
       addPart({ name: 'boostBody' + bi, geom: boostBodyG, color: COLORS.boostWhite, y: 0.25, x: bx, z: bz, centerY: 1.15,
@@ -138,7 +153,28 @@
 
   function buildPad(renderer) {
     var pad = {};
-    pad.ground = renderer.createMesh(geom.disk(11, 64), COLORS.concrete, { group: 'pad' });
+
+    // ---- 地球：完整球体，程序化海陆/冰盖/云层 ----
+    var earthG = geom.sphere(EARTH_R, 120, 80);
+    pad.earth = renderer.createMesh(earthG, [1, 1, 1], { group: 'earth', isEarth: true });
+    pad.earth.atmo = 0.18;
+    mat4.identity(pad.earth.modelMatrix);
+    mat4.translate(pad.earth.modelMatrix, pad.earth.modelMatrix, EARTH_CENTER);
+    pad.earthSpin = 0;
+
+    // 大气辉光壳：只画背面 + 附加混合 → 轨道上是光晕，地面上是地平线霞光
+    var atmoG = geom.sphere(EARTH_R * ATMO_SCALE, 96, 64);
+    pad.atmo = renderer.createMesh(atmoG, COLORS.sky, { group: 'earth', blend: 'add', cull: 'front', atmoShader: true });
+    pad.atmo.atmoInner = 1 / ATMO_SCALE;
+    pad.atmo.atmoStrength = 1.25;
+    mat4.identity(pad.atmo.modelMatrix);
+    mat4.translate(pad.atmo.modelMatrix, pad.atmo.modelMatrix, EARTH_CENTER);
+
+    // ---- 场坪：贴合球面的球冠 ----
+    pad.apron = renderer.createMesh(geom.cap(EARTH_R, APRON_R, 96, 6), COLORS.apron, { group: 'pad', fill: 0.10 });
+    pad.ground = renderer.createMesh(geom.disk(9, 64), COLORS.concrete, { group: 'pad' });
+    pad.ground.modelMatrix[13] = 0.05;
+
     pad.platform = renderer.createMesh(geom.cylinder(1.15, 1.35, 0.16, 32), COLORS.padSteel, { group: 'pad' });
     pad.ductRing = renderer.createMesh(geom.ring(0.42, 0.95, 32), COLORS.duct, { group: 'pad' });
     pad.ductRing.modelMatrix[13] = 0.165;
@@ -202,39 +238,39 @@
       pad.legs.push(leg);
     }
 
-    pad.horizon = renderer.createMesh(geom.ring(30, 55, 72), [0.13, 0.33, 0.58], { group: 'pad' });
-    pad.horizon.alpha = 0;
-
-    // 地球：完整球体，fragment shader 程序化海陆/冰盖/云层纹理
-    var EARTH_R = 500;
-    var earthProfile = [];
-    for (var ep = 0; ep <= 48; ep++) {
-      var ea = (ep / 48) * Math.PI;
-      earthProfile.push([EARTH_R * Math.sin(ea), -EARTH_R + EARTH_R * Math.cos(ea)]);
-    }
-    var earthG = geom.lathe(earthProfile, 64);
-    for (var eni = 0; eni < earthG.normals.length; eni++) earthG.normals[eni] = -earthG.normals[eni];
-    for (var eti = 0; eti < earthG.indices.length; eti += 3) {
-      var eswap = earthG.indices[eti + 1]; earthG.indices[eti + 1] = earthG.indices[eti + 2]; earthG.indices[eti + 2] = eswap;
-    }
-    pad.earth = renderer.createMesh(earthG, [1.0, 1.0, 1.0], { group: 'pad', isEarth: true });
-    pad.earthR = EARTH_R;
-
-    pad.all = [pad.earth, pad.ground, pad.platform, pad.ductRing, pad.ember, pad.deflector, pad.towerBase, pad.towerTop, pad.towerAntenna, pad.horizon]
+    pad.parts = [pad.ground, pad.platform, pad.ductRing, pad.ember, pad.deflector, pad.towerBase, pad.towerTop, pad.towerAntenna]
       .concat(pad.towerRails, pad.towerBeams, pad.arms, pad.legs);
+    pad.all = pad.parts.concat([pad.apron]);
     pad.towerX = towerX; pad.towerZ = towerZ;
     return pad;
   }
 
-  // env: { rotY, explode, launchY, launchX, pitch, launchT }
+  // 地球自转：地轴相对世界 Y 轴倾斜 AXIS_TILT，使发射场（世界 +Y 极点）落在
+  // 贴图的北纬 40°、东经 100°（戈壁发射场），自转仍绕地球自身极轴。
+  var AXIS_TILT = 50 * Math.PI / 180;
+  var SPIN0 = 100 * Math.PI / 180;
+  var SPIN_RATE = 0.016;
+
+  function spinEarth(pad, dt) {
+    if (!pad.earth) return;
+    pad.earthSpin += dt * SPIN_RATE;
+    var m = pad.earth.modelMatrix;
+    mat4.identity(m);
+    mat4.translate(m, m, EARTH_CENTER);
+    mat4.rotateZ(m, m, -AXIS_TILT);
+    mat4.rotateY(m, m, SPIN0 + pad.earthSpin);
+  }
+
+  // env: { rotY, explode, launchY, launchX, tilt, launchT, scale }
   function updatePartTransforms(parts, env) {
     var g = env.rotY, radScale = 1 + env.explode * 1.7;
-    var pitch = env.pitch || 0, launchX = env.launchX || 0;
+    var tilt = env.tilt || 0, launchX = env.launchX || 0;
+    var s = env.scale || 1;
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
       var detached = p.detached;
       var launchY = detached ? p.detachBaseY : env.launchY;
-      var curPitch = detached ? (p.detachPitch || 0) : pitch;
+      var curTilt = detached ? (p.detachPitch || 0) : tilt;
       var curX = detached ? (p.detachX || 0) : launchX;
       var px = p.ox * radScale + p.detachOff[0] + p.explodeOff[0] * env.explode;
       var pz = p.oz * radScale + p.detachOff[2] + p.explodeOff[2] * env.explode;
@@ -242,7 +278,8 @@
       var m = p.tmp;
       mat4.identity(m);
       mat4.translate(m, m, [curX, launchY, 0]);
-      mat4.rotateZ(m, m, -curPitch);
+      if (s !== 1) mat4.scale(m, m, [s, s, s]);
+      mat4.rotateZ(m, m, -curTilt);
       mat4.rotateY(m, m, g);
       mat4.translate(m, m, [px, py + p.centerY, pz]);
       if (detached) {
@@ -257,17 +294,24 @@
       for (var k = 0; k < 16; k++) mm[k] = m[k];
       if (detached) {
         var since = env.launchT - p.detachT;
-        p.mesh.alpha = Math.max(0, 1 - since * 0.20);
+        p.mesh.alpha = Math.max(0, 1 - Math.max(0, since - 3) * 0.28);
         if (p.mesh.alpha <= 0) p.mesh.visible = false;
       }
     }
   }
 
-  function updateDetached(parts, dt) {
+  // 分离体：相对箭体做弹道运动（重力矢量 + 箭体加速度差）
+  function updateDetached(parts, dt, mu, cx, cy, cz, aVehX, aVehY, aVehZ) {
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
       if (!p.detached) continue;
-      p.detachV[1] -= 4.2 * dt;
+      var m = p.mesh.modelMatrix;
+      var dx = cx - m[12], dy = cy - m[13], dz = cz - m[14];
+      var d2 = dx * dx + dy * dy + dz * dz;
+      var d = Math.sqrt(d2) || 1;
+      var gMag = mu / d2;
+      var ax = dx / d * gMag - aVehX, ay = dy / d * gMag - aVehY, az = dz / d * gMag - aVehZ;
+      p.detachV[0] += ax * dt; p.detachV[1] += ay * dt; p.detachV[2] += az * dt;
       p.detachOff[0] += p.detachV[0] * dt;
       p.detachOff[1] += p.detachV[1] * dt;
       p.detachOff[2] += p.detachV[2] * dt;
@@ -276,8 +320,13 @@
     }
   }
 
+  M3D.EARTH = {
+    R: EARTH_R, center: EARTH_CENTER, alt: ORBIT_ALT, r: EARTH_R + ORBIT_ALT,
+    mu: MU, g0: G0, atmoScale: ATMO_SCALE
+  };
   M3D.buildCZ2F = buildCZ2F;
   M3D.buildPad = buildPad;
+  M3D.spinEarth = spinEarth;
   M3D.updatePartTransforms = updatePartTransforms;
   M3D.updateDetached = updateDetached;
   M3D.COLORS = COLORS;
