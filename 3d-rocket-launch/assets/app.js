@@ -271,6 +271,10 @@
     }
 
     if (mode === 'launch') {
+      // 倒计时末段摆开回转平台摆臂，点火前让出箭体通道（约 1.2 s 完成摆开）
+      if (pad.armSwing < 1 && (launchState.ignited || (countdown > 0 && countdown < 2.4))) {
+        M3D.setArmSwing(pad, Math.min(1, pad.armSwing + dt * 0.8));
+      }
       launch.update(dt, cam);
       launch.updateDetachedParts(dt);
       launch.directCamera(cam, dt);

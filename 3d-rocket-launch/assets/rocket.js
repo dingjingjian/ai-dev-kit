@@ -6,7 +6,7 @@
   var EARTH_R = 1800;                 // 地球半径（场景单位）
   var EARTH_CENTER = [0, -EARTH_R, 0]; // 球心：地表发射点位于世界原点
   var ORBIT_ALT = 97;                 // 目标轨道高度（场景单位）≈ 343 km，与神舟轨道一致
-  var TIME_SCALE = 6.0;               // 1 场景秒 ≈ 6 任务秒：起飞→入轨约 93 场景秒（MET ≈ 9 分 15 秒）
+  var TIME_SCALE = 10.0;              // 1 场景秒 ≈ 10 任务秒：起飞→入轨约 55 场景秒（MET ≈ 9 分 15 秒）
   var KM_PER_UNIT = 6371 / EARTH_R;   // 1 场景单位 ≈ 3.539 km
   // 场景重力加速度：由真实 9.81 m/s² 按上述单位/时间换算反推，
   // 保证“场景里的物理”与“MET 显示的真实物理”自洽（改 TIME_SCALE 时必须同步改这里）
@@ -193,7 +193,8 @@
     mat4.translate(pad.deflector.modelMatrix, pad.deflector.modelMatrix, [0, 0, -2.1]);
 
     // 勤务塔
-    var towerX = 2.35, towerZ = -0.4;
+    // 勤务塔放在射向反侧（火箭下程方向为 +X），避免程序转弯后箭体从塔顶扫过
+    var towerX = -2.35, towerZ = -0.4;
     pad.towerBase = renderer.createMesh(geom.box(0.9, 0.3, 0.9), COLORS.concrete, { group: 'pad' });
     mat4.identity(pad.towerBase.modelMatrix);
     mat4.translate(pad.towerBase.modelMatrix, pad.towerBase.modelMatrix, [towerX - 0.45, 0, towerZ - 0.45]);
@@ -221,16 +222,18 @@
     mat4.identity(pad.towerAntenna.modelMatrix);
     mat4.translate(pad.towerAntenna.modelMatrix, pad.towerAntenna.modelMatrix, [towerX, 10.6, towerZ]);
 
-    // 回转平台摆臂（连接勤务塔与火箭）
+    // 回转平台摆臂（连接勤务塔与火箭），由 M3D.setArmSwing 驱动摆开/复位
     pad.arms = [];
     var armG = geom.box(1.5, 0.09, 0.26);
     var armHeights = [2.2, 4.6, 7.0];
     for (var ai = 0; ai < armHeights.length; ai++) {
       var arm = renderer.createMesh(armG, COLORS.tower, { group: 'pad' });
       mat4.identity(arm.modelMatrix);
-      mat4.translate(arm.modelMatrix, arm.modelMatrix, [towerX - 0.4 - 1.45, armHeights[ai], towerZ - 0.13]);
+      mat4.translate(arm.modelMatrix, arm.modelMatrix, [towerX + 0.4 + 1.45, armHeights[ai], towerZ - 0.13]);
       pad.arms.push(arm);
     }
+    pad.armYs = armHeights;
+    pad.armSwing = 0;
 
     // 支撑腿
     pad.legs = [];
@@ -251,9 +254,12 @@
   }
 
   // 地球自转：地轴相对世界 Y 轴倾斜 AXIS_TILT，使发射场（世界 +Y 极点）落在
-  // 贴图的北纬 40°、东经 100°（戈壁发射场），自转仍绕地球自身极轴。
+  // 贴图的北纬 40°、东经 100°（戈壁发射场），自转仍绕地球自身极轴、自西向东。
+  // 世界坐标约定：天顶=+Y，东=+X（与火箭下程方向一致，顺行发射可借助地球自转），北=-Z。
+  // 外层 Ry(90°) 负责把“东向”从 +Z 转到 +X（否则火箭是朝南北方向发射的）；
+  // SPIN0 必须取 -100°，台面才会压在东经 100°（取 +100° 会落到西经 100°）。
   var AXIS_TILT = 50 * Math.PI / 180;
-  var SPIN0 = 100 * Math.PI / 180;
+  var SPIN0 = -100 * Math.PI / 180;
   var SPIN_RATE = 0.016;
 
   // rate：自转速度倍率。发射台还立在地表时传 0（地球静止，发射台不会在地表漂移），
@@ -264,8 +270,25 @@
     var m = pad.earth.modelMatrix;
     mat4.identity(m);
     mat4.translate(m, m, EARTH_CENTER);
+    mat4.rotateY(m, m, Math.PI / 2);     // 东向 → 世界 +X（与火箭下程一致）
     mat4.rotateZ(m, m, -AXIS_TILT);
     mat4.rotateY(m, m, SPIN0 + pad.earthSpin);
+  }
+
+  // 回转平台摆臂收回：绕塔架侧端点的竖轴旋转约 112°，为点火/起飞让出通道。
+  // k: 0 = 连接箭体（初始），1 = 完全摆开。
+  function setArmSwing(pad, k) {
+    if (!pad.arms) return;
+    pad.armSwing = k;
+    var ang = -k * 1.95;
+    var px = pad.towerX + 0.4, pz = pad.towerZ - 0.13;   // 摆臂塔侧端点（枢轴）
+    for (var i = 0; i < pad.arms.length; i++) {
+      var m = pad.arms[i].modelMatrix;
+      mat4.identity(m);
+      mat4.translate(m, m, [px, 0, pz]);
+      mat4.rotateY(m, m, ang);
+      mat4.translate(m, m, [1.45, pad.armYs[i], 0]);
+    }
   }
 
   // env: { rotY, explode, launchY, launchX, tilt, launchT, scale }
@@ -334,6 +357,7 @@
   M3D.buildCZ2F = buildCZ2F;
   M3D.buildPad = buildPad;
   M3D.spinEarth = spinEarth;
+  M3D.setArmSwing = setArmSwing;
   M3D.updatePartTransforms = updatePartTransforms;
   M3D.updateDetached = updateDetached;
   M3D.COLORS = COLORS;

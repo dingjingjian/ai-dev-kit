@@ -8,9 +8,9 @@
 
   // ---- 显示换算（地球半径按真实 6371 km）----
   var KM_PER_UNIT = E.kmPerUnit;
-  var TIME_SCALE = E.timeScale;                 // 1 场景秒 ≈ 6 任务秒
+  var TIME_SCALE = E.timeScale;                 // 1 场景秒 ≈ 10 任务秒
   var MS_PER_UNIT = KM_PER_UNIT * 1000 / TIME_SCALE;
-  var T_TOTAL = 92;                             // 进度条满程（场景秒，对应 MET ≈ 552 s）
+  var T_TOTAL = 55.2;                           // 进度条满程（场景秒，对应 MET ≈ 552 s）
 
   // ---- 质量模型（归一化，起飞总质量 1.02，载荷比 1.7%）----
   var PAY = 0.017, FAIR = 0.004, TOW = 0.007;
@@ -18,16 +18,18 @@
   var S1D = 0.026, S1F0 = 0.3805;
   var BD = 0.006, BF0 = 0.0892;                 // 单枚助推器 干 / 燃（共 4 枚）
   // ---- 推力与有效排气速度（≈ 比冲 270 s / 336 s；起飞推重比 1.26，末级关机约 5.6 g）----
-  var F1 = 0.0641, FB = 0.01603, F2 = 0.01672;
-  var VE1 = 4.492, VE2 = 5.594;
+  // 注意：这些是“场景单位”数值，与 TIME_SCALE 强耦合（推力 ∝ TIME_SCALE²，排气速度 ∝ TIME_SCALE），
+  // 改 rocket.js 的 TIME_SCALE 时必须按 6→10 的比例（25/9 与 5/3）同步重标定。
+  var F1 = 0.1781, FB = 0.04453, F2 = 0.04644;
+  var VE1 = 7.487, VE2 = 9.323;
   // ---- 俯仰程序（开环）+ 末段高度闭环 ----
   // α = 推力方向与当地铅垂线的夹角：0° 竖直向上，90° 水平指向下程方向
-  var T_PITCH = 3.0;                            // 起飞后 18 任务秒开始程序转弯
-  var T_TURN = 130.0, A_END = 91 * DEG, TURN_P = 3.0;
-  var A_RATE = 3.5 * DEG, AOA_MAX = 10 * DEG;   // 姿态角速率上限 / 攻角上限
-  var KG = 0.8, KH = 0.05, VR_CAP = 2.0, W_TERM = 0.62;
+  var T_PITCH = 1.8;                            // 起飞后 18 任务秒开始程序转弯
+  var T_TURN = 78.0, A_END = 91 * DEG, TURN_P = 3.0;
+  var A_RATE = 5.83 * DEG, AOA_MAX = 10 * DEG;  // 姿态角速率上限 / 攻角上限
+  var KG = 0.8, KH = 0.0833, VR_CAP = 3.33, W_TERM = 0.62;
   // ---- 时序（场景秒）----
-  var IGN_RAMP = 0.9, SEP_DELAY = 0.8;
+  var IGN_RAMP = 0.54, SEP_DELAY = 0.5;
   var TOWER_ALT = 11.3, FAIRING_ALT = 31.1;     // 40 km / 110 km
   var WARP = 20;                                // 在轨时间加速
   var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;   // 二级喷口位于二级箭体底部（级间段随一级分离）
@@ -251,46 +253,52 @@
       }
       // 稠密大气内的烟气拖尾：随高度升高变淡，进入稀薄大气后停止
       if (state.alt < 55) {
+        var dense = state.alt < 8;               // 低空段烟最浓、团絮最大
         var thinAir = state.alt > 22;
-        acc.smoke = (acc.smoke || 0) + (thinAir ? 24 : 40) * dt;
+        acc.smoke = (acc.smoke || 0) + (dense ? 60 : (thinAir ? 24 : 42)) * dt;
         while (acc.smoke >= 1) {
           acc.smoke -= 1;
-          var sa = Math.random() * Math.PI * 2, sr = 0.15 + Math.random() * 0.45;
-          var sw = localToWorld(Math.cos(sa) * sr, nozzleY - 0.5, Math.sin(sa) * sr, [0, 0, 0]);
-          var sv = 0.7 + Math.random() * 1.3;
-          var st = 0.60 + Math.random() * 0.18;
+          var sa = Math.random() * Math.PI * 2, sr = 0.15 + Math.random() * 0.55;
+          var sw = localToWorld(Math.cos(sa) * sr, nozzleY - 0.6, Math.sin(sa) * sr, [0, 0, 0]);
+          var sv = (dense ? 1.1 : 0.7) + Math.random() * (dense ? 1.9 : 1.3);
+          var st = 0.55 + Math.random() * 0.22;
           renderer.particles.spawnSmoke(sw[0], sw[1], sw[2],
-            down[0] * sv + (Math.random() - 0.5) * 1.7,
-            down[1] * sv + (Math.random() - 0.5) * 0.6,
-            down[2] * sv + (Math.random() - 0.5) * 1.7,
+            down[0] * sv + (Math.random() - 0.5) * 2.2,
+            down[1] * sv + (Math.random() - 0.5) * 0.7,
+            down[2] * sv + (Math.random() - 0.5) * 2.2,
             st, st, st * 1.03,
-            2.2 + Math.random() * 2.4,          // 寿命
-            0.8 + Math.random() * 0.9,          // 初始尺寸
-            1.1 + Math.random() * 1.1,          // 膨胀
-            thinAir ? 0.7 : 1.3);               // 高空空气稀薄，阻尼小、飘得更远
+            (dense ? 3.0 : 2.2) + Math.random() * (dense ? 2.8 : 2.4),   // 寿命
+            (dense ? 1.1 : 0.8) + Math.random() * (dense ? 1.1 : 0.9),   // 初始尺寸
+            (dense ? 1.4 : 1.1) + Math.random() * 1.1,                   // 膨胀
+            thinAir ? 0.7 : 1.3);              // 高空空气稀薄，阻尼小、飘得更远
         }
       }
     }
 
-    // 发射台烟云：导流槽把火焰推向四周，烟团一边翻滚外扩一边上升、逐渐稀薄
+    // 发射台烟云：导流槽把火焰推向四周，烟团一边翻滚外扩一边上升、逐渐稀薄。
+    // 点火瞬间喷涌最猛，随后按任务时间逐渐减弱；低空段尾焰仍会持续卷起烟尘。
     function spawnPadSmoke(dt) {
-      acc.pad = (acc.pad || 0) + 70 * dt;
+      var k = state.t < IGN_RAMP ? 0.6 : Math.max(0, 1 - (state.t - IGN_RAMP) / 5.0);
+      if (k <= 0.02 && state.alt >= 3.5) return;
+      var rate = 95 * Math.max(k, 0.18) + (state.alt < 3.5 ? 26 : 0);
+      acc.pad = (acc.pad || 0) + rate * dt;
       while (acc.pad >= 1) {
         acc.pad -= 1;
-        var a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * 3.6;
+        var a = Math.random() * Math.PI * 2, r = 0.35 + Math.random() * 3.8;
         var ca = Math.cos(a), sa2 = Math.sin(a);
-        var outV = 1.0 + Math.random() * 2.6;          // 径向铺开
-        var swirl = (Math.random() - 0.5) * 2.8;       // 切向涡旋，避免整齐的圆环
-        var upV = 1.5 + Math.random() * 2.8;           // 受热抬升
-        var tint = 0.50 + Math.random() * 0.16;
+        var outV = 1.2 + Math.random() * 3.2;          // 径向铺开
+        var swirl = (Math.random() - 0.5) * 3.2;       // 切向涡旋，避免整齐的圆环
+        var upV = 1.2 + Math.random() * 3.4;           // 受热抬升
+        var tint = 0.46 + Math.random() * 0.22;
+        var warm = Math.random() < 0.22;               // 少量被火焰映亮的暖色烟团
         renderer.particles.spawnSmoke(
-          ca * r, 0.2 + Math.random() * 0.6, sa2 * r,
+          ca * r, 0.15 + Math.random() * 0.7, sa2 * r,
           ca * outV - sa2 * swirl, upV, sa2 * outV + ca * swirl,
-          tint, tint, tint * 1.05,
-          2.8 + Math.random() * 2.6,                   // 寿命
-          1.5 + Math.random() * 1.7,                   // 初始尺寸
-          1.0 + Math.random() * 0.9,                   // 膨胀
-          1.6, 0.12);                                  // 阻尼 / 轻微下沉
+          warm ? 0.82 : tint, warm ? 0.55 : tint, warm ? 0.36 : tint * 1.05,
+          3.2 + Math.random() * 3.2,                   // 寿命
+          1.6 + Math.random() * 2.0,                   // 初始尺寸
+          1.2 + Math.random() * 1.2,                   // 膨胀
+          1.5, 0.06);                                  // 阻尼 / 轻微下沉
       }
     }
 
@@ -454,7 +462,7 @@
 
       var camDist = cam ? cam.distance : 20;
       spawnFlames(dt, camDist);
-      if (state.t < 3.0) spawnPadSmoke(dt);
+      if (state.t < 7.5 || state.alt < 3.5) spawnPadSmoke(dt);
       if (state.inserted) spawnTrail(dt, camDist);
 
       // 入轨后镜头过渡 + 视觉放大
@@ -495,8 +503,8 @@
       cam.yaw += dt * (0.035 + 0.075 * k);
       cam.pitch += ((0.05 + 0.20 * k) - cam.pitch) * Math.min(1, dt * 1.5);
       var shake = 0;
-      if (state.t > IGN_RAMP && state.t < 12) shake = 0.05;
-      else if (state.t >= 12 && state.t < 20) shake = 0.028;
+      if (state.t > IGN_RAMP && state.t < 7.2) shake = 0.05;
+      else if (state.t >= 7.2 && state.t < 12) shake = 0.028;
       cam.shake = shake;
     }
 
@@ -510,6 +518,8 @@
       state.ignited = false; state.inserted = false; state.orbitBlend = 0;
       state.warp = 1; state.scale = 1; state.progress = 0; state.sepT = 0;
       state.accel = 0; state.gForce = 1; state.met = 0;
+      pad.armSwing = 0;
+      M3D.setArmSwing(pad, 0);
       syncWorld();
       fired = {}; acc = {};
       if (pad.ember) pad.ember.glow = 0;
