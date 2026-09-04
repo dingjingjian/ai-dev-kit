@@ -36,6 +36,7 @@
 
   var mode = 'show', explodeAmount = 0, explodeTarget = 0, autoRot = 0, groupRotY = 0;
   var countdown = 0, lastCount = -1, igniteFlash = 0;
+  var padAlpha = 1, spinGate = 0;   // 发射台可见度 / 地球自转速度倍率
   var cam = {
     yaw: 0.42, pitch: 0.06, distance: 16, fitDist: 5200,
     targetX: 0, targetY: rocketModel.center, targetZ: 0, shake: 0
@@ -123,6 +124,7 @@
     renderer.stars.setAlpha(Math.max(starA, Math.max(0, (sb - 0.35) / 0.65) * 0.85));
     var fadeAlt = alt < 150 ? 1 : Math.max(0, 1 - (alt - 150) / 250);
     var pa = fadeAlt * (1 - launchState.orbitBlend) * sceneK;
+    padAlpha = pa;
     for (var i = 0; i < pad.parts.length; i++) {
       var pm = pad.parts[i];
       if (pm === pad.ember) continue;
@@ -138,6 +140,15 @@
     var ax = renderer.camera.eye[0] - E.center[0], ay = renderer.camera.eye[1] - E.center[1], az = renderer.camera.eye[2] - E.center[2];
     var shellR = R_E * E.atmoScale;
     pad.atmo.atmoMode = (ax * ax + ay * ay + az * az < shellR * shellR) ? 1 : 0;
+  }
+
+  // 发射台还立在地表时地球保持静止（否则发射台像是在地表漂移），
+  // 等发射台淡出后再把自转速度平滑拉起来，地球慢慢开始转。
+  function updateEarthSpin(dt) {
+    var target = padAlpha < 0.02 ? 1 : 0;
+    spinGate += (target - spinGate) * Math.min(1, dt * 0.4);
+    if (Math.abs(target - spinGate) < 0.004) spinGate = target;
+    M3D.spinEarth(pad, dt, spinGate);
   }
 
   var projOut = { x: 0, y: 0, visible: false };
@@ -259,8 +270,6 @@
       if (igniteFlash <= 0 && countdownEl) countdownEl.style.display = 'none';
     }
 
-    M3D.spinEarth(pad, dt);
-
     if (mode === 'launch') {
       launch.update(dt, cam);
       launch.updateDetachedParts(dt);
@@ -270,6 +279,7 @@
     launch.syncFlames();
 
     updateSceneBg();
+    updateEarthSpin(dt);
     updateLight();
     renderer.particles.update(dt);
     updateParts();

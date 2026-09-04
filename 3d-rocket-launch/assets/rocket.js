@@ -5,10 +5,14 @@
   // ---- 全局尺度（发射/在轨共用同一套物理尺度）----
   var EARTH_R = 1800;                 // 地球半径（场景单位）
   var EARTH_CENTER = [0, -EARTH_R, 0]; // 球心：地表发射点位于世界原点
-  var ORBIT_ALT = 130;                // 目标轨道高度
-  var G0 = 0.34;                      // 地表重力加速度
+  var ORBIT_ALT = 97;                 // 目标轨道高度（场景单位）≈ 343 km，与神舟轨道一致
+  var TIME_SCALE = 6.0;               // 1 场景秒 ≈ 6 任务秒：起飞→入轨约 93 场景秒（MET ≈ 9 分 15 秒）
+  var KM_PER_UNIT = 6371 / EARTH_R;   // 1 场景单位 ≈ 3.539 km
+  // 场景重力加速度：由真实 9.81 m/s² 按上述单位/时间换算反推，
+  // 保证“场景里的物理”与“MET 显示的真实物理”自洽（改 TIME_SCALE 时必须同步改这里）
+  var G0 = 9.81 * TIME_SCALE * TIME_SCALE / (KM_PER_UNIT * 1000);  // ≈ 0.09978
   var MU = G0 * EARTH_R * EARTH_R;    // 引力常数
-  var ATMO_SCALE = 1.05;              // 大气层外壳相对地球半径
+  var ATMO_SCALE = 1.035;             // 大气层外壳相对地球半径（≈ 223 km）
 
   var SEG = 32;
   var COLORS = {
@@ -155,15 +159,16 @@
     var pad = {};
 
     // ---- 地球：完整球体，程序化海陆/冰盖/云层 ----
-    var earthG = geom.sphere(EARTH_R, 120, 80);
+    var earthG = geom.sphere(EARTH_R, 168, 104);
     pad.earth = renderer.createMesh(earthG, [1, 1, 1], { group: 'earth', isEarth: true });
     pad.earth.atmo = 0.18;
     mat4.identity(pad.earth.modelMatrix);
     mat4.translate(pad.earth.modelMatrix, pad.earth.modelMatrix, EARTH_CENTER);
     pad.earthSpin = 0;
 
-    // 大气辉光壳：只画背面 + 附加混合 → 轨道上是光晕，地面上是地平线霞光
-    var atmoG = geom.sphere(EARTH_R * ATMO_SCALE, 96, 64);
+    // 大气辉光壳：只画背面 + 附加混合 → 轨道上是光晕，地面上是天空梯度与地平线霞光
+    // 分段取密一些：地面模式下整片天空都由这层壳绘制，段数不足会让天空出现直边方块感
+    var atmoG = geom.sphere(EARTH_R * ATMO_SCALE, 192, 112);
     pad.atmo = renderer.createMesh(atmoG, COLORS.sky, { group: 'earth', blend: 'add', cull: 'front', atmoShader: true });
     pad.atmo.atmoInner = 1 / ATMO_SCALE;
     pad.atmo.atmoStrength = 1.25;
@@ -251,9 +256,11 @@
   var SPIN0 = 100 * Math.PI / 180;
   var SPIN_RATE = 0.016;
 
-  function spinEarth(pad, dt) {
+  // rate：自转速度倍率。发射台还立在地表时传 0（地球静止，发射台不会在地表漂移），
+  // 等发射台淡出后再由调用方把 rate 平滑拉到 1，地球才慢慢转起来。
+  function spinEarth(pad, dt, rate) {
     if (!pad.earth) return;
-    pad.earthSpin += dt * SPIN_RATE;
+    pad.earthSpin += dt * SPIN_RATE * (rate || 0);
     var m = pad.earth.modelMatrix;
     mat4.identity(m);
     mat4.translate(m, m, EARTH_CENTER);
@@ -322,7 +329,7 @@
 
   M3D.EARTH = {
     R: EARTH_R, center: EARTH_CENTER, alt: ORBIT_ALT, r: EARTH_R + ORBIT_ALT,
-    mu: MU, g0: G0, atmoScale: ATMO_SCALE
+    mu: MU, g0: G0, atmoScale: ATMO_SCALE, timeScale: TIME_SCALE, kmPerUnit: KM_PER_UNIT
   };
   M3D.buildCZ2F = buildCZ2F;
   M3D.buildPad = buildPad;

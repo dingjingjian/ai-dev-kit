@@ -132,41 +132,77 @@
     '#endif',
     'varying vec3 vNormal;', 'varying vec3 vViewDir;', 'varying vec3 vObjPos;',
     'uniform vec3 uColor;', 'uniform vec3 uLightDir;', 'uniform float uInner;', 'uniform float uStrength;',
-    'uniform float uMode;',   // 0=太空光晕（星球边缘向外衰减） 1=地面天光（地平线霞光）
+    'uniform float uMode;',   // 0=太空光晕（星球边缘向外衰减） 1=地面天光（仰角梯度天空 + 地平线霞光）
     'void main(){',
-    ' vec3 N=normalize(vNormal); vec3 V=normalize(vViewDir);',
-    ' float ndv=dot(N,V);',
-    ' float pr=sqrt(max(0.0,1.0-ndv*ndv));',       // 归一化屏幕半径（正交近似）
-    ' float hn=(pr-uInner)/max(1.0-uInner,0.0001);', // 0=星球边缘 1=大气顶
-    ' if(hn<0.0) discard;',
-    ' float a;',
+    ' vec3 N=normalize(vNormal); vec3 V=normalize(vViewDir); vec3 L=normalize(uLightDir);',
+    ' float sun=smoothstep(-0.55,0.40,dot(N,L));',
+    ' float a; vec3 col;',
     ' if(uMode>0.5){',
-    '   a=uStrength*smoothstep(0.0,0.5,hn);',      // 地面：霞光在地平线处最强，向上平滑淡出
+    // 地面模式：相机在大气壳内部，看到的是壳的远侧内表面。
+    // -V.y 恰好等于视线仰角的正弦：-1=正下方 0=地平线 +1=天顶。
+    // 用它做整片天空的垂直梯度，让天空/太空之间不再出现直边的方块感。
+    '   float elev=-V.y;',
+    '   if(elev<-0.05) discard;',                       // 地平线以下交给地表，不画
+    '   float horizon=exp(-elev*elev*26.0);',           // 贴地平线的霞光峰
+    '   float t=smoothstep(0.0,0.85,elev);',            // 0=地平线 1=天顶
+    '   col=mix(uColor*1.55+vec3(0.10,0.05,-0.01),uColor*0.20,t);',
+    '   col+=vec3(1.0,0.58,0.32)*horizon*sun*0.55;',    // 朝阳侧的暖色霞光
+    '   col*=0.42+0.58*sun;',
+    '   a=(horizon*0.55+(1.0-t)*0.55)*uStrength;',      // 地平线最浓，向天顶平滑变淡
+    '   a*=smoothstep(-0.05,0.06,elev);',
     ' } else {',
-    '   a=uStrength*exp(-hn*1.5);',                // 太空：贴着星球边缘最亮，向外指数衰减
+    // 太空模式：相机在大气壳外，只保留星球边缘一圈辉光
+    '   float ndv=dot(N,V);',
+    '   float pr=sqrt(max(0.0,1.0-ndv*ndv));',          // 归一化视线掠过半径
+    '   float hn=(pr-uInner)/max(1.0-uInner,0.0001);',  // 0=星球边缘 1=大气顶
+    '   if(hn<0.0) discard;',
+    '   a=uStrength*exp(-hn*1.35);',
+    '   col=uColor*(0.06+0.94*sun);',
     ' }',
-    ' float sun=smoothstep(-0.55,0.35,dot(N,normalize(uLightDir)));',
-    ' gl_FragColor=vec4(uColor*a*(0.06+0.94*sun),a); }'
+    ' gl_FragColor=vec4(col*a,a); }'
   ].join('\n');
 
+  // 粒子：一套着色器两种形态 —— glow（附加混合的火焰/火花）与 smoke（混合的软边烟团）
   var POINT_VS = [
     'attribute vec3 aPosition;', 'attribute float aLife;', 'attribute vec3 aColor;', 'attribute float aSize;',
-    'uniform mat4 uView;', 'uniform mat4 uProj;', 'uniform float uSize;', 'uniform float uPtScale;',
-    'varying float vLife;', 'varying vec3 vColor;',
-    'void main(){ vec4 vp=uView*vec4(aPosition,1.0); gl_Position=uProj*vp;',
+    'attribute float aGrow;', 'attribute float aSeed;',
+    'uniform mat4 uView;', 'uniform mat4 uProj;', 'uniform mediump float uSize;', 'uniform mediump float uPtScale;',
+    'uniform mediump float uTime;', 'uniform mediump float uSmoke;',
+    'varying float vLife;', 'varying vec3 vColor;', 'varying float vSeed;',
+    'void main(){',
+    ' float age=clamp(1.0-aLife,0.0,1.0);',
+    ' vec3 p=aPosition;',
+    ' if(uSmoke>0.5){',                                  // 烟团：随年龄膨胀 + 低频湍流扰动
+    '   float ph=aSeed*6.2831;',
+    '   float amp=aSize*0.30*(0.25+age);',
+    '   p+=vec3(sin(uTime*0.85+ph),sin(uTime*0.61+ph*1.7)*0.55,cos(uTime*1.07+ph*1.3))*amp;',
+    ' }',
+    ' vec4 vp=uView*vec4(p,1.0); gl_Position=uProj*vp;',
     ' float d=max(-vp.z,0.05);',
-    ' gl_PointSize=clamp(uSize*aSize*uPtScale/d,1.0,180.0);',
-    ' vLife=aLife; vColor=aColor; }'
+    ' float s=aSize*(1.0+aGrow*age*2.4);',               // 直径随寿命增长
+    ' gl_PointSize=clamp(uSize*s*uPtScale/d,1.0,240.0);',
+    ' vLife=aLife; vColor=aColor; vSeed=aSeed; }'
   ].join('\n');
   var POINT_FS = [
-    'precision mediump float;', 'varying float vLife;', 'varying vec3 vColor;',
-    'void main(){ vec2 d=gl_PointCoord-vec2(0.5); float r=dot(d,d); if(r>0.25) discard;',
-    'float life=vLife; float core=1.0-r*4.0; float alpha=core*life;',
-    'float warmth=clamp((vColor.r-vColor.b)*1.5,0.0,1.0);',
-    'vec3 hot=vec3(1.0,0.92,0.65);',
-    'vec3 col=mix(vColor,hot,warmth*life*life*0.7);',
-    'col+=vec3(0.18,0.12,0.06)*warmth*core*life;',
-    'gl_FragColor=vec4(col,alpha); }'
+    'precision mediump float;', 'varying float vLife;', 'varying vec3 vColor;', 'varying float vSeed;',
+    'uniform mediump float uSmoke;',
+    'void main(){ vec2 d=gl_PointCoord-vec2(0.5); float r2=dot(d,d); if(r2>0.25) discard;',
+    ' float life=vLife;',
+    ' if(uSmoke>0.5){',
+    '   float r=sqrt(r2)*2.0;',
+    '   float a=1.0-r; a=a*a*(3.0-2.0*a);',              // 软边，避免一个个圆球
+    '   float age=1.0-life;',
+    '   float env=smoothstep(0.0,0.16,age)*pow(life,0.75);', // 快速生成、缓慢消散
+    '   float wisp=0.74+0.36*sin(vSeed*27.3+r*6.4+vSeed*3.1);', // 团絮明暗
+    '   gl_FragColor=vec4(vColor*wisp,a*env*0.58);',
+    ' } else {',
+    '   float core=1.0-r2*4.0; float alpha=core*life;',
+    '   float warmth=clamp((vColor.r-vColor.b)*1.5,0.0,1.0);',
+    '   vec3 hot=vec3(1.0,0.92,0.65);',
+    '   vec3 col=mix(vColor,hot,warmth*life*life*0.7);',
+    '   col+=vec3(0.18,0.12,0.06)*warmth*core*life;',
+    '   gl_FragColor=vec4(col,alpha); }',
+    '}'
   ].join('\n');
 
   var STAR_VS = [
@@ -254,7 +290,9 @@
         var th = (j / seg) * Math.PI * 2, ct = Math.cos(th), st = Math.sin(th);
         var nx = sp * ct, ny = cp, nz = sp * st;
         pos.push(nx * R, ny * R, nz * R); nor.push(nx, ny, nz);
-        uvs.push(j / seg, 1 - i / rings);
+        // u 取 1-j/seg：等距圆柱贴图 u=0 对应西经 180°，自西向东递增；
+        // 直接用 j/seg 会得到镜像贴图（像从球内部看，大陆左右翻转）。
+        uvs.push(1 - j / seg, 1 - i / rings);
       }
     }
     for (i = 0; i < rings; i++) {
@@ -379,8 +417,10 @@
     var ptL = {
       aPosition: gl.getAttribLocation(ppart, 'aPosition'), aLife: gl.getAttribLocation(ppart, 'aLife'),
       aColor: gl.getAttribLocation(ppart, 'aColor'), aSize: gl.getAttribLocation(ppart, 'aSize'),
+      aGrow: gl.getAttribLocation(ppart, 'aGrow'), aSeed: gl.getAttribLocation(ppart, 'aSeed'),
       uView: gl.getUniformLocation(ppart, 'uView'), uProj: gl.getUniformLocation(ppart, 'uProj'),
-      uSize: gl.getUniformLocation(ppart, 'uSize'), uPtScale: gl.getUniformLocation(ppart, 'uPtScale')
+      uSize: gl.getUniformLocation(ppart, 'uSize'), uPtScale: gl.getUniformLocation(ppart, 'uPtScale'),
+      uTime: gl.getUniformLocation(ppart, 'uTime'), uSmoke: gl.getUniformLocation(ppart, 'uSmoke')
     };
     var stL = {
       aPosition: gl.getAttribLocation(pstar, 'aPosition'), aBright: gl.getAttribLocation(pstar, 'aBright'),
@@ -462,27 +502,36 @@
       m.indexCount = g.indices.length; meshes.push(m); return m;
     }
 
-    var particles = (function () {
-      var max = 2400, data = new Float32Array(max * 8), vel = new Float32Array(max * 3),
-        life = new Float32Array(max), maxLife = new Float32Array(max), grav = new Float32Array(max);
-      var count = 0, cursor = 0, buf = gl.createBuffer(), size = 0.5;
+    var pSize = 0.5;   // 粒子全局尺寸系数（glow / smoke 两个池共用）
+
+    // 单个粒子池：glow=附加混合的火焰/火花，smoke=普通混合的软边烟团
+    // 数据布局（每粒子 10 个 float）：pos3 / life1 / color3 / size1 / grow1 / seed1
+    function createPool(cap, smoke) {
+      var F = 10, STRIDE = F * 4;
+      var data = new Float32Array(cap * F), vel = new Float32Array(cap * 3),
+        life = new Float32Array(cap), maxLife = new Float32Array(cap),
+        gravS = new Float32Array(cap), dragS = new Float32Array(cap);
+      var count = 0, cursor = 0, buf = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, data.byteLength, gl.DYNAMIC_DRAW);
-      function spawn(x, y, z, vx, vy, vz, r, g2, b, lf, sz, gs) {
-        var i = cursor; cursor = (cursor + 1) % max; var o = i * 8;
+
+      function spawn(x, y, z, vx, vy, vz, r, g2, b, lf, sz, gs, grow, drag, seed) {
+        var i = cursor; cursor = (cursor + 1) % cap; var o = i * F;
         data[o] = x; data[o + 1] = y; data[o + 2] = z; data[o + 3] = 1.0;
         data[o + 4] = r; data[o + 5] = g2; data[o + 6] = b; data[o + 7] = sz || 1;
+        data[o + 8] = grow || 0; data[o + 9] = seed == null ? Math.random() : seed;
         vel[i * 3] = vx; vel[i * 3 + 1] = vy; vel[i * 3 + 2] = vz;
-        life[i] = lf; maxLife[i] = lf; grav[i] = (gs === undefined) ? 1 : gs;
+        life[i] = lf; maxLife[i] = lf;
+        gravS[i] = (gs === undefined) ? 1 : gs;
+        dragS[i] = (drag === undefined) ? (gravS[i] > 0 ? 1 : 0) : drag;
         if (i >= count) count = i + 1;
       }
       function update(dt) {
         for (var i = 0; i < count; i++) {
           if (life[i] <= 0) continue;
-          life[i] -= dt; if (life[i] <= 0) { data[i * 8 + 3] = 0; continue; }
-          var vi = i * 3, oi = i * 8, gs = grav[i];
-          vel[vi + 1] -= 2.5 * dt * gs;
-          var drag = gs > 0 ? 1 : 0;
-          vel[vi] *= (1 - 1.2 * dt * drag); vel[vi + 1] *= (1 - 0.6 * dt * drag); vel[vi + 2] *= (1 - 1.2 * dt * drag);
+          life[i] -= dt; if (life[i] <= 0) { data[i * F + 3] = 0; continue; }
+          var vi = i * 3, oi = i * F, gS = gravS[i], dr = dragS[i];
+          vel[vi + 1] -= 2.5 * dt * gS;
+          vel[vi] *= (1 - 1.4 * dt * dr); vel[vi + 1] *= (1 - 0.5 * dt * dr); vel[vi + 2] *= (1 - 1.4 * dt * dr);
           data[oi] += vel[vi] * dt; data[oi + 1] += vel[vi + 1] * dt; data[oi + 2] += vel[vi + 2] * dt;
           data[oi + 3] = life[i] / maxLife[i];
         }
@@ -492,19 +541,45 @@
         if (count === 0) return;
         gl.useProgram(ppart);
         gl.uniformMatrix4fv(ptL.uView, false, view); gl.uniformMatrix4fv(ptL.uProj, false, proj);
-        gl.uniform1f(ptL.uSize, size);
+        gl.uniform1f(ptL.uSize, pSize);
         gl.uniform1f(ptL.uPtScale, canvas.height / (2 * Math.tan(camera.fov / 2)));
-        gl.bindBuffer(gl.ARRAY_BUFFER, buf); var stride = 32;
-        gl.enableVertexAttribArray(ptL.aPosition); gl.vertexAttribPointer(ptL.aPosition, 3, gl.FLOAT, false, stride, 0);
-        gl.enableVertexAttribArray(ptL.aLife); gl.vertexAttribPointer(ptL.aLife, 1, gl.FLOAT, false, stride, 12);
-        gl.enableVertexAttribArray(ptL.aColor); gl.vertexAttribPointer(ptL.aColor, 3, gl.FLOAT, false, stride, 16);
-        gl.enableVertexAttribArray(ptL.aSize); gl.vertexAttribPointer(ptL.aSize, 1, gl.FLOAT, false, stride, 28);
-        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE); gl.depthMask(false);
+        gl.uniform1f(ptL.uTime, time);
+        gl.uniform1f(ptL.uSmoke, smoke ? 1 : 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+        gl.enableVertexAttribArray(ptL.aPosition); gl.vertexAttribPointer(ptL.aPosition, 3, gl.FLOAT, false, STRIDE, 0);
+        gl.enableVertexAttribArray(ptL.aLife); gl.vertexAttribPointer(ptL.aLife, 1, gl.FLOAT, false, STRIDE, 12);
+        gl.enableVertexAttribArray(ptL.aColor); gl.vertexAttribPointer(ptL.aColor, 3, gl.FLOAT, false, STRIDE, 16);
+        gl.enableVertexAttribArray(ptL.aSize); gl.vertexAttribPointer(ptL.aSize, 1, gl.FLOAT, false, STRIDE, 28);
+        gl.enableVertexAttribArray(ptL.aGrow); gl.vertexAttribPointer(ptL.aGrow, 1, gl.FLOAT, false, STRIDE, 32);
+        gl.enableVertexAttribArray(ptL.aSeed); gl.vertexAttribPointer(ptL.aSeed, 1, gl.FLOAT, false, STRIDE, 36);
+        gl.enable(gl.BLEND);
+        // 烟走普通混合（能压暗、能遮住背景），火光走附加混合（越叠越亮）
+        if (smoke) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        else gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.depthMask(false);
         gl.drawArrays(gl.POINTS, 0, count); gl.depthMask(true); gl.disable(gl.BLEND);
       }
-      function reset() { count = 0; cursor = 0; for (var i = 0; i < max; i++) life[i] = 0; }
-      return { spawn: spawn, update: update, render: render, reset: reset, max: max,
-        setSize: function (s) { size = s; } };
+      function reset() { count = 0; cursor = 0; for (var i = 0; i < cap; i++) life[i] = 0; }
+      return { spawn: spawn, update: update, render: render, reset: reset, cap: cap };
+    }
+
+    var particles = (function () {
+      var glow = createPool(2200, false), smoke = createPool(1400, true);
+      return {
+        // 火焰 / 火花 / 在轨标记（附加混合）
+        spawn: function (x, y, z, vx, vy, vz, r, g2, b, lf, sz, gs, grow) {
+          glow.spawn(x, y, z, vx, vy, vz, r, g2, b, lf, sz, gs, grow || 0);
+        },
+        // 烟团（普通混合，grow=膨胀系数，drag=空气阻尼，gs=重力倍率）
+        spawnSmoke: function (x, y, z, vx, vy, vz, r, g2, b, lf, sz, grow, drag, gs) {
+          smoke.spawn(x, y, z, vx, vy, vz, r, g2, b, lf, sz, gs === undefined ? 0 : gs, grow, drag);
+        },
+        update: function (dt) { glow.update(dt); smoke.update(dt); },
+        render: function () { smoke.render(); glow.render(); },
+        reset: function () { glow.reset(); smoke.reset(); },
+        max: glow.cap + smoke.cap,
+        setSize: function (s) { pSize = s; }
+      };
     })();
 
     var stars = (function () {

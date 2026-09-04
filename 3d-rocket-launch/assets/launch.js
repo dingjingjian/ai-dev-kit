@@ -6,38 +6,43 @@
   var V_ORB = Math.sqrt(MU / R_ORB);
   var DEG = Math.PI / 180;
 
-  // ---- 质量模型（归一化，起飞总质量 1.02）----
-  var PAY = 0.040, FAIR = 0.018, TOW = 0.012;
-  var S2D = 0.045, S2F0 = 0.150;
-  var S1D = 0.110, S1F0 = 0.285;
-  var BD = 0.015, BF0 = 0.075;                 // 单枚助推器 干 / 燃（共 4 枚）
-  // ---- 推力与比冲（有效排气速度）----
-  var F1 = 0.220, FB = 0.106, F2 = 0.134;
-  var VE1 = 18.0, VE2 = 19.5;
-  // ---- 制导参数（弹道倾角 γ 程序 + 高度外环）----
-  var T_VERT = 8.0, TURN_H = 0.60, TURN_P = 1.5;
-  var KG = 1.6, KH = 0.004, A_RATE = 7 * DEG;
-  var A_MIN = -6 * DEG, A_MAX = 115 * DEG;
-  // ---- 时序 ----
-  var IGN_RAMP = 1.2, SEP_DELAY = 1.5;
-  var TOWER_ALT = 45, FAIRING_ALT = 115;
-  var WARP = 10;                                // 在轨时间加速
-  var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;   // 二级喷口位于二级箭体底部（级间段随一级分离）
-
   // ---- 显示换算（地球半径按真实 6371 km）----
-  var KM_PER_UNIT = 6371 / R_E;
-  var TIME_SCALE = 11.0;                        // 1 场景秒 ≈ 11 任务秒
+  var KM_PER_UNIT = E.kmPerUnit;
+  var TIME_SCALE = E.timeScale;                 // 1 场景秒 ≈ 6 任务秒
   var MS_PER_UNIT = KM_PER_UNIT * 1000 / TIME_SCALE;
+  var T_TOTAL = 92;                             // 进度条满程（场景秒，对应 MET ≈ 552 s）
+
+  // ---- 质量模型（归一化，起飞总质量 1.02，载荷比 1.7%）----
+  var PAY = 0.017, FAIR = 0.004, TOW = 0.007;
+  var S2D = 0.013, S2F0 = 0.1917;
+  var S1D = 0.026, S1F0 = 0.3805;
+  var BD = 0.006, BF0 = 0.0892;                 // 单枚助推器 干 / 燃（共 4 枚）
+  // ---- 推力与有效排气速度（≈ 比冲 270 s / 336 s；起飞推重比 1.26，末级关机约 5.6 g）----
+  var F1 = 0.0641, FB = 0.01603, F2 = 0.01672;
+  var VE1 = 4.492, VE2 = 5.594;
+  // ---- 俯仰程序（开环）+ 末段高度闭环 ----
+  // α = 推力方向与当地铅垂线的夹角：0° 竖直向上，90° 水平指向下程方向
+  var T_PITCH = 3.0;                            // 起飞后 18 任务秒开始程序转弯
+  var T_TURN = 130.0, A_END = 91 * DEG, TURN_P = 3.0;
+  var A_RATE = 3.5 * DEG, AOA_MAX = 10 * DEG;   // 姿态角速率上限 / 攻角上限
+  var KG = 0.8, KH = 0.05, VR_CAP = 2.0, W_TERM = 0.62;
+  // ---- 时序（场景秒）----
+  var IGN_RAMP = 0.9, SEP_DELAY = 0.8;
+  var TOWER_ALT = 11.3, FAIRING_ALT = 31.1;     // 40 km / 110 km
+  var WARP = 20;                                // 在轨时间加速
+  var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;   // 二级喷口位于二级箭体底部（级间段随一级分离）
 
   var PHASES = {
     ignition: '点火 · 发动机启动，尾焰喷涌',
-    liftoff: '起飞 · 离开发射台垂直上升',
-    maxQ: '程序转弯 · 穿越最大动压区',
+    liftoff: '起飞 · 垂直上升，离开塔架',
+    pitch: '程序转弯 · 按俯仰程序缓缓侧转',
+    maxQ: '最大动压 · 穿越气动载荷最强区',
     towerSep: '逃逸塔分离 · 抛离逃逸塔',
     boosterSep: '助推器分离 · 四枚助推器脱落',
     stage1Sep: '一二级分离 · 一级箭体脱落',
     stage2Ignition: '二级点火 · 继续加速爬升',
     fairingSep: '整流罩分离 · 飞船露出太空',
+    cruise: '二级爬升 · 持续加速接近环绕速度',
     seco: '二级关机 · 飞船精确入轨',
     orbit: '在轨运行 · 环绕地球飞行'
   };
@@ -148,19 +153,20 @@
         p.detached = true; p.detachT = state.t;
         p.detachBaseY = state.y; p.detachX = state.x; p.detachPitch = state.tilt;
         p.detachOff = [0, 0, 0]; p.detachRot = [0, 0, 0];
+        // 分离相对速度（本箭体视觉尺度下的观感值，非真实 m/s）
         if (group === 'booster') {
           var len = Math.sqrt(p.ox * p.ox + p.oz * p.oz) || 1;
-          p.detachV = localDirToWorld((p.ox / len) * 2.2, -1.4, (p.oz / len) * 2.2, [0, 0, 0]).slice();
-          p.detachSpin = [(Math.random() - 0.5) * 2.4, (Math.random() - 0.5) * 2.0];
+          p.detachV = localDirToWorld((p.ox / len) * 1.45, -0.9, (p.oz / len) * 1.45, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 1.8, (Math.random() - 0.5) * 1.5];
         } else if (group === 'tower') {
-          p.detachV = localDirToWorld(0.8, 5.2, 0.3, [0, 0, 0]).slice();
-          p.detachSpin = [(Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6];
+          p.detachV = localDirToWorld(0.5, 3.4, 0.2, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.2];
         } else if (group === 'fairing') {
-          p.detachV = localDirToWorld(1.9, 2.6, 0.6, [0, 0, 0]).slice();
-          p.detachSpin = [(Math.random() - 0.5) * 1.2, (Math.random() - 0.5) * 1.4];
+          p.detachV = localDirToWorld(1.25, 1.7, 0.4, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 1.0];
         } else if (group === 'stage1') {
-          p.detachV = localDirToWorld((Math.random() - 0.5) * 0.5, -3.4, (Math.random() - 0.5) * 0.5, [0, 0, 0]).slice();
-          p.detachSpin = [(Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 0.9];
+          p.detachV = localDirToWorld((Math.random() - 0.5) * 0.32, -2.2, (Math.random() - 0.5) * 0.32, [0, 0, 0]).slice();
+          p.detachSpin = [(Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7];
         }
       }
       // 分离火光
@@ -243,31 +249,48 @@
             1.0, 0.32 + Math.random() * 0.3, 0.04 + Math.random() * 0.1, 0.4 + Math.random() * 0.3, 0.95);
         }
       }
-      // 稠密大气内的烟气拖尾
-      if (state.alt < 45) {
-        acc.smoke = (acc.smoke || 0) + 16 * dt;
+      // 稠密大气内的烟气拖尾：随高度升高变淡，进入稀薄大气后停止
+      if (state.alt < 55) {
+        var thinAir = state.alt > 22;
+        acc.smoke = (acc.smoke || 0) + (thinAir ? 24 : 40) * dt;
         while (acc.smoke >= 1) {
           acc.smoke -= 1;
-          var sa = Math.random() * Math.PI * 2, sr = 0.2 + Math.random() * 0.3;
-          var sw = localToWorld(Math.cos(sa) * sr, nozzleY - 0.6, Math.sin(sa) * sr, [0, 0, 0]);
-          var ss = 1 + Math.random();
-          renderer.particles.spawn(sw[0], sw[1], sw[2],
-            down[0] * ss * 0.5 + (Math.random() - 0.5) * 1.2,
-            down[1] * ss + (Math.random() - 0.5) * 0.5,
-            down[2] * ss * 0.5 + (Math.random() - 0.5) * 1.2,
-            0.36, 0.33, 0.31, 0.9 + Math.random() * 0.7, 2.0);
+          var sa = Math.random() * Math.PI * 2, sr = 0.15 + Math.random() * 0.45;
+          var sw = localToWorld(Math.cos(sa) * sr, nozzleY - 0.5, Math.sin(sa) * sr, [0, 0, 0]);
+          var sv = 0.7 + Math.random() * 1.3;
+          var st = 0.60 + Math.random() * 0.18;
+          renderer.particles.spawnSmoke(sw[0], sw[1], sw[2],
+            down[0] * sv + (Math.random() - 0.5) * 1.7,
+            down[1] * sv + (Math.random() - 0.5) * 0.6,
+            down[2] * sv + (Math.random() - 0.5) * 1.7,
+            st, st, st * 1.03,
+            2.2 + Math.random() * 2.4,          // 寿命
+            0.8 + Math.random() * 0.9,          // 初始尺寸
+            1.1 + Math.random() * 1.1,          // 膨胀
+            thinAir ? 0.7 : 1.3);               // 高空空气稀薄，阻尼小、飘得更远
         }
       }
     }
 
+    // 发射台烟云：导流槽把火焰推向四周，烟团一边翻滚外扩一边上升、逐渐稀薄
     function spawnPadSmoke(dt) {
-      acc.pad = (acc.pad || 0) + 46 * dt;
+      acc.pad = (acc.pad || 0) + 70 * dt;
       while (acc.pad >= 1) {
         acc.pad -= 1;
-        var a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 3.2;
-        renderer.particles.spawn(Math.cos(a) * r, 0.2, Math.sin(a) * r,
-          Math.cos(a) * (1.2 + Math.random() * 2.6), 0.6 + Math.random() * 1.5, Math.sin(a) * (1.2 + Math.random() * 2.6),
-          0.56, 0.56, 0.59, 1.3 + Math.random() * 0.9, 2.4);
+        var a = Math.random() * Math.PI * 2, r = 0.4 + Math.random() * 3.6;
+        var ca = Math.cos(a), sa2 = Math.sin(a);
+        var outV = 1.0 + Math.random() * 2.6;          // 径向铺开
+        var swirl = (Math.random() - 0.5) * 2.8;       // 切向涡旋，避免整齐的圆环
+        var upV = 1.5 + Math.random() * 2.8;           // 受热抬升
+        var tint = 0.50 + Math.random() * 0.16;
+        renderer.particles.spawnSmoke(
+          ca * r, 0.2 + Math.random() * 0.6, sa2 * r,
+          ca * outV - sa2 * swirl, upV, sa2 * outV + ca * swirl,
+          tint, tint, tint * 1.05,
+          2.8 + Math.random() * 2.6,                   // 寿命
+          1.5 + Math.random() * 1.7,                   // 初始尺寸
+          1.0 + Math.random() * 0.9,                   // 膨胀
+          1.6, 0.12);                                  // 阻尼 / 轻微下沉
       }
     }
 
@@ -331,18 +354,25 @@
       var v = Math.sqrt(state.vr * state.vr + state.vt * state.vt) || 1e-6;
       var gamma = Math.atan2(state.vr, state.vt);
 
-      // 目标弹道倾角：低空近垂直，接近轨道高度转平，再由高度外环微调
-      var frac = Math.min(h / (TURN_H * H_ORB), 1);
-      var gCmd = 89 * DEG * Math.pow(1 - frac, TURN_P);
-      gCmd += Math.max(-6 * DEG, Math.min(20 * DEG, KH * (H_ORB - h)));
-      if (gCmd < -3 * DEG) gCmd = -3 * DEG;
-
-      var aCmd;
-      if (state.phase === 'orbit') aCmd = Math.PI / 2;              // 入轨后保持水平姿态（顺行）
-      else if (state.t < T_VERT || state.phase === 'ignition') aCmd = 0;
-      else aCmd = (Math.PI / 2 - gamma) + KG * (gamma - gCmd);
-      if (aCmd < A_MIN) aCmd = A_MIN;
-      if (aCmd > A_MAX) aCmd = A_MAX;
+      // ---- 姿态指令 α（推力方向相对当地铅垂线）----
+      var aCmd = 0;
+      if (state.phase === 'orbit') {
+        aCmd = Math.PI / 2;                        // 入轨后保持水平（顺行）姿态
+      } else if (state.phase !== 'ignition' && state.t >= T_PITCH) {
+        // 1) 开环俯仰程序：起飞后按预定曲线由竖直平滑转到接近水平。
+        //    一级只完成前半段转弯（分离时 α ≈ 43°），后半段由二级完成。
+        var u = Math.min(1, (state.t - T_PITCH) / (T_TURN - T_PITCH));
+        aCmd = A_END * (1 - Math.pow(1 - u, TURN_P));
+        // 2) 末段高度闭环：按剩余高度差收紧爬升率，保证关机时高度与径向速度同时归零。
+        //    权重随速度接近环绕速度而上升——低速段交给程序，避免指令超出控制能力。
+        var vCircNow = Math.sqrt(MU / state.r);
+        var w = Math.max(0, Math.min(1, (v / vCircNow - W_TERM) / (1 - W_TERM)));
+        var vrWant = Math.max(-VR_CAP, Math.min(VR_CAP, KH * (H_ORB - h)));
+        var gRef = Math.atan2(vrWant, Math.max(state.vt, 0.02));
+        aCmd += Math.max(-AOA_MAX, Math.min(AOA_MAX, w * KG * (gamma - gRef)));
+        // α 恒 ≥ 0：推力永不指向上程方向，杜绝起飞初期“往反方向倒一下”
+        aCmd = Math.max(0, Math.min(100 * DEG, aCmd));
+      }
       var dA = aCmd - state.alpha, lim = A_RATE * dt;
       state.alpha += Math.max(-lim, Math.min(lim, dA));
 
@@ -393,12 +423,14 @@
       // 高度触发分离
       if (state.towerAttached && h > TOWER_ALT) { state.towerAttached = false; detach('tower'); firePhase('towerSep'); }
       if (state.fairingAttached && h > FAIRING_ALT) { state.fairingAttached = false; detach('fairing'); firePhase('fairingSep'); }
-      if (!fired.maxQ && state.t > 16 && h > 40) firePhase('maxQ');
+      if (!fired.pitch && state.t >= T_PITCH) firePhase('pitch');
+      if (!fired.maxQ && state.t > 10.5 && h > 2.2) firePhase('maxQ');   // MET ≈ 63 s，约 8 km
+      if (!fired.cruise && state.phase === 'burn2' && state.t > 40) firePhase('cruise');
 
       // 关机入轨：达到当地环绕速度且径向速度接近 0
       if (state.phase === 'burn2') {
         var vCirc = Math.sqrt(MU / state.r);
-        if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.6) {
+        if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.25) {
           state.phase = 'orbit'; state.inserted = true;
           for (var k = 0; k < panels.length; k++) panels[k].mesh.visible = true;
           firePhase('seco');
@@ -422,7 +454,7 @@
 
       var camDist = cam ? cam.distance : 20;
       spawnFlames(dt, camDist);
-      if (state.t < 3.4) spawnPadSmoke(dt);
+      if (state.t < 3.0) spawnPadSmoke(dt);
       if (state.inserted) spawnTrail(dt, camDist);
 
       // 入轨后镜头过渡 + 视觉放大
@@ -439,7 +471,7 @@
           : Math.max(0, 1 - (state.t - IGN_RAMP) / 2.5);
         pad.ember.glow = glow * 0.9;
       }
-      state.progress = Math.min(1, state.t / 48);
+      state.progress = Math.min(1, state.t / T_TOTAL);
       syncFlames();
     }
 

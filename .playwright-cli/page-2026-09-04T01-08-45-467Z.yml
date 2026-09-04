@@ -1,0 +1,41 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - generic [ref=e3]: 太阳系
+    - generic [ref=e6] [cursor=pointer]
+  - generic: 点击星球可切换跟踪视角
+  - generic [ref=e11]:
+    - button "全景" [ref=e12] [cursor=pointer]
+    - button "太阳" [ref=e14] [cursor=pointer]
+    - button "地球" [ref=e16] [cursor=pointer]
+    - button "月球" [ref=e18] [cursor=pointer]
+  - generic [ref=e20]:
+    - button "×" [ref=e21] [cursor=pointer]
+    - heading "显示" [level=3] [ref=e22]
+    - generic [ref=e23]:
+      - generic [ref=e24]: 自动公转
+      - generic [ref=e25] [cursor=pointer]
+    - generic [ref=e27]:
+      - generic [ref=e28]: 轨道线
+      - generic [ref=e29] [cursor=pointer]
+    - generic [ref=e31]:
+      - generic [ref=e32]: 天体标签
+      - generic [ref=e33] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]: 星空背景
+      - generic [ref=e37] [cursor=pointer]
+    - heading "时间流速" [level=3] [ref=e39]
+    - generic [ref=e40]:
+      - generic [ref=e41]: 速度
+      - generic [ref=e42]: 1.0×
+    - slider [ref=e43]: "100"
+    - heading "视角" [level=3] [ref=e44]
+    - generic [ref=e45]:
+      - generic [ref=e46]: 重置视角
+      - generic [ref=e47] [cursor=pointer]
+    - generic [ref=e48]:
+      - button "重置" [ref=e49] [cursor=pointer]
+      - button "俯视" [ref=e50] [cursor=pointer]
+  - generic: 太阳
+  - generic: 地球
+  - generic: 月球
+  - paragraph [ref=e53]: 正在加载三维场景…
