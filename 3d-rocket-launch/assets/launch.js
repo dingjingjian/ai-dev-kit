@@ -24,8 +24,11 @@
   var VE1 = 7.487, VE2 = 9.323;
   // ---- 俯仰程序（开环）+ 末段高度闭环 ----
   // α = 推力方向与当地铅垂线的夹角：0° 竖直向上，90° 水平指向下程方向
-  var T_PITCH = 1.8;                            // 起飞后 18 任务秒开始程序转弯
-  var T_TURN = 78.0, A_END = 91 * DEG, TURN_P = 3.0;
+  // 注意：起飞→入轨的 dv 余量极小（二级燃尽 ≈ 关机时刻），起转时刻每推迟
+  // 1 场景秒都会加重重力损失；4.4 是“肉眼可见的转弯明显晚于离塔”的极限，
+  // 再推迟（或改缓入曲线）会导致高度过冲甚至无法入轨。改动前先仿真验证。
+  var T_PITCH = 4.4;                            // 起飞后 44 任务秒开始程序转弯
+  var T_TURN = 74.0, A_END = 91 * DEG, TURN_P = 3.0;
   var A_RATE = 5.83 * DEG, AOA_MAX = 10 * DEG;  // 姿态角速率上限 / 攻角上限
   var KG = 0.8, KH = 0.0833, VR_CAP = 3.33, W_TERM = 0.62;
   // ---- 时序（场景秒）----
@@ -33,6 +36,17 @@
   var TOWER_ALT = 11.3, FAIRING_ALT = 31.1;     // 40 km / 110 km
   var WARP = 20;                                // 在轨时间加速
   var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;   // 二级喷口位于二级箭体底部（级间段随一级分离）
+
+  // ---- 显示位移增益（缓解“箭体过大 / 位移过小”的比例失真）----
+  // 火箭模型相对地球放大约 600 倍，而位移按真实比例计算：开始转弯时
+  // 实际位移不足半个箭身，视觉上像钉在发射台上原地倾斜。这里给相对
+  // 发射台的位移加一段饱和显示增量：f(d) = d·(1 + S/(C+d))。
+  // 关键性质：f'(d) = 1 + S·C/(C+d)² > 1 恒成立 —— 显示爬速永远不低于
+  // 真实爬速，中段不会出现“卡在半空不动”的平台期（乘法衰减式增益会停滞）。
+  // S/C 越大离塔越快：S=35、C=2.5 时塔顶(9.6 单位)约 MET 38s 掠过、
+  // 转弯可见(α=5°, MET≈57s)时已升到约 14 单位，入轨前收敛回真实比例
+  // （残余 <5%）。只影响渲染用 x/y/altVis，物理量与遥测高度不受影响。
+  var GAIN_A = 35, GAIN_TAU = 2.5;
 
   var PHASES = {
     ignition: '点火 · 发动机启动，尾焰喷涌',
@@ -56,7 +70,7 @@
       phase: 'prelaunch', t: 0,
       r: R_E, theta: 0, vr: 0, vt: 0,
       alpha: 0, gamma: Math.PI / 2, tilt: Math.PI / 2,
-      x: 0, y: 0, alt: 0, speed: 0, vCirc: V_ORB,
+      x: 0, y: 0, alt: 0, altVis: 0, speed: 0, vCirc: V_ORB,
       mass: 1.02, accel: 0, gForce: 1, met: 0,
       fuel1: S1F0, fuel2: S2F0, fuelBoost: BF0,
       boostersAttached: true, stage1Attached: true, towerAttached: true, fairingAttached: true,
@@ -114,8 +128,16 @@
     }
 
     function syncWorld() {
-      state.x = state.r * Math.sin(state.theta);
-      state.y = E.center[1] + state.r * Math.cos(state.theta);
+      // 物理位置 → 显示位置：把相对发射台的位移按增益放大后再落回场景。
+      // 起飞初期真实位移远小于一个箭身长度（模型放大约 600 倍所致），
+      // 不放大就会“钉在发射台上原地转弯”；增益随距离衰减，远离后即真实比例。
+      var dx = state.r * Math.sin(state.theta);
+      var dy = state.r * Math.cos(state.theta) - R_E;    // 相对发射台的竖直位移
+      var d = Math.sqrt(dx * dx + dy * dy);
+      var gain = 1 + GAIN_A / (GAIN_TAU + d);
+      state.x = dx * gain;
+      state.y = E.center[1] + R_E + dy * gain;           // 发射台位于世界原点
+      state.altVis = dy * gain;                          // 显示高度（含增益），仅用于镜头
       state.tilt = state.theta + state.alpha;
       state.alt = state.r - R_E;
       state.speed = Math.sqrt(state.vr * state.vr + state.vt * state.vt);
@@ -490,7 +512,7 @@
       var noseX = Math.sin(state.tilt), noseY = Math.cos(state.tilt);
       var cx = state.x + noseX * rocketModel.center * s;
       var cy = state.y + noseY * rocketModel.center * s;
-      var chaseDist = Math.max(20, Math.min(115, 20 + state.alt * 0.55));
+      var chaseDist = Math.max(20, Math.min(115, 20 + Math.max(state.alt, state.altVis) * 0.55));
       var tx = cx + (E.center[0] - cx) * k;
       var ty = cy + (E.center[1] - cy) * k;
       var tz = 0 + (E.center[2] - 0) * k;
