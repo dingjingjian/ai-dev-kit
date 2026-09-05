@@ -32,7 +32,7 @@
     'varying float vDist;',
     'uniform vec3 uColor;', 'uniform vec3 uLightDir;', 'uniform vec3 uLightColor;',
     'uniform vec3 uAmbient;', 'uniform vec3 uRimColor;',
-    'uniform float uAlpha;', 'uniform float uGlow;', 'uniform float uIsEarth;', 'uniform float uTime;',
+    'uniform float uAlpha;', 'uniform float uGlow;', 'uniform float uIsEarth;', 'uniform float uIsCloud;', 'uniform float uTime;',
     'uniform float uAtmo;', 'uniform float uUseTex;', 'uniform sampler2D uTex;', 'uniform float uFill;',
     'float hash31(vec3 p){',
     ' p=fract(p*0.3183099+vec3(0.71,0.113,0.419)); p*=17.0;',
@@ -94,12 +94,24 @@
     '   }',
     '   bright=dot(baseCol,vec3(0.33));',
     '   landMask*=1.0-smoothstep(0.55,0.80,bright);',   // 冰盖/亮沙漠不放城市灯光
-    // 云带（沿纬向缓慢移动）
-    '   float cl=fbm3(sp*3.6+vec3(uTime*0.012,0.0,uTime*0.004));',
-    '   float band=0.55+0.45*sin(sp.y*7.0);',
-    '   float cloud=smoothstep(0.46,0.62,cl*band);',
-    '   baseCol=mix(baseCol,vec3(0.95,0.96,0.98),cloud*0.58);',
-    '   waterMask*=(1.0-cloud*0.58);',
+    ' }',
+    // 独立云层壳（参考“口袋地球”）：半透明白云铺在 1.012× 半径的壳上，
+    // 有云图时按 alpha×亮度取云量，无图时退回 fbm 噪声；光照阶段让云随昼夜自然明暗
+    ' float outA=uAlpha;',
+    ' if(uIsCloud>0.5){',
+    '   vec3 sp=normalize(vObjPos);',
+    '   float cover;',
+    '   if(uUseTex>0.5){',
+    '     vec4 t=texture2D(uTex,vUV);',
+    '     cover=t.a*max(t.r,max(t.g,t.b));',   // 兼容“透明底”与“黑底白云”两种云图
+    '   } else {',
+    '     float cl=fbm3(sp*3.6+vec3(uTime*0.012,0.0,uTime*0.004));',
+    '     float band=0.55+0.45*sin(sp.y*7.0);',
+    '     cover=smoothstep(0.40,0.64,cl*band);',
+    '   }',
+    '   baseCol=vec3(0.95,0.96,0.98);',
+    '   waterMask=0.0;',
+    '   outA=uAlpha*cover;',
     ' }',
     ' vec3 H=normalize(L+V);',
     ' float spec=pow(max(dot(N,H),0.0),150.0)*waterMask;',
@@ -120,7 +132,7 @@
     // 相机侧补光：箭体大姿态转弯后向阳面背离镜头时仍可辨（地球不受此光）
     ' col+=vec3(1.0,0.98,0.95)*uFill*max(dot(N,V),0.0);',
     ' col=mix(col,baseCol*1.7,uGlow);',
-    ' gl_FragColor=vec4(col,uAlpha); }'
+    ' gl_FragColor=vec4(col,outA); }'
   ].join('\n');
 
   // 大气辉光：只画背面，附加混合，形成环绕星球的光晕
@@ -281,6 +293,22 @@
     return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint16Array(idx) };
   };
 
+  // 圆柱面贴片：贴合箭体表面的弧形标识（旗面/徽标），r 为贴片半径、h 为高度，
+  // a0/a1 为周向范围（弧度，a=0 朝 +X），法线朝外，无端盖
+  geom.arcPatch = function (r, h, a0, a1, seg) {
+    seg = seg || 14;
+    var pos = [], nor = [], idx = [], i, j;
+    for (j = 0; j < 2; j++) {
+      var y = j * h;
+      for (i = 0; i <= seg; i++) {
+        var a = a0 + (i / seg) * (a1 - a0), ca = Math.cos(a), sa = Math.sin(a);
+        pos.push(ca * r, y, sa * r); nor.push(ca, 0, sa);
+      }
+    }
+    for (i = 0; i < seg; i++) idx.push(i, seg + 1 + i, i + 1, i + 1, seg + 1 + i, seg + 2 + i);
+    return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint16Array(idx) };
+  };
+
   // 完整球体（外表面，法线朝外，逆时针缠绕；带等距圆柱 UV，v=1 为 +Y 极）
   geom.sphere = function (R, seg, rings) {
     var pos = [], nor = [], uvs = [], idx = [], i, j;
@@ -325,25 +353,30 @@
     return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint16Array(idx) };
   };
 
-  geom.lathe = function (profile, seg) {
+  // 旋转成型；可选 a0/a1 限定周向范围（默认整圈），用于整流罩对半壳等剖切件
+  geom.lathe = function (profile, seg, a0, a1) {
+    if (a0 === undefined) { a0 = 0; a1 = Math.PI * 2; }
+    var span = a1 - a0;
     var pos = [], nor = [], idx = [], n = profile.length, i, j;
     for (i = 0; i < n; i++) {
       var r = profile[i][0], y = profile[i][1], dr, dy;
       if (i === 0) { dr = profile[1][0] - r; dy = profile[1][1] - y; }
       else if (i === n - 1) { dr = r - profile[i - 1][0]; dy = y - profile[i - 1][1]; }
-      else { dr = profile[i + 1][0] - profile[i - 1][0]; dy = profile[i + 1][1] - profile[i - 1][1]; }
+      else { dr = profile[i + 1][0] - profile[i - 1][0]; dy = y - profile[i - 1][1]; }
       var len = Math.sqrt(dy * dy + dr * dr) || 1, nx = dy / len, ny = -dr / len;
-      for (j = 0; j <= seg; j++) { var a = (j / seg) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a); pos.push(ca * r, y, sa * r); nor.push(ca * nx, ny, sa * nx); }
+      for (j = 0; j <= seg; j++) { var a = a0 + (j / seg) * span, ca = Math.cos(a), sa = Math.sin(a); pos.push(ca * r, y, sa * r); nor.push(ca * nx, ny, sa * nx); }
     }
-    for (i = 0; i < n - 1; i++) { for (j = 0; j < seg; j++) { var a0 = i * (seg + 1) + j, b0 = (i + 1) * (seg + 1) + j, a1 = a0 + 1, b1 = b0 + 1; idx.push(a0, b0, a1, a1, b0, b1); } }
-    if (profile[0][0] > 0.001) { var base = pos.length / 3; pos.push(0, profile[0][1], 0); nor.push(0, -1, 0); for (j = 0; j <= seg; j++) { var ab = (j / seg) * Math.PI * 2; pos.push(Math.cos(ab) * profile[0][0], profile[0][1], Math.sin(ab) * profile[0][0]); nor.push(0, -1, 0); } for (j = 0; j < seg; j++) idx.push(base, base + 1 + j, base + 1 + j + 1); }
+    for (i = 0; i < n - 1; i++) { for (j = 0; j < seg; j++) { var q0 = i * (seg + 1) + j, q1 = (i + 1) * (seg + 1) + j, q2 = q0 + 1, q3 = q1 + 1; idx.push(q0, q1, q2, q2, q1, q3); } }
+    if (profile[0][0] > 0.001) { var base = pos.length / 3; pos.push(0, profile[0][1], 0); nor.push(0, -1, 0); for (j = 0; j <= seg; j++) { var ab = a0 + (j / seg) * span; pos.push(Math.cos(ab) * profile[0][0], profile[0][1], Math.sin(ab) * profile[0][0]); nor.push(0, -1, 0); } for (j = 0; j < seg; j++) idx.push(base, base + 1 + j, base + 1 + j + 1); }
     return { positions: new Float32Array(pos), normals: new Float32Array(nor), indices: new Uint16Array(idx) };
   };
-  geom.torus = function (R, tube, seg, tubularSegments) {
+  geom.torus = function (R, tube, seg, tubularSegments, a0, a1) {
     tubularSegments = tubularSegments || 10;
+    if (a0 === undefined) { a0 = 0; a1 = Math.PI * 2; }
+    var span = a1 - a0;
     var pos = [], nor = [], idx = [], i, j;
     for (i = 0; i <= seg; i++) {
-      var u = (i / seg) * Math.PI * 2, cu = Math.cos(u), su = Math.sin(u);
+      var u = a0 + (i / seg) * span, cu = Math.cos(u), su = Math.sin(u);
       for (j = 0; j <= tubularSegments; j++) {
         var v = (j / tubularSegments) * Math.PI * 2, cv = Math.cos(v), sv = Math.sin(v);
         pos.push((R + tube * cv) * cu, tube * sv, (R + tube * cv) * su);
@@ -400,7 +433,7 @@
       uLightColor: gl.getUniformLocation(phong, 'uLightColor'), uAmbient: gl.getUniformLocation(phong, 'uAmbient'),
       uRimColor: gl.getUniformLocation(phong, 'uRimColor'),
       uAlpha: gl.getUniformLocation(phong, 'uAlpha'), uGlow: gl.getUniformLocation(phong, 'uGlow'),
-      uIsEarth: gl.getUniformLocation(phong, 'uIsEarth'), uTime: gl.getUniformLocation(phong, 'uTime'),
+      uIsEarth: gl.getUniformLocation(phong, 'uIsEarth'), uIsCloud: gl.getUniformLocation(phong, 'uIsCloud'), uTime: gl.getUniformLocation(phong, 'uTime'),
       uAtmo: gl.getUniformLocation(phong, 'uAtmo'),
       uUseTex: gl.getUniformLocation(phong, 'uUseTex'), uTex: gl.getUniformLocation(phong, 'uTex'),
       uFill: gl.getUniformLocation(phong, 'uFill')
@@ -444,7 +477,7 @@
 
     // 加载等距圆柱投影贴图：尺寸为 2 的幂时直接上传（启用 mipmap 与 REPEAT），否则重采样到 1024x512。
     // file:// 直接打开时 <img> 会污染画布导致 texImage2D 被拒，故优先使用内联 data URI（earth-data.js）。
-    function createTexture(url, onReady) {
+    function createTexture(url, onReady, dataUri) {
       var tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 255]));
@@ -476,7 +509,9 @@
         } catch (e) { if (onReady) onReady(false); }
       };
       img.onerror = function () { if (onReady) onReady(false); };
-      img.src = (typeof global.EARTH_TEXTURE_URI === 'string') ? global.EARTH_TEXTURE_URI : url;
+      // 优先级：调用方显式传入的 data URI > 地球贴图内联 URI（仅 earth.jpg）> 相对路径
+      img.src = (typeof dataUri === 'string') ? dataUri
+        : (url === 'assets/earth.jpg' && typeof global.EARTH_TEXTURE_URI === 'string') ? global.EARTH_TEXTURE_URI : url;
       return tex;
     }
 
@@ -485,7 +520,7 @@
       var m = {
         geometry: g, color: color || [0.8, 0.8, 0.8],
         modelMatrix: mat4.identity(mat4.create()), visible: true, alpha: 1, glow: 0,
-        group: opts.group || 'scene', isEarth: opts.isEarth || false,
+        group: opts.group || 'scene', isEarth: opts.isEarth || false, isCloud: opts.isCloud || false,
         atmo: opts.atmo || 0, atmoShader: opts.atmoShader || false, atmoMode: 0,
         fill: opts.fill != null ? opts.fill : (opts.isEarth ? 0 : 0.26),  // 相机侧补光强度
         blend: opts.blend || 'alpha',        // 'alpha' | 'add' | 'none'
@@ -632,6 +667,7 @@
         gl.uniform3fv(L.uRimColor, light.rim);
         gl.uniform1f(L.uAlpha, m.alpha); gl.uniform1f(L.uGlow, m.glow);
         gl.uniform1f(L.uIsEarth, m.isEarth ? 1 : 0);
+        gl.uniform1f(L.uIsCloud, m.isCloud ? 1 : 0);
         gl.uniform1f(L.uTime, time);
         gl.uniform1f(L.uAtmo, m.atmo || 0);
         gl.uniform1f(L.uFill, m.fill || 0);

@@ -12,9 +12,7 @@
   var btnShow = document.getElementById('btn-show');
   var btnExplode = document.getElementById('btn-explode');
   var btnLaunch = document.getElementById('btn-launch');
-  var launchPanel = document.getElementById('launch-panel');
   var btnIgnite = document.getElementById('btn-ignite');
-  var btnReset = document.getElementById('btn-reset');
   var progressFill = document.getElementById('progress-fill');
   var descBox = document.getElementById('desc-box');
   var descTitle = document.getElementById('desc-title');
@@ -36,7 +34,7 @@
 
   var mode = 'show', explodeAmount = 0, explodeTarget = 0, autoRot = 0, groupRotY = 0;
   var countdown = 0, lastCount = -1, igniteFlash = 0;
-  var padAlpha = 1, spinGate = 0;   // 发射台可见度 / 地球自转速度倍率
+  var padAlpha = 1, spinGate = 0, axisRoll = 0;   // 发射台可见度 / 自转倍率 / 在轨镜头翻转角
   var cam = {
     yaw: 0.42, pitch: 0.06, distance: 16, fitDist: 5200,
     targetX: 0, targetY: rocketModel.center, targetZ: 0, shake: 0
@@ -45,10 +43,6 @@
   var launch = M3D.createLaunchSystem(renderer, rocketModel, pad, {
     onPhase: function (key, text) {
       if (phaseText) phaseText.textContent = text;
-      if (btnIgnite) {
-        if (key === 'ignition') btnIgnite.textContent = '飞行中';
-        if (key === 'seco' || key === 'orbit') btnIgnite.textContent = '已入轨';
-      }
     }
   });
   var launchState = launch.state;
@@ -83,10 +77,18 @@
   function updateCamera() {
     var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
     var d = cam.distance, sh = cam.shake;
+    // 在轨段把镜头（位置偏移 + up 向量）绕世界 X 轴翻转 axisRoll（0 → 地轴倾角）：
+    // 翻转后地轴指向屏幕上方、赤道水平，轨道环呈现 40° 倾角的经典构型；
+    // 上升段 axisRoll=0，保持发射台铅垂视角不变。绕同一轴同步翻转
+    // 偏移与 up，保证镜头始终绕地轴环绕、地球在画面里保持正立。
+    var ca = Math.cos(axisRoll), sa = Math.sin(axisRoll);
+    var ox = d * cp * sy, oy = d * sp, oz = d * cp * cy;
     var eye = renderer.camera.eye;
-    eye[0] = cam.targetX + d * cp * sy + (sh ? (Math.random() - 0.5) * sh : 0);
-    eye[1] = cam.targetY + d * sp + (sh ? (Math.random() - 0.5) * sh : 0);
-    eye[2] = cam.targetZ + d * cp * cy + (sh ? (Math.random() - 0.5) * sh : 0);
+    eye[0] = cam.targetX + ox + (sh ? (Math.random() - 0.5) * sh : 0);
+    eye[1] = cam.targetY + oy * ca + oz * sa + (sh ? (Math.random() - 0.5) * sh : 0);
+    eye[2] = cam.targetZ - oy * sa + oz * ca + (sh ? (Math.random() - 0.5) * sh : 0);
+    var up = renderer.camera.up;
+    up[0] = 0; up[1] = ca; up[2] = -sa;
     // 避免相机钻到地表以下
     var dx = eye[0] - E.center[0], dy = eye[1] - E.center[1], dz = eye[2] - E.center[2];
     var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -122,7 +124,11 @@
     var sceneK = Math.max(0, 1 - sb * 2.5);
     var starA = alt > 18 ? Math.min((alt - 18) / 60, 1) : 0;
     renderer.stars.setAlpha(Math.max(starA, Math.max(0, (sb - 0.35) / 0.65) * 0.85));
-    var fadeAlt = alt < 150 ? 1 : Math.max(0, 1 - (alt - 150) / 250);
+    // 发射台淡出挂在显示高度上：起飞脱塔后（altVis 12）开始淡出，
+    // ~30（约 6 km）前完全消失——必须早于俯仰程序的门控（TOWER_CLEAR=28），
+    // 保证“发射台看不见了火箭才开始倾斜”
+    var altVis = launchState.altVis;
+    var fadeAlt = altVis < 12 ? 1 : Math.max(0, 1 - (altVis - 12) / 18);
     var pa = fadeAlt * (1 - launchState.orbitBlend) * sceneK;
     padAlpha = pa;
     for (var i = 0; i < pad.parts.length; i++) {
@@ -130,10 +136,11 @@
       if (pm === pad.ember) continue;
       pm.alpha = pa; pm.visible = pa > 0.01;
     }
-    pad.apron.alpha = pa; pad.apron.visible = pa > 0.01;
+    if (pad.apron) { pad.apron.alpha = pa; pad.apron.visible = pa > 0.01; }
     pad.ember.visible = pa > 0.01;
     // 拆解空间：地球与大气整体隐去，箭体悬于星场之中
     pad.earth.alpha = sceneK; pad.earth.visible = sceneK > 0.005;
+    if (pad.clouds) { pad.clouds.alpha = 0.62 * sceneK; pad.clouds.visible = sceneK > 0.005; }
     pad.atmo.visible = sceneK > 0.005;
     pad.atmo.atmoStrength = (pad.atmo.atmoMode ? 0.62 : 1.25) * sceneK;
     // 相机在大气层内 → 霞光模式；在大气层外 → 星球边缘光晕模式
@@ -142,10 +149,12 @@
     pad.atmo.atmoMode = (ax * ax + ay * ay + az * az < shellR * shellR) ? 1 : 0;
   }
 
-  // 发射台还立在地表时地球保持静止（否则发射台像是在地表漂移），
-  // 等发射台淡出后再把自转速度平滑拉起来，地球慢慢开始转。
+  // 上升段地球保持静止：发射台立在地表时自转会让台面漂移；即使发射台
+  // 淡出后，0.06 rad/s 对应的地表线速度（约 108 单位/秒）在镜头贴近地面时
+  // 仍会让地面像在飞速后退。因此把自转与入轨过渡（orbitBlend）绑定，
+  // 镜头切到在轨远景的同时把自转平滑拉满，远看才自然。
   function updateEarthSpin(dt) {
-    var target = padAlpha < 0.02 ? 1 : 0;
+    var target = launchState.orbitBlend;
     spinGate += (target - spinGate) * Math.min(1, dt * 0.4);
     if (Math.abs(target - spinGate) < 0.004) spinGate = target;
     M3D.spinEarth(pad, dt, spinGate);
@@ -157,14 +166,29 @@
     var showLabels = (mode === 'explode') && explodeAmount > 0.55;
     labelLayer.style.display = showLabels ? 'block' : 'none';
     if (!showLabels) return;
+    var shown = [];
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
       if (!p.label || !p._labelEl) continue;
       if (!p.mesh.visible) { p._labelEl.style.display = 'none'; continue; }
       var m = p.mesh.modelMatrix;
       renderer.project([m[12], m[13], m[14]], projOut);
-      if (projOut.visible) { p._labelEl.style.display = 'block'; p._labelEl.style.left = projOut.x + 'px'; p._labelEl.style.top = projOut.y + 'px'; }
-      else { p._labelEl.style.display = 'none'; }
+      if (projOut.visible) shown.push({ el: p._labelEl, x: projOut.x, y: projOut.y, w: p.label.length * 11 + 22 });
+      else p._labelEl.style.display = 'none';
+    }
+    // 标签防重叠：按屏幕纵坐标排序，横向交叠且纵向过近的标签依次下推
+    shown.sort(function (a, b) { return a.y - b.y; });
+    var minGap = 24;
+    for (var j = 1; j < shown.length; j++) {
+      for (var k = 0; k < j; k++) {
+        var a = shown[k], b = shown[j];
+        if (Math.abs(a.x - b.x) < (a.w + b.w) / 2 && b.y - a.y < minGap) b.y = a.y + minGap;
+      }
+    }
+    for (var s = 0; s < shown.length; s++) {
+      shown[s].el.style.display = 'block';
+      shown[s].el.style.left = shown[s].x + 'px';
+      shown[s].el.style.top = shown[s].y + 'px';
     }
   }
 
@@ -204,7 +228,8 @@
     var txt = 'T+' + fmtMet(launchState.met) + ' · 高度 ' + altKm.toFixed(0) + ' km · 速度 ' + vel + ' m/s';
     if (launchState.inserted) {
       var laps = launchState.theta / (Math.PI * 2);
-      txt += ' · 环绕 ' + laps.toFixed(2) + ' 圈 · ' + launchState.warp.toFixed(0) + '× 加速';
+      // 入轨后只保留任务时间与环绕圈数，避免状态条过长溢出移动端屏幕
+      txt = 'T+' + fmtMet(launchState.met) + ' · 环绕 ' + laps.toFixed(2) + ' 圈 · ' + launchState.warp.toFixed(0) + '× 加速';
     } else {
       txt += ' · 过载 ' + gf + ' g';
     }
@@ -214,7 +239,7 @@
   function updateParts() {
     M3D.updatePartTransforms(parts, {
       rotY: groupRotY, explode: explodeAmount, launchY: launchState.y, launchX: launchState.x,
-      tilt: launchState.tilt, launchT: launchState.t, scale: launchState.scale
+      tilt: launchState.tiltVis, launchT: launchState.t, scale: launchState.scale
     });
   }
 
@@ -249,6 +274,7 @@
         if (n !== lastCount) {
           lastCount = n;
           countdownEl.textContent = String(n);
+          countdownEl.classList.remove('cd-ignite');
           countdownEl.style.opacity = '1';
           countdownEl.classList.remove('pop');
           void countdownEl.offsetWidth;
@@ -258,7 +284,7 @@
       if (phaseText && n > 0) phaseText.textContent = '倒计时 ' + n + ' · 各系统准备就绪';
       if (countdown <= 0) {
         countdown = 0; launch.ignite(); igniteFlash = 1.0; lastCount = -1;
-        if (countdownEl) { countdownEl.textContent = '点火！'; countdownEl.classList.remove('pop'); void countdownEl.offsetWidth; countdownEl.classList.add('pop'); }
+        if (countdownEl) { countdownEl.textContent = '点火！'; countdownEl.classList.add('cd-ignite'); countdownEl.classList.remove('pop'); void countdownEl.offsetWidth; countdownEl.classList.add('pop'); }
       }
     }
     if (igniteFlash > 0) {
@@ -285,6 +311,11 @@
     updateSceneBg();
     updateEarthSpin(dt);
     updateLight();
+    // 在轨过渡：镜头参考系随 orbitBlend 从“台面铅垂”翻转到“地轴朝上”，
+    // 与地球自转拉起、镜头拉远共用同一过渡因子，节奏保持一致
+    var rollTarget = launchState.orbitBlend * M3D.EARTH.axisTilt;
+    axisRoll += (rollTarget - axisRoll) * Math.min(1, dt * 0.8);
+    if (Math.abs(rollTarget - axisRoll) < 0.001) axisRoll = rollTarget;
     renderer.particles.update(dt);
     updateParts();
     updateCamera();
@@ -309,14 +340,20 @@
 
   function resetLaunch() {
     launch.reset();
+    spinGate = 0;   // 立即停住地球自转（否则平滑衰减期间地面仍在移动）
+    axisRoll = 0;   // 镜头参考系复位为台面铅垂
     countdown = 0; lastCount = -1; igniteFlash = 0; cam.shake = 0;
     cam.targetX = 0; cam.targetY = rocketModel.center; cam.targetZ = 0;
     if (mode === 'launch') { cam.targetY = 3.2; cam.distance = 18; cam.pitch = 0.04; cam.yaw = 0.42; }
     if (phaseText) phaseText.textContent = '准备就绪 · 点击点火发射';
     if (progressFill) progressFill.style.width = '0%';
-    if (btnIgnite) { btnIgnite.disabled = false; btnIgnite.textContent = '点火发射'; }
+    if (btnIgnite) {
+      btnIgnite.disabled = false;
+      btnIgnite.textContent = '点火发射';
+      btnIgnite.style.display = (mode === 'launch') ? 'flex' : 'none';
+    }
     if (descBox) descBox.style.display = 'none';
-    if (countdownEl) { countdownEl.style.display = 'none'; countdownEl.style.opacity = '1'; }
+    if (countdownEl) { countdownEl.style.display = 'none'; countdownEl.style.opacity = '1'; countdownEl.classList.remove('cd-ignite'); }
     if (telemetryEl) telemetryEl.style.display = 'none';
   }
 
@@ -325,7 +362,7 @@
     if (btnShow) btnShow.classList.toggle('active', m === 'show');
     if (btnExplode) btnExplode.classList.toggle('active', m === 'explode');
     if (btnLaunch) btnLaunch.classList.toggle('active', m === 'launch');
-    if (launchPanel) launchPanel.style.display = (m === 'launch') ? 'flex' : 'none';
+    if (btnIgnite) btnIgnite.style.display = (m === 'launch') ? 'flex' : 'none';
     if (descBox) descBox.style.display = 'none';
     if (labelLayer) labelLayer.style.display = 'none';
     if (countdownEl) countdownEl.style.display = 'none';
@@ -350,14 +387,13 @@
   function ignite() {
     if (launchState.ignited || launchState.inserted || countdown > 0) return;
     countdown = 3;
-    if (btnIgnite) { btnIgnite.disabled = true; btnIgnite.textContent = '倒计时中…'; }
+    if (btnIgnite) btnIgnite.style.display = 'none';
   }
 
   if (btnShow) btnShow.addEventListener('click', function () { setMode('show'); });
   if (btnExplode) btnExplode.addEventListener('click', function () { setMode('explode'); });
   if (btnLaunch) btnLaunch.addEventListener('click', function () { setMode('launch'); });
   if (btnIgnite) btnIgnite.addEventListener('click', ignite);
-  if (btnReset) btnReset.addEventListener('click', function () { resetLaunch(); });
 
   var pointers = {}, drag = false, lastX = 0, lastY = 0, pinchDist = 0;
   function onDown(e) {
@@ -393,6 +429,16 @@
     canvas.style.touchAction = 'none';
   }
   window.addEventListener('resize', doResize);
+  // 鼠标滚轮缩放（展示 / 拆解模式）
+  if (canvas) {
+    canvas.addEventListener('wheel', function (e) {
+      if (mode === 'launch') return;
+      e.preventDefault();
+      cam.distance *= (e.deltaY > 0) ? 1.1 : 1 / 1.1;
+      if (cam.distance < 7) cam.distance = 7;
+      if (cam.distance > 60) cam.distance = 60;
+    }, { passive: false });
+  }
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) { running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0; }
     else if (!running) { running = true; lastTime = 0; rafId = requestAnimationFrame(frame); }

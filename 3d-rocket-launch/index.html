@@ -3,19 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>3D 火箭发射模拟</title>
+  <title>口袋火箭</title>
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
   <div id="app">
-    <header class="topbar">
-      <span class="title">火箭发射 · 3D</span>
-    </header>
     <main id="stage-wrap">
       <canvas id="stage"></canvas>
       <div id="countdown"></div>
       <div id="telemetry"></div>
       <div id="labels"></div>
+      <button id="btn-ignite" class="ignite-btn" type="button">点火发射</button>
       <div id="desc-box">
         <div id="desc-title"></div>
         <div id="desc-text"></div>
@@ -36,19 +34,16 @@
     <footer class="bottombar">
       <div id="phase-text" class="phase-text">静态展示 · 拖动旋转</div>
       <nav class="modes">
-        <button id="btn-show" class="mode-btn active" type="button">展示</button>
-        <button id="btn-explode" class="mode-btn" type="button">拆解</button>
-        <button id="btn-launch" class="mode-btn" type="button">发射</button>
+        <button id="btn-show" class="mode-btn active" type="button"><span class="dot" style="background:#5cc8ff"></span>展示</button>
+        <button id="btn-explode" class="mode-btn" type="button"><span class="dot" style="background:#ffb84d"></span>拆解</button>
+        <button id="btn-launch" class="mode-btn" type="button"><span class="dot" style="background:#ff6a3a"></span>发射</button>
       </nav>
-      <div id="launch-panel" class="launch-panel">
-        <button id="btn-ignite" class="ignite-btn" type="button">点火发射</button>
-        <button id="btn-reset" class="reset-btn" type="button">重置</button>
-      </div>
       <div class="progress"><div class="progress-track"><div id="progress-fill" class="progress-fill"></div></div></div>
     </footer>
   </div>
   <script src="./assets/math.js"></script>
   <script src="./assets/earth-data.js"></script>
+  <script src="./assets/clouds-data.js"></script>
   <script src="./assets/engine.js"></script>
   <script src="./assets/rocket.js"></script>
   <script src="./assets/launch.js"></script>
