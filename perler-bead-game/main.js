@@ -758,7 +758,9 @@ const SFX=(function(){
 
 function hexToRgb(h){h=h.replace('#','');return{r:parseInt(h.slice(0,2),16),g:parseInt(h.slice(2,4),16),b:parseInt(h.slice(4,6),16)};}
 function clamp(v){return v<0?0:v>255?255:v|0;}
-function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>clamp(x).toString(16).padStart(2,'0')).join('');}
+// padStart（Chrome 57+）在安卓 9 以前的老 WebView 上不存在，用自实现代替
+function pad2(s){s=String(s);return s.length<2?'0'+s:s;}
+function rgbToHex(r,g,b){return '#'+[r,g,b].map(x=>pad2(clamp(x).toString(16))).join('');}
 function adjust(hex,f){const c=hexToRgb(hex);return rgbToHex(c.r+f*255,c.g+f*255,c.b+f*255);}
 function lighten(hex,f){return adjust(hex,f);}
 function darken(hex,f){return adjust(hex,-f);}
@@ -1164,17 +1166,31 @@ function applyAt(e){
 
 function applyPointer(e){
   if(celebrated)return;              // 拼成后不再进入绘制状态
-  painting=true;try{board.setPointerCapture(e.pointerId);}catch(_){}applyAt(e);}
-board.addEventListener('pointerdown',applyPointer);
-board.addEventListener('pointermove',e=>{if(painting)applyAt(e);});
+  painting=true;
+  if(e.pointerId!=null){try{board.setPointerCapture(e.pointerId);}catch(_){}}
+  applyAt(e);}
+function onBoardMove(e){if(painting)applyAt(e);}
 function endPaint(){
   if(!painting)return;
   painting=false;
   if(celebrated){render();return;}   // 已完成：不重算进度、不回写存档
   updatePct();saveProgress();
 }
+// Pointer Events（Chrome 55+）始终绑定；安卓 9 以前未升级的老 WebView 不支持时，
+// 再补 Touch/Mouse 兜底监听，保证棋盘可拖动填豆（两套监听不会同时生效）。
+board.addEventListener('pointerdown',applyPointer);
+board.addEventListener('pointermove',onBoardMove);
 board.addEventListener('pointerup',endPaint);
 board.addEventListener('pointercancel',endPaint);
+if(!window.PointerEvent){
+  board.addEventListener('mousedown',applyPointer);
+  board.addEventListener('mousemove',onBoardMove);
+  document.addEventListener('mouseup',endPaint);
+  board.addEventListener('touchstart',function(e){if(e.touches.length)applyPointer(e.touches[0]);},{passive:true});
+  board.addEventListener('touchmove',function(e){if(painting&&e.touches.length){applyAt(e.touches[0]);e.preventDefault();}},{passive:false});
+  board.addEventListener('touchend',endPaint);
+  board.addEventListener('touchcancel',endPaint);
+}
 
 function updatePct(){
   let tot=0,ok=0;
@@ -1188,7 +1204,7 @@ function updatePct(){
 
 function formatTime(sec){
   const m=Math.floor(sec/60),s=sec%60;
-  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  return pad2(m)+':'+pad2(s);
 }
 function startTimer(){if(timerId)clearInterval(timerId);timerId=setInterval(()=>{elapsed=Math.floor((Date.now()-startTime)/1000);timerEl.textContent=formatTime(elapsed);updateStars();},1000);}
 function stopTimer(){clearInterval(timerId);timerId=null;}
