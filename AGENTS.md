@@ -22,6 +22,7 @@
 | 火箭发射 | `rocket-launch/` | 火箭发射主题小工具（2D），含构建/打包/校验脚本，生成可分发压缩包 |
 | 3D 火箭发射 | `3d-rocket-launch/` | 3D 火箭发射模拟，WebGL 渲染，支持展示/拆解等模式，含遥测与倒计时 |
 | 太阳系 3D | `solar-system-3d/` | 太阳系 3D 可视化，WebGL 渲染行星、轨道与土星环，支持点击追踪天体 |
+| 3D 地球科普 | `earth-3d/` | 3D 地球科普工具，WebGL 展示蓝色星球、昼夜交替、四季成因、地球内部结构与经纬网格 |
 | 网站截图 | `screenshot/` | 多网站批量截图采集，自动处理懒加载/Cloudflare/字体，分类输出 |
 | Word 转 Markdown | `word-to-md/` | Word 文档转 Markdown 格式工具 |
 
