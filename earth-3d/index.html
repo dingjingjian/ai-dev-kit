@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>口袋地球</title>
+<style>
+  :root{--bg:#05060d;--panel:rgba(12,18,34,.78);--line:rgba(120,160,220,.16);--txt:#eaf1fb;--mut:#8da2c0;--acc:#5cc8ff;--warm:#ffb84d;}
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* 顶部 */
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:50px 50px 12px;z-index:10;pointer-events:none}
+  .brand{display:flex;align-items:center;pointer-events:auto}
+  .brand>*+*{margin-left:9px}
+  .logo{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#cfeeff,#4a90e2 45%,#2a5f9e 75%,#0e2f52);box-shadow:0 0 12px rgba(74,144,226,.55)}
+  .brand b{font-size:15px;font-weight:600;letter-spacing:.5px}
+  .gear{width:38px;height:38px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .gear svg{width:18px;height:18px;fill:none;stroke:var(--txt);stroke-width:1.6}
+
+  /* 底部模式切换 */
+  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);z-index:10;pointer-events:auto;max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
+  .dock::-webkit-scrollbar{display:none}
+  .dock button{border:none;background:transparent;color:var(--mut);font-size:13px;font-weight:500;padding:9px 14px;border-radius:999px;cursor:pointer;transition:.18s;white-space:nowrap;flex-shrink:0;margin-left:6px}
+  .dock button:first-child{margin-left:0}
+  .dock button.on{background:linear-gradient(135deg,rgba(92,200,255,.9),rgba(74,144,226,.9));color:#fff;box-shadow:0 2px 10px rgba(92,200,255,.35)}
+  .dock button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle}
+
+  /* 科普卡片 */
+  .card{position:fixed;left:50%;bottom:80px;transform:translate(-50%,20px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+  .card.show{opacity:1;transform:translate(-50%,0)}
+  .card .name{font-size:16px;font-weight:600;display:flex;align-items:center;user-select:none}
+  .card .name>*+*{margin-left:8px}
+  .card .name i{width:11px;height:11px;border-radius:50%}
+  .card .desc{font-size:13px;color:var(--mut);margin-top:6px;line-height:1.55}
+  .card .meta{display:flex;margin-top:10px;flex-wrap:wrap}
+  .card .meta span{font-size:11px;color:var(--acc);background:rgba(92,200,255,.1);border:1px solid rgba(92,200,255,.2);border-radius:6px;padding:3px 8px;margin:0 8px 6px 0}
+
+  /* 设置浮层 */
+  .sheet{position:fixed;top:0;right:0;bottom:0;width:86vw;width:min(300px,86vw);background:var(--panel);border-left:1px solid var(--line);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);z-index:20;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto}
+  .sheet.show{transform:translateX(0)}
+  .sheet h3{font-size:12px;color:var(--mut);letter-spacing:1.5px;margin:18px 0 10px;text-transform:uppercase}
+  .sheet h3:first-child{margin-top:8px}
+  .row{display:flex;align-items:center;justify-content:space-between;margin:12px 0}
+  .row label{font-size:14px}
+  .sw{position:relative;width:42px;height:24px;border-radius:12px;background:rgba(255,255,255,.12);cursor:pointer;transition:.2s;flex-shrink:0}
+  .sw.on{background:var(--acc)}
+  .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .sw.on i{left:21px}
+  input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:2px;background:rgba(255,255,255,.15);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 0 6px rgba(92,200,255,.6)}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:var(--acc);cursor:pointer}
+  .val{font-size:12px;color:var(--acc);font-variant-numeric:tabular-nums}
+  .sheet .close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);cursor:pointer;font-size:16px}
+  .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.4);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
+  .scrim.show{opacity:1;pointer-events:auto}
+
+  /* 标签 */
+  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11px;color:var(--txt);background:rgba(8,14,28,.55);border:1px solid var(--line);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+
+  /* 提示 */
+  .tip{position:fixed;left:50%;top:96px;transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap}
+  .tip.show{opacity:1}
+
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
+  #loader.hide{opacity:0;pointer-events:none}
+  .spin{width:42px;height:42px;border:3px solid rgba(92,200,255,.2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loader p{margin-top:14px;font-size:13px;color:var(--mut)}
+  #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}
+  #fallback.show{display:flex}
+  #fallback h2{color:var(--warm);margin-bottom:10px}
+  #fallback p{color:var(--mut);max-width:420px;line-height:1.6}
+
+@supports (padding: env(safe-area-inset-top)){
+  .top{padding:max(50px,env(safe-area-inset-top)) max(50px,env(safe-area-inset-right)) 12px max(50px,env(safe-area-inset-left))}
+  .dock{bottom:max(16px,env(safe-area-inset-bottom))}
+  .card{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 64px)}
+  .sheet{padding-top:max(14px,env(safe-area-inset-top))}
+  .sheet .close{top:max(14px,env(safe-area-inset-top))}
+  .tip{top:max(96px,calc(env(safe-area-inset-top) + 86px))}
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="top">
+  <div class="brand"><div class="logo"></div><b>口袋地球</b></div>
+  <div class="gear" id="gear">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
+  </div>
+</div>
+
+<div class="tip" id="tip">拖动旋转 · 滚轮缩放 · 底部切换科普主题</div>
+
+<div class="dock" id="dock">
+  <button data-m="overview" class="on"><span class="dot" style="background:#4a90e2"></span>星球</button>
+  <button data-m="seasons"><span class="dot" style="background:#7ec850"></span>四季</button>
+  <button data-m="layers"><span class="dot" style="background:#ff7a3c"></span>内部</button>
+  <button data-m="grid"><span class="dot" style="background:#5cc8ff"></span>经纬</button>
+</div>
+
+  <div class="card" id="card">
+    <div class="name"><i id="cDot"></i><span id="cName"></span></div>
+    <div class="desc" id="cDesc"></div>
+    <div class="meta" id="cMeta"></div>
+  </div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <button class="close" id="sClose">×</button>
+  <h3>显示</h3>
+  <div class="row"><label>自动播放</label><div class="sw on" id="swPlay"><i></i></div></div>
+  <div class="row"><label>标注标签</label><div class="sw on" id="swLabel"><i></i></div></div>
+  <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
+  <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
+  <h3>时间流速</h3>
+  <div class="row"><label>速度</label><span class="val" id="vSpeed">1.0×</span></div>
+  <input type="range" id="speed" min="0" max="400" value="100">
+  <h3>视角</h3>
+  <div style="display:flex;margin-top:4px">
+    <button id="bReset" style="flex:1;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer">重置视角</button>
+    <button id="bTop" style="flex:1;font-size:13px;background:linear-gradient(135deg,#1a6fc4,#5cc8ff);border:none;color:#fff;border-radius:8px;padding:9px 0;cursor:pointer;margin-left:8px">俯视</button>
+  </div>
+</div>
+
+<div id="loader"><div class="spin"></div><p>正在加载三维场景…</p></div>
+<div id="fallback"><h2>无法启动 3D 场景</h2><p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Firefox / Safari。</p></div>
+
+<script src="./assets/three.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
