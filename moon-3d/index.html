@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>月球科普 · 3D</title>
+<style>
+  :root{
+    --bg:#05060d;--bg2:#0a1428;
+    --panel:rgba(12,18,34,.82);
+    --line:rgba(140,180,230,.16);
+    --txt:#eaf1fb;--mut:#8da2c0;
+    --acc:#8ab4f8;--warm:#5cc8ff;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;background:radial-gradient(ellipse at 50% 30%,var(--bg2),var(--bg) 70%);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* 顶部 */
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:50px 50px 12px;z-index:10;pointer-events:none}
+  .brand{display:flex;align-items:center;gap:10px;pointer-events:auto}
+  .logo{width:30px;height:30px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#ffffff,#d8e0ec 45%,#a0aab8 75%,#5a6478);box-shadow:0 0 14px rgba(200,220,255,.4)}
+  .brand b{font-size:16px;font-weight:600;letter-spacing:1px;display:block}
+  .brand small{display:block;font-size:11px;color:var(--mut);font-weight:400;letter-spacing:.5px;margin-top:1px}
+  .gear{width:38px;height:38px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;backdrop-filter:blur(8px)}
+  .gear svg{width:18px;height:18px;fill:none;stroke:var(--txt);stroke-width:1.6}
+
+  /* 底部 dock */
+  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;backdrop-filter:blur(12px);z-index:10;pointer-events:auto;max-width:calc(100vw - 24px);overflow-x:auto}
+  .dock button{border:none;background:transparent;color:var(--mut);font-size:13px;font-weight:500;padding:9px 14px;border-radius:999px;cursor:pointer;transition:.18s;white-space:nowrap}
+  .dock button.on{background:linear-gradient(135deg,rgba(138,180,248,.92),rgba(92,200,255,.85));color:#06203a;box-shadow:0 2px 12px rgba(92,200,255,.4)}
+
+  /* 月相控制 */
+  .phase{position:fixed;left:50%;bottom:80px;transform:translate(-50%,16px);width:min(440px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+  .phase.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .phase .ph-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+  .phase .ph-name{font-size:15px;font-weight:600;color:var(--acc)}
+  .phase .ph-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mut);cursor:pointer;user-select:none}
+  .phase input[type=range]{width:100%;-webkit-appearance:none;height:5px;border-radius:3px;background:linear-gradient(90deg,#0a1428 0%,#c8d8f0 50%,#0a1428 100%);outline:none}
+  .phase input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8e0ec 60%,#8a98a8);cursor:pointer;box-shadow:0 0 8px rgba(200,220,255,.6)}
+  .phase input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8e0ec 60%,#8a98a8);cursor:pointer}
+  .phase input[type=range]:disabled{opacity:.5}
+  .phase .ph-marks{display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--mut)}
+  .sw{position:relative;width:42px;height:24px;border-radius:12px;background:rgba(255,255,255,.12);cursor:pointer;transition:.2s;flex-shrink:0}
+  .sw.on{background:var(--acc)}
+  .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .sw.on i{left:21px}
+
+  /* 科普卡片 */
+  .sci{position:fixed;left:50%;bottom:80px;transform:translate(-50%,16px);width:min(460px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;max-height:calc(100vh - 200px);overflow-y:auto}
+  .sci.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .sci h2{font-size:16px;font-weight:600;color:var(--acc);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+  .sci h2 i{width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,#d8e0ec 60%,#8a98a8);box-shadow:0 0 8px rgba(200,220,255,.5)}
+  .sci .grp{margin-bottom:12px}
+  .sci .grp h3{font-size:12px;color:var(--warm);letter-spacing:1px;margin-bottom:6px}
+  .sci .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sci .item{background:rgba(140,180,230,.06);border:1px solid rgba(140,180,230,.14);border-radius:8px;padding:8px 10px}
+  .sci .item .k{font-size:11px;color:var(--mut)}
+  .sci .item .v{font-size:13px;color:var(--txt);font-weight:500;margin-top:2px}
+  .sci .narr{font-size:13px;color:var(--txt);line-height:1.7;background:rgba(140,180,230,.06);border:1px solid rgba(140,180,230,.14);border-radius:8px;padding:10px 12px}
+  .sci .narr strong{color:var(--acc);font-weight:600}
+
+  /* 设置浮层 */
+  .set{position:fixed;top:0;right:0;bottom:0;width:min(300px,86vw);background:var(--panel);border-left:1px solid var(--line);backdrop-filter:blur(16px);z-index:21;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto}
+  .set.show{transform:translateX(0)}
+  .set h3{font-size:12px;color:var(--mut);letter-spacing:1.5px;margin:18px 0 10px;text-transform:uppercase}
+  .set h3:first-child{margin-top:8px}
+  .row{display:flex;align-items:center;justify-content:space-between;margin:12px 0}
+  .row label{font-size:14px}
+  .set .close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);cursor:pointer;font-size:16px}
+  .set input[type=range]{width:100%;-webkit-appearance:none;height:4px;border-radius:2px;background:rgba(255,255,255,.15);outline:none}
+  .set input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 0 6px rgba(138,180,248,.6)}
+  .set input[type=range]::-moz-range-thumb{width:16px;height:16px;border:none;border-radius:50%;background:var(--acc);cursor:pointer}
+  .val{font-size:12px;color:var(--acc);font-variant-numeric:tabular-nums}
+  .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.5);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
+  .scrim.show{opacity:1;pointer-events:auto}
+
+  /* 提示 */
+  .tip{position:fixed;left:50%;top:54px;transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none}
+  .tip.show{opacity:1}
+
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
+  #loader.hide{opacity:0;pointer-events:none}
+  .spin{width:42px;height:42px;border:3px solid rgba(138,180,248,.2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loader p{margin-top:14px;font-size:13px;color:var(--mut)}
+  #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}
+  #fallback.show{display:flex}
+  #fallback h2{color:var(--warm);margin-bottom:10px}
+  #fallback p{color:var(--mut);max-width:420px;line-height:1.6}
+
+@supports (padding: env(safe-area-inset-top)){
+  .top{padding:max(50px,env(safe-area-inset-top)) max(50px,env(safe-area-inset-right)) 12px max(50px,env(safe-area-inset-left))}
+  .dock{bottom:max(16px,env(safe-area-inset-bottom))}
+  .phase,.sci{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 64px)}
+  .set{padding-top:max(14px,env(safe-area-inset-top))}
+  .set .close{top:max(14px,env(safe-area-inset-top))}
+  .tip{top:max(54px,calc(env(safe-area-inset-top) + 44px))}
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="top">
+  <div class="brand">
+    <div class="logo"></div>
+    <div><b>月球科普</b><small>3D 交互展示</small></div>
+  </div>
+  <div class="gear" id="gear">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
+  </div>
+</div>
+
+<div class="tip" id="tip">拖动旋转月球，滚轮缩放，点击月球看科普</div>
+
+<div class="dock" id="dock">
+  <button data-v="moon" class="on">月球</button>
+  <button data-v="phase">月相</button>
+  <button data-v="sci">科普</button>
+</div>
+
+<div class="phase" id="phase">
+  <div class="ph-head">
+    <div class="ph-name" id="phName">满月</div>
+    <div class="ph-toggle" id="phToggle"><span>自动播放</span><div class="sw" id="swPhAuto"><i></i></div></div>
+  </div>
+  <input type="range" id="phSlider" min="0" max="360" value="180">
+  <div class="ph-marks"><span>新月</span><span>上弦</span><span>满月</span><span>下弦</span><span>新月</span></div>
+</div>
+
+<div class="sci" id="sci">
+  <h2><i></i>月球科普</h2>
+  <div class="grp">
+    <h3>基本参数</h3>
+    <div class="grid">
+      <div class="item"><div class="k">赤道直径</div><div class="v">3,474.8 km</div></div>
+      <div class="item"><div class="k">平均距地</div><div class="v">38.44 万 km</div></div>
+      <div class="item"><div class="k">质量</div><div class="v">7.35×10²² kg</div></div>
+      <div class="item"><div class="k">表面重力</div><div class="v">1.62 m/s²（地球 1/6）</div></div>
+      <div class="item"><div class="k">公转周期</div><div class="v">27.32 天</div></div>
+      <div class="item"><div class="k">自转周期</div><div class="v">27.32 天</div></div>
+      <div class="item"><div class="k">逃逸速度</div><div class="v">2.38 km/s</div></div>
+      <div class="item"><div class="k">反照率</div><div class="v">0.12</div></div>
+    </div>
+  </div>
+  <div class="grp">
+    <h3>表面特征</h3>
+    <div class="narr">月海是月球正面暗色平原，为古老玄武岩熔岩填充的巨型撞击盆地，著名者有<strong>风暴洋</strong>、<strong>静海</strong>、<strong>雨海</strong>、<strong>澄海</strong>等，约占正面 31%。月陆为明亮高地，富含斜长岩，年龄约 44 亿年，比月海更古老。环形山遍布表面，<strong>第谷环形山</strong>、<strong>哥白尼环形山</strong>、<strong>阿基米德环形山</strong>等清晰可辨。</div>
+  </div>
+  <div class="grp">
+    <h3>潮汐锁定</h3>
+    <div class="narr">月球自转周期与公转周期几乎相同，因此始终以同一面朝向地球，称为<strong>潮汐锁定</strong>（同步自转）。我们在地球上永远看不到月球背面。直到 1959 年苏联"月球 3 号"探测器才首次拍下背面影像，背面月海较少、地形崎岖，与正面差异显著。</div>
+  </div>
+  <div class="grp">
+    <h3>起源假说</h3>
+    <div class="narr">主流的<strong>大碰撞假说</strong>认为：约 45 亿年前，一颗火星大小的天体"忒伊亚"撞击原始地球，抛射的碎片在轨道上聚集形成月球。这能解释月球相对地球缺铁、同位素组成相近、以及地月系统高角动量等特征。</div>
+  </div>
+  <div class="grp">
+    <h3>对地球的影响</h3>
+    <div class="narr">月球引力是地球海洋<strong>潮汐</strong>的主因，也通过潮汐摩擦使地球自转缓慢变慢（每世纪约延长 1.7 毫秒），同时月球以每年约 3.8 cm 的速度远离地球。月球还稳定地轴倾角，使地球四季长期稳定，利于生命演化。</div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="set" id="set">
+  <button class="close" id="setClose">×</button>
+  <h3>显示</h3>
+  <div class="row"><label>自动自转</label><div class="sw on" id="swSpin"><i></i></div></div>
+  <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
+  <div class="row"><label>月光辉光</label><div class="sw on" id="swGlow"><i></i></div></div>
+  <h3>自转速度</h3>
+  <div class="row"><label>速度</label><span class="val" id="vSpin">1.0×</span></div>
+  <input type="range" id="spinSpeed" min="0" max="300" value="100">
+  <h3>视角</h3>
+  <div style="display:flex;gap:8px;margin-top:4px">
+    <button id="bReset" style="flex:1;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer">重置</button>
+    <button id="bTop" style="flex:1;font-size:13px;background:linear-gradient(135deg,#3a6fc4,#5cc8ff);border:none;color:#fff;border-radius:8px;padding:9px 0;cursor:pointer">拉近</button>
+  </div>
+</div>
+
+<div id="loader"><div class="spin"></div><p>正在加载月球场景…</p></div>
+<div id="fallback"><h2>无法启动 3D 场景</h2><p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Firefox / Safari。</p></div>
+
+<script src="./assets/three.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
