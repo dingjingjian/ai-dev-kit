@@ -226,9 +226,9 @@
     var dt=clock.getDelta();
     if(playing){var s=dt*speedMul;
       eAng+=s*EARTH_REV;mAng+=s*MOON_REV;eSpin+=s*EARTH_SPIN;
-      earthOrbit.position.set(Math.cos(eAng)*EARTH_ORBIT,0,Math.sin(eAng)*EARTH_ORBIT);
-      moonOrbit.position.set(Math.cos(mAng)*MOON_ORBIT,0,Math.sin(mAng)*MOON_ORBIT);
-      earth.rotation.y=eSpin;clouds.rotation.y=eSpin*1.12;moon.rotation.y=mAng;sun.rotation.y+=s*SUN_SPIN;
+      earthOrbit.position.set(Math.cos(eAng)*EARTH_ORBIT,0,-Math.sin(eAng)*EARTH_ORBIT);
+      moonOrbit.position.set(Math.cos(mAng)*MOON_ORBIT,0,-Math.sin(mAng)*MOON_ORBIT);
+      earth.rotation.y=eSpin;clouds.rotation.y=eSpin*1.12;moon.rotation.y=Math.PI+mAng;sun.rotation.y+=s*SUN_SPIN;
       stars.rotation.y+=s*0.003;sky.rotation.y+=s*0.001;}
     // 跟踪插值
     if(focus){targetGoal.setFromMatrixPosition(focusTargets[focus].matrixWorld);}

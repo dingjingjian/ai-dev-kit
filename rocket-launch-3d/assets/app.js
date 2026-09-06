@@ -28,6 +28,8 @@
     if (canvas) canvas.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; return;
   }
 
+  var audio = M3D.createAudio ? M3D.createAudio() : null;
+
   var rocketModel = M3D.buildCZ2F(renderer);
   var pad = M3D.buildPad(renderer);
   var parts = rocketModel.parts;
@@ -47,13 +49,25 @@
   var countdown = 0, lastCount = -1, igniteFlash = 0;
   var padAlpha = 1, spinGate = 0, axisRoll = 0;   // 发射台可见度 / 自转倍率 / 在轨镜头翻转角
   var transitEye0 = null, transitPrevK = 0;       // 在轨过渡镜头弧线的起点捕获
+  var orbitSun = null, lastOrbitK = 0;            // 入轨后冻结的太阳方向（世界系）及上帧过渡因子
   var cam = {
     yaw: 0.42, pitch: 0.06, distance: 16, fitDist: 5200,
     targetX: 0, targetY: rocketModel.center, targetZ: 0, shake: 0
   };
 
   var launch = M3D.createLaunchSystem(renderer, rocketModel, pad, {
-    onPhase: function (key, text) { queuePhase(text); }
+    onPhase: function (key, text) {
+      queuePhase(text);
+      // 阶段音效：分离类事件给金属反冲闷响，入轨给轻和弦（点火/起飞由隆隆声覆盖）
+      if (!audio) return;
+      if (key === 'towerSep') audio.clank(0.8);
+      else if (key === 'boosterSep') audio.clank(1.0);
+      else if (key === 'stage1Sep') audio.clank(1.2);
+      else if (key === 'stage2Ignition') audio.clank(0.5);
+      else if (key === 'fairingSep') audio.clank(0.9);
+      else if (key === 'seco' || key === 'orbit') audio.chime();
+      else if (key === 'shipSep') audio.clank(0.7);
+    }
   });
   var launchState = launch.state;
 
@@ -196,14 +210,36 @@
   }
 
   function updateLight() {
-    // 太阳方位跟随镜头：上升段贴着相机方向保证箭体受光；在轨段外扩偏角，
-    // 让明暗界线与夜面城市灯光始终留在画面里
+    // 太阳光照：上升段贴着相机方向保证箭体始终受光（不出现背光黑箭）；
+    // 入轨过渡后收敛为世界系固定的太阳方向——太阳不再跟随镜头，晨昏线
+    // 静止在场景里，飞船每圈穿越明暗界线自然出现昼夜交替，夜面城市灯光
+    // 随地表转动依次亮灭。
     var k = launchState.orbitBlend;
-    var la = cam.yaw + 0.45 + 0.15 * k;
     var d = renderer.light.dir;
-    d[0] = Math.sin(la) * 0.80; d[1] = 0.45; d[2] = Math.cos(la) * 0.80;
-    var l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
-    d[0] /= l; d[1] /= l; d[2] /= l;
+    var la = cam.yaw + 0.45 + 0.15 * k;
+    var ax = Math.sin(la) * 0.80, ay = 0.45, az = Math.cos(la) * 0.80;
+    var l = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
+    ax /= l; ay /= l; az /= l;
+    var kb = k * k * (3 - 2 * k);   // smoothstep：与镜头过渡弧线同节奏收敛
+    if (kb > 0.001) {
+      // 过渡起点捕获一次固定太阳方位（基于当时的镜头方位外扩偏角，光照
+      // 构图连续），此后冻结在世界系；倒放/复位后重入时重新捕获
+      if (!orbitSun || k < lastOrbitK) {
+        var sa = cam.yaw + 0.45 + 0.15 + 0.55;
+        orbitSun = [Math.sin(sa) * 0.94, 0.34, Math.cos(sa) * 0.94];
+        l = Math.sqrt(orbitSun[0] * orbitSun[0] + orbitSun[1] * orbitSun[1] + orbitSun[2] * orbitSun[2]) || 1;
+        orbitSun[0] /= l; orbitSun[1] /= l; orbitSun[2] /= l;
+      }
+      d[0] = ax + (orbitSun[0] - ax) * kb;
+      d[1] = ay + (orbitSun[1] - ay) * kb;
+      d[2] = az + (orbitSun[2] - az) * kb;
+      l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+      d[0] /= l; d[1] /= l; d[2] /= l;
+    } else {
+      orbitSun = null;   // 回到上升段（复位/展示模式）允许下次入轨重新捕获
+      d[0] = ax; d[1] = ay; d[2] = az;
+    }
+    lastOrbitK = k;
   }
 
   function updateSceneBg() {
@@ -291,6 +327,7 @@
       var el = document.createElement('div'); el.className = 'ptag'; el.textContent = p.label;
       (function (pp, ee) {
         ee.addEventListener('click', function () {
+          if (audio) audio.click();
           if (descTitle) descTitle.textContent = pp.label;
           if (descText) descText.textContent = pp.desc;
           if (descBox) descBox.style.display = 'block';
@@ -326,6 +363,23 @@
       if (launchState.hold) txt += ' · ' + launchState.warp.toFixed(0) + '×加速';
     }
     telemetryEl.textContent = txt;
+  }
+
+  // ---- 音效调制：隆隆声随推力/大气密度/镜头距离实时变化 ----
+  // 点火爬坡期渐起；高度越高大气越稀薄声音越小（入真空近乎消失）；
+  // 入轨关机后彻底静音；长按加速时相机远离，声音按镜头距离衰减。
+  function updateAudio() {
+    var s = launchState, lvl = 0, bright = 0;
+    var burning = mode === 'launch' && s.ignited && !s.inserted &&
+      (s.phase === 'ignition' || s.phase === 'burn1' || (s.phase === 'burn2' && s.fuel2 > 0));
+    if (burning) {
+      var ramp = Math.min(s.t / 0.54, 1);
+      var altKm = Math.max(0, s.alt * launch.KM_PER_UNIT);
+      var air = altKm <= 10 ? 1 : Math.max(0.22, 1 - (altKm - 10) / 60);
+      lvl = ramp * air * Math.max(0.55, 1 - (cam.distance - 20) / 180);
+      bright = Math.min(1, altKm / 45);
+    }
+    audio.setRumble(lvl, bright);
   }
 
   function updateParts() {
@@ -379,11 +433,13 @@
           countdownEl.classList.remove('pop');
           void countdownEl.offsetWidth;
           countdownEl.classList.add('pop');
+          if (audio) audio.beep('count');
         }
       }
       if (phaseText && n > 0) phaseText.textContent = '倒计时 ' + n + ' · 各系统准备就绪';
       if (countdown <= 0) {
         countdown = 0; launch.ignite(); igniteFlash = 1.0; lastCount = -1;
+        if (audio) audio.beep('go');
         if (countdownEl) { countdownEl.textContent = '点火！'; countdownEl.classList.add('cd-ignite'); countdownEl.classList.remove('pop'); void countdownEl.offsetWidth; countdownEl.classList.add('pop'); }
         if (btnWarp) btnWarp.style.display = 'flex';
       }
@@ -414,6 +470,7 @@
       launch.directCamera(cam, dt);
       if (progressFill) progressFill.style.width = (launchState.progress * 100) + '%';
     }
+    if (audio) updateAudio();
     launch.syncFlames();
 
     updateSceneBg();
@@ -449,6 +506,7 @@
 
   function resetLaunch() {
     launch.reset();
+    if (audio) audio.silence();
     if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
     spinGate = 0;   // 立即停住地球自转（否则平滑衰减期间地面仍在移动）
     axisRoll = 0;   // 镜头参考系复位为台面铅垂
@@ -497,14 +555,33 @@
 
   function ignite() {
     if (launchState.ignited || launchState.inserted || countdown > 0) return;
+    if (audio) audio.arm();
     countdown = 3;
     if (btnIgnite) btnIgnite.style.display = 'none';
   }
 
-  if (btnShow) btnShow.addEventListener('click', function () { setMode('show'); });
-  if (btnExplode) btnExplode.addEventListener('click', function () { setMode('explode'); });
-  if (btnLaunch) btnLaunch.addEventListener('click', function () { setMode('launch'); });
+  if (btnShow) btnShow.addEventListener('click', function () { if (audio) audio.click(); setMode('show'); });
+  if (btnExplode) btnExplode.addEventListener('click', function () { if (audio) audio.click(); setMode('explode'); });
+  if (btnLaunch) btnLaunch.addEventListener('click', function () { if (audio) audio.click(); setMode('launch'); });
   if (btnIgnite) btnIgnite.addEventListener('click', ignite);
+
+  // ---- 音效开关 + 自动播放策略解锁：首次用户手势时才创建/恢复 AudioContext ----
+  var btnSound = document.getElementById('btn-sound');
+  if (btnSound) {
+    btnSound.addEventListener('click', function () {
+      var muted = !audio.isMuted();
+      audio.setMuted(muted);
+      btnSound.classList.toggle('muted', muted);
+    });
+  }
+  function unlockAudio() {
+    if (!audio) return;
+    audio.unlock();
+    document.removeEventListener('pointerdown', unlockAudio);
+    window.removeEventListener('keydown', unlockAudio);
+  }
+  document.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
 
   // ---- 长按加速：按住按钮（或空格键）期间仿真倍率 ×3，松开立即恢复 ----
   function setHold(on) {
@@ -575,8 +652,14 @@
     }, { passive: false });
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { running = false; setHold(false); if (rafId) cancelAnimationFrame(rafId); rafId = 0; }
-    else if (!running) { running = true; lastTime = 0; rafId = requestAnimationFrame(frame); }
+    if (document.hidden) {
+      running = false; setHold(false);
+      if (rafId) cancelAnimationFrame(rafId); rafId = 0;
+      if (audio) audio.suspend();   // 页面隐藏时停住常驻噪声循环，避免后台持续发声
+    } else if (!running) {
+      running = true; lastTime = 0; rafId = requestAnimationFrame(frame);
+      if (audio) audio.resume();
+    }
   });
 
   doResize(); setMode('show'); rafId = requestAnimationFrame(frame);

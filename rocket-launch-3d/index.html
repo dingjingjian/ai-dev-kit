@@ -18,6 +18,16 @@
         <span class="w-arrows">▶▶</span>
         <span class="w-label">长按加速</span>
       </button>
+      <button id="btn-sound" class="sound-btn" type="button" aria-label="切换音效">
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M3 9v6h4l5 4V5L7 9H3z" fill="currentColor"/>
+          <path class="s-wave" d="M16 8.5a4.5 4.5 0 0 1 0 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path class="s-wave" d="M18.5 6a8 8 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <line class="s-off" x1="16" y1="9" x2="21" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <line class="s-off" x1="21" y1="9" x2="16" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="s-label">音效</span>
+      </button>
       <div id="desc-box">
         <div id="desc-title"></div>
         <div id="desc-text"></div>
@@ -55,6 +65,7 @@
   <script src="./assets/engine.js"></script>
   <script src="./assets/rocket.js"></script>
   <script src="./assets/launch.js"></script>
+  <script src="./assets/audio.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>

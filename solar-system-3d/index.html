@@ -11,7 +11,7 @@
   #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
 
   /* 顶部 */
-  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:50px 50px 12px;z-index:10;pointer-events:none}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:85px 12px 12px;z-index:10;pointer-events:none}
   .brand{display:flex;align-items:center;gap:9px;pointer-events:auto}
   .logo{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff6d0,#ffb84d 45%,#ff7a1e 75%,#b53a10);box-shadow:0 0 12px rgba(255,150,40,.55)}
   .brand b{font-size:15px;font-weight:600;letter-spacing:.5px}
@@ -57,7 +57,7 @@
   .tag{position:absolute;transform:translate(-50%,-140%);font-size:11px;color:var(--txt);background:rgba(8,14,28,.55);border:1px solid var(--line);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
 
   /* 提示 */
-  .tip{position:fixed;left:50%;top:54px;transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none}
+  .tip{position:fixed;left:50%;top:120px;transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none}
   .tip.show{opacity:1}
 
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
@@ -71,12 +71,12 @@
   #fallback p{color:var(--mut);max-width:420px;line-height:1.6}
 
 @supports (padding: env(safe-area-inset-top)){
-  .top{padding:max(50px,env(safe-area-inset-top)) max(50px,env(safe-area-inset-right)) 12px max(50px,env(safe-area-inset-left))}
+  .top{padding:max(85px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left))}
   .dock{bottom:max(16px,env(safe-area-inset-bottom))}
   .card{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 64px)}
   .sheet{padding-top:max(14px,env(safe-area-inset-top))}
   .sheet .close{top:max(14px,env(safe-area-inset-top))}
-  .tip{top:max(54px,calc(env(safe-area-inset-top) + 44px))}
+  .tip{top:max(120px,calc(env(safe-area-inset-top) + 44px))}
 }
 </style>
 </head>
