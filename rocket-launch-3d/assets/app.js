@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   'use strict';
   var M3D = window.M3D;
   var E = M3D.EARTH;
@@ -6,6 +6,7 @@
 
   var canvas = document.getElementById('stage');
   var fallback = document.getElementById('fallback');
+  var loader = document.getElementById('loader');
   var wrap = document.getElementById('stage-wrap');
   var labelLayer = document.getElementById('labels');
   var phaseText = document.getElementById('phase-text');
@@ -13,6 +14,7 @@
   var btnExplode = document.getElementById('btn-explode');
   var btnLaunch = document.getElementById('btn-launch');
   var btnIgnite = document.getElementById('btn-ignite');
+  var btnWarp = document.getElementById('btn-warp');
   var progressFill = document.getElementById('progress-fill');
   var descBox = document.getElementById('desc-box');
   var descTitle = document.getElementById('desc-title');
@@ -21,11 +23,20 @@
   var telemetryEl = document.getElementById('telemetry');
 
   var renderer = M3D.createRenderer(canvas);
-  if (!renderer) { if (canvas) canvas.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; return; }
+  if (!renderer) {
+    if (loader) loader.classList.add('hide');
+    if (canvas) canvas.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; return;
+  }
 
   var rocketModel = M3D.buildCZ2F(renderer);
   var pad = M3D.buildPad(renderer);
   var parts = rocketModel.parts;
+
+  // WebGL 上下文丢失：淡出载入层并显示降级提示（与 earth-3d 行为一致）
+  canvas.addEventListener('webglcontextlost', function () {
+    hideLoader();
+    if (fallback) fallback.style.display = 'flex';
+  }, false);
 
   // 地球卫星影像（等距圆柱投影）；加载成功后替换程序化地表，失败则保持后备方案
   var earthTex = renderer.createTexture('assets/earth.jpg', function (ok) {
@@ -35,17 +46,35 @@
   var mode = 'show', explodeAmount = 0, explodeTarget = 0, autoRot = 0, groupRotY = 0;
   var countdown = 0, lastCount = -1, igniteFlash = 0;
   var padAlpha = 1, spinGate = 0, axisRoll = 0;   // 发射台可见度 / 自转倍率 / 在轨镜头翻转角
+  var transitEye0 = null, transitPrevK = 0;       // 在轨过渡镜头弧线的起点捕获
   var cam = {
     yaw: 0.42, pitch: 0.06, distance: 16, fitDist: 5200,
     targetX: 0, targetY: rocketModel.center, targetZ: 0, shake: 0
   };
 
   var launch = M3D.createLaunchSystem(renderer, rocketModel, pad, {
-    onPhase: function (key, text) {
-      if (phaseText) phaseText.textContent = text;
-    }
+    onPhase: function (key, text) { queuePhase(text); }
   });
   var launchState = launch.state;
+
+  // ---- 阶段字幕队列：每条字幕保证最短停留时间 ----
+  // 分离类事件在 MET 上很密集（如一二级分离 MET154 → 二级点火 MET156 仅隔
+  // 0.3 场景秒），直接跟着事件刷会让字幕一闪而过。事件只入队，字幕按
+  // 最短停留时间依次播出，保证每条都看得清。
+  var PHASE_MIN_SHOW = 2.4;   // 每条字幕最短停留（秒）
+  var phaseQueue = [], phaseTimer = 0;
+  function queuePhase(text) {
+    if (!text) return;
+    if (phaseQueue.length >= 4) phaseQueue.shift();   // 队列满则丢弃最旧的，保最新事件可见
+    phaseQueue.push(text);
+  }
+  function showPhaseText(text) {
+    if (!phaseText) return;
+    phaseText.textContent = text;
+    phaseText.classList.remove('phase-in');
+    void phaseText.offsetWidth;   // 重启动画
+    phaseText.classList.add('phase-in');
+  }
 
   var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
   var qualityDrop = false, frameTimes = [], lastCheck = 0;
@@ -84,12 +113,74 @@
     var ca = Math.cos(axisRoll), sa = Math.sin(axisRoll);
     var ox = d * cp * sy, oy = d * sp, oz = d * cp * cy;
     var eye = renderer.camera.eye;
-    eye[0] = cam.targetX + ox + (sh ? (Math.random() - 0.5) * sh : 0);
-    eye[1] = cam.targetY + oy * ca + oz * sa + (sh ? (Math.random() - 0.5) * sh : 0);
-    eye[2] = cam.targetZ - oy * sa + oz * ca + (sh ? (Math.random() - 0.5) * sh : 0);
+    var k = launchState.orbitBlend;
+    if (k > 0.002 && k < 0.995) {
+      // ---- 在轨过渡的安全镜头弧线 ----
+      // 直接对目标点/距离做线性插值时，目标点会沉向地心、而距离还在半途，
+      // 镜头位置被压进地球内部（原来只靠 R_E+4 的硬钳制贴地掠过，观感就是
+      // “穿模”）。改为在过渡起点捕获一次当前镜头位置（含地表钳制，与过渡
+      // 前逐位连续），之后沿“捕获点 → 在轨眼”的 (半径,方向) 球面弧线行进：
+      // 方向 slerp、半径单调上升并在中段向外隆起，沿程不再进入大气辉光壳。
+      var ke = k * k * (3 - 2 * k);
+      var C = E.center;
+      if (!transitEye0 || k < transitPrevK) {
+        // 过渡起点（含倒放/复位后重入）：捕获当前镜头位置
+        var q0x = cam.targetX + ox, q0y = cam.targetY + oy * ca + oz * sa, q0z = cam.targetZ - oy * sa + oz * ca;
+        var qdx = q0x - C[0], qdy = q0y - C[1], qdz = q0z - C[2];
+        var qlen = Math.sqrt(qdx * qdx + qdy * qdy + qdz * qdz) || 1;
+        var qc = Math.max(qlen, R_E + 4) / qlen;   // 与既有地表钳制一致
+        transitEye0 = [C[0] + qdx * qc, C[1] + qdy * qc, C[2] + qdz * qc];
+      }
+      transitPrevK = k;
+      var e0x = transitEye0[0] - C[0], e0y = transitEye0[1] - C[1], e0z = transitEye0[2] - C[2];
+      var r0 = Math.sqrt(e0x * e0x + e0y * e0y + e0z * e0z) || 1;
+      // 在轨眼方向：偏移随 axisRoll 翻转，长度即 d；半径低于安全壳时抬到安全壳
+      var SAFE_R = R_E * 1.035 + 25;
+      var floor = (R_E + 4) + (SAFE_R - (R_E + 4)) * Math.min(1, k * 20);
+      var rO = Math.max(d, floor);
+      var dAx = e0x / r0, dAy = e0y / r0, dAz = e0z / r0;
+      var dBx = ox / d, dBy = (oy * ca + oz * sa) / d, dBz = (-oy * sa + oz * ca) / d;
+      // 方向用球面插值（slerp）：两眼方向接近对跖时 nlerp 会退化跳变
+      var dot = dAx * dBx + dAy * dBy + dAz * dBz;
+      if (dot > 1) dot = 1; else if (dot < -1) dot = -1;
+      var w = Math.acos(dot), sw = Math.sin(w);
+      if (sw < 1e-4) {
+        // 方向几乎重合或对跖：nlerp 后备；对跖时先给 dirB 加正交微扰绕开奇点
+        if (w > 3) {
+          var qx = dAy - dAz, qy = dAz - dAx, qz = dAx - dAy;
+          var ql = Math.sqrt(qx * qx + qy * qy + qz * qz) || 1;
+          dBx += qx / ql * 0.1; dBy += qy / ql * 0.1; dBz += qz / ql * 0.1;
+          var bl = Math.sqrt(dBx * dBx + dBy * dBy + dBz * dBz) || 1;
+          dBx /= bl; dBy /= bl; dBz /= bl;
+        }
+        var mx = dAx + (dBx - dAx) * ke, my = dAy + (dBy - dAy) * ke, mz = dAz + (dBz - dAz) * ke;
+        var ml = Math.sqrt(mx * mx + my * my + mz * mz) || 1;
+        dAx = mx / ml; dAy = my / ml; dAz = mz / ml;
+      } else {
+        var s0 = Math.sin((1 - ke) * w) / sw, s1 = Math.sin(ke * w) / sw;
+        dAx = dAx * s0 + dBx * s1; dAy = dAy * s0 + dBy * s1; dAz = dAz * s0 + dBz * s1;
+      }
+      var dn = Math.sqrt(dAx * dAx + dAy * dAy + dAz * dAz) || 1;
+      // 半径：弧线插值与“前 1/8 过渡内抬升到安全壳”的下限取大者，
+      // 再叠加中段向外隆起——起点即最低点，沿程单调远离地表
+      var arcR = r0 + (rO - r0) * ke;
+      var rLow = r0 + (SAFE_R - r0) * Math.min(1, k * 8);
+      var r = Math.max(arcR, rLow) + Math.sin(Math.PI * ke) * 140;
+      eye[0] = C[0] + dAx / dn * r;
+      eye[1] = C[1] + dAy / dn * r;
+      eye[2] = C[2] + dAz / dn * r;
+    } else {
+      transitEye0 = null; transitPrevK = 0;
+      eye[0] = cam.targetX + ox;
+      eye[1] = cam.targetY + oy * ca + oz * sa;
+      eye[2] = cam.targetZ - oy * sa + oz * ca;
+    }
+    eye[0] += sh ? (Math.random() - 0.5) * sh : 0;
+    eye[1] += sh ? (Math.random() - 0.5) * sh : 0;
+    eye[2] += sh ? (Math.random() - 0.5) * sh : 0;
     var up = renderer.camera.up;
     up[0] = 0; up[1] = ca; up[2] = -sa;
-    // 避免相机钻到地表以下
+    // 避免相机钻到地表以下（安全弧线之外的最后兜底）
     var dx = eye[0] - E.center[0], dy = eye[1] - E.center[1], dz = eye[2] - E.center[2];
     var len = Math.sqrt(dx * dx + dy * dy + dz * dz);
     var minLen = R_E + 4;
@@ -232,6 +323,7 @@
       txt = 'T+' + fmtMet(launchState.met) + ' · 环绕 ' + laps.toFixed(2) + ' 圈 · ' + launchState.warp.toFixed(0) + '× 加速';
     } else {
       txt += ' · 过载 ' + gf + ' g';
+      if (launchState.hold) txt += ' · ' + launchState.warp.toFixed(0) + '×加速';
     }
     telemetryEl.textContent = txt;
   }
@@ -239,11 +331,19 @@
   function updateParts() {
     M3D.updatePartTransforms(parts, {
       rotY: groupRotY, explode: explodeAmount, launchY: launchState.y, launchX: launchState.x,
-      tilt: launchState.tiltVis, launchT: launchState.t, scale: launchState.scale
+      tilt: launchState.tiltVis, launchT: launchState.t, scale: launchState.scale,
+      // 在轨段任务时间被 20× 加速，固定淡出速率会让船箭分离的二级一闪而过；
+      // 速率随 TIME_SCALE 等比缩放，保持各分离事件中碎片可见的 MET 时长不变
+      fade: launchState.inserted ? 0.013 : 0.17
     });
   }
 
-  var lastTime = 0, running = true, rafId = 0;
+  var lastTime = 0, running = true, rafId = 0, loaderHidden = false;
+  function hideLoader() {
+    if (loaderHidden || !loader) return;
+    loaderHidden = true;
+    loader.classList.add('hide');
+  }
   function frame(now) {
     if (!running) return;
     rafId = requestAnimationFrame(frame);
@@ -285,6 +385,7 @@
       if (countdown <= 0) {
         countdown = 0; launch.ignite(); igniteFlash = 1.0; lastCount = -1;
         if (countdownEl) { countdownEl.textContent = '点火！'; countdownEl.classList.add('cd-ignite'); countdownEl.classList.remove('pop'); void countdownEl.offsetWidth; countdownEl.classList.add('pop'); }
+        if (btnWarp) btnWarp.style.display = 'flex';
       }
     }
     if (igniteFlash > 0) {
@@ -294,6 +395,13 @@
         countdownEl.style.opacity = String(Math.max(0, Math.min(1, igniteFlash / 0.7)));
       }
       if (igniteFlash <= 0 && countdownEl) countdownEl.style.display = 'none';
+    }
+
+    // ---- 阶段字幕播出：上条停留满最短时间后才切下一条 ----
+    if (phaseTimer > 0) phaseTimer -= dt;
+    if (phaseQueue.length && phaseTimer <= 0) {
+      showPhaseText(phaseQueue.shift());
+      phaseTimer = PHASE_MIN_SHOW;
     }
 
     if (mode === 'launch') {
@@ -322,6 +430,7 @@
     updateLabels();
     updateTelemetry();
     renderer.render(dt);
+    hideLoader();   // 首帧渲染完成，淡出载入画面
 
     frameTimes.push(dt);
     if (now - lastCheck > 4000 && frameTimes.length > 60) {
@@ -340,12 +449,14 @@
 
   function resetLaunch() {
     launch.reset();
+    if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
     spinGate = 0;   // 立即停住地球自转（否则平滑衰减期间地面仍在移动）
     axisRoll = 0;   // 镜头参考系复位为台面铅垂
     countdown = 0; lastCount = -1; igniteFlash = 0; cam.shake = 0;
     cam.targetX = 0; cam.targetY = rocketModel.center; cam.targetZ = 0;
     if (mode === 'launch') { cam.targetY = 3.2; cam.distance = 18; cam.pitch = 0.04; cam.yaw = 0.42; }
     if (phaseText) phaseText.textContent = '准备就绪 · 点击点火发射';
+    phaseQueue.length = 0; phaseTimer = 0;   // 清空字幕队列
     if (progressFill) progressFill.style.width = '0%';
     if (btnIgnite) {
       btnIgnite.disabled = false;
@@ -395,6 +506,30 @@
   if (btnLaunch) btnLaunch.addEventListener('click', function () { setMode('launch'); });
   if (btnIgnite) btnIgnite.addEventListener('click', ignite);
 
+  // ---- 长按加速：按住按钮（或空格键）期间仿真倍率 ×3，松开立即恢复 ----
+  function setHold(on) {
+    launch.setHoldWarp(on);
+    if (btnWarp) btnWarp.classList.toggle('holding', on);
+  }
+  if (btnWarp) {
+    btnWarp.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      if (btnWarp.setPointerCapture) { try { btnWarp.setPointerCapture(e.pointerId); } catch (err) {} }
+      setHold(true);
+    });
+    btnWarp.addEventListener('pointerup', function () { setHold(false); });
+    btnWarp.addEventListener('pointercancel', function () { setHold(false); });
+    btnWarp.addEventListener('lostpointercapture', function () { setHold(false); });
+    btnWarp.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  }
+  window.addEventListener('keydown', function (e) {
+    if (e.code === 'Space' && mode === 'launch' && launchState.ignited && !e.repeat) { e.preventDefault(); setHold(true); }
+  });
+  window.addEventListener('keyup', function (e) {
+    if (e.code === 'Space') setHold(false);
+  });
+  window.addEventListener('blur', function () { setHold(false); });
+
   var pointers = {}, drag = false, lastX = 0, lastY = 0, pinchDist = 0;
   function onDown(e) {
     pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -440,7 +575,7 @@
     }, { passive: false });
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { running = false; if (rafId) cancelAnimationFrame(rafId); rafId = 0; }
+    if (document.hidden) { running = false; setHold(false); if (rafId) cancelAnimationFrame(rafId); rafId = 0; }
     else if (!running) { running = true; lastTime = 0; rafId = requestAnimationFrame(frame); }
   });
 

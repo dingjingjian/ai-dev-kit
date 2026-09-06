@@ -6,7 +6,9 @@
   var EARTH_R = 1800;                 // 地球半径（场景单位）
   var EARTH_CENTER = [0, -EARTH_R, 0]; // 球心：地表发射点位于世界原点
   var ORBIT_ALT = 97;                 // 目标轨道高度（场景单位）≈ 343 km，与神舟轨道一致
-  var TIME_SCALE = 10.0;              // 1 场景秒 ≈ 10 任务秒：起飞→入轨约 55 场景秒（MET ≈ 9 分 15 秒）
+  var TIME_SCALE = 6.0;               // 1 场景秒 ≈ 6 任务秒：起飞→入轨约 94 场景秒（MET ≈ 9 分 24 秒）
+                                      // 放慢整体节奏让各分离事件的字幕有足够停留时间；改此值时
+                                      // launch.js 的推力/排气速度/闭环参数必须按 F∝TS²、VE∝TS 同步缩放
   var KM_PER_UNIT = 6371 / EARTH_R;   // 1 场景单位 ≈ 3.539 km
   // 场景重力加速度：由真实 9.81 m/s² 按上述单位/时间换算反推，
   // 保证“场景里的物理”与“MET 显示的真实物理”自洽（改 TIME_SCALE 时必须同步改这里）
@@ -119,10 +121,10 @@
 
     // ---- 二级 ----
     addPart({ name: 'upper', geom: geom.cylinder(CORE_R, CORE_R, 2.40, SEG), color: COLORS.white, y: 5.30, centerY: 1.20,
-      label: '二级', desc: '芯二级：装有高空发动机与推进剂贮箱，负责把飞船加速到入轨速度。',
-      detachGroup: 'never', explodeOff: [0, 1.9, 0] });
+      label: '二级', desc: '芯二级：装有高空发动机与推进剂贮箱，负责把飞船加速到入轨速度，船箭分离后抛离。',
+      detachGroup: 'stage2', explodeOff: [0, 1.9, 0] });
     addPart({ name: 'upperStripe1', geom: geom.cylinder(0.505, 0.505, 0.10, SEG), color: COLORS.stripe, y: 7.40, detachGroup: 'fairing', explodeOff: [0, 1.5, 0] });
-    addPart({ name: 'upperStripe2', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: 6.45, detachGroup: 'never', explodeOff: [0, 1.9, 0] });
+    addPart({ name: 'upperStripe2', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: 6.45, detachGroup: 'stage2', explodeOff: [0, 1.9, 0] });
 
     // ---- 级间段 ----
     addPart({ name: 'inter', geom: geom.cylinder(0.47, CORE_R, 0.22, SEG), color: COLORS.dark, y: 5.08, centerY: 0.11,
@@ -132,13 +134,13 @@
     // ---- 二级发动机（主喷管 + 4 游机）：分离前藏在级间段内，分离后露出 ----
     addPart({ name: 'nozS2', geom: geom.cylinder(0.14, 0.30, 0.24, SEG), color: COLORS.nozzle, y: 5.06, centerY: 0.12,
       label: '二级发动机', desc: '二级主发动机高空喷管，一二级分离后点火工作，把飞船一路加速到环绕速度。',
-      detachGroup: 'never', explodeOff: [0, 1.15, 0] });
+      detachGroup: 'stage2', explodeOff: [0, 1.15, 0] });
     var s2vG = geom.cylinder(0.030, 0.062, 0.12, 10);
     for (var sv = 0; sv < 4; sv++) {
       var sva = sv * Math.PI / 2 + Math.PI / 4, svr = 0.37;
       addPart({ name: 'nozS2V' + sv, geom: s2vG, color: COLORS.nozzle,
         y: 5.10, x: Math.cos(sva) * svr, z: Math.sin(sva) * svr, rotY: sva, rotX: 0.35, centerY: 0.06,
-        detachGroup: 'never', explodeOff: [0, 1.15, 0] });
+        detachGroup: 'stage2', explodeOff: [0, 1.15, 0] });
     }
 
     // ---- 一级 ----
@@ -154,7 +156,7 @@
     var FLAG_R = 0.515, FLAG_W = 0.45, FLAG_H = 0.30, FLAG_Y = 6.52;
     var flagSpan = FLAG_W / FLAG_R;   // 旗面宽度对应的周向角
     addPart({ name: 'flagCN', geom: geom.arcPatch(FLAG_R, FLAG_H, -flagSpan / 2, flagSpan / 2, 16), color: COLORS.red,
-      y: FLAG_Y, centerY: FLAG_H / 2, detachGroup: 'never', explodeOff: [0, 1.9, 0] });
+      y: FLAG_Y, centerY: FLAG_H / 2, detachGroup: 'stage2', explodeOff: [0, 1.9, 0] });
     // 载人航天徽标：整流罩圆柱段（y 7.50~7.95）弧形贴片，随右半罩分离
     var BADGE_H = 0.22, badgeSpan = 0.26 / FAIRING_R;
     addPart({ name: 'cmsBadge', geom: geom.arcPatch(FAIRING_R + 0.01, BADGE_H, -badgeSpan / 2, badgeSpan / 2, 12), color: [0.08, 0.28, 0.62],
@@ -424,7 +426,8 @@
       for (var k = 0; k < 16; k++) mm[k] = m[k];
       if (detached) {
         var since = env.launchT - p.detachT;
-        p.mesh.alpha = Math.max(0, 1 - Math.max(0, since - 3) * 0.28);
+        var fadeRate = env.fade || 0.28;
+        p.mesh.alpha = Math.max(0, 1 - Math.max(0, since - 3) * fadeRate);
         if (p.mesh.alpha <= 0) p.mesh.visible = false;
       }
     }

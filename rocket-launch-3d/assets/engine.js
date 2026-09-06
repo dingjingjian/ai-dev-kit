@@ -1,4 +1,4 @@
-(function (global) {
+﻿(function (global) {
   'use strict';
   var M3D = global.M3D || (global.M3D = {});
   var mat4 = M3D.mat4;

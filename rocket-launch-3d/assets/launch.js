@@ -8,28 +8,32 @@
 
   // ---- 显示换算（地球半径按真实 6371 km）----
   var KM_PER_UNIT = E.kmPerUnit;
-  var TIME_SCALE = E.timeScale;                 // 1 场景秒 ≈ 10 任务秒
+  var TIME_SCALE = E.timeScale;                 // 1 场景秒 ≈ 6 任务秒（rocket.js）
   var MS_PER_UNIT = KM_PER_UNIT * 1000 / TIME_SCALE;
   // 进度条满程按 MET 585 s（神舟任务船箭分离节点）；实际入轨约 MET 562 s
-  var T_TOTAL = 58.5;
+  var T_TOTAL = 97.5;
+  // 船箭分离后镜头/尾迹的跟随中心：飞船组合体（服务舱+返回舱+轨道舱）
+  // 在箭体坐标系中的高度（服务舱底 ~6.9 → 轨道舱顶 ~8.6 的中点）
+  var SHIP_CENTER = 7.72;
 
   // ---- 质量模型（归一化；总质量 1.02，载荷比 ~1.7%）----
   var PAY = 0.017, FAIR = 0.004, TOW = 0.007;
   var S2D = 0.013;
   var S1D = 0.026;
   var BD = 0.006;
-  // 单枚助推器：烧时 12.61 场景秒 ≈ 12.6+0.54 = 13.2 s → MET 131 s 抛
-  // （较真实 MET 152 提前：视觉上与 MET 156 的一二级分离拉开 ~25 s，
-  //   避免两组分离事件挤在一起看不出先后）
+  // 单枚助推器：MET ≈ 131 s 抛（较真实 MET 152 提前：视觉上与 MET 156 的
+  //   一二级分离拉开 ~25 s，避免两组分离事件挤在一起看不出先后）
   var BF0 = 0.075;
-  // 芯一级：烧时 15.06 场景秒 ≈ 15.06+0.54 = 15.6 s → MET 156 s 一二级分离
+  // 芯一级：MET ≈ 156 s 一二级分离
   var S1F0 = 0.3584;
   // 二级主推力：全程连续燃烧（配合末段 ~2% 推进剂余度补燃）完成入轨
-  var F2 = 0.04644;
+  var F2 = 0.01672;
   // ---- 推力与排气速度（比冲 ≈ 270 s / 336 s）----
-  // F1+4FB 与起飞推重比决定前 160 s 的爬升；保持场景值与 TIME_SCALE² / TIME_SCALE 同步
-  var F1 = 0.1781, FB = 0.04453;
-  var VE1 = 7.487, VE2 = 9.323;
+  // 场景值按 TIME_SCALE=10 标定，随时间倍率整体缩放：F ∝ TS²、VE ∝ TS
+  // （与 rocket.js 的 G0 ∝ TS² 同步），保证任意 TIME_SCALE 下 MET 弹道一致。
+  // 当前 TS=6 → F×0.36、VE×0.6。
+  var F1 = 0.06412, FB = 0.01603;
+  var VE1 = 4.4922, VE2 = 5.5938;
   // 二级燃料量：主机推进剂。关机后允许按推进剂"余度"再补燃少许
   // （见 GHOST_LIMIT，等效真实火箭的推进剂误差余量），保证在燃料数值
   // 误差范围内仍能完成入轨判据；超过余度即彻底关机。
@@ -58,8 +62,10 @@
   }
 
   // ---- 末段高度闭环（沿用原 KG/KH 思路，参数微调使插入高度贴近 R_ORB）----
-  var KG = 0.85, KH = 0.10, VR_CAP = 2.4, W_TERM = 0.62;
-  var A_RATE = 5.83 * DEG, AOA_MAX = 10 * DEG;
+  // KH/VR_CAP 是速度量纲、A_RATE 是姿态角速度：均随 TIME_SCALE 等比缩放
+  //（TS=10 标定值 0.10/2.4/5.83°，当前 TS=6 → ×0.6）；KG/W_TERM 为无量纲比值
+  var KG = 0.85, KH = 0.06, VR_CAP = 1.44, W_TERM = 0.62;
+  var A_RATE = 3.5 * DEG, AOA_MAX = 10 * DEG;
 
   // ---- 时序（场景秒）----
   var IGN_RAMP = 0.54, SEP_DELAY = 0.3;          // 一二级分离到二级点火的间隔
@@ -67,6 +73,7 @@
   var MET_PITCH = 12, MET_MAXQ = 75, MET_TOWER = 120, MET_FAIRING = 210;
   // 助推/一二级燃尽由燃料量自动落到 MET 152/156（见 BF0/S1F0）
   var WARP = 20;
+  var HOLD_WARP = 3;   // 长按加速倍率：与当前基础倍率相乘（上升段 1→3，在轨 20→60）
   var NOZZLE_S1_Y = 0.12, NOZZLE_S2_Y = 5.26;
 
   // ---- 高度阈值（按真实 km 转场景单位）----
@@ -105,6 +112,7 @@
     fairingSep: '整流罩分离 · 飞船露出太空',
     cruise: '二级巡航 · 持续加速接近环绕速度',
     seco: '二级关机 · 飞船精确入轨',
+    shipSep: '船箭分离 · 飞船与二级火箭分离',
     orbit: '在轨运行 · 环绕地球飞行'
   };
 
@@ -120,6 +128,8 @@
       fuel1: S1F0, fuel2: S2F0, fuelBoost: BF0,
       boostersAttached: true, stage1Attached: true, towerAttached: true, fairingAttached: true,
       ignited: false, inserted: false, orbitBlend: 0, warp: 1, scale: 1,
+      hold: false,
+      shipAttached: true, focus: rocketModel.center,
       progress: 0, sepT: 0, _altMax: 0,
       camDist: 20
     };
@@ -273,11 +283,21 @@
         } else if (group === 'stage1') {
           p.detachV = localDirToWorld((Math.random() - 0.5) * 0.32, -2.2, (Math.random() - 0.5) * 0.32, [0, 0, 0]).slice();
           p.detachSpin = [(Math.random() - 0.5) * 0.7, (Math.random() - 0.5) * 0.7];
+        } else if (group === 'stage2') {
+          // 船箭分离：期望的世界分离方向 = 沿轨道切向向后 + 少量径向内。
+          // 分离体的 detachOff 是在“冻结的分离姿态系”里积分的
+          // （updatePartTransforms 会再乘 Rz(-detachPitch)），直接存世界向量
+          // 会被再转一次，所以这里按该系做一次逆旋转预补偿，保证世界方向正确
+          var cT = Math.cos(state.tiltVis), sT = Math.sin(state.tiltVis);
+          var dxb = -Math.cos(state.theta) * 0.38 - Math.sin(state.theta) * 0.14;
+          var dyb = Math.sin(state.theta) * 0.38 - Math.cos(state.theta) * 0.14;
+          p.detachV = [dxb * cT - dyb * sT, dxb * sT + dyb * cT, (Math.random() - 0.5) * 0.05];
+          p.detachSpin = [(Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 0.4];
         }
       }
       // 分离火光
       var n = group === 'tower' ? 22 : (group === 'stage1' ? 26 : 20);
-      var ly = group === 'tower' ? 9.4 : (group === 'stage1' ? 5.0 : (group === 'fairing' ? 8.1 : 1.6));
+      var ly = group === 'tower' ? 9.4 : (group === 'stage1' ? 5.0 : (group === 'fairing' ? 8.1 : (group === 'stage2' ? 7.5 : 1.6)));
       if (group === 'booster') {
         for (var b = 0; b < 4; b++) {
           var ba = b * Math.PI / 2;
@@ -285,18 +305,20 @@
           flashAt(w[0], w[1], w[2], 16);
         }
       } else {
+        if (group === 'stage2') ly *= state.scale;   // 在轨段箭体已放大，闪点位置与火花尺寸同步放大
         localToWorld(0, ly, 0, w);
-        flashAt(w[0], w[1], w[2], n);
+        flashAt(w[0], w[1], w[2], n, group === 'stage2' ? state.scale * 0.5 : 1);
       }
     }
 
-    function flashAt(x, y, z, n) {
+    function flashAt(x, y, z, n, szK) {
+      var k = szK || 1;
       for (var i = 0; i < n; i++) {
-        var a = Math.random() * Math.PI * 2, rr = Math.random() * 0.5, sp = 2 + Math.random() * 3;
+        var a = Math.random() * Math.PI * 2, rr = Math.random() * 0.5, sp = (2 + Math.random() * 3) * k;
         renderer.particles.spawn(
-          x + Math.cos(a) * rr, y + (Math.random() - 0.4) * 0.5, z + Math.sin(a) * rr,
+          x + Math.cos(a) * rr * k, y + (Math.random() - 0.4) * 0.5 * k, z + Math.sin(a) * rr * k,
           Math.cos(a) * sp, (Math.random() - 0.2) * sp, Math.sin(a) * sp,
-          1.0, 0.92, 0.6, 0.22 + Math.random() * 0.2, 1.2);
+          1.0, 0.92, 0.6, 0.22 + Math.random() * 0.2, 1.2 * k);
       }
     }
 
@@ -407,19 +429,22 @@
     }
 
     function spawnTrail(dt, camDist) {
-      acc.trail = (acc.trail || 0) + 40 * dt;
-      var sz = Math.max(2, Math.min(100, camDist * 0.017));
-      var hw = localToWorld(0, rocketModel.center * state.scale, 0, [0, 0, 0]);
+      // 入轨尾迹：细颗粒青蓝光点沿航迹排成一条纤细光弧，随年龄收缩消隐。
+      // 关机后发动机早已停止工作，这条线只是“轨道殷迹”提示，绝不能做成
+      // 大团白色烟雾（会被误读成尾烟/漏气），因此颗粒小、亮度低、拖尾短。
+      acc.trail = (acc.trail || 0) + 34 * dt;
+      var sz = Math.max(1.5, Math.min(12, camDist * 0.0022));
+      var hw = localToWorld(0, state.focus * state.scale, 0, [0, 0, 0]);
       // 信标光晕：尺寸跟随在轨放大倍数（≈ 船体长度的 1/3）、淡蓝低亮度，
-      // 只起"飞船在这里"的提示作用，不再用纯白大光球盖住飞船本体
-      var beacon = state.scale * 3.2;
+      // 只起“飞船在这里”的提示作用，不再用纯白大光球盖住飞船本体
+      var beacon = state.scale * 2.4;
       renderer.particles.spawn(hw[0], hw[1], hw[2], 0, 0, 0,
-        0.52, 0.70, 1.0, Math.max(dt * 2.4, 0.05), beacon, 0);
+        0.45, 0.75, 1.0, Math.max(dt * 2.4, 0.05), beacon, 0);
       while (acc.trail >= 1) {
         acc.trail -= 1;
-        var w = localToWorld((Math.random() - 0.5) * 0.4 * state.scale, rocketModel.center * state.scale, (Math.random() - 0.5) * 0.4 * state.scale, [0, 0, 0]);
+        var w = localToWorld((Math.random() - 0.5) * 0.12 * state.scale, state.focus * state.scale, (Math.random() - 0.5) * 0.12 * state.scale, [0, 0, 0]);
         renderer.particles.spawn(w[0], w[1], w[2], 0, 0, 0,
-          0.60, 0.88, 1.0, 10.0, sz, 0);
+          0.30, 0.72, 1.0, 3.5, sz * (0.8 + Math.random() * 0.4), 0, -0.45);
       }
     }
 
@@ -595,17 +620,26 @@
       // 关机入轨：达到当地环绕速度且径向速度接近 0（即完成圆轨道插入）
       if (state.phase === 'burn2') {
         var vCirc = Math.sqrt(MU / state.r);
-        if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.25) {
+        if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.15) {
           state.phase = 'orbit'; state.inserted = true;
           for (var k = 0; k < panels.length; k++) panels[k].mesh.visible = true;
           firePhase('seco');
         }
+      }
+
+      // 船箭分离：真实任务在 MET ≈ 585 s（入轨后约 23 s）进行；在轨段时间被
+      // 20× 加速，MET 585 会在关机后一闪而过，因此等在轨过渡（镜头拉远、
+      // 箭体放大）基本完成后触发，保证分离画面清晰可辨
+      if (state.shipAttached && state.inserted && state.orbitBlend > 0.95) {
+        state.shipAttached = false;
+        detach('stage2'); firePhase('shipSep');
       }
     }
 
     function update(dt, cam) {
       if (!state.ignited) { syncFlames(); return; }
       var warp = 1 + (WARP - 1) * state.orbitBlend;
+      if (state.hold) warp *= HOLD_WARP;   // 长按加速：在基础倍率上再乘
       state.warp = warp;
       var simDt = dt * warp;
       var remaining = simDt, hMax = 1 / 120;
@@ -630,6 +664,9 @@
       // 在轨放大 24×：镜头拉到全景（~5200 单位）后飞船本体仍需可辨，
       // 放大与拉远同步进行，屏幕占比全程基本恒定（近景 ~36px → 全景 ~30px）
       state.scale = 1 + state.orbitBlend * 23;
+      // 船箭分离后，镜头/尾迹/信标的跟随中心从整箭中心平滑移到飞船组合体中心
+      var focusTarget = state.shipAttached ? rocketModel.center : SHIP_CENTER;
+      state.focus += (focusTarget - state.focus) * Math.min(1, dt * 1.5);
       if (state.orbitBlend > 0.92 && !fired.orbit) firePhase('orbit');
 
       orbitRing.visible = state.orbitBlend > 0.01;
@@ -649,8 +686,8 @@
       var k = state.orbitBlend;
       var s = state.scale;
       var noseX = Math.sin(state.tilt), noseY = Math.cos(state.tilt);
-      var cx = state.x + noseX * rocketModel.center * s;
-      var cy = state.y + noseY * rocketModel.center * s;
+      var cx = state.x + noseX * state.focus * s;
+      var cy = state.y + noseY * state.focus * s;
       var chaseDist = Math.max(20, Math.min(115, 20 + Math.max(state.alt, state.altVis) * 0.55));
       var tx = cx + (E.center[0] - cx) * k;
       var ty = cy + (E.center[1] - cy) * k;
@@ -667,8 +704,9 @@
       cam.yaw += dt * (0.035 * (1 - k) + 0.03 * k);
       cam.pitch += ((0.05 + 0.20 * k) - cam.pitch) * Math.min(1, dt * 1.5);
       var shake = 0;
-      if (state.t > IGN_RAMP && state.t < 7.2) shake = 0.05;
-      else if (state.t >= 7.2 && state.t < 12) shake = 0.028;
+      // 场景秒窗口按 MET 锚点换算（TS=6）：12/20 场景秒 ≈ MET 72/120
+      if (state.t > IGN_RAMP && state.t < 12) shake = 0.05;
+      else if (state.t >= 12 && state.t < 20) shake = 0.028;
       cam.shake = shake;
     }
 
@@ -680,6 +718,8 @@
       state.boostersAttached = true; state.stage1Attached = true;
       state.towerAttached = true; state.fairingAttached = true;
       state.ignited = false; state.inserted = false; state.orbitBlend = 0;
+      state.hold = false;
+      state.shipAttached = true; state.focus = rocketModel.center;
       state.warp = 1; state.scale = 1; state.progress = 0; state.sepT = 0;
       state.accel = 0; state.gForce = 1; state.met = 0; state._altMax = 0;
       pad.armSwing = 0;
@@ -708,12 +748,20 @@
     return {
       state: state, V_ORB: V_ORB, KM_PER_UNIT: KM_PER_UNIT, MS_PER_UNIT: MS_PER_UNIT, TIME_SCALE: TIME_SCALE,
       ignite: function () { state.ignited = true; state.phase = 'ignition'; firePhase('ignition'); },
+      setHoldWarp: function (on) { state.hold = !!on; },
       update: update, reset: reset, directCamera: directCamera, syncFlames: syncFlames,
       updateDetachedParts: function (dt) {
         var A = (isBurning() && !state.inserted) ? currentThrust() / state.mass : 0;
         var c = Math.cos(state.tiltVis), s = Math.sin(state.tiltVis);
-        M3D.updateDetached(parts, dt, MU, E.center[0], E.center[1], E.center[2],
-          s * A, c * A, 0);
+        var ax = s * A, ay = c * A, az = 0;
+        if (state.inserted) {
+          // 入轨后箭体本身处于自由落体（引力恰好充当向心加速度），把引力计入
+          // 参考系加速度，分离体才不会相对飞船凭空向地心加速坠落
+          var gMag = MU / (state.r * state.r);
+          ax -= Math.sin(state.theta) * gMag;
+          ay -= Math.cos(state.theta) * gMag;
+        }
+        M3D.updateDetached(parts, dt, MU, E.center[0], E.center[1], E.center[2], ax, ay, az);
       },
       setFitDistance: function (d) { /* 由 app 写入 cam.fitDist */ }
     };
