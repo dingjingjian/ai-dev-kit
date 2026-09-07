@@ -3,7 +3,7 @@
 import os
 from PIL import Image, ImageDraw, ImageFont
 
-BASE = r"C:\Users\dingj\Documents\git\ai-dev-kit\rocket-launch-3d\xiaohongshu"
+BASE = os.path.dirname(os.path.abspath(__file__))
 SS = os.path.join(BASE, "screenshots")
 OUT = BASE
 

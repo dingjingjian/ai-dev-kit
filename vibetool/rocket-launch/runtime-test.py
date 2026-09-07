@@ -1,9 +1,10 @@
 """用解压出的 zip 副本做运行时实测：控制台错误 / WebGL 渲染 / 交互闭环。"""
+import os
 import sys
 from playwright.sync_api import sync_playwright
 
 URL = "http://127.0.0.1:8231/"
-OUT = r"C:\Users\ASUS\Documents\git\ai-dev-kit\rocket-launch\runtime-check.png"
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtime-check.png")
 
 errors, warnings, requests_ext = [], [], []
 

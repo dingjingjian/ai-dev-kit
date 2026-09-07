@@ -1,8 +1,17 @@
 # 赛道分类索引
 
-本文件是 ai-dev-kit 项目**赛道归属的唯一真源**。目录结构不随分类变动——分类是元数据，不是存储结构。
+本文件是 ai-dev-kit 项目**赛道归属的唯一真源**。顶层目录与赛道一一对应：
 
-改动任一项目的赛道归属时，改这里，再去子项目 README 同步顶部那一行。
+```
+ai-dev-kit/
+├── vibetool/     #vibetool 实用工具
+├── vibegame/     #vibegame 互动游戏
+├── vibeart/      #vibeart 数字艺术（当前为空）
+├── vibeknow/     #vibeknow 人文知识
+└── _internal/    内部基建 · 不参赛
+```
+
+换赛道 = 用 `git mv` 把项目迁到目标赛道目录，再同步本表与该项目 README 顶部的赛道行。
 
 ## 四赛道定义
 
@@ -25,18 +34,18 @@
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
-| 拼豆设计工具 | `perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 笔记就绪 · 未打包 |
-| 像素画编辑器 | `pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 笔记就绪 · 未打包 |
-| Word 转 Markdown | `word-to-md/` | 浏览器端 .docx 转 Markdown | 均未 |
-| 火箭发射 | `rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时 | 已打包 · 缺笔记 |
+| 拼豆设计工具 | `vibetool/perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 笔记就绪 · 未打包 |
+| 像素画编辑器 | `vibetool/pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 笔记就绪 · 未打包 |
+| Word 转 Markdown | `vibetool/word-to-md/` | 浏览器端 .docx 转 Markdown | 均未 |
+| 火箭发射 | `vibetool/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时 | 已打包 · 缺笔记 |
 
 ## #vibegame　互动游戏（3）
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
-| 拼豆城市 | `perler-city/` | 拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政 | 完整（zip + 海报） |
-| 拼豆游戏 | `perler-bead-game/` | 国风纹样逐格填豆，拼成即过关 | 完整（zip + 图） |
-| AI 计算器 | `ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
+| 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政 | 完整（zip + 海报） |
+| 拼豆游戏 | `vibegame/perler-bead-game/` | 国风纹样逐格填豆，拼成即过关 | 完整（zip + 图） |
+| AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
 
 > `ai-calculator` 外壳是计算器，但有判断对错、得分、连对加成、实时战绩——爽点是"上头"而非"算得快"，故归 `#vibegame`。
 
@@ -50,12 +59,12 @@
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
-| 3D 地球科普 | `earth-3d/` | 昼夜交替、四季成因、地球内部结构 | 完整（zip + 物料） |
-| 太阳系 3D | `solar-system-3d/` | 行星轨道、土星环、点击追踪天体 | 完整（zip + 物料） |
-| 3D 火箭发射 | `rocket-launch-3d/` | 发射/拆解双模式，实时遥测 | 完整（zip + 物料） |
-| 3D 月球科普 | `moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
-| 分子空间构型 | `molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
-| 函数可视化 | `function-visualization/` | 初高中数学函数图像绘制 | 已打包 · 缺笔记 |
+| 3D 地球科普 | `vibeknow/earth-3d/` | 昼夜交替、四季成因、地球内部结构 | 完整（zip + 物料） |
+| 太阳系 3D | `vibeknow/solar-system-3d/` | 行星轨道、土星环、点击追踪天体 | 完整（zip + 物料） |
+| 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 发射/拆解双模式，实时遥测 | 完整（zip + 物料） |
+| 3D 月球科普 | `vibeknow/moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
+| 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
+| 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已打包 · 缺笔记 |
 
 ## 内部基建 · 不参赛（5）
 
@@ -63,15 +72,15 @@
 
 | 项目 | 目录 | 用途 |
 |------|------|------|
-| AI 网关 | `ai_gateway/` | 本地 LLM API 统一网关，智能体只需配置一次 |
-| AI 新闻日报 | `ai-news/` | AI 新闻采集、飞书写入、HTML 日报生成 |
-| 工作日报 | `daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 |
-| 网站截图 | `screenshot/` | 多网站批量截图，处理懒加载/Cloudflare/字体 |
-| 密码管理器 | `password-manager/` | AES 加密本地密码库，Web + Electron 双模式 |
+| AI 网关 | `_internal/ai_gateway/` | 本地 LLM API 统一网关，智能体只需配置一次 |
+| AI 新闻日报 | `_internal/ai-news/` | AI 新闻采集、飞书写入、HTML 日报生成 |
+| 工作日报 | `_internal/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 |
+| 网站截图 | `_internal/screenshot/` | 多网站批量截图，处理懒加载/Cloudflare/字体 |
+| 密码管理器 | `_internal/password-manager/` | AES 加密本地密码库，Web + Electron 双模式 |
 
 ## 维护约定
 
 1. **新项目在落地时就定赛道**，写进 TRACKS.md 与自身 README 顶部。
 2. **一个项目只允许一个主赛道**。确实跨界的（如工具外壳 + 游戏内核），以第 2 问定主赛道，在备注里说明另一面。
 3. **发笔记时的标签以本文件为准**，避免 README 写一遍、文案写一遍、话题标签又是第三遍。
-4. **目录不动**。赛道只存在于元数据层，物理移动会打断跨项目资源引用（`moon-3d` 复用 `solar-system-3d` 的月面纹理）与构建脚本路径。
+4. **禁止硬编码绝对路径**。项目整体迁移是常态，任何写死 `C:\Users\...` 的脚本都会在迁移后失效——`vibetool/rocket-launch/runtime-test.py` 与 `vibeknow/rocket-launch-3d/xiaohongshu/gen_cards.py` 都曾踩过，已改为基于 `__file__` 推导。新脚本一律用相对路径，或 `os.path.dirname(os.path.abspath(__file__))`。
