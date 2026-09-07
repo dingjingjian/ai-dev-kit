@@ -3,14 +3,10 @@
 import math, os
 from PIL import Image
 
-BASE = os.path.dirname(os.path.abspath(__file__))
+# 色卡直接复用图案稿的唯一真源，避免两处不同步
+from patterns import PAL
 
-PAL = {
-    'w': '#F3EDE0', 'e': '#BDB6A8', 'k': '#221E1B', 'm': '#7A4A2E',
-    'o': '#B0763C', 'r': '#C8382F', 'v': '#7E2B3A', 'p': '#C95F7C',
-    'l': '#DCACBB', 'y': '#E9B23C', 'd': '#C9A34B', 'g': '#86A95C',
-    'n': '#3D6B4E', 't': '#3FA79B', 'b': '#2F5D8C', 'c': '#86AECB',
-}
+BASE = os.path.dirname(os.path.abspath(__file__))
 
 
 def hex2rgb(h):

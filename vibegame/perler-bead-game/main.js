@@ -567,15 +567,16 @@ const PATTERNS = [
  }
 ];
 
+// 色卡与 _dev/patterns.py 的 PAL 必须一致：任意两色 RGB 距离 >= 60（改后跑 check.py pal）
 const PALETTE = [
-  {code:'w',name:'月白',hex:'#F3EDE0'},{code:'e',name:'银灰',hex:'#BDB6A8'},
-  {code:'k',name:'墨黑',hex:'#221E1B'},{code:'m',name:'栗棕',hex:'#7A4A2E'},
-  {code:'o',name:'赭石',hex:'#B0763C'},{code:'r',name:'朱砂',hex:'#C8382F'},
-  {code:'v',name:'绛紫',hex:'#7E2B3A'},{code:'p',name:'胭脂',hex:'#C95F7C'},
-  {code:'l',name:'藕荷',hex:'#DCACBB'},{code:'y',name:'藤黄',hex:'#E9B23C'},
-  {code:'d',name:'描金',hex:'#C9A34B'},{code:'g',name:'豆绿',hex:'#86A95C'},
-  {code:'n',name:'松绿',hex:'#3D6B4E'},{code:'t',name:'青碧',hex:'#3FA79B'},
-  {code:'b',name:'青花',hex:'#2F5D8C'},{code:'c',name:'天青',hex:'#86AECB'}
+  {code:'w',name:'月白',hex:'#F5EFE2'},{code:'e',name:'银灰',hex:'#A8A292'},
+  {code:'k',name:'墨黑',hex:'#221E1B'},{code:'m',name:'栗棕',hex:'#6E3D1F'},
+  {code:'o',name:'赭石',hex:'#D09A55'},{code:'r',name:'朱砂',hex:'#CE3A2C'},
+  {code:'v',name:'绛紫',hex:'#8A2450'},{code:'p',name:'胭脂',hex:'#DB6A8C'},
+  {code:'l',name:'藕荷',hex:'#EFAFC4'},{code:'y',name:'藤黄',hex:'#F5C93C'},
+  {code:'d',name:'描金',hex:'#A87A1E'},{code:'g',name:'豆绿',hex:'#8FBF52'},
+  {code:'n',name:'松绿',hex:'#2F6B49'},{code:'t',name:'青碧',hex:'#35AE9E'},
+  {code:'b',name:'青花',hex:'#2F5D8C'},{code:'c',name:'天青',hex:'#9CC0DC'}
 ];
 const PAL = {}; PALETTE.forEach(p=>PAL[p.code]=p.hex);
 const MODES = {copy:'临摹',challenge:'挑战'};
@@ -985,40 +986,42 @@ function drawIronSheen(t){
 
 // 提示高亮：脉动光环 + 外扩波 + 内部辉光 + 四角准星（由 hint() 里的 rAF 持续重绘驱动）
 function drawHint(){
-  if(hintCell==null)return;
-  const i=hintCell%n,j=hintCell/n|0;
-  const cx=pad+i*cell+cell/2, cy=pad+j*cell+cell/2;
+  if(!hintCells.length)return;
   const phase=(Date.now()%1100)/1100;
   const pulse=0.5+0.5*Math.sin(phase*Math.PI*2);   // 0..1
   const r0=cell*0.42, r1=r0+cell*0.26*pulse;
   ctx.save();
-  // 1) 向外扩散的波
-  ctx.globalAlpha=0.5*(1-pulse);
-  ctx.strokeStyle=varGold; ctx.lineWidth=Math.max(2,cell*0.09);
-  ctx.beginPath();ctx.arc(cx,cy,r1,0,Math.PI*2);ctx.stroke();
-  // 2) 主环
-  ctx.globalAlpha=0.6+0.4*pulse;
-  ctx.lineWidth=Math.max(2.5,cell*0.13);
-  ctx.beginPath();ctx.arc(cx,cy,r0,0,Math.PI*2);ctx.stroke();
-  // 3) 内部辉光
-  ctx.globalAlpha=1;
-  const gg=ctx.createRadialGradient(cx,cy,0,cx,cy,r0);
-  gg.addColorStop(0,'rgba(235,205,110,'+(0.28+0.26*pulse)+')');
-  gg.addColorStop(0.65,'rgba(235,205,110,'+(0.10+0.10*pulse)+')');
-  gg.addColorStop(1,'rgba(235,205,110,0)');
-  ctx.fillStyle=gg;
-  ctx.beginPath();ctx.arc(cx,cy,r0,0,Math.PI*2);ctx.fill();
-  // 4) 四角准星，指向明确
-  ctx.globalAlpha=0.55+0.45*pulse;
-  ctx.strokeStyle=varGold; ctx.lineWidth=Math.max(2,cell*0.10);
-  const R=cell*0.66, L=cell*0.22;
-  for(let k=0;k<4;k++){
-    const ang=k*Math.PI/2+Math.PI/4;
-    const ux=Math.cos(ang),uy=Math.sin(ang);
-    ctx.beginPath();
-    ctx.moveTo(cx+ux*(R-L),cy+uy*(R-L));
-    ctx.lineTo(cx+ux*R,cy+uy*R);
-    ctx.stroke();
+  for(const hc of hintCells){
+    const i=hc%n,j=hc/n|0;
+    const cx=pad+i*cell+cell/2, cy=pad+j*cell+cell/2;
+    // 1) 向外扩散的波
+    ctx.globalAlpha=0.5*(1-pulse);
+    ctx.strokeStyle=varGold; ctx.lineWidth=Math.max(2,cell*0.09);
+    ctx.beginPath();ctx.arc(cx,cy,r1,0,Math.PI*2);ctx.stroke();
+    // 2) 主环
+    ctx.globalAlpha=0.6+0.4*pulse;
+    ctx.lineWidth=Math.max(2.5,cell*0.13);
+    ctx.beginPath();ctx.arc(cx,cy,r0,0,Math.PI*2);ctx.stroke();
+    // 3) 内部辉光
+    ctx.globalAlpha=1;
+    const gg=ctx.createRadialGradient(cx,cy,0,cx,cy,r0);
+    gg.addColorStop(0,'rgba(235,205,110,'+(0.28+0.26*pulse)+')');
+    gg.addColorStop(0.65,'rgba(235,205,110,'+(0.10+0.10*pulse)+')');
+    gg.addColorStop(1,'rgba(235,205,110,0)');
+    ctx.fillStyle=gg;
+    ctx.beginPath();ctx.arc(cx,cy,r0,0,Math.PI*2);ctx.fill();
+    // 4) 四角准星，指向明确
+    ctx.globalAlpha=0.55+0.45*pulse;
+    ctx.strokeStyle=varGold; ctx.lineWidth=Math.max(2,cell*0.10);
+    const R=cell*0.66, L=cell*0.22;
+    for(let k=0;k<4;k++){
+      const ang=k*Math.PI/2+Math.PI/4;
+      const ux=Math.cos(ang),uy=Math.sin(ang);
+      ctx.beginPath();
+      ctx.moveTo(cx+ux*(R-L),cy+uy*(R-L));
+      ctx.lineTo(cx+ux*R,cy+uy*R);
+      ctx.stroke();
+    }
   }
   ctx.restore();
 }
@@ -1277,32 +1280,57 @@ function showToast(msg){
   clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1800);
 }
 
-let hintCell=null,hintTimer=null,hintRAF=null;
+let hintCells=[],hintTimer=null,hintRAF=null;
 function stopHint(){
   if(hintTimer){clearTimeout(hintTimer);hintTimer=null;}
   if(hintRAF){cancelAnimationFrame(hintRAF);hintRAF=null;}
-  hintCell=null;
+  hintCells=[];
 }
 function hint(){
   if(celebrated){showToast('已经拼好啦，不能再提示');return;}
-  const candidates=[];
+  const extra=[],wrong=[],wrongCur=[],needCur=[],needOther=[];
   for(let k=0;k<n*n;k++){
-    if(target[k]!=null && state[k]!==target[k]) candidates.push(k);
+    if(state[k]!=null && target[k]==null){extra.push(k);}          // 拼多了：豆放在图案之外
+    else if(state[k]!=null && state[k]!==target[k]){
+      wrong.push(k);                                              // 放错色：图案内但颜色不对
+      if(state[k]===curColor) wrongCur.push(k);
+    }else if(target[k]!=null && state[k]==null){
+      if(target[k]===curColor) needCur.push(k);                   // 当前颜色还缺的位置
+      else needOther.push(k);                                     // 其他颜色还缺的位置
+    }
   }
-  if(candidates.length===0){showToast('已经完美啦');return;}
+  let cells,msg;
+  if(extra.length){                                               // 1) 拼多了 → 指出图案外的多余豆
+    cells=extra;
+    msg='有 '+extra.length+' 颗豆拼多了（图案外），已高亮，用橡皮擦掉';
+  }else if(needCur.length){                                       // 2) 当前颜色还缺 → 高亮所有可放位置
+    cells=needCur;
+    msg='高亮了「'+PALETTE.find(p=>p.code===curColor).name+'」还可放的 '+needCur.length+' 处';
+  }else if(wrongCur.length){                                      // 3) 当前颜色放错了位置
+    cells=wrongCur;
+    msg='「'+PALETTE.find(p=>p.code===curColor).name+'」有 '+wrongCur.length+' 处放错了，已高亮';
+  }else if(wrong.length){                                         // 4) 当前颜色没问题但有其他放错
+    cells=wrong;
+    msg='当前颜色没问题；另有 '+wrong.length+' 处放错了，已高亮';
+  }else if(needOther.length){                                     // 5) 当前颜色全部拼对 → 指出剩余待拼
+    cells=needOther;
+    msg='当前颜色已全部拼对，剩余 '+needOther.length+' 处待拼已高亮';
+  }else{
+    showToast('已经完美啦');return;
+  }
   stopHint();
-  hintCell=candidates[(Math.random()*candidates.length)|0];
+  hintCells=cells;
   hints++; mistakes++; // 提示计一次失误参考
   SFX.hint();
   // render() 不是常驻循环，这里必须自己跑 rAF，否则脉动只画一帧静止画面
   (function loop(){
-    if(hintCell==null){hintRAF=null;return;}
+    if(!hintCells.length){hintRAF=null;return;}
     render();
     hintRAF=requestAnimationFrame(loop);
   })();
   hintTimer=setTimeout(()=>{stopHint();render();},3200);
   saveProgress();
-  showToast('已高亮一处，快补上');
+  showToast(msg);
 }
 
 function clearBoard(){

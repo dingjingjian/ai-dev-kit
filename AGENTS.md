@@ -27,6 +27,7 @@
 |------|------|------|
 | 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市：拼成图纸才能盖楼，已掌握后可花金币直接建；含 RCI 三需求与电力/供水/环卫三市政；同构工程约定（`_dev/build.py` 唯一真源 + `build_zip.py` 打包 + `smoke_test.js` 无头验证） |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风拼豆填色网页小游戏，逐格填豆拼图过关；`_dev/build.py` 为唯一真源，产出 `index.html` + `main.js`；`_dev/build_zip.py` 校验并打包为小红书小工具 zip |
+| 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 基于 perler-bead-game 引擎的中秋活动版：16 幅月夜纹样 + 猜灯谜（拼成点亮）；同构工程约定，存档前缀 `pma_` |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分、连对加成，锻炼心算验算能力 |
 
 ### #vibeart　数字艺术

@@ -19,7 +19,7 @@
 
 ### 页面与渲染
 
-标准 HTML / CSS / JS 完整可用：Flexbox / Grid / 动画 / 媒体查询、Canvas 2D（`getContext('2d')`）、WebGL（`getContext('webgl'/'webgl2')`，边界见 §4）、文本选择不限制。
+标准 HTML / CSS / JS 可用，但最终产物须满足目标内核基线：JS 见 [js-compatibility.md](./js-compatibility.md)，CSS 见 [css-compatibility.md](./css-compatibility.md)。可使用基线内的 Flexbox / Grid / 动画 / 媒体查询、Canvas 2D（`getContext('2d')`）、WebGL（`getContext('webgl'/'webgl2')`，能力边界见 §5、性能与低端机降级见 [performance-budget.md](./performance-budget.md) §4–5），文本选择不限制。
 
 ### 媒体与文件
 
@@ -86,7 +86,7 @@ Cookie 仅作本地存储：可读写、按 origin 隔离，但因不联网**不
 
 | 行为 | 说明 | 替代方案 |
 | --- | --- | --- |
-| 网络请求 | `fetch` / `XMLHttpRequest`、加载外部图片 / 字体 / 媒体等一切联网请求 | 所有资源打包在内，改本地相对引用；数据用包内 `.json` 或写死在 JS |
+| 网络请求 | `fetch` / `XMLHttpRequest`、加载外部图片 / 字体 / 媒体等一切联网请求 | 所有资源打包在内，改本地相对引用；仅小型配置 / 数据可随包提供，大型只读数据集不适合小工具，见 [performance-budget.md](./performance-budget.md) §2 |
 | 动态执行代码 | `eval()`、`new Function()` | 改写为静态逻辑 |
 | WebAssembly | WASM 编译执行（依赖 WASM 的库无法运行） | 移除或改用纯 JS 实现 |
 | iframe / object | 内嵌 iframe / object，或被外部页面嵌入 | 内容直接写进页面 |
@@ -111,7 +111,7 @@ Cookie 仅作本地存储：可读写、按 origin 隔离，但因不联网**不
 | 依赖 Worker 的离屏渲染（OffscreenCanvas + Worker） | 🔴 |
 | SharedArrayBuffer 多线程 | 🔴 |
 
-WebGL 适合用包内资源做本地渲染；AI 图像处理等重计算（需联网或 WASM 模型）无法支持。
+WebGL 适合用包内资源做本地渲染；AI 图像处理等重计算（需联网或 WASM 模型）无法支持。WebGL 可用不等于低端真机性能足够：DPR、像素、纹理、draw call、几何预算、动态降档与兜底必须遵守 [performance-budget.md](./performance-budget.md) §4–5。
 
 ---
 

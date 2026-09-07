@@ -250,34 +250,35 @@
   }
 
   // dock 按钮
+  var dDragged=false;
   document.querySelectorAll('#dock button').forEach(function(b){
     b.addEventListener('click',function(){
-      if(dSwiped){dSwiped=false;return;}
+      if(dDragged){dDragged=false;return;} // 鼠标拖拽滚动后不触发选中
       var f=b.getAttribute('data-f');setFocus(focus===f?null:(f||null));
     });
   });
-  // 滑动翻页：在 dock 上左右滑动/滚轮切换天体（月球不在序列中，点击场景内月球为彩蛋）
-  var SEQ=['','sun','mercury','venus','earth','mars','jupiter','saturn','uranus','neptune'];
+  // dock 滚动：触摸端用原生横滑（CSS touch-action:pan-x），桌面端滚轮横滚 + 鼠标拖拽
   var dockEl=document.getElementById('dock');
-  function pageDock(dir){
-    var idx=SEQ.indexOf(focus);if(idx<0)idx=SEQ.indexOf('earth');
-    idx=Math.max(0,Math.min(SEQ.length-1,idx+dir));
-    setFocus(SEQ[idx]);
-  }
-  var dTrack=false,dSwiped=false,dX=0,dY=0;
-  dockEl.addEventListener('touchstart',function(e){if(e.touches.length!==1)return;dTrack=true;dSwiped=false;dX=e.touches[0].clientX;dY=e.touches[0].clientY;},{passive:true});
-  dockEl.addEventListener('touchmove',function(e){
-    if(!dTrack)return;
-    var dx=e.touches[0].clientX-dX,dy=e.touches[0].clientY-dY;
-    if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>10){e.preventDefault();dSwiped=true;}
+  dockEl.addEventListener('wheel',function(e){
+    if(Math.abs(e.deltaX)>Math.abs(e.deltaY))return; // 触控板横滚交给原生
+    e.preventDefault();
+    dockEl.scrollLeft+=e.deltaY;
   },{passive:false});
-  dockEl.addEventListener('touchend',function(e){
-    if(!dTrack)return;dTrack=false;
-    if(!dSwiped)return;
-    var dx=e.changedTouches[0].clientX-dX;
-    if(Math.abs(dx)>36)pageDock(dx<0?1:-1);
+  // 桌面端鼠标拖拽滚动（触摸端原生滚动，无需处理）
+  var pDown=false,pX=0;
+  dockEl.addEventListener('pointerdown',function(e){
+    if(e.pointerType!=='mouse')return;
+    pDown=true;pX=e.clientX;dDragged=false;
   });
-  dockEl.addEventListener('wheel',function(e){e.preventDefault();pageDock((e.deltaY||e.deltaX)>0?1:-1);},{passive:false});
+  dockEl.addEventListener('pointermove',function(e){
+    if(!pDown)return;
+    var dx=e.clientX-pX;
+    if(Math.abs(dx)>4){dDragged=true;dockEl.setPointerCapture(e.pointerId);}
+    if(dDragged){dockEl.scrollLeft-=dx;pX=e.clientX;}
+  });
+  function pEnd(){pDown=false;}
+  dockEl.addEventListener('pointerup',pEnd);
+  dockEl.addEventListener('pointercancel',pEnd);
   // dock 溢出时启用两端渐隐
   function dockFade(){dockEl.classList.toggle('scrollable',dockEl.scrollWidth>dockEl.clientWidth+1);}
   dockEl.addEventListener('scroll',function(){dockEl.classList.add('scrollable');});

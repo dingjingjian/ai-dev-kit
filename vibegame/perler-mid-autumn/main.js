@@ -1,471 +1,499 @@
-# -*- coding: utf-8 -*-
-import json, os, textwrap
-
-BASE = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(BASE, 'patterns.json'), 'r', encoding='utf-8') as f:
-    PATTERNS_JSON = f.read()
-
-HTML_TEMPLATE = r'''<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>国风拼豆坊 · 掌上拼豆</title>
-<style>
-:root{
-  --paper:#F3EDE0; --ink:#2B2B2B;
-  --red:#C8362B; --red-deep:#9E2620;
-  --gold:#D4AF37; --gold-soft:#E6C65C; --gold-deep:#A6821E;
-  --bg-1:#14100c; --bg-2:#241b14; --bg-3:#2e2218;
-  --panel:#2a1f16; --panel-2:#3a2b1e;
-  --text:#F2EBDD; --text-dim:#C9B896;
-  --glass:rgba(42,31,22,0.78);
-  --border-gold:rgba(212,175,55,0.28);
-  --shadow:rgba(0,0,0,0.45);
-  --ease:cubic-bezier(.2,.7,.3,1); --ease-back:cubic-bezier(.2,1.4,.4,1);
-  /* 安全区：PC 模拟器注入 --safe-area-inset-* 变量，真机走 env()，两者都要兼容 */
-  --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
-  --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
-  --safe-l:0px;
-  --safe-r:0px;
-}
-body.in-app{
-  --safe-top:calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 40px);
-  --safe-l:48px;
-  --safe-r:92px;
-}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;}
-body{
-  font-family:"KaiTi","STKaiti","Kaiti SC","楷体","Songti SC","STSong","SimSun","Microsoft YaHei",serif;
-  color:var(--text);
-  display:flex;flex-direction:column;
-  height:100vh;height:100dvh;
-  overflow:hidden;
-  -webkit-user-select:none;user-select:none;
-  touch-action:manipulation;
-  background:var(--bg-1);
-  padding-top:var(--safe-top);
-}
-button{font-family:inherit;cursor:pointer;border:none;outline:none;background:none;color:inherit;}
-canvas{display:block;}
-/* 宣纸纹理 + 流光背景 */
-#bgCanvas{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;}
-.bg-noise{
-  position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:0;
-  background:
-    radial-gradient(circle at 18% 10%, rgba(200,54,42,0.10), transparent 34%),
-    radial-gradient(circle at 86% 90%, rgba(212,175,55,0.10), transparent 40%),
-    radial-gradient(circle at 50% 50%, rgba(255,235,200,0.03), transparent 60%),
-    linear-gradient(160deg, #1b140e 0%, #0f0b08 100%);
-}
-.bg-noise::after{
-  content:"";position:absolute;top:0;left:0;right:0;bottom:0;
-  background:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
-  opacity:0.5;
-}
-.corner-decor{
-  position:fixed;top:0;left:0;right:0;bottom:0;pointer-events:none;z-index:1;
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M10,110 Q30,30 110,10' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M20,110 Q35,35 110,20' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") left top no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M110,110 Q90,30 10,10' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M100,110 Q85,35 10,20' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") right top no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M10,10 Q30,90 110,110' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M20,10 Q35,85 110,100' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") left bottom no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cpath d='M110,10 Q90,90 10,110' fill='none' stroke='rgba(212,175,55,0.18)' stroke-width='1.5'/%3E%3Cpath d='M100,10 Q85,85 10,100' fill='none' stroke='rgba(212,175,55,0.10)' stroke-width='1'/%3E%3C/svg%3E") right bottom no-repeat;
-  background-size:120px 120px;
-}
-
-/* 顶栏 */
-.topbar{
-  flex-shrink:0;min-height:48px;display:flex;align-items:center;
-  padding:6px calc(12px + var(--safe-r)) 6px calc(12px + var(--safe-l));
-  background:linear-gradient(180deg, rgba(44,35,26,0.95), rgba(34,25,18,0.95));
-  border-bottom:1px solid var(--border-gold);
-  box-shadow:0 2px 14px rgba(0,0,0,0.35);
-  z-index:10;
-}
-/* flex 间距用 margin 实现（安卓 9 以前的老 WebView 不支持 flex gap） */
-.topbar>*:not(:first-child){margin-left:10px;}
-/* 顶部只放信息与视觉记录，不放任何可点按钮 */
-#refThumb{
-  width:34px;height:34px;border-radius:8px;flex-shrink:0;
-  background:#1b140e;
-  box-shadow:0 0 0 1px rgba(212,175,55,0.45), 0 2px 7px rgba(0,0,0,0.45);
-  transition:opacity .25s var(--ease), filter .25s var(--ease);
-}
-/* 挑战模式下只留轮廓，不给答案 */
-#refThumb.masked{opacity:.24;filter:blur(1.7px) grayscale(.45);}
-.topbar .rec{flex-shrink:0;display:flex;align-items:center;}
-.topbar .rec .col{margin-left:9px;text-align:right;line-height:1.15;}
-.topbar .rec .t{font-size:16px;font-weight:bold;color:var(--gold);font-variant-numeric:tabular-nums;}
-.topbar .rec .s{font-size:10px;color:var(--gold-soft);letter-spacing:2px;}
-.seal{
-  width:34px;height:34px;border-radius:7px;flex-shrink:0;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:22px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 2px 8px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.18);
-  text-shadow:0 1px 2px rgba(0,0,0,0.3);
-}
-.title{flex:1;min-width:0;}
-.title .main{font-size:17px;font-weight:bold;letter-spacing:2px;
-  background:linear-gradient(90deg,var(--gold-soft),#fff6d4,var(--gold-soft));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  animation:shine 4s linear infinite;
-  background-size:200% 100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-}
-@keyframes shine{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
-.title .sub{font-size:10px;color:var(--text-dim);letter-spacing:1px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.progress-ring{width:38px;height:38px;flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,0.5));}
-.progress-ring circle.bg{fill:none;stroke:rgba(255,255,255,0.08);stroke-width:4;}
-.progress-ring circle.fg{fill:none;stroke:var(--gold);stroke-width:4;stroke-linecap:round;
-  transform:rotate(-90deg);transform-origin:50% 50%;
-  transition:stroke-dashoffset .35s var(--ease);
-}
-.icon-btn{
-  width:32px;height:32px;border-radius:50%;flex-shrink:0;
-  background:rgba(255,255,255,0.07);color:var(--text-dim);
-  display:flex;align-items:center;justify-content:center;transition:all .18s var(--ease);
-}
-.icon-btn svg{width:19px;height:19px;fill:currentColor;}
-.icon-btn.on{background:linear-gradient(145deg,var(--gold-soft),var(--gold));color:#1a120a;}
-/* 顶栏下拉菜单 */
-.menu{
-  position:absolute;bottom:calc(100% + 8px);right:calc(10px + var(--safe-r));width:210px;border-radius:13px;
-  background:linear-gradient(180deg,var(--panel-2),var(--panel));
-  border:1px solid var(--border-gold);
-  box-shadow:0 -8px 30px rgba(0,0,0,0.55), 0 10px 34px rgba(0,0,0,0.45);
-  overflow:hidden;opacity:0;transform:translateY(10px) scale(.97);pointer-events:none;
-  transition:opacity .18s var(--ease),transform .18s var(--ease);z-index:70;
-}
-.menu.show{opacity:1;transform:none;pointer-events:auto;}
-.menu-item{
-  width:100%;display:flex;align-items:center;justify-content:space-between;
-  padding:12px 14px;color:var(--text);font-size:14px;letter-spacing:1px;
-  border-bottom:1px solid rgba(212,175,55,0.12);transition:background .15s;
-}
-.menu-item:last-child{border-bottom:none;}
-.menu-item b{font-size:12px;color:var(--gold-soft);font-weight:normal;}
-.menu-item:active{background:rgba(212,175,55,0.14);}
-
-.stage{
-  flex:1;position:relative;display:flex;align-items:center;justify-content:center;
-  min-height:0;padding:12px;z-index:5;
-}
-/* 边框统一由 canvas 内部绘制，这里只保留外阴影，避免双描边与内阴影压暗边缘 */
-#board{
-  border-radius:16px;
-  box-shadow:0 14px 40px rgba(0,0,0,0.55);
-  touch-action:none;
-}
-
-/* 色板 */
-.palette-wrap{
-  flex-shrink:0;z-index:10;
-  background:linear-gradient(180deg, rgba(24,18,13,0.92), rgba(34,25,18,0.95));
-  border-top:1px solid var(--border-gold);
-}
-/* 色板区只放珠子，不放任何标题文字 */
-.palette{
-  display:flex;flex-wrap:wrap;align-content:flex-start;
-  padding:10px 2px 1px 14px;
-  max-height:112px;overflow-y:auto;overflow-x:hidden;
-  scrollbar-width:thin;
-}
-.palette::-webkit-scrollbar{width:3px;}
-.palette::-webkit-scrollbar-thumb{background:rgba(212,175,55,0.25);border-radius:2px;}
-.swab{flex-shrink:0;width:38px;height:38px;margin:0 12px 9px 0;border-radius:50%;position:relative;transition:transform .18s var(--ease-back),box-shadow .2s;
-  box-shadow:0 3px 8px rgba(0,0,0,0.45), inset 0 2px 4px rgba(255,255,255,0.38), inset 0 -3px 6px rgba(0,0,0,0.4);
-}
-.swab::after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;box-shadow:inset 0 0 8px rgba(0,0,0,0.25);}
-.swab.sel{transform:scale(1.15);box-shadow:0 0 0 3px var(--gold), 0 5px 14px rgba(0,0,0,0.5);}
-.swab .hole{position:absolute;top:0;left:0;right:0;bottom:0;border-radius:50%;box-shadow:inset 0 1px 2px rgba(0,0,0,0.55);}
-.swab .hole::before{content:"";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:26%;height:26%;border-radius:50%;
-  background:radial-gradient(circle at 30% 30%, rgba(255,255,255,0.15), rgba(0,0,0,0.4));
-  box-shadow:inset 0 1px 2px rgba(0,0,0,0.5);
-}
-.swab .cnt{position:absolute;bottom:-2px;right:-2px;min-width:16px;height:16px;padding:0 3px;border-radius:8px;background:var(--panel-2);color:var(--gold-soft);font-size:9px;font-weight:bold;display:flex;align-items:center;justify-content:center;border:1px solid var(--border-gold);}
-
-/* 工具条 */
-.toolbar{
-  flex-shrink:0;
-  /* 旧 WebView 无 grid：先用 flex 兜底，支持 grid 的浏览器覆盖为 grid 布局 */
-  display:flex;flex-wrap:wrap;justify-content:space-between;
-  display:grid;grid-template-columns:repeat(6,1fr);
-  grid-gap:6px;gap:6px;padding:8px 10px;
-  padding-bottom:calc(8px + var(--safe-bottom));
-  background:linear-gradient(180deg, rgba(34,25,18,0.95), rgba(24,18,13,0.98));
-  border-top:1px solid var(--border-gold);
-  z-index:20;position:relative;
-}
-.tool{
-  flex:1 1 15%;min-width:0;
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  height:50px;border-radius:12px;color:var(--text-dim);
-  background:rgba(255,255,255,0.04);
-  border:1px solid transparent;
-  transition:all .18s var(--ease);
-}
-.tool svg{width:21px;height:21px;margin-bottom:3px;fill:currentColor;}
-.tool span{font-size:10px;letter-spacing:1px;white-space:nowrap;}
-.tool.on{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;box-shadow:0 2px 8px rgba(212,175,55,0.35);}
-.tool.on svg{fill:#1a120a;}
-@keyframes nudge{0%,100%{transform:translateX(0);}25%{transform:translateX(-3px);}75%{transform:translateX(3px);}}
-.tool.confirm{
-  color:#fff;background:linear-gradient(145deg,#D8483C,var(--red-deep));
-  border-color:transparent;font-weight:bold;
-  box-shadow:0 3px 12px rgba(200,54,42,0.5);
-  animation:nudge .26s var(--ease) 2;
-}
-.tool.confirm svg{fill:#fff;}
-
-
-/* Toast / Stamp */
-.toast{
-  position:fixed;left:50%;bottom:92px;transform:translateX(-50%) translateY(10px);
-  background:rgba(20,16,11,0.94);color:var(--gold-soft);
-  padding:10px 20px;border-radius:22px;font-size:13px;letter-spacing:1px;
-  border:1px solid rgba(212,175,55,0.35);
-  opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
-  z-index:40;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,0.45);
-}
-.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
-.stamp{
-  position:fixed;left:50%;top:38%;transform:translate(-50%,-50%) scale(0.3) rotate(-16deg);
-  width:130px;height:130px;border-radius:16px;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:68px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 0 0 5px rgba(255,255,255,0.12), 0 14px 50px rgba(0,0,0,0.65), inset 0 0 20px rgba(0,0,0,0.25);
-  opacity:0;pointer-events:none;z-index:50;
-  transition:opacity .4s, transform .6s var(--ease-back);
-}
-.stamp.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-8deg);}
-#petals{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:45;}
-
-/* 面板遮罩 */
-.sheet, .modal{
-  position:fixed;top:0;left:0;width:100%;height:100%;z-index:60;background:rgba(8,6,4,0.75);
-  opacity:0;pointer-events:none;transition:opacity .25s;
-  display:flex;align-items:flex-end;justify-content:center;
-}
-.sheet.show, .modal.show{opacity:1;pointer-events:auto;}
-.sheet-panel{
-  width:100%;max-height:72vh;border-radius:18px 18px 0 0;
-  background:linear-gradient(180deg, var(--panel-2), var(--panel));
-  border-top:1px solid var(--border-gold);
-  transform:translateY(100%);transition:transform .3s var(--ease);
-  padding:16px 16px calc(16px + var(--safe-bottom));
-  overflow:auto;
-}
-.sheet.show .sheet-panel{transform:translateY(0);}
-.sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
-.sheet-title{font-size:18px;font-weight:bold;color:var(--gold-soft);letter-spacing:1px;}
-.sheet-close{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.08);color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;}
-
-.modal{align-items:center;padding:16px;}
-.modal-card{
-  width:100%;max-width:360px;border-radius:18px;
-  background:linear-gradient(180deg, var(--panel-2), var(--panel));
-  border:1px solid var(--border-gold);
-  box-shadow:0 14px 50px rgba(0,0,0,0.55);
-  transform:scale(0.92);transition:transform .25s var(--ease-back);
-  padding:22px;text-align:center;
-}
-.modal.show .modal-card{transform:scale(1);}
-.modal-card h2{font-size:22px;color:var(--gold-soft);margin-bottom:6px;letter-spacing:2px;}
-.modal-card p{font-size:13px;color:var(--text-dim);line-height:1.6;margin-bottom:14px;}
-.modal-stars{font-size:24px;color:var(--gold);margin-bottom:10px;letter-spacing:3px;}
-.modal-stats{display:flex;justify-content:center;margin-bottom:16px;font-size:13px;color:var(--text-dim);}
-.modal-stats>*+*{margin-left:20px;}
-.modal-stats b{display:block;font-size:18px;color:var(--gold);}
-.modal-btns{display:flex;}
-.modal-btns button+button{margin-left:10px;}
-.modal-btns button{flex:1;height:42px;border-radius:10px;background:linear-gradient(145deg,var(--gold-soft),var(--gold));color:#1a120a;font-weight:bold;font-size:14px;letter-spacing:1px;}
-.modal-btns button.secondary{background:rgba(255,255,255,0.08);color:var(--text);border:1px solid var(--border-gold);}
-
-/* 完成画廊 */
-.gallery-grid{display:flex;flex-wrap:wrap;display:grid;grid-template-columns:repeat(3,1fr);grid-gap:10px;gap:10px;}
-.gal-item{flex:0 0 calc(33.333% - 7px);border-radius:10px;background:#211a13;height:0;padding-bottom:100%;position:relative;}
-.gal-item canvas{position:absolute;top:5%;left:5%;width:90%;height:90%;border-radius:6px;}
-.gal-item .name{position:absolute;bottom:4px;left:4px;right:4px;text-align:center;font-size:9px;color:var(--text-dim);background:rgba(0,0,0,0.55);border-radius:4px;}
-
-/* 视图容器：首页=图纸库，游戏页=拼豆台 */
-#playView{flex:1;min-height:0;display:flex;flex-direction:column;}
-#homeView{
-  position:fixed;top:0;left:0;width:100%;height:100%;z-index:90;
-  background:linear-gradient(180deg,#231a12 0%,#14100c 100%);
-  display:flex;flex-direction:column;
-  transition:opacity .3s var(--ease),transform .3s var(--ease);
-}
-#homeView.hide{opacity:0;pointer-events:none;transform:translateY(-16px);}
-.home-head{
-  flex-shrink:0;
-  padding:calc(14px + var(--safe-top)) calc(14px + var(--safe-r)) 13px calc(14px + var(--safe-l));
-  display:flex;align-items:center;
-  border-bottom:1px solid var(--border-gold);
-  background:linear-gradient(180deg,rgba(44,35,26,0.96),rgba(34,25,18,0.9));
-}
-.home-head>*:not(:first-child){margin-left:12px;}
-.home-seal{
-  width:46px;height:46px;border-radius:10px;flex-shrink:0;
-  background:linear-gradient(145deg,var(--red),var(--red-deep));
-  color:#fff;font-size:26px;font-weight:bold;
-  display:flex;align-items:center;justify-content:center;
-  box-shadow:0 3px 10px rgba(0,0,0,0.5),inset 0 0 0 1px rgba(255,255,255,0.18);
-}
-.home-title{flex:1;min-width:0;}
-.home-title .m{font-size:21px;font-weight:bold;letter-spacing:3px;
-  background:linear-gradient(90deg,var(--gold-soft),#fff6d4,var(--gold-soft));
-  -webkit-background-clip:text;background-clip:text;color:transparent;
-  background-size:200% 100%;animation:shine 4s linear infinite;}
-.home-title .s{font-size:11px;color:var(--text-dim);letter-spacing:2px;margin-top:3px;}
-.home-stat{flex-shrink:0;text-align:right;font-size:10px;color:var(--text-dim);letter-spacing:1px;}
-.home-stat b{display:block;font-size:17px;color:var(--gold);font-variant-numeric:tabular-nums;line-height:1.2;}
-.lib-tabs{flex-shrink:0;display:flex;padding:10px calc(12px + var(--safe-r)) 10px calc(12px + var(--safe-l));overflow-x:auto;scrollbar-width:none;}
-.lib-tabs::-webkit-scrollbar{display:none;}
-.lib-tab{
-  flex-shrink:0;height:30px;padding:0 14px;margin-right:8px;border-radius:15px;font-size:13px;
-  color:var(--text-dim);background:rgba(255,255,255,0.05);
-  border:1px solid rgba(212,175,55,0.18);white-space:nowrap;transition:all .18s var(--ease);
-}
-.lib-tab.sel{color:#1a120a;background:linear-gradient(145deg,var(--gold-soft),var(--gold));border-color:transparent;font-weight:bold;}
-.lib-body{flex:1;overflow-y:auto;padding:2px calc(12px + var(--safe-r)) calc(18px + var(--safe-bottom)) calc(12px + var(--safe-l));}
-.lib-grid{display:flex;flex-wrap:wrap;display:grid;grid-template-columns:repeat(2,1fr);grid-gap:12px;gap:12px;}
-.lib-card{
-  flex:0 0 calc(50% - 6px);min-width:0;
-  border-radius:14px;background:var(--panel);border:1px solid rgba(212,175,55,0.15);
-  overflow:hidden;display:flex;flex-direction:column;transition:transform .2s var(--ease);
-}
-.lib-card:active{transform:scale(.97);}
-.lib-card.cur{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold),0 4px 14px rgba(212,175,55,0.22);}
-/* aspect-ratio（Chrome 88+）老 WebView 不支持，用 padding-bottom 撑出正方形 */
-.lib-thumb{width:100%;height:0;padding-bottom:100%;background:#1b140e;position:relative;}
-.lib-thumb canvas{position:absolute;top:7%;left:7%;width:86%;height:86%;border-radius:8px;}
-.lib-badge{position:absolute;top:6px;right:6px;padding:2px 7px;border-radius:9px;font-size:9px;letter-spacing:1px;background:var(--gold);color:#1a120a;font-weight:bold;}
-.lib-info{padding:8px 9px 10px;display:flex;flex-direction:column;}
-.lib-info>*+*{margin-top:2px;}
-.lib-name{font-size:14px;font-weight:bold;color:var(--text);letter-spacing:1px;}
-.lib-meta{font-size:10px;color:var(--text-dim);letter-spacing:.5px;}
-.lib-lore{font-size:10px;color:var(--gold-soft);opacity:.9;line-height:1.45;margin-top:3px;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-.lib-empty{grid-column:1/-1;text-align:center;color:var(--text-dim);padding:34px 0;font-size:13px;}
-</style>
-</head>
-<body>
-  <canvas id="bgCanvas"></canvas>
-  <div class="bg-noise"></div>
-  <div class="corner-decor"></div>
-
-  <div id="playView">
-  <div class="topbar">
-    <canvas id="refThumb" width="72" height="72"></canvas>
-    <div class="title">
-      <div class="main" id="patName">太极</div>
-      <div class="sub" id="patMeta">入门 · 13×13 · 128 豆</div>
-    </div>
-    <div class="rec">
-      <svg class="progress-ring" viewBox="0 0 42 42"><circle class="bg" cx="21" cy="21" r="17"/><circle class="fg" id="pctRing" cx="21" cy="21" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/></svg>
-      <div class="col">
-        <div class="t" id="timer">00:00</div>
-        <div class="s" id="stars">☆☆☆</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="stage">
-    <canvas id="board"></canvas>
-  </div>
-
-  <div class="palette-wrap">
-    <div class="palette" id="palette"></div>
-  </div>
-
-  <div class="toolbar" id="toolbar">
-    <button class="tool" data-tool="home"><svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg><span>图纸</span></button>
-    <button class="tool on" data-tool="pen"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span>画笔</span></button>
-    <button class="tool" data-tool="erase"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-6 14.5c-1.5 0-2.9-.6-3.9-1.6L5.5 13c-.5-.5-.5-1.3 0-1.8l6.8-6.8c.5-.5 1.3-.5 1.8 0l4.6 4.6c.5.5.5 1.3 0 1.8l-6.8 6.8c-1 1-2.4 1.6-3.9 1.6z"/></svg><span>橡皮</span></button>
-    <button class="tool" data-tool="hint"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg><span>提示</span></button>
-    <button class="tool" data-tool="clear"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg><span>清空</span></button>
-    <button class="tool" data-tool="more"><svg viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg><span>更多</span></button>
-    <div class="menu" id="moreMenu">
-      <button class="menu-item" data-act="mode"><span>模式</span><b id="modeLabel">临摹</b></button>
-      <button class="menu-item" data-act="gallery"><span>我的画廊</span><b id="galCount">0 幅</b></button>
-      <button class="menu-item" data-act="sfx"><span>音效</span><b id="sfxLabel">开</b></button>
-      <button class="menu-item" data-act="bgm"><span>背景音乐</span><b id="bgmLabel">开</b></button>
-      <button class="menu-item" data-act="info"><span>玩法说明</span><b>›</b></button>
-    </div>
-  </div>
-  </div><!-- /playView -->
-
-  <div id="homeView">
-    <div class="home-head">
-      <div class="home-seal">拼</div>
-      <div class="home-title">
-        <div class="m">国风拼豆坊</div>
-        <div class="s">二十幅国风纹样等你拼</div>
-      </div>
-      <div class="home-stat">已完成<b id="homeDone">0</b><span id="homeTotal">共 20 幅</span></div>
-    </div>
-    <div class="lib-tabs" id="libTabs"></div>
-    <div class="lib-body"><div class="lib-grid" id="libGrid"></div></div>
-  </div>
-
-  <div class="toast" id="toast"></div>
-  <div class="stamp" id="stamp">成</div>
-  <canvas id="petals"></canvas>
-
-  <div class="sheet" id="sheetGallery">
-    <div class="sheet-panel">
-      <div class="sheet-head"><div class="sheet-title">我的画廊</div><button class="sheet-close" data-close>✕</button></div>
-      <div class="gallery-grid" id="galleryGrid"></div>
-    </div>
-  </div>
-
-  <div class="modal" id="winModal">
-    <div class="modal-card">
-      <h2>拼成啦！</h2>
-      <div class="modal-stars" id="winStars">★★★</div>
-      <p id="winLore">国风佳作，收入画廊。</p>
-      <div class="modal-stats"><div>用时<br><b id="winTime">00:00</b></div><div>步数<br><b id="winMoves">0</b></div><div>失误<br><b id="winMistakes">0</b></div></div>
-      <div class="modal-btns">
-        <button id="winReplay">重玩</button>
-        <button class="secondary" id="winNext">下一幅</button>
-      </div>
-    </div>
-  </div>
-
-<script src="./main.js"></script>
-</body>
-</html>'''
-
-# 小工具容器 CSP 的 script-src 不含 unsafe-inline，脚本必须外置为经典脚本，
-# 由 index.html 用 <script src="./main.js"> 引入（勿改回内联，勿用 type="module"）。
-JS_TEMPLATE = r'''(function(){
+(function(){
 "use strict";
-const PATTERNS = __PATTERNS_JSON__;
+const PATTERNS = [
+ {
+  "id": "moon",
+  "name": "明月",
+  "diff": 1,
+  "cat": "赏月",
+  "lore": "今夜月明人尽望，不知秋思落谁家。",
+  "n": 13,
+  "grid": [
+   "....ddddd....",
+   "..ddyyyyydd..",
+   ".dyywwyyyyyd.",
+   ".dywwwwyyyyd.",
+   "dywwwwwyyyyyd",
+   "dyywwwwyyeyyd",
+   "dyyywwyyyyyyd",
+   "dyyyyyyyyyyyd",
+   "dyyyyyyeeeyyd",
+   ".dyyyeyyeyyd.",
+   ".dyyyyyyyyyd.",
+   "..ddyyyyydd..",
+   "....ddddd...."
+  ]
+ },
+ {
+  "id": "mooncake",
+  "name": "月饼",
+  "diff": 1,
+  "cat": "赏月",
+  "lore": "小饼如嚼月，中有酥与饴。",
+  "n": 13,
+  "grid": [
+   "....ooooo....",
+   "..oodddddoo..",
+   ".oodooooodoo.",
+   ".odooooooodo.",
+   "odooyowoyoodo",
+   "odoooowoooodo",
+   "odoowwywwoodo",
+   "odoooowoooodo",
+   "odooyowoyoodo",
+   ".odooooooodo.",
+   ".oodooooodoo.",
+   "..oodddddoo..",
+   "....ooooo...."
+  ]
+ },
+ {
+  "id": "rabbit",
+  "name": "玉兔",
+  "diff": 1,
+  "cat": "玉兔",
+  "lore": "白兔捣药秋复春，嫦娥孤栖与谁邻。",
+  "n": 13,
+  "grid": [
+   ".............",
+   "....w...w....",
+   "....ww.ww....",
+   "....lw.wl....",
+   "....lw.wl....",
+   "....l...l....",
+   "....weeew....",
+   "....wwwww....",
+   "...ewkwkwe...",
+   "...elwpwle...",
+   "...ewwwwwe...",
+   "....ewwwe....",
+   "......e......"
+  ]
+ },
+ {
+  "id": "osmanthus",
+  "name": "桂花",
+  "diff": 1,
+  "cat": "玉兔",
+  "lore": "桂子月中落，天香云外飘。",
+  "n": 13,
+  "grid": [
+   ".............",
+   "........yy...",
+   ".......yyyym.",
+   "......y.yynm.",
+   ".....yyy.nny.",
+   "..yy.yyymmydy",
+   ".yyyy.ymm..y.",
+   "..yy..mm..nn.",
+   "...nnmm.y....",
+   "...nmn.ydy...",
+   ".mmm.nnny....",
+   "mmm..........",
+   "m............"
+  ]
+ },
+ {
+  "id": "lantern",
+  "name": "花灯",
+  "diff": 2,
+  "cat": "灯谜",
+  "lore": "一夜鱼龙舞，灯明照岁寒。",
+  "n": 17,
+  "grid": [
+   "........k........",
+   "......ddddd......",
+   "......ddddd......",
+   "....yyyyyyyyy....",
+   "......drdrd......",
+   ".....rdrdrdr.....",
+   "....rrdrwrdrr....",
+   "....rrdwdwdrr....",
+   "....rrdwwwdrr....",
+   ".....rdrwrdr.....",
+   ".....rdrdrdr.....",
+   "......drdrd......",
+   "....yyyyyyyyy....",
+   "....yydddddyy....",
+   "......dyyyd......",
+   ".......yyy.......",
+   ".......yyy......."
+  ]
+ },
+ {
+  "id": "osm_tree",
+  "name": "桂树",
+  "diff": 2,
+  "cat": "赏月",
+  "lore": "吴刚捧出桂花酒，寂寞嫦娥舒广袖。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".......nnn..ddd..",
+   "......nynggdwyyd.",
+   ".....nggnggnyyyd.",
+   ".....ygggnnnyyyd.",
+   "....gggggnnyndd..",
+   "...nggnnnynnnn...",
+   "...ngnnnynnnnn...",
+   "...nnnnnnnnnnn...",
+   "....nnnmnmynn....",
+   ".......mmm.......",
+   ".......mmm.......",
+   ".......mmm.......",
+   ".......mmm.......",
+   ".......mmm.......",
+   "nnnnnnnnnnnnnnnnn",
+   "nnnnnnnnnnnnnnnnn"
+  ]
+ },
+ {
+  "id": "pestle",
+  "name": "玉兔捣药",
+  "diff": 2,
+  "cat": "玉兔",
+  "lore": "玉兔捣药，服之可以长生。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".................",
+   "....w....d.......",
+   "....l.l..dd......",
+   "...wl.l..dd......",
+   "...wwww..mm......",
+   "...wwwww..m......",
+   "...wwwwww.mm.....",
+   "....wwwww.mm.....",
+   "...wwwww..mm.....",
+   "...wwwwww..m.....",
+   "...wwwwww..eee...",
+   "...wwwww..ekkke..",
+   "....wwww..eeeee..",
+   "nnnnnnnnnneeeeenn",
+   "nnnnnnnnnnnnnnnnn",
+   "nnnnnnnnnnnnnnnnn"
+  ]
+ },
+ {
+  "id": "cloud_moon",
+  "name": "彩云追月",
+  "diff": 2,
+  "cat": "赏月",
+  "lore": "彩云追月，月华如练。",
+  "n": 17,
+  "grid": [
+   ".................",
+   ".....ddd.........",
+   "....dyyyd........",
+   "...dwwwyyd.......",
+   "..dywwwyyyd......",
+   "..dywwwyyyd......",
+   "..dyeyyyeyd......",
+   "...deyyyed.......",
+   "....dyyycc.......",
+   "...c.cccccccc.c..",
+   "...ceeeeeeeeeec..",
+   "...ceeeeeeeeeec..",
+   ".c.cccccc.c......",
+   ".ceeeeeeeec......",
+   ".ceeeeeeeec......",
+   ".................",
+   "................."
+  ]
+ },
+ {
+  "id": "pomelo",
+  "name": "柚子",
+  "diff": 2,
+  "cat": "团圆",
+  "lore": "柚子谐音「佑子」，中秋供之求平安。",
+  "n": 17,
+  "grid": [
+   "......nnmnn......",
+   "....nnn.m.nnn....",
+   "......ddmdd......",
+   "....ddyymyydd....",
+   "...dyyyyyyyyyd...",
+   "..dyywwwyydyyyd..",
+   "..dywwwwyydyyyd..",
+   ".dyyywyyyyyyyyyd.",
+   ".dyyyyyyyyyyyyyd.",
+   ".dyyydyyyyyyyyyd.",
+   ".dyyydyyyyyyyyyd.",
+   ".dyyyyyyyyydyyyd.",
+   "..dyyddyyyydyyd..",
+   "..dyyyyyyyyyyyd..",
+   "...dyyyyyyyyyd...",
+   "....ddyyyyydd....",
+   "......ddddd......"
+  ]
+ },
+ {
+  "id": "cake_cut",
+  "name": "莲蓉蛋黄",
+  "diff": 2,
+  "cat": "团圆",
+  "lore": "一枚月饼切开，金黄蛋黄如满月。",
+  "n": 17,
+  "grid": [
+   ".......ooo.......",
+   "....ooommmooo....",
+   "...oommmmmmmoo...",
+   "..ommmmmwmmmmmo..",
+   ".oommmmmmmmmmmoo.",
+   ".ommmmmdddmmmmmo.",
+   ".ommwmdyyydmwmmo.",
+   "ommmmdywyyydmmmmo",
+   "ommmmdyyyyydmmmmo",
+   "ommmmdyyyyydmmmmo",
+   ".ommwmdyyydmwmmo.",
+   ".ommmmmdddmmmmmo.",
+   ".oommmmmmmmmmmoo.",
+   "..ommmmmwmmmmmo..",
+   "...oommmmmmmoo...",
+   "....ooommmooo....",
+   ".......ooo......."
+  ]
+ },
+ {
+  "id": "change",
+  "name": "嫦娥奔月",
+  "diff": 3,
+  "cat": "玉兔",
+  "lore": "嫦娥应悔偷灵药，碧海青天夜夜心。",
+  "n": 21,
+  "grid": [
+   ".....................",
+   "..............ddd....",
+   ".......d....ddyyydd..",
+   ".....dddk...dywyyyd..",
+   "...w..kkk..dywwyyyyd.",
+   "...ww.kk...wwyyyyyyd.",
+   "....wwwwwwwwyyyyyyyd.",
+   ".....wwwwww.dyyyyyd..",
+   "......www...ddyyydd..",
+   "......wwwt....ddtt...",
+   ".......ppptt..ttttt..",
+   "......pppp.tttt...tt.",
+   ".......www.......p.t.",
+   ".......wwwpp...pppp..",
+   ".......wew.ppppp..pp.",
+   ".......wee...p.....pp",
+   "......wecccc.........",
+   "...c.cccccccccc.c....",
+   "...ceeeeeeeeeeeec....",
+   "...ceeeeeeeeeeeec....",
+   "....................."
+  ]
+ },
+ {
+  "id": "palace",
+  "name": "广寒宫",
+  "diff": 3,
+  "cat": "赏月",
+  "lore": "琼楼玉宇高处，不胜清寒。",
+  "n": 21,
+  "grid": [
+   "bbbbbbbbbdddbbbbbbbbb",
+   "bbbbbwbbdyyydbbbbbbbb",
+   "bbwbbbbdywyyydbbbbbbb",
+   "bbbbbbbdywyyydbbbbbbb",
+   "bbbbbbbdyyyyydbbbbbbb",
+   "bbbbbbbbdyyydbbbbbbbb",
+   "bbbbbbbbbdddbbbbbbbbb",
+   "bbbbbbbbbbrbbbbbbbbbb",
+   "bbnnbbbbrrrrrbbbbbbbb",
+   "bnynnbbrrrrrrrbbbbbbb",
+   "bnnndddddddddddddbbbb",
+   "nnnnddddmmmmmddddbbbb",
+   "nnnnnnbdmmmmmdbbbbbbb",
+   "bnmmnbbdmkkkmdbbbbbbb",
+   "bbmmbbbdmkkkmdbbwbbbb",
+   "bbmmbbbdmkkkmdbbwwwbb",
+   "bbmmbbbdmkkkmdbbwwwbb",
+   "......eeeeeeeee......",
+   "nnnnnnnnnnnnnnnnnnnnn",
+   "nnnnnnnnnnnnnnnnnnnnn",
+   "nnnnnnnnnnnnnnnnnnnnn"
+  ]
+ },
+ {
+  "id": "reunion",
+  "name": "团圆宴",
+  "diff": 3,
+  "cat": "团圆",
+  "lore": "月圆人圆事事圆，一桌清欢话团圆。",
+  "n": 21,
+  "grid": [
+   ".........ddd.........",
+   "......ddmmmmmdd......",
+   "....ddmmmmmmmmmdd....",
+   "...dcwwcmmwmmcwwcd...",
+   "..dcdoowcwtwcwoodcd..",
+   "..dwoyodcmwmcdoyowd..",
+   ".dmwooodcmmmcdooowmd.",
+   ".dmcwddwmmmmmwddwcmd.",
+   ".mmmcccmmwdwmmwccmmm.",
+   "dmmmmmmmwwdwwwwmmmmmd",
+   "dmmmmmmwwwtwwwmmmmmmd",
+   "dmmmmmmwwwwwwmmmmmmmd",
+   ".mmmcccmmwwwmmcccmmm.",
+   ".dmcwddwmmmmmwddwcmd.",
+   ".dmwooodcmmmcdooowmd.",
+   "..dwoyodcmwmcdoyowd..",
+   "..dcdoowcwtwcwoodcd..",
+   "...dcwwcmmwmmcwwcd...",
+   "....ddmmmmmmmmmdd....",
+   "......ddmmmmmdd......",
+   ".........ddd........."
+  ]
+ },
+ {
+  "id": "pools",
+  "name": "三潭印月",
+  "diff": 3,
+  "cat": "赏月",
+  "lore": "三潭印月，一湖金波共婵娟。",
+  "n": 21,
+  "grid": [
+   "bbdddbbbbbbbbbbbbbbbb",
+   "bddyddbbbbbwbbbbbbbbb",
+   "ddwwyddbbbbbbbbbwbbbb",
+   "dyyyyydbbbbbbbbbbbbbb",
+   "ddyyyddbbbbbbbbbbbbbb",
+   "bddyddbbbbbbbbbbbbbbb",
+   "bbdddbbbbbbbbwbbbbbbb",
+   "bbbbbbbbbbbbbbbbbbbbb",
+   "bbbbbbbbbbbbbbbbbbbbb",
+   "tttyyttddtttddtttddtt",
+   "ttyyyteeeeteeeeweeeew",
+   "tttyytteewtweetwweeww",
+   "ttyyyteeeeteeeeteeeet",
+   "tttyyteeeeteeeeweeeew",
+   "ttyyyttwwwtwwwtwwwtww",
+   "tttyytttttttttttttttt",
+   "ttyyytttttttttttttttt",
+   "tttyytwwwwwwwwtwwwwww",
+   "ttyyytttttttttttttttt",
+   "ttttttttttttttttttttt",
+   "ttttttttttttttttttttt"
+  ]
+ },
+ {
+  "id": "moon_palace",
+  "name": "月宫全景",
+  "diff": 4,
+  "cat": "玉兔",
+  "lore": "广寒宫里，桂树玉兔伴嫦娥。",
+  "n": 25,
+  "grid": [
+   "..........ddddd..........",
+   ".w.....dddyyyyyddd.......",
+   "....w.dyyyyyyyyyyyd......",
+   "....ddyyyyyyyyyyyyyddw...",
+   "...ddyeeyyyyyyyyyyyydd...",
+   "...dyeeeeyyyyyyyyyyyyd...",
+   "..dyyeeeeyyyryyyyyeyyydw.",
+   ".dyyyyeeyyrrrrryyeeeyyyd.",
+   ".dyyyyyyyrrrrrrryyeyyyyd.",
+   ".dyyyydddddddddddddyyyyd.",
+   "dyyynyddddmmmmmddddyyyyyd",
+   "dyyynnnnydmmmmmdyyyyyyyyd",
+   "dyyynnnnndmkkkmdyyyyyyyyd",
+   "dyynnnnnndmkkkmdyyyyyyyyd",
+   "dyynnnnnndmkkkmdywywyyyyd",
+   ".dyyyymmeeeeeeeeewwwyyyd.",
+   ".dyyyymmeeeeeeeeewkwyyyd.",
+   ".dyyyymmyyyyyyyyyywyyyyd.",
+   "..dyyyeyyyyyyyyyyyyyyyd..",
+   "...dyyyyyyyyyyyyyyyyyd...",
+   "...ddyyyyyyyyyyyyyyydd...",
+   "....ddyyyyyyyyyyyyydd....",
+   "...cc.dyyyyyyyyyyydcc....",
+   "c.cccc.cddyyyyydcdcccc.c.",
+   "ceeeeeec..ddddd.ceeeeeec."
+  ]
+ },
+ {
+  "id": "miles",
+  "name": "千里共婵娟",
+  "diff": 4,
+  "cat": "团圆",
+  "lore": "但愿人长久，千里共婵娟。",
+  "n": 25,
+  "grid": [
+   "...............dddddd....",
+   "........w.....dyyyyyyd...",
+   ".............dyywyyyyyd..",
+   "............dyywwwyyyyyd.",
+   ".....w......dywwwwyyyyyd.",
+   "............dyywwwyyyyyd.",
+   ".w..........dyyyyyyyyyyd.",
+   ".w..........dyyyyyyyyyyd.",
+   "............dyyyyyyyyyyd.",
+   ".....c.cccc.cdyyyyyyyyd..",
+   "c.ccccccccccccccycyyyd...",
+   "ceeeeeeeeeeeeeeeecddd....",
+   "ceeeeeeeeeeeeeeeec.......",
+   "............bb...........",
+   "....nn.....bbbb.....n....",
+   "...nnnn...bbbbbb...nn....",
+   "..nnnnnn..bbbbbb..nnnn...",
+   "..nnnnnn.bbbbbbbbnnnnnn..",
+   ".nnnnnnnbbbbbbbbnnnnnnnn.",
+   "nnnnnnnbbbbbbbbnnnnnnnnnn",
+   "cnnnwwccckkccccwwwcwwwnnc",
+   "cnnwwwccckkccccwwwcwwwnnc",
+   "cnnwwwmmmkkmmccwwwcwwwnnc",
+   "cnnwwwcmmmmmcccwwwcwwwnnc",
+   "ccccccccccccccccccccccccc"
+  ]
+ }
+];
 
-// 色卡与 _dev/patterns.py 的 PAL 必须一致：任意两色 RGB 距离 >= 60（改后跑 check.py pal）
+// 中秋色卡。硬约束：任意两色 RGB 欧氏距离 >= 60，否则逐格填豆时认不出（由 _dev/_check.py 体检）。
 const PALETTE = [
-  {code:'w',name:'月白',hex:'#F5EFE2'},{code:'e',name:'银灰',hex:'#A8A292'},
-  {code:'k',name:'墨黑',hex:'#221E1B'},{code:'m',name:'栗棕',hex:'#6E3D1F'},
-  {code:'o',name:'赭石',hex:'#D09A55'},{code:'r',name:'朱砂',hex:'#CE3A2C'},
-  {code:'v',name:'绛紫',hex:'#8A2450'},{code:'p',name:'胭脂',hex:'#DB6A8C'},
-  {code:'l',name:'藕荷',hex:'#EFAFC4'},{code:'y',name:'藤黄',hex:'#F5C93C'},
-  {code:'d',name:'描金',hex:'#A87A1E'},{code:'g',name:'豆绿',hex:'#8FBF52'},
-  {code:'n',name:'松绿',hex:'#2F6B49'},{code:'t',name:'青碧',hex:'#35AE9E'},
-  {code:'b',name:'青花',hex:'#2F5D8C'},{code:'c',name:'天青',hex:'#9CC0DC'}
+  {code:'w',name:'月白',hex:'#FBF6E9'},{code:'e',name:'银灰',hex:'#9C9686'},
+  {code:'k',name:'墨黑',hex:'#1C1A1E'},{code:'m',name:'栗棕',hex:'#63351A'},
+  {code:'o',name:'赭石',hex:'#C8944E'},{code:'r',name:'朱砂',hex:'#D13B2E'},
+  {code:'v',name:'绛紫',hex:'#7A2450'},{code:'p',name:'胭脂',hex:'#D9627F'},
+  {code:'l',name:'藕荷',hex:'#E7B7C6'},{code:'y',name:'月黄',hex:'#FFD45E'},
+  {code:'d',name:'描金',hex:'#A87A1E'},{code:'g',name:'豆绿',hex:'#8AB84E'},
+  {code:'n',name:'松绿',hex:'#2E6B45'},{code:'t',name:'青碧',hex:'#35AD9C'},
+  {code:'b',name:'夜蓝',hex:'#2E4FA6'},{code:'c',name:'天青',hex:'#8FB8DC'}
 ];
 const PAL = {}; PALETTE.forEach(p=>PAL[p.code]=p.hex);
 const MODES = {copy:'临摹',challenge:'挑战'};
 
+// ==================== 中秋灯谜（拼成一幅图点亮一盏） ====================
+const RIDDLES = [
+  {id:'r1',q:'有时落在山腰，有时挂在树梢；有时像面圆镜，有时像把镰刀。（打一天体）',
+   opts:['月亮','太阳','星星','云彩'],a:0,note:'阴晴圆缺都休说，且喜人间好时节。'},
+  {id:'r2',q:'圆圆像个盘，甜甜馅里藏；中秋桌上摆，一家分着尝。（打一食品）',
+   opts:['汤圆','月饼','烧饼','年糕'],a:1,note:'小饼如嚼月，中有酥与饴。'},
+  {id:'r3',q:'耳朵长长尾巴短，红眼白毛爱捣药；嫦娥身边常相伴。（打一动物）',
+   opts:['白猫','松鼠','玉兔','小鸡'],a:2,note:'白兔捣药秋复春，嫦娥孤栖与谁邻。'},
+  {id:'r4',q:'八月开花香十里，金黄小粒藏叶底；吴刚挥斧砍不倒。（打一花木）',
+   opts:['桂花','梅花','荷花','菊花'],a:0,note:'桂子月中落，天香云外飘。'},
+  {id:'r5',q:'红红身子高高挂，肚里点灯照万家；中秋夜里满街走。（打一物）',
+   opts:['蜡烛','烟花','对联','灯笼'],a:3,note:'一夜鱼龙舞，灯明照岁寒。'},
+  {id:'r6',q:'一位仙女住月宫，偷吃灵药上青天；从此人间盼团圆。（打一神话人物）',
+   opts:['织女','嫦娥','七仙女','龙女'],a:1,note:'嫦娥应悔偷灵药，碧海青天夜夜心。'},
+  {id:'r7',q:'黄皮疙瘩大肚皮，剥开月牙一瓣瓣；中秋摆上求平安。（打一水果）',
+   opts:['柚子','橘子','西瓜','苹果'],a:0,note:'柚子谐音「佑子」，中秋供果，护佑平安。'},
+  {id:'r8',q:'八月十五月儿明，合家欢聚在堂前。（打一成语）',
+   opts:['花好月圆','心想事成','年年有余','岁岁平安'],a:0,note:'但愿人长久，千里共婵娟。'}
+];
+
 // ==================== 音效引擎：Web Audio 程序化合成（零外部文件）====================
 // 音色全部实时合成：木鱼/梆子（放豆）、编钟（通关）、古筝拨弦（背景音乐）、带通噪声（擦除/熨烫）
 const SFX=(function(){
-  let ctx=null, master=null, sfxBus=null, bgmBus=null, noiseBuf=null;
+  let ctx=null, master=null, sfxBus=null, bgmBus=null, noiseBuf=null, reverb=null, wet=null;
   let on=true, bgmOn=true, unlocked=false;
-  let bgmTimer=null, bgmIdx=4, lastPlace=0;
-  // C 宫五声音阶（宫商角徵羽），跨两个八度
-  const PENTA=[261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25,783.99,880.00];
+  let bgmTimer=null, bgmBar=0, bgmBeat=0, lastPlace=0;
+  // A 羽调式：羽 A - 宫 C - 商 D - 角 E - 徵 G，跨三个八度。
+  // 选羽调式而非宫调式，是因为羽调式色彩清冷幽远，更贴合月夜；主音 A 落在低音区做根音。
+  const PENTA=[220.00,261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25,783.99,880.00,1046.50];
 
   function ensure(){
     if(ctx) return ctx;
@@ -474,10 +502,31 @@ const SFX=(function(){
     try{ ctx=new AC(); }catch(e){ return null; }
     master=ctx.createGain(); master.gain.value=on?0.85:0; master.connect(ctx.destination);
     sfxBus=ctx.createGain(); sfxBus.gain.value=0.95; sfxBus.connect(master);
-    bgmBus=ctx.createGain(); bgmBus.gain.value=0.55; bgmBus.connect(master);
+    bgmBus=ctx.createGain(); bgmBus.gain.value=0.42; bgmBus.connect(master);
+    // ConvolverNode 在部分老 WebView 上不存在：缺失时静默降级为无混响干声，不能因此抛错
+    try{
+      if(ctx.createConvolver){
+        reverb=makeReverb(2.6,0.72);
+        wet=ctx.createGain(); wet.gain.value=0.30; reverb.connect(wet); wet.connect(master);
+      }
+    }catch(e){ reverb=null; wet=null; }
     return ctx;
   }
   function live(){ return on && ctx; }
+  // 程序化混响：噪声脉冲响应 + 一阶低通，尾巴越拖越暗，模拟月下空庭余韵（零外部 IR 文件）
+  function makeReverb(sec,decay){
+    const rate=ctx.sampleRate, len=Math.max(1,Math.floor(rate*sec));
+    const buf=ctx.createBuffer(2,len,rate);
+    for(let ch=0;ch<2;ch++){
+      const d=buf.getChannelData(ch);
+      let lp=0;
+      for(let i=0;i<len;i++){
+        lp+=((Math.random()*2-1)-lp)*0.36;
+        d[i]=lp*Math.pow(1-i/len,decay);
+      }
+    }
+    const cv=ctx.createConvolver(); cv.buffer=buf; return cv;
+  }
   function noise(){
     if(!noiseBuf){
       const len=Math.floor(ctx.sampleRate*1.2);
@@ -490,7 +539,7 @@ const SFX=(function(){
 
   // --- 基础音色 ---
   // 古筝拨弦：三角波主体 + 泛音，低通随时间收敛模拟弦振衰减
-  function pluck(freq,t,dur,amp,dest){
+  function pluck(freq,t,dur,amp,dest,rev){
     const o=ctx.createOscillator(); o.type='triangle'; o.frequency.value=freq;
     const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.value=freq*2.01;
     const f=ctx.createBiquadFilter(); f.type='lowpass';
@@ -505,6 +554,7 @@ const SFX=(function(){
     g2.gain.exponentialRampToValueAtTime(0.0004,t+dur*0.45);
     o.connect(f); f.connect(g); g.connect(dest);
     o2.connect(g2); g2.connect(dest);
+    if(rev&&reverb){ const rg=ctx.createGain(); rg.gain.value=rev; g.connect(rg); g2.connect(rg); rg.connect(reverb); }
     o.start(t); o.stop(t+dur+0.05);
     o2.start(t); o2.stop(t+dur+0.05);
   }
@@ -553,19 +603,34 @@ const SFX=(function(){
     src.start(t,Math.random()*0.5); src.stop(t+dur+0.05);
   }
 
-  // --- 背景音乐：五声音阶随机游走 ---
+  // --- 背景音乐：固定乐句循环（慢板 52BPM，8 拍一句）---
+  // 纯随机游走没有主题、听着像试音；改成「起承转合」四条乐句循环，才是一首曲子。
+  // 值 = PENTA 索引，-1 = 留白（留白比填满更空灵，也更省 CPU）。
+  const BEAT=60/52;
+  const MEL=[
+    [5,7,6,5, 4,-1,3,-1],   // 起：主音上行后回落
+    [7,8,7,6, 5, 4,-1,-1],  // 承：攀到高音再下行
+    [5,6,5,3, 4, 5,-1,-1],  // 转：中段徘徊
+    [8,-1,7,6, 5,-1,4,-1]   // 合：收束回主音
+  ];
+  const BASS=[0,-1,-1,-1, 2,-1,-1,-1];   // 低音只在 1、5 拍落点，撑住调性
   function bgmTick(){
     bgmTimer=null;
     if(!on||!bgmOn||!ctx) return;
     const t=ctx.currentTime+0.03;
-    const step=(Math.random()<0.5?-1:1)*(Math.random()<0.72?1:2);
-    bgmIdx+=step;
-    if(bgmIdx<2) bgmIdx=3+((2-bgmIdx)%3);
-    if(bgmIdx>=PENTA.length) bgmIdx=PENTA.length-1-((bgmIdx-PENTA.length+1)%4);
-    pluck(PENTA[bgmIdx],t,1.7,0.13,bgmBus);
-    if(Math.random()<0.32) pluck(PENTA[bgmIdx%5]/2,t,2.4,0.09,bgmBus);      // 低八度衬底
-    if(Math.random()<0.18) pluck(PENTA[Math.min(PENTA.length-1,bgmIdx+2)],t+0.28,1.2,0.07,bgmBus); // 高音点缀
-    bgmTimer=setTimeout(bgmTick,1000+Math.random()*800);
+    const phr=MEL[bgmBar%MEL.length];
+    const mi=phr[bgmBeat];
+    if(mi>=0){
+      pluck(PENTA[mi],t,2.2,0.115,bgmBus,0.5);
+      // 邻音装饰：模拟古筝「按滑」，概率触发，避免每句完全一样
+      if(Math.random()<0.16) pluck(PENTA[Math.min(PENTA.length-1,mi+2)],t+0.14,1.1,0.055,bgmBus,0.4);
+    }
+    const bi=BASS[bgmBeat];
+    if(bi>=0) pluck(PENTA[bi]/2,t,3.4,0.085,bgmBus,0.25);   // 低八度衬底
+    // 每 4 句一次远处风铃般的高音，打破循环的机械感
+    if(bgmBar%4===3&&bgmBeat===0) pluck(PENTA[10],t+0.3,2.6,0.05,bgmBus,0.85);
+    bgmBeat=(bgmBeat+1)%8; if(bgmBeat===0) bgmBar++;
+    bgmTimer=setTimeout(bgmTick,BEAT*1000);
   }
   function stopBgm(){ if(bgmTimer){ clearTimeout(bgmTimer); bgmTimer=null; } }
 
@@ -590,13 +655,13 @@ const SFX=(function(){
     },
     load:function(){
       try{
-        var a=JSON.parse(localStorage.getItem('pbg_audio')||'null');
+        var a=JSON.parse(localStorage.getItem('pma_audio')||'null');
         if(a){ on=a.s!==0; bgmOn=a.b!==0; }
       }catch(e){}
       api.syncLabels();
     },
     save:function(){
-      try{ localStorage.setItem('pbg_audio',JSON.stringify({s:on?1:0,b:bgmOn?1:0})); }catch(e){}
+      try{ localStorage.setItem('pma_audio',JSON.stringify({s:on?1:0,b:bgmOn?1:0})); }catch(e){}
     },
     syncLabels:function(){
       const a=document.getElementById('sfxLabel'), b=document.getElementById('bgmLabel');
@@ -705,7 +770,7 @@ function drawBeadSprite(g,s,hex){
   g.restore();
 
   // 3) 孔洞：露出钉板/钉柱的暖灰色，孔壁下侧受光、上侧背光
-  g.fillStyle='rgba(82,72,62,0.96)';
+  g.fillStyle='rgba(74,66,58,0.96)';
   g.beginPath();g.arc(cx,cy,RH,0,Math.PI*2);g.fill();
   g.fillStyle='rgba(255,255,255,0.12)';
   g.beginPath();g.ellipse(cx,cy+RH*0.34,RH*0.52,RH*0.20,0,0.22*Math.PI,0.78*Math.PI);g.fill();
@@ -829,7 +894,7 @@ function drawFusedBead(i,j,code,t){
 
   // 残留孔洞：露出钉柱色，随熨烫淡出
   if(RH>0.4){
-    ctx.fillStyle='rgba(82,72,62,'+(0.96*(1-grow))+')';
+    ctx.fillStyle='rgba(74,66,58,'+(0.96*(1-grow))+')';
     ctx.beginPath();ctx.arc(cx,cy,RH,0,Math.PI*2);ctx.fill();
   }
   // 表面高光：熨烫前期保留，后期完全溶入整片光泽
@@ -931,7 +996,7 @@ function render(){
 
 function renderRefThumb(){
   const sz=refThumb.width,c=sz/n,g=refThumb.getContext('2d');
-  g.clearRect(0,0,sz,sz);g.fillStyle='#211a13';g.fillRect(0,0,sz,sz);
+  g.clearRect(0,0,sz,sz);g.fillStyle='#101627';g.fillRect(0,0,sz,sz);
   for(let j=0;j<n;j++)for(let i=0;i<n;i++){
     const code=target[j*n+i]; if(!code)continue;
     g.fillStyle=PAL[code];g.beginPath();g.arc(i*c+c/2,j*c+c/2,c*0.46,0,Math.PI*2);g.fill();
@@ -1038,7 +1103,7 @@ function applyAt(e){
   if(celebrated)return;              // 拼成后锁盘，不能再加/擦豆
   const idx=cellFromEvent(e); if(idx==null)return;
   if(tool==='pen'){
-    if(state[idx]!==curColor){state[idx]=curColor;moves++;spawnSparkle(idx);SFX.place();render();updateMaterialCounts();updatePct();}
+    if(state[idx]!==curColor){state[idx]=curColor;moves++;SFX.place();render();updateMaterialCounts();updatePct();}
   }else if(tool==='erase'){
     if(state[idx]!=null){state[idx]=null;moves++;SFX.erase();render();updateMaterialCounts();updatePct();}
   }
@@ -1120,30 +1185,27 @@ function celebrate(){
       setTimeout(()=>stamp.classList.remove('show'),2400);
       spawnPetals();
       SFX.win();
-      showToast('拼成啦！国风佳作 ✦');
+      showToast('月圆拼成！中秋快乐 ✦');
       openWin();
     }
   });
 }
 
-function spawnSparkle(idx){
-  // 简单在对应位置画一个闪光圈，由 renderHint 机制或单独实现
-}
-
 function spawnPetals(){
+  // 桂花飘落：金黄小瓣，与背景星尘同色系
   const c=petals,d=Math.min(window.devicePixelRatio||1,2);
   c.width=window.innerWidth*d;c.height=window.innerHeight*d;
   c.style.width=window.innerWidth+'px';c.style.height=window.innerHeight+'px';
   const g=c.getContext('2d');g.setTransform(d,0,0,d,0,0);
   const W=window.innerWidth,H=window.innerHeight;
-  const cols=['#C8362B','#D4AF37','#E6C65C','#C9A0B4','#C95F7C'];
+  const cols=['#FFD45E','#E6C65C','#FBF6E9','#A87A1E'];
   const ps=[];
-  for(let i=0;i<40;i++)ps.push({x:Math.random()*W,y:Math.random()*-H,vy:1.2+Math.random()*2.0,vr:(Math.random()-0.5)*0.18,ph:Math.random()*6,sz:6+Math.random()*8,col:cols[(Math.random()*cols.length)|0]});
+  for(let i=0;i<40;i++)ps.push({x:Math.random()*W,y:Math.random()*-H,vy:1.2+Math.random()*2.0,vr:(Math.random()-0.5)*0.18,ph:Math.random()*6,sz:5+Math.random()*7,col:cols[(Math.random()*cols.length)|0]});
   const start=performance.now();
   function frame(now){
     const el=now-start;g.clearRect(0,0,W,H);
     for(const p of ps){p.y+=p.vy;p.x+=Math.sin(el/600+p.ph)*0.6;p.rot=(p.rot||0)+p.vr;
-      g.save();g.translate(p.x,p.y);g.rotate(p.rot);g.fillStyle=p.col;
+      g.save();g.translate(p.x,p.y);g.rotate(p.rot);g.fillStyle=p.col;g.globalAlpha=0.9;
       g.beginPath();g.ellipse(0,0,p.sz,p.sz*0.55,0,0,Math.PI*2);g.fill();g.restore();
       if(p.y>H+20){p.y=-20;p.x=Math.random()*W;}}
     if(el<3000)requestAnimationFrame(frame);else g.clearRect(0,0,W,H);
@@ -1253,9 +1315,9 @@ function isSolved(){
   return has;
 }
 
-// 每幅图纸的独立进度：pbg_progress = {图纸id:{g:压缩棋盘,t:已用时,m:步数,k:失误}}
+// 每幅图纸的独立进度：pma_progress = {图纸id:{g:压缩棋盘,t:已用时,m:步数,k:失误}}
 function loadProgress(){
-  try{progress=JSON.parse(localStorage.getItem('pbg_progress')||'{}')||{};}catch(e){progress={};}
+  try{progress=JSON.parse(localStorage.getItem('pma_progress')||'{}')||{};}catch(e){progress={};}
 }
 function packState(){return state.map(c=>c||'.').join('');}
 function unpackState(s,nn){
@@ -1270,24 +1332,20 @@ function saveProgress(){
   const id=PATTERNS[curPattern].id;
   if(state.some(c=>c!=null)) progress[id]={g:packState(),t:elapsed,m:moves,k:mistakes};
   else delete progress[id];
-  try{localStorage.setItem('pbg_progress',JSON.stringify(progress));}catch(e){}
+  try{localStorage.setItem('pma_progress',JSON.stringify(progress));}catch(e){}
 }
 function clearProgress(id){
   if(!(id in progress))return;
   delete progress[id];
-  try{localStorage.setItem('pbg_progress',JSON.stringify(progress));}catch(e){}
+  try{localStorage.setItem('pma_progress',JSON.stringify(progress));}catch(e){}
 }
 
-// 本地存档：pbg_records = {图纸id:{t用时秒,s星级,m步数}}（兼容旧版 pbg_completed 数组）
+// 本地存档：pma_records = {图纸id:{t用时秒,s星级,m步数}}
 function loadRecords(){
   records={};
   try{
-    const raw=JSON.parse(localStorage.getItem('pbg_records')||'null');
+    const raw=JSON.parse(localStorage.getItem('pma_records')||'null');
     if(raw&&typeof raw==='object'&&!Array.isArray(raw)) records=raw;
-    else{
-      const old=JSON.parse(localStorage.getItem('pbg_completed')||'[]');
-      if(Array.isArray(old)) old.forEach(id=>{records[id]={t:0,s:0,m:0};});
-    }
   }catch(e){records={};}
   updateGalCount();
 }
@@ -1301,11 +1359,89 @@ function saveCompletion(){
   const cur={t:elapsed,s:starCount(),m:moves};
   const prev=records[id];
   if(!prev||cur.s>prev.s||(cur.s===prev.s&&(!prev.t||cur.t<prev.t))) records[id]=cur;
-  try{localStorage.setItem('pbg_records',JSON.stringify(records));}catch(e){}
+  try{localStorage.setItem('pma_records',JSON.stringify(records));}catch(e){}
   clearProgress(id); // 拼完即清空该图进度，下次从头开始
   updateGalCount();
+  syncRiddle();      // 新完成一幅 → 可能解锁下一盏灯谜
 }
 function isCompleted(id){return !!records[id];}
+
+// ==================== 猜灯谜：拼成一幅点亮一盏 ====================
+let riddleState={solved:[]};
+function loadRiddle(){
+  try{
+    const r=JSON.parse(localStorage.getItem('pma_riddle')||'null');
+    if(r&&Array.isArray(r.solved)){
+      riddleState.solved=r.solved.filter(id=>RIDDLES.some(x=>x.id===id));
+    }
+  }catch(e){}
+  syncRiddle();
+}
+function saveRiddle(){
+  try{localStorage.setItem('pma_riddle',JSON.stringify(riddleState));}catch(e){}
+}
+// 同步「已点亮 N/8 盏」两处入口文案
+function syncRiddle(){
+  const lit=riddleState.solved.length, total=RIDDLES.length;
+  const a=document.getElementById('rbState');
+  const b=document.getElementById('menuRiddle');
+  if(a)a.textContent='已点亮 '+lit+'/'+total+' 盏';
+  if(b)b.textContent=lit+'/'+total+' 盏';
+}
+const LANTERN_SVG='<svg viewBox="0 0 24 24"><path d="M8 2h8v2H8zM7 5h10c2.8 0 5 3.1 5 7s-2.2 7-5 7H7c-2.8 0-5-3.1-5-7s2.2-7 5-7zm4 2v10h2V7h-2zM10 20h4v2h-4z"/></svg>';
+function renderRiddleSheet(){
+  const body=document.getElementById('riddleBody');
+  const solved=riddleState.solved.length;
+  syncRiddle();
+  if(solved>=RIDDLES.length){
+    body.innerHTML='<div class="rd-done"><div class="rd-big">灯火已全亮</div>'+
+      '<p>八盏灯谜全部猜中，<br>愿你人月两团圆，中秋快乐。</p></div>';
+    return;
+  }
+  const r=RIDDLES[solved];
+  const unlocked=Object.keys(records).length;
+  if(solved>=unlocked){
+    body.innerHTML='<div class="rd-lock"><div class="rd-big">灯笼还暗着</div>'+
+      '<p>拼成一幅图案，即可点亮第 '+(solved+1)+' 盏灯谜。<br>已完成 '+unlocked+' 幅，还差一幅。</p>'+
+      '<button class="rd-btn" id="rdGo">去拼豆</button></div>';
+    const b=document.getElementById('rdGo');
+    if(b)b.addEventListener('click',function(){
+      document.getElementById('sheetRiddle').classList.remove('show');
+      showHome();
+    });
+    return;
+  }
+  let lanterns='';
+  RIDDLES.forEach(function(x,i){
+    lanterns+=LANTERN_SVG.replace('<svg','<svg class="'+(i<solved?'lit':'')+'"');
+  });
+  body.innerHTML='<div class="rd-lanterns">'+lanterns+'</div>'+
+    '<div class="rd-q">'+(solved+1)+'. '+r.q+'</div>'+
+    '<div class="rd-opts">'+r.opts.map((o,i)=>'<button class="rd-opt" data-i="'+i+'">'+String.fromCharCode(65+i)+' · '+o+'</button>').join('')+'</div>'+
+    '<div class="rd-note" id="rdNote"></div>';
+  body.querySelectorAll('.rd-opt').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      const i=+btn.dataset.i;
+      if(i===r.a){
+        btn.classList.add('ok');
+        riddleState.solved.push(r.id); saveRiddle(); syncRiddle();
+        SFX.win();
+        spawnPetals();
+        document.getElementById('rdNote').innerHTML='<b>猜中啦，第 '+(solved+1)+' 盏灯点亮！</b>'+r.note+
+          (solved+1<RIDDLES.length?'<button class="rd-btn" id="rdNext">下一盏</button>':'');
+        const nb=document.getElementById('rdNext');
+        if(nb)nb.addEventListener('click',renderRiddleSheet);
+      }else{
+        btn.classList.add('bad'); SFX.error();
+        setTimeout(function(){btn.classList.remove('bad');},600);
+      }
+    });
+  });
+}
+function openRiddle(){
+  renderRiddleSheet();
+  document.getElementById('sheetRiddle').classList.add('show');
+}
 
 // 图纸库全屏页
 let libFilter='全部';
@@ -1410,7 +1546,7 @@ function renderGallerySheet(){
     const item=document.createElement('div');item.className='gal-item';
     const cv=document.createElement('canvas');cv.width=80;cv.height=80;
     const c=cv.getContext('2d');const sc=80/p.n;
-    c.fillStyle='#211a13';c.fillRect(0,0,80,80);
+    c.fillStyle='#101627';c.fillRect(0,0,80,80);
     for(let j=0;j<p.n;j++)for(let i=0;i<p.n;i++){const code=p.grid[j][i];if(code==='.')continue;c.fillStyle=PAL[code];c.beginPath();c.arc(i*sc+sc/2,j*sc+sc/2,sc*0.46,0,Math.PI*2);c.fill();}
     item.appendChild(cv);
     const name=document.createElement('div');name.className='name';name.textContent=p.name;item.appendChild(name);
@@ -1420,23 +1556,26 @@ function renderGallerySheet(){
   if(grid.children.length===0)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:20px 0;">暂无完成作品，快去拼一幅吧</div>';
 }
 
-// 背景粒子
+// 背景粒子：星尘缓浮 + 明暗闪烁（夜空）
 function initBg(){
   const c=document.getElementById('bgCanvas'),g=c.getContext('2d');
   const d=Math.min(window.devicePixelRatio||1,1.5);
   let W,H,ps=[];
   function resize(){
     W=window.innerWidth;H=window.innerHeight;c.width=W*d;c.height=H*d;c.style.width=W+'px';c.style.height=H+'px';g.setTransform(d,0,0,d,0,0);ps=[];
-    for(let i=0;i<36;i++)ps.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.25,vy:(Math.random()-0.5)*0.18,sz:1+Math.random()*2,al:0.15+Math.random()*0.35});
+    for(let i=0;i<42;i++)ps.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.16,vy:(Math.random()-0.5)*0.12,sz:0.8+Math.random()*1.8,al:0.15+Math.random()*0.4,sp:0.4+Math.random()*1.4,ph:Math.random()*6});
   }
   resize();
-  function frame(){
+  function frame(now){
     g.clearRect(0,0,W,H);
     for(const p of ps){p.x+=p.vx;p.y+=p.vy;if(p.x<0)p.x+=W;if(p.x>W)p.x-=W;if(p.y<0)p.y+=H;if(p.y>H)p.y-=H;
-      g.fillStyle='rgba(212,175,55,'+p.al+')';g.beginPath();g.arc(p.x,p.y,p.sz,0,Math.PI*2);g.fill();}
+      const a=p.al*(0.55+0.45*Math.sin(now/1000*p.sp+p.ph));
+      g.fillStyle='rgba(255,244,214,'+a+')';
+      g.beginPath();g.arc(p.x,p.y,p.sz,0,Math.PI*2);g.fill();}
     requestAnimationFrame(frame);
   }
-  frame();window.addEventListener('resize',resize);
+  requestAnimationFrame(frame);
+  window.addEventListener('resize',resize);
 }
 
 // 事件绑定
@@ -1466,9 +1605,10 @@ function bindTools(){
       if(a==='sfx'){SFX.setOn(!SFX.isOn());SFX.save();SFX.syncLabels();if(SFX.isOn())SFX.select();}
       else if(a==='bgm'){SFX.setBgm(!SFX.isBgmOn());SFX.save();SFX.syncLabels();if(SFX.isBgmOn())SFX.select();}
       else SFX.click();
-      if(a==='mode'){const keys=Object.keys(MODES),i=keys.indexOf(mode);setMode(keys[(i+1)%keys.length]);}
+      if(a==='riddle'){openRiddle();}
+      else if(a==='mode'){const keys=Object.keys(MODES),i=keys.indexOf(mode);setMode(keys[(i+1)%keys.length]);}
       else if(a==='gallery'){renderGallerySheet();document.getElementById('sheetGallery').classList.add('show');}
-      else if(a==='info') showToast('选色珠点棋盘填豆；每幅图进度会自动保存，拼满 100% 即完成。');
+      else if(a==='info') showToast('选色珠点棋盘填豆；进度自动保存，拼满 100% 即点亮一盏灯谜。');
     });
   });
   document.addEventListener('click',e=>{
@@ -1477,6 +1617,8 @@ function bindTools(){
   document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('.sheet').classList.remove('show')));
   document.getElementById('winReplay').addEventListener('click',()=>{closeWin();clearBoard();startTime=Date.now();elapsed=0;startTimer();});
   document.getElementById('winNext').addEventListener('click',nextPattern);
+  document.getElementById('riddleBanner').addEventListener('click',()=>{SFX.click();openRiddle();});
+  document.getElementById('riddleBanner').addEventListener('click',()=>{SFX.click();openRiddle();});
   winModal.addEventListener('click',e=>{if(e.target===winModal)closeWin();});
 }
 
@@ -1500,6 +1642,7 @@ function init(){
   });
   loadRecords();
   loadProgress();
+  loadRiddle();
   bindTools();
   initBg();
   selectPattern(0);
@@ -1511,18 +1654,3 @@ function init(){
 
 init();
 })();
-'''
-
-html = HTML_TEMPLATE.replace('__PATTERNS_JSON__', PATTERNS_JSON)
-js = JS_TEMPLATE.replace('__PATTERNS_JSON__', PATTERNS_JSON)
-
-out_html = os.path.join(BASE, '..', 'index.html')
-with open(out_html, 'w', encoding='utf-8') as f:
-    f.write(html)
-
-out_js = os.path.join(BASE, '..', 'main.js')
-with open(out_js, 'w', encoding='utf-8') as f:
-    f.write(js)
-
-print('generated', os.path.normpath(out_html), 'chars', len(html))
-print('generated', os.path.normpath(out_js), 'chars', len(js))

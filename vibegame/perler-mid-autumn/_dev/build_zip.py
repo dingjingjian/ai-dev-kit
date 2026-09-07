@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-小工具 ZIP 打包（纯打包，不含修复逻辑）
+中秋拼豆坊 小工具 ZIP 打包（纯打包，不含修复逻辑）
 修复一律改 _dev/build.py（唯一真源）后重跑 `python _dev/build.py`。
 
 前置校验 -> 构建 dist（仅 index.html + main.js）-> 压缩 dist 的“内容”
@@ -11,9 +11,9 @@
 import os, re, shutil, sys, zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent          # perler-bead-game/
+ROOT = Path(__file__).resolve().parent.parent          # perler-mid-autumn/
 DIST = ROOT / "dist"
-ZIP = ROOT / "perler-bead-game.zip"
+ZIP = ROOT / "perler-mid-autumn.zip"
 ALLOWED_EXT = {".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif",
                ".webp", ".svg", ".woff", ".woff2", ".json"}
 sys.stdout.reconfigure(encoding="utf-8")

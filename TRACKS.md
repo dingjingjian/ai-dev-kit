@@ -45,12 +45,13 @@ ai-dev-kit/
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
 | 小工具打包器 | `vibetool/minitool-zip-builder-1.6.0.skill` | 把单文件 HTML 打成符合小红书规范的小工具 zip | 自用 · 不投稿 |
 
-## #vibegame　互动游戏（3）
+## #vibegame　互动游戏（4）
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
 | 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政 | 完整（zip + 海报） |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风纹样逐格填豆，拼成即过关 | 完整（zip + 图） |
+| 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜 | 完整（zip）· 缺笔记 |
 | AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
 
 > `ai-calculator` 外壳是计算器，但有判断对错、得分、连对加成、实时战绩——爽点是"上头"而非"算得快"，故归 `#vibegame`。

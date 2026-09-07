@@ -19,7 +19,7 @@
   .gear svg{width:18px;height:18px;fill:none;stroke:var(--txt);stroke-width:1.6}
 
   /* 底部天体切换（单排胶囊，溢出时两端渐隐 + 滚动吸附） */
-  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;backdrop-filter:blur(14px) saturate(1.35);box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);z-index:10;pointer-events:auto;max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;backdrop-filter:blur(14px) saturate(1.35);box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);z-index:10;pointer-events:auto;max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;user-select:none;-webkit-user-select:none}
   .dock::-webkit-scrollbar{display:none}
   .dock.scrollable{-webkit-mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
   .dock button{flex:0 0 auto;margin:0 2px;border:none;background:transparent;color:var(--mut);font-size:13px;font-weight:500;padding:8px 14px;border-radius:999px;cursor:pointer;transition:color .18s,background .18s,transform .18s;white-space:nowrap;scroll-snap-align:center}

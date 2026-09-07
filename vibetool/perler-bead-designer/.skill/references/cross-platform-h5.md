@@ -2,6 +2,8 @@
 
 > 小工具同一份 H5 同时跑在 PC 模拟器与真机 WebView。以下是保证两端一致体验的适配要点。
 
+CSS 的最低语法与布局能力以 [css-compatibility.md](./css-compatibility.md) 为准；本文件只说明触摸、滚动、安全区和设备形态差异。
+
 ---
 
 ## 1. 触摸

@@ -1,0 +1,12 @@
+{
+  "name": "perler-mid-autumn-dev",
+  "version": "1.0.0",
+  "private": true,
+  "description": "中秋拼豆坊 开发依赖（仅用于 jsdom 冒烟测试，不参与构建产物）",
+  "scripts": {
+    "smoke": "node smoke_test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^24.0.0"
+  }
+}
