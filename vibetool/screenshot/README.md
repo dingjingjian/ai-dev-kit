@@ -1,6 +1,6 @@
 # 网站截图 - Screenshot
 
-> **赛道**：`#vibetool` 实用工具　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
+> **分类**：`#vibetool` 实用工具　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
 
 输入 URL 即可截图，自动处理懒加载、Cloudflare 拦截与 Web 字体，按分类输出。
 
@@ -43,6 +43,6 @@ node capture.js --config sites.json --headed
 
 自用工具，不投稿。
 
-## 赛道判定
+## 分类判定
 
 "把一批网站的图截下来"是明确任务 → `#vibetool`。

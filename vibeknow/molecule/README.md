@@ -1,6 +1,6 @@
 # 分子空间构型 - Molecule
 
-> **赛道**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
+> **分类**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
 
 分子结构的 3D 可视化，把平面的化学式变成立体能转的球棍模型。
 
@@ -26,6 +26,6 @@
 | zip | `molecule-minitool.zip` |
 | 小红书笔记 | 未写 |
 
-## 赛道判定
+## 分类判定
 
 不产出任何可交付物，用户点开是为了理解分子长什么样 → 认知增量是主价值 → `#vibeknow`（副标签 `#vibetool`）。

@@ -1,12 +1,12 @@
 # AI Dev Kit
 
-本目录是一个 AI 开发工具集合，包含多个独立子项目，按小红书 vibecoding 四赛道分目录组织（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`）。多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。
+本目录是一个 AI 开发工具集合，包含多个独立子项目，按用途分为四个顶层目录（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`）。多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。
 
 每个子项目可能带有各自的 `README.md` 或 `CLAUDE.md`/`SKILL.md`；工作区级协作约定见 `AGENTS.md`，详细用法请参阅对应文件。
 
 ## 项目列表
 
-按赛道分组，与顶层目录一一对应。赛道定义与维护约定见 [`TRACKS.md`](TRACKS.md)。
+按目录分组，与顶层目录一一对应。各目录的定位与维护约定见 [`TRACKS.md`](TRACKS.md)。
 
 ### #vibetool　实用工具
 

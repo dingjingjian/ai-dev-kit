@@ -1,6 +1,6 @@
 # 函数可视化 - Function Visualization
 
-> **赛道**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
+> **分类**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
 
 初高中数学函数图像绘制工具：输入表达式，立刻看到曲线，还能看对称轴等特征。
 
@@ -21,6 +21,6 @@
 | zip | `function-visualization.zip` |
 | 小红书笔记 | 未写 |
 
-## 赛道判定
+## 分类判定
 
 虽然形态是"输入→出图"的工具闭环，但用户点开的动机是"搞懂这个函数的图像长什么样"，主价值是认知增量而非效率 → 按 TRACKS.md 第 3 问归 `#vibeknow`（副标签 `#vibetool`）。
