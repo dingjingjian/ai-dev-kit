@@ -1,0 +1,178 @@
+/*!
+ * compat.css —— 安卓9(WebView ≈ Chrome 69) 兼容性补丁
+ *
+ * 职责：对 app.css(Tailwind 构建产物) 中安卓9 不支持的现代 CSS 特性
+ *       提供降级 fallback，仅在目标特性不被支持时生效(@supports not)，
+ *       不影响现代浏览器的原生表现。
+ *
+ * 加载顺序：在 app.css 之后加载，确保 fallback 声明能覆盖。
+ */
+
+/* =====================================================================
+ * 1. backdrop-filter 降级（毛玻璃 → 半透明背景色）
+ * =====================================================================
+ *
+ * 背景：安卓9 WebView(Chrome 69) 完全不支持 backdrop-filter，即使
+ *       app.css 已带 -webkit-backdrop-filter 前缀(Chrome 76+ 才支持)。
+ *       失效后元素背景透明，上层文字不可读。
+ *
+ * 方案：不支持时给一层半透明背景色作为蒙层降级，浅色模式用白、暗色
+ *       模式用黑，保证文字可读性。已声明 background-color 的元素会被
+ *       此 fallback 覆盖(同特异性、后加载)，这在毛玻璃场景下是期望的
+ *       ——毛玻璃本就靠模糊背后内容，无模糊时需不透明背景兜底。
+ */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .backdrop-blur,
+  .backdrop-blur-xl,
+  .backdrop-blur-\[4px\],
+  .backdrop-blur-\[10px\],
+  .backdrop-blur-\[30px\],
+  .backdrop-filter {
+    background-color: rgba(255, 255, 255, 0.75);
+  }
+
+  .dark .backdrop-blur,
+  .dark .backdrop-blur-xl,
+  .dark .backdrop-blur-\[4px\],
+  .dark .backdrop-blur-\[10px\],
+  .dark .backdrop-blur-\[30px\],
+  .dark .backdrop-filter {
+    background-color: rgba(0, 0, 0, 0.75);
+  }
+}
+
+/* =====================================================================
+ * 2. aspect-ratio 降级（padding-top 百分比 hack）
+ * =====================================================================
+ *
+ * 背景：安卓9 WebView(Chrome 69) 不支持 aspect-ratio(Chrome 88+)。
+ *       app.css 中 3 处：.aspect-[100/12]、.aspect-[3/4]、.aspect-square。
+ *       失效后元素高度由内容决定，比例塌陷。
+ *
+ * 方案：padding-top 百分比相对父宽度，可撑出固定比例高度。容器需
+ *       position:relative，内容用绝对定位填满。用 ::before 撑高，避免
+ *       占据正常流空间。仅在不支持 aspect-ratio 时启用。
+ *
+ * 注意：填满规则只作用于 img/video 子元素(常见包裹用法)。若用 `> *` 通配
+ *       会覆盖容器内已有 absolute 子元素的自定义定位(如相机取景框的四角
+ *       方框 -top-0.5 -left-0.5、十字 top-1/2 left-1/2)，使其全部塌到左上
+ *       角。限定为 img/video 既能让媒体填满，又不破坏其余子元素的定位。
+ */
+@supports not (aspect-ratio: 1 / 1) {
+
+  /* aspect-[100/12]  宽:高 = 100:12 → 高/宽 = 12% */
+  .aspect-\[100\/12\] {
+    position: relative;
+  }
+  .aspect-\[100\/12\]::before {
+    content: "";
+    display: block;
+    padding-top: 12%;
+  }
+  .aspect-\[100\/12\] > img,
+  .aspect-\[100\/12\] > video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* aspect-[3/4]  宽:高 = 3:4 → 高/宽 = 4/3 ≈ 133.3333% */
+  .aspect-\[3\/4\] {
+    position: relative;
+  }
+  .aspect-\[3\/4\]::before {
+    content: "";
+    display: block;
+    padding-top: 133.3333%;
+  }
+  .aspect-\[3\/4\] > img,
+  .aspect-\[3\/4\] > video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+
+  /* aspect-square  宽:高 = 1:1 → 高/宽 = 100% */
+  .aspect-square {
+    position: relative;
+  }
+  .aspect-square::before {
+    content: "";
+    display: block;
+    padding-top: 100%;
+  }
+  .aspect-square > img,
+  .aspect-square > video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+  }
+}
+
+/* =====================================================================
+ * 3. text-underline-offset（无降级）
+ * =====================================================================
+ *
+ * .underline-offset-4{text-underline-offset:4px} 在 Chrome 87+ 支持。
+ * 安卓9 不支持时下划线回到默认位置，仅视觉微调差异，无可用 CSS 等价
+ * 属性替代，故不做处理。
+ */
+
+/* =====================================================================
+ * 4. 移动端顶部预留 20px 空白
+ * =====================================================================
+ *
+ * 背景：base.css 在 @media(max-width:600px) 下隐藏了 .status-bar
+ *       （避免与系统状态栏重复），而 Android WebView 的
+ *       env(safe-area-inset-top) 通常返回 0，导致内容直接贴到屏幕顶部。
+ *
+ * 方案：在移动端给 #root 加 padding-top:20px，利用 box-sizing:border-box
+ *       （Tailwind preflight 已设）使 padding 包含在 height:100% 内，
+ *       不增加总高度、不触发滚动条。
+ */
+@media (max-width: 600px) {
+  #root {
+    padding-top: 20px;
+  }
+  /*
+   * .min-h-screen 原值 100vh，加上 #root 的 padding-top:20px 后总高度
+   * 超出视口 20px 产生滚动条。此处缩减 20px 使总高度恰好等于视口高度。
+   * 内容超过一屏时 min-height 不限制，自然撑开滚动，行为不受影响。
+   */
+  .min-h-screen {
+    min-height: calc(100vh - 20px);
+  }
+  /*
+   * 相机页面用 fixed inset-0 脱离 #root 文档流，#root 的 padding-top:20px
+   * 不生效。此处给相机页面的 fixed 全屏容器补上 20px + safe-area-top，
+   * 使顶部按钮距视口顶部 = 20px + 12px + 16px(p-4) = 48px，与普通页面一致。
+   * :not(.items-center) 排除模态框/Loading 等居中弹层。
+   *
+   * fallback：max() 需 Chrome 79+，安卓9(Chrome 69) 不支持，第二条声明
+   *   会被丢弃，回退到第一条 20px。此时 safe-area-top 的 max() 同样失效，
+   *   普通页面顶部 = 20px(#root) + 0px + 16px(p-4) = 36px，相机页面顶部
+   *   = 20px(fallback) + 16px(p-4) = 36px，两端一致。
+   */
+  .fixed.inset-0.flex.flex-col.safe-area-top:not(.items-center) {
+    padding-top: 20px;
+    padding-top: calc(20px + max(var(--flash-app-safe-area-inset-top, 0px), 12px));
+  }
+}
+
+/* =====================================================================
+ * 5. 缺失的 Tailwind 工具类补全
+ * =====================================================================
+ *
+ * app.css 构建产物中未包含 .pt-5（项目未使用该类，故 Tree-shaking 移除）。
+ * 相机页面根容器需要 pt-5（20px）与 #root 的 padding-top:20px 对齐，
+ * 此处补回定义。1.25rem = 20px（root font-size 16px）。
+ */
+.pt-5 {
+  padding-top: 1.25rem;
+}

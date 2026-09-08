@@ -1,0 +1,35 @@
+/*!
+ * icons.css —— Material Icons 本地字体声明
+ *
+ * 原产物通过 CDN 引入 material-icons.css，离线容器内无法加载，
+ * 故将字体文件打包进 zip 并在此重新声明。
+ *
+ * 应用仅使用基础字重（.material-icons，63 处引用），
+ * outlined / round / sharp / two-tone 四个变体均未被使用，已不打包。
+ */
+
+@font-face {
+  font-family: "Material Icons";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("../fonts/material-icons.woff2") format("woff2");
+}
+
+.material-icons {
+  font-family: "Material Icons";
+  font-weight: normal;
+  font-style: normal;
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "liga";
+}

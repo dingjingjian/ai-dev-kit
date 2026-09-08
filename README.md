@@ -27,7 +27,10 @@
 |------|------|------|
 | 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市：拼成图纸才能盖楼，含 RCI 三需求与电力/供水/环卫三市政 |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风拼豆填色网页小游戏，纯前端单文件，逐格填豆拼图过关 |
+| 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜，拼成即点亮 |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分，锻炼心算验算 |
+| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟，React 构建，含旧版安卓适配层 |
+| 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM |
 
 ### #vibeart　数字艺术
 
