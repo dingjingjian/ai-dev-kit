@@ -7,7 +7,7 @@
  * 决策公式（§4.3）：
  *   得分 = 危机值修正 × hawkishness + 副作用权重 + 随机扰动
  * hawkishness ∈ [-1,1]：鹰派偏好激化、鸽派偏好缓和。
- * 一行系数让五个 AI 各有脾气 —— 玩家会慢慢摸清「东陆是疯子，西海在求和」。
+ * 一行系数让五个 AI 各有脾气 —— 玩家会慢慢摸清「北方是火药桶，东亚在踩刹车」。
  *
  * 确定性：随机扰动一律走 state.rng（种子化），同种子同输入必然同结果，便于 tests/ 无头断言。
  */
@@ -27,7 +27,13 @@
     reveal_radar: -0.20,       // 雷达位置被揭示
     city_defense:  0.25,       // 城市防空 +1 级
     pop_loss:     -0.40,       // 直接人口损失
-    radar_down:   -0.15        // 雷达停摆
+    radar_down:   -0.15,       // 雷达停摆
+    // 事件奖励 effect（§4.2 奖励驱动）—— 对己方有利，AI 会倾向选带奖励的选项
+    add_radar:     0.30,       // 增建雷达
+    add_sam:       0.30,       // 增建防空
+    add_missiles:  0.35,       // 补充核弹
+    boost_pop:     0.20,       // 人口回升
+    intel_city:   -0.35        // 获取敌方城市情报（target:'enemy' 取反后为正收益）
   };
 
   function effectAmount(eff) {
@@ -47,7 +53,15 @@
    * 返回选中选项的下标。纯打分 + 取最大，无分支策略，便于断言性格确实起作用。
    */
   function scoreOption(state, option, hawkishness) {
-    var s = (option.crisis / CRISIS_NORM) * hawkishness;
+    /* crisis:'MAX' 对 AI 不是无条件可选：只有危机值已经烧过 CONFIG.aiMaxMinCrisis（默认 70）
+     * 时才按 crisisMaxAiScore 参与打分，否则判为 -Infinity 直接排除。
+     * 没有这道闸门，六个 AI 里只要有一个鹰派（ALFA 0.9），第一回合就会把世界点了，
+     * 危机博弈阶段的存在意义归零。玩家不受此限 —— 主动引爆是玩家的特权。 */
+    if (DC.isCrisisMax(option)) {
+      var gate = (CONFIG.aiMaxMinCrisis != null) ? CONFIG.aiMaxMinCrisis : 70;
+      if (state.crisis < gate) return -Infinity;
+    }
+    var s = (DC.crisisValue(option) / CRISIS_NORM) * hawkishness;
     if (option.effect) s += effectWeight(option.effect);
     var noise = (CONFIG.aiNoise != null) ? CONFIG.aiNoise : 0.2;
     s += (state.rng() - 0.5) * 2 * noise;
@@ -59,12 +73,13 @@
     if (!card || !card.options || !card.options.length) return 0;
     var f = DC.sim.findFaction(state, faction);
     var hawk = f ? f.hawkishness : 0;
-    var best = 0, bestScore = -Infinity;
+    var best = -1, bestScore = -Infinity;
     for (var i = 0; i < card.options.length; i++) {
       var s = scoreOption(state, card.options[i], hawk);
       if (s > bestScore) { bestScore = s; best = i; }
     }
-    return best;
+    // 理论上不会发生（至多排除 'MAX'，普通选项总有有限分），留兜底避免返回 -1
+    return best < 0 ? 0 : best;
   }
 
   /* ───────────────────────── 2. 战争期开火决策 ───────────────────────── */
@@ -113,7 +128,7 @@
 
   // 井选择：取离目标最近且有弹的井（飞行快、更早命中）
   function pickSilo(state, faction, target) {
-    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0; });
+    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0 && !u.disabled; });
     var best = null, bestD = Infinity;
     silos.forEach(function (s) {
       var d = G.distKm(s, target);
@@ -127,7 +142,7 @@
    * 伤亡差计分逼出的行为，也是「留几枚反击」内核在 AI 侧的落地。
    */
   function planFire(state, faction) {
-    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0; });
+    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0 && !u.disabled; });
     if (!silos.length) return [];
     if (!DC.sim.enemyCities(state, faction).length) return [];
 

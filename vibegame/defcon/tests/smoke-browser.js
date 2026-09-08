@@ -38,7 +38,7 @@ function serve() {
   });
 }
 
-var PLAYWRIGHT = 'C:/Users/ASUS/.workbuddy/binaries/node/workspace/node_modules/playwright';
+var PLAYWRIGHT = 'C:/Users/dingj/.workbuddy/binaries/node/workspace/node_modules/playwright';
 var EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
 /* 画面体检（可编程，不靠肉眼看图）：手动渲染一帧后立刻 readPixels，
@@ -64,7 +64,9 @@ function sampleShot(page) {
 }
 
 async function runCase(browser, opt) {
-  var page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  // 竖屏移动端视口：本作重构后就是竖屏游戏，冒烟必须复刻真实画面比例，
+  // 否则竖屏特有问题（横向溢出、抽屉遮挡、镜头取景）全部漏检。
+  var page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   var errors = [], reqFails = [];
   page.on('console', function (m) { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', function (e) { errors.push('PAGEERROR: ' + e.message); });
@@ -72,6 +74,19 @@ async function runCase(browser, opt) {
 
   await page.goto(opt.url, { waitUntil: 'load' });
   await page.waitForTimeout(3500);
+
+  /* 开局必须先选阵营：没选之前不会 create state、也不会 init 渲染，
+   * 后面所有探测项（phase / 阵营行 / 城市行 / WebGL）读到的全是空值。 */
+  var setupProbe = await page.evaluate(function () {
+    var s = document.getElementById('setup');
+    return {
+      setupShown: !!s && s.classList.contains('show'),
+      pickCount: document.getElementById('pickList').children.length,
+      gameNull: !window.DC || !window.DC.game
+    };
+  });
+  await page.click('#pickList .pick:nth-child(1)');
+  await page.waitForTimeout(1500);
 
   var probe = await page.evaluate(function () {
     var g = function (id) { return document.getElementById(id); };
@@ -91,6 +106,10 @@ async function runCase(browser, opt) {
       })(),
       factionRows: g('fList') ? g('fList').children.length : 0,
       cityRows: g('cList') ? g('cList').children.length : 0,
+      legendRows: document.querySelectorAll('#legend .lrow').length,
+      maxBtn: !!g('cMax'),
+      bloomOk: !!(window.DC && window.DC.render && window.DC.render.bloomOk),
+      overflowX: g('app').scrollWidth - g('app').clientWidth,
       fallbackShown: g('fallback') ? g('fallback').classList.contains('show') : false
     };
   });
@@ -141,7 +160,25 @@ async function runCase(browser, opt) {
       cardShown: document.getElementById('card').classList.contains('show')
     };
   });
+  /* 两段式发射：第一下只是选中目标（不发射、抽屉自动收起、发射键解锁），
+   * 第二下按「发 射」才真的出弹 —— 核弹不可逆，冒烟必须把这两段分别断掉。 */
+  await page.click('#drawerBtn');
+  await page.waitForTimeout(350);
+  var drawerOpen = await page.evaluate(function () {
+    return document.getElementById('drawer').classList.contains('open');
+  });
   await page.click('#cList .crow.tgt');
+  await page.waitForTimeout(600);
+  var selProbe = await page.evaluate(function () {
+    var st = window.DC.game.state;
+    return {
+      pending: window.DC.ui.getPending(),
+      launched: st.stats[st.playerFaction].launched,
+      drawerOpen: document.getElementById('drawer').classList.contains('open'),
+      fireDisabled: document.getElementById('fireBtn').disabled
+    };
+  });
+  await page.click('#fireBtn');
   await page.waitForTimeout(600);
   var warPost = await page.evaluate(function () {
     var st = window.DC.game.state;
@@ -178,29 +215,42 @@ async function runCase(browser, opt) {
     else real.push(e);
   });
   return {
-    opt: opt, probe: probe, shot1: shot1, cardProbe: cardProbe, pickProbe: pickProbe,
-    warPre: warPre, warPost: warPost, war: war, shot2: shot2,
+    opt: opt, setupProbe: setupProbe, probe: probe, shot1: shot1, cardProbe: cardProbe, pickProbe: pickProbe,
+    warPre: warPre, drawerOpen: drawerOpen, selProbe: selProbe, warPost: warPost, war: war, shot2: shot2,
     errors: real, knownNoise: allowedHits,
     reqFails: reqFails.filter(function (u) { return !/earth\.jpg|favicon/i.test(u); })
   };
 }
 
 function verdict(r) {
-  var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, q = r.warPost, bad = [];
+  var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, s2 = r.selProbe, q = r.warPost,
+      s = r.setupProbe, bad = [];
+  if (!s.setupShown) bad.push('开局未弹出阵营选择');
+  if (s.pickCount !== 6) bad.push('阵营按钮数 ' + s.pickCount);
+  if (!s.gameNull) bad.push('选阵营前就已建局');
   if (!p.hasDC) bad.push('window.DC 缺失');
   if (!p.renderOk) bad.push('WebGL 未启动');
+  if (!p.bloomOk) bad.push('bloom 后处理未启用');
+  if (p.overflowX > 0) bad.push('竖屏横向溢出 ' + p.overflowX + 'px');
   if (!p.texOk) bad.push('地球贴图未加载（走了纯色兜底）');
   if (!p.inlineTex) bad.push('内联贴图 DC_EARTH_TEX 未注入');
   if (p.autoPlay !== false) bad.push('玩家席位被 AI 托管');
   if (p.fallbackShown) bad.push('兜底界面误触发');
   if (p.factionRows !== 6) bad.push('阵营行数 ' + p.factionRows);
   if (p.cityRows !== 60) bad.push('城市行数 ' + p.cityRows);
+  if (p.legendRows !== 4) bad.push('图例行数 ' + p.legendRows);
+  if (!p.maxBtn) bad.push('缺少常驻拉满按钮');
   if (c.phase !== 'crisis' || !c.cardShown) bad.push('事件卡未显示');
   if (c.optCount < 2 || c.optCount > 3) bad.push('选项数 ' + c.optCount);
   if (k.choice !== 1 || k.selCount !== 1 || k.selIndex !== 1) bad.push('选项点击未生效');
   if (w.phase !== 'war' || w.ammo !== 18) bad.push('未进入 war 或弹头数 ' + w.ammo);
   if (!w.warbarShown || w.cardShown) bad.push('战争条/卡片互斥失败');
-  if (q.launched !== w.launched + 1) bad.push('点击未发射');
+  if (!r.drawerOpen) bad.push('抽屉打不开');
+  if (!s2.pending) bad.push('点城市行未选中目标');
+  if (s2.launched !== w.launched) bad.push('选目标阶段误发射');
+  if (s2.drawerOpen) bad.push('选完目标抽屉未收起（会盖住发射条）');
+  if (s2.fireDisabled) bad.push('选中目标后发射键仍禁用');
+  if (q.launched !== w.launched + 1) bad.push('确认发射未生效');
   if (q.ammo !== w.ammo - 1) bad.push('弹头未扣减');
   if (r.shot1.whiteFrac > 0.08 || r.shot1.meanLum > 120) bad.push('首屏画面过曝');
   if (r.shot2.whiteFrac > 0.08 || r.shot2.meanLum > 160) bad.push('核战画面过曝');
@@ -249,12 +299,15 @@ function verdict(r) {
     var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, q = r.warPost;
     var bad = verdict(r);
     console.log('\n── ' + r.opt.label + ' ──');
+    console.log('  开局阵营选择          : ' + (r.setupProbe.setupShown ? '✓' : '✗') +
+      ' / 阵营按钮 ' + r.setupProbe.pickCount + ' / 选前未建局 ' + (r.setupProbe.gameNull ? '✓' : '✗'));
     console.log('  GPU 后端              : ' + p.gpu);
     console.log('  WebGL / 兜底界面      : ' + (p.renderOk ? '✓' : '✗') + ' / ' + (p.fallbackShown ? '✗ 误触发' : '✓'));
     console.log('  地球贴图已加载        : ' + (p.texOk ? '✓' : '✗ 走了纯色兜底'));
     console.log('  内联贴图已注入        : ' + (p.inlineTex ? '✓' : '✗'));
     console.log('  玩家席位未被托管      : ' + (p.autoPlay === false ? '✓' : '✗'));
-    console.log('  阵营/城市行数         : ' + p.factionRows + ' / ' + p.cityRows);
+    console.log('  阵营/城市/图例行数     : ' + p.factionRows + ' / ' + p.cityRows + ' / ' + p.legendRows +
+      '   拉满按钮 ' + (p.maxBtn ? '✓' : '✗'));
     console.log('  首屏 近白/亮度        : ' + (r.shot1.whiteFrac * 100).toFixed(2) + '% / ' + r.shot1.meanLum.toFixed(1));
     console.log('  事件卡 选项数/点击后  : ' + c.optCount + ' / choice=' + k.choice + ' sel=' + k.selCount);
     console.log('  war 弹头 / 点击发射   : ' + w.ammo + ' / ' + w.launched + '→' + q.launched + '（余 ' + q.ammo + '）');

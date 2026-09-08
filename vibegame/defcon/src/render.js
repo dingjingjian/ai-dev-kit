@@ -24,7 +24,7 @@
   var UNIT_LIFT = 1.020;       // 单位离地高度
   var MISSILE_POOL = 128;      // 同时在飞的导弹上限（全局最多 108 枚）
   var FX_POOL = 32;            // 核爆/拦截特效槽位
-  var TRAIL_PTS = 8;           // 每枚导弹尾迹采样点数
+  var TRAIL_PTS = 24;           // 每枚导弹尾迹采样点数（完整弹道从发射井到当前位置）
 
   var api = { ok: false };
   var renderer, scene, camera, globe, gridGroup;
@@ -32,7 +32,10 @@
   var unitMeshes = {};         // type -> InstancedMesh
   var missilePool = [], fxPool = [];
   var scorchMarks = [];
-  var raycaster, clock;
+  var clock;
+  var shakeAmt = 0;            // 核爆冲击的相机震动强度，每帧衰减
+  var bloomPulse = 0;          // 核爆瞬间的辉光强度脉冲（0→1，0.6s 衰减回 0）
+  var _sn = null;              // 蘑菇云抬升用的法线暂存（避免每帧 new Vector3）
   var cam = { theta: 0.9, phi: 1.15, radius: 6.2, tTheta: 0.9, tPhi: 1.15, tRadius: 6.2 };
   var dragging = false, lastX = 0, lastY = 0, pinch = 0;
   var radarRings = [];
@@ -53,10 +56,61 @@
 
   var TEX = {};
   function buildTextures() {
-    TEX.dot = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.55)', 'rgba(255,255,255,0)');
+    TEX.dot = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)');
     TEX.flash = radialTex('rgba(255,250,225,1)', 'rgba(255,190,90,0.65)', 'rgba(255,120,30,0)');
     TEX.small = radialTex('rgba(200,235,255,0.95)', 'rgba(120,190,255,0.4)', 'rgba(60,120,255,0)');
     TEX.scorch = radialTex('rgba(20,14,10,0.85)', 'rgba(35,25,18,0.45)', 'rgba(40,30,20,0)');
+    // 蘑菇云：烟灰色的柔和团块，叠在火球上方模拟升起的尘柱
+    TEX.smoke = radialTex('rgba(150,140,130,0.85)', 'rgba(90,82,74,0.5)', 'rgba(50,46,42,0)');
+  }
+
+  /* ───────────── 单位图标贴图（与 HUD 图例同一套图形）─────────────
+   * 早期用 3D 几何体（六棱柱 / 四棱锥 / 扁圆台）表示三种单位，问题有两个：
+   *   1) 缩到十几个像素时，光照下的立体剪影与图例里的**线稿**对不上，玩家认不出；
+   *   2) 位于球面边缘时几何体侧视会退化成一条线，形状信息全丢。
+   * 改为把图例里那三个图形（六边形 / 三角 / 椭圆+支杆）画到 canvas 上做成贴图，
+   * 用永远正对镜头的平面片（billboard）渲染 —— 所见即图例，且任何角度形状不变。
+   * 图标画成白色，实际颜色由 InstancedMesh 的 instanceColor 乘上阵营色。 */
+  function iconTex(kind) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 64;
+    var x = c.getContext('2d');
+    x.lineWidth = 6; x.lineJoin = 'round';
+    x.strokeStyle = '#ffffff';
+    x.fillStyle = 'rgba(255,255,255,0.30)';
+    var i, a, pts = [];
+
+    function poly() {
+      x.beginPath();
+      pts.forEach(function (p, k) { if (k === 0) x.moveTo(p[0], p[1]); else x.lineTo(p[0], p[1]); });
+      x.closePath(); x.fill(); x.stroke();
+    }
+
+    if (kind === 'silo') {                       // 六边形（图例：发射井）
+      for (i = 0; i < 6; i++) {
+        a = (Math.PI / 180) * (60 * i - 90);
+        pts.push([32 + 20 * Math.cos(a), 32 + 26 * Math.sin(a)]);
+      }
+      poly();
+    } else if (kind === 'sam') {                 // 三角（图例：防空）
+      pts = [[32, 6], [58, 56], [6, 56]];
+      poly();
+    } else {                                     // 椭圆 + 支杆（图例：雷达）
+      x.beginPath();
+      x.ellipse(32, 24, 24, 13, 0, 0, Math.PI * 2);
+      x.fill(); x.stroke();
+      x.beginPath(); x.moveTo(32, 37); x.lineTo(32, 58); x.stroke();
+    }
+    var t = new THREE.CanvasTexture(c);
+    if (THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  var ICON = {};
+  function buildIcons() {
+    ICON.silo = iconTex('silo');
+    ICON.sam = iconTex('sam');
+    ICON.radar = iconTex('radar');
   }
 
   function hexToRgb(hex) {
@@ -70,8 +124,9 @@
     var seg = quality ? 64 : 32;
 
     // 染色 + 冷色壳 = 降饱和压暗叠青灰，全部在 GPU 端完成
+    // 提亮（2026-09-08）：原 0x8fa6b8 + shell 0.38 压得太暗看不清，提到 0xc0d4e0 + 0.20
     var mat = new THREE.MeshStandardMaterial({
-      color: 0x8fa6b8, roughness: 0.95, metalness: 0.02
+      color: 0xc0d4e0, roughness: 0.95, metalness: 0.02
     });
     globe = new THREE.Mesh(new THREE.SphereGeometry(R, seg, seg / 2), mat);
     scene.add(globe);
@@ -81,7 +136,7 @@
     var shell = new THREE.Mesh(
       new THREE.SphereGeometry(R * 1.0015, seg, seg / 2),
       new THREE.MeshBasicMaterial({
-        color: 0x0b1a24, transparent: true, opacity: 0.38,
+        color: 0x0b1a24, transparent: true, opacity: 0.20,
         depthWrite: false, side: THREE.FrontSide
       })
     );
@@ -131,7 +186,7 @@
         if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
         tex.anisotropy = quality ? 4 : 1;
         mat.map = tex;
-        mat.color.setHex(0xa8bccb);
+        mat.color.setHex(0xd0e0ec);
         mat.needsUpdate = true;
         api.texOk = true;              // 供冒烟断言「贴图真的加载了」，而不是静默走纯色兜底
       }, undefined, fallback);
@@ -143,6 +198,77 @@
   function v3(lat, lon, r) {
     var v = G.ll2v(lat, lon, r);
     return new THREE.Vector3(v.x, v.y, v.z);
+  }
+
+  /* ───────────────────────── 星空与大气辉光 ─────────────────────────
+   * 「震撼」的第一层不是爆炸，是**环境**：一颗悬在深空里的星球。
+   * 星空 —— 900 个点分布在大球壳上，静止不动（地球自转由相机拖动表现，星空跟着转会晕）。
+   * 大气 —— 1.06R 的球壳配 Fresnel 边缘光，只渲染背面（side: BackSide），
+   *          于是只有星球轮廓外那圈会亮起来，形成蓝色大气辉光。 */
+  function buildStars() {
+    var n = 900, pos = new Float32Array(n * 3), sz = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      // 球面均匀采样：z 均匀、方位角均匀，避免两极扎堆
+      var z = Math.random() * 2 - 1, t = Math.random() * Math.PI * 2, rxy = Math.sqrt(1 - z * z);
+      var R0 = 260;
+      pos[i * 3] = R0 * rxy * Math.cos(t);
+      pos[i * 3 + 1] = R0 * z;
+      pos[i * 3 + 2] = R0 * rxy * Math.sin(t);
+      sz[i] = 1.1 + Math.random() * 2.2;
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('aSize', new THREE.BufferAttribute(sz, 1));
+    var m = new THREE.ShaderMaterial({
+      uniforms: { uPR: { value: renderer.getPixelRatio() || 1 } },
+      vertexShader: [
+        'attribute float aSize;',
+        'uniform float uPR;',
+        'void main(){',
+        '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+        '  gl_PointSize = aSize * uPR;',       // 不随距离衰减；必须乘 DPR，否则高分屏上星星小于 1 物理像素
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'void main(){',
+        '  float d = length(gl_PointCoord - vec2(0.5));',
+        '  if (d > 0.5) discard;',
+        '  gl_FragColor = vec4(0.72, 0.82, 0.92, (1.0 - d * 2.0) * 0.9);',
+        '}'
+      ].join('\n'),
+      transparent: true, depthWrite: false
+    });
+    var stars = new THREE.Points(g, m);
+    stars.frustumCulled = false;
+    scene.add(stars);
+  }
+
+  function buildAtmosphere() {
+    var m = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Color(0x54b4e8) }, uInt: { value: 1.0 } },
+      vertexShader: [
+        'varying vec3 vN; varying vec3 vP;',
+        'void main(){',
+        '  vN = normalize(normalMatrix * normal);',
+        '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
+        '  vP = mv.xyz;',
+        '  gl_Position = projectionMatrix * mv;',
+        '}'
+      ].join('\n'),
+      fragmentShader: [
+        'uniform vec3 uColor; uniform float uInt;',
+        'varying vec3 vN; varying vec3 vP;',
+        'void main(){',
+        '  float f = 1.0 - abs(dot(normalize(vN), normalize(-vP)));',
+        '  f = pow(f, 4.2);',
+        '  gl_FragColor = vec4(uColor * f * uInt, 1.0);',
+        '}'
+      ].join('\n'),
+      side: THREE.BackSide, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false
+    });
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.06, 48, 32), m));
   }
 
   /* ───────────────────────── 城市光点（Points，60 座）─────────────────────────
@@ -188,8 +314,9 @@
       var rgb = hexToRgb((DC.FACTIONS_BY_CODE[c.faction] || {}).color || '#ffffff');
       cityColor[i * 3] = rgb[0]; cityColor[i * 3 + 1] = rgb[1]; cityColor[i * 3 + 2] = rgb[2];
       // aSize 为「期望像素直径 × 距离」的系数；uScale = 画布高/2（见 syncPointScale）。
-      // 首版写成 26+pop×1.6 配 uScale=320，在距离 6 时算出 1600+ 像素的巨型白点糊满全屏。
-      citySize[i] = 0.30 + c.pop0 * 0.017;
+      // 首版 26+pop×1.6 配 uScale=320 糊满全屏；光核收紧到 ~20px，余下的辉光交给 bloom，
+      // 「亮核 + 泛光」比「一个大软斑」干净得多。
+      citySize[i] = 0.15 + c.pop0 * 0.010;
       cityAlpha[i] = 1;
     });
 
@@ -241,32 +368,45 @@
   /* ───────────────────────── 单位（InstancedMesh）─────────────────────────
    * 只渲染玩家阵营与已被标记的敌方单位 —— 敌方单位默认不可见（DESIGN §3 / §5.1）。
    */
-  var UNIT_GEOM = {};
+  var UNIT_SIZE = 0.115;         // 图标边长（球径 3.2 的 3.6%，屏幕上约 13px，与图例图标同尺寸）
   function buildUnits(state) {
-    UNIT_GEOM.silo = new THREE.OctahedronGeometry(0.028, 0);
-    UNIT_GEOM.sam = new THREE.TetrahedronGeometry(0.030, 0);
-    UNIT_GEOM.radar = new THREE.ConeGeometry(0.022, 0.05, 4);
-
+    /* 三种单位 = 三张与图例同形的图标贴图，贴在永远朝向镜头的方片上（billboard）。
+     * 用 InstancedMesh + PlaneGeometry，每帧把实例矩阵的旋转设为相机旋转即可实现朝向。 */
     ['silo', 'sam', 'radar'].forEach(function (type) {
-      var count = DC.FACTIONS.length * CONFIG[
-        type === 'silo' ? 'silosPerFaction' : (type === 'sam' ? 'samPerFaction' : 'radarPerFaction')
-      ];
-      var mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
-      var im = new THREE.InstancedMesh(UNIT_GEOM[type], mat, count);
+      // 容量按各阵营 perk 实际单位数求和 + 事件奖励（add_radar/add_sam）余量
+      var count = 0;
+      DC.FACTIONS.forEach(function (f) {
+        var k = DC.perkOf(f.code);
+        count += type === 'silo' ? k.silos : (type === 'sam' ? k.sam : k.radar);
+      });
+      count += DC.FACTIONS.length * 4;   // 事件奖励增建的单位余量
+      var mat = new THREE.MeshBasicMaterial({
+        map: ICON[type], color: 0xffffff,
+        transparent: true, depthWrite: false, alphaTest: 0.02
+      });
+      var im = new THREE.InstancedMesh(new THREE.PlaneGeometry(UNIT_SIZE, UNIT_SIZE), mat, count);
       im.count = 0;
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+      im.frustumCulled = false;
       scene.add(im);
       unitMeshes[type] = im;
     });
   }
 
-  var _mtx = null, _col = null;
+  var _mtx = null, _col = null, _q = null, _pos = null, _nrm = null, _scl = null, _up = null;
   function syncUnits(state) {
-    if (!_mtx) { _mtx = new THREE.Matrix4(); _col = new THREE.Color(); }
+    if (!_mtx) {
+      _mtx = new THREE.Matrix4(); _col = new THREE.Color();
+      _q = new THREE.Quaternion(); _pos = new THREE.Vector3();
+      _nrm = new THREE.Vector3(); _scl = new THREE.Vector3(1, 1, 1);
+      _up = new THREE.Vector3(0, 1, 0);
+    }
     var counts = { silo: 0, sam: 0, radar: 0 };
 
     state.units.forEach(function (u) {
+      // 失效设施（关联城市被毁）不渲染
+      if (u.disabled) return;
       // 可见性：己方全部可见；敌方仅在 exposed 时可见（D5 溯源会置位）
       var visible = (u.faction === state.playerFaction) || u.exposed;
       if (!visible) return;
@@ -276,7 +416,11 @@
       if (idx >= im.instanceMatrix.count) return;
 
       var v = G.ll2v(u.lat, u.lon, R * UNIT_LIFT);
-      _mtx.makeTranslation(v.x, v.y, v.z);
+      /* billboard：旋转直接取相机旋转，图标永远正对镜头。
+       * 旧版把「上方向」对齐球面法线，边缘处仍会退化成一条线；正对镜头则任何角度形状不变。 */
+      _pos.set(v.x, v.y, v.z);
+      _q.copy(camera.quaternion);
+      _mtx.compose(_pos, _q, _scl);
       im.setMatrixAt(idx, _mtx);
       var rgb = hexToRgb((DC.FACTIONS_BY_CODE[u.faction] || {}).color || '#ffffff');
       _col.setRGB(rgb[0], rgb[1], rgb[2]);
@@ -293,13 +437,14 @@
   }
 
   // 玩家雷达覆盖圈（角半径 → 球面圆环）
+  // 配色换洋红（2026-09-08）：原青色 0x39d0ff 与经纬网 0x5f9fb5 太近，看不清
   function buildRadarRings(state) {
     radarRings.forEach(function (r) { scene.remove(r); });
     radarRings = [];
     DC.sim.unitsOf(state, state.playerFaction, 'radar').forEach(function (u) {
       var ring = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(circlePts(u, CONFIG.radarRadiusDeg, R * 1.005)),
-        new THREE.LineBasicMaterial({ color: 0x39d0ff, transparent: true, opacity: 0.35 })
+        new THREE.BufferGeometry().setFromPoints(circlePts(u, u.radiusDeg || CONFIG.radarRadiusDeg, R * 1.005)),
+        new THREE.LineBasicMaterial({ color: 0xff4fa0, transparent: true, opacity: 0.45 })
       );
       scene.add(ring);
       radarRings.push(ring);
@@ -356,10 +501,16 @@
       slot.head.position.set(p.x, p.y, p.z);
       slot.head.visible = true;
       slot.head.material.color.setHex(0xffffff);
+      /* 再入段增亮增粗：弹头越接近目标越亮越大，尾迹由冷白转炽橙 ——
+       * 「最后几秒」的紧张感全靠这条渐变，平飞的白色细线没人会盯着看。 */
+      slot.head.scale.setScalar(0.045 + m.progress * 0.038);
+      slot.trail.material.opacity = 0.55 + m.progress * 0.35;
+      slot.trail.material.color.setRGB(1, 0.85 - m.progress * 0.30, 0.63 - m.progress * 0.45);
 
       var arr = slot.trail.geometry.getAttribute('position');
+      // 完整尾痕：从发射井（t=0）到当前位置（t=progress）均匀采样
       for (var k = 0; k < TRAIL_PTS; k++) {
-        var tt = Math.max(0, m.progress - (TRAIL_PTS - 1 - k) * 0.012);
+        var tt = (k / (TRAIL_PTS - 1)) * m.progress;
         var q = G.ballistic(m.from, m.to, tt, R, 9);
         arr.setXYZ(k, q.x, q.y, q.z);
       }
@@ -376,14 +527,31 @@
 
   function buildFxPool() {
     for (var i = 0; i < FX_POOL; i++) {
+      /* 核爆三层结构（各一份独立材质，便于逐槽调色/调透明度）：
+       *   sp  —— 瞬态白闪：0.4s 内炸到最大再熄灭，负责「第一眼的亮」
+       *   fb  —— 火球：2s 慢速膨胀，白 → 橙 → 暗红，负责「余烬感」
+       *   ring —— 冲击波：贴着地表扩散的环，负责「能量掠过球面」 */
       var sp = new THREE.Sprite(new THREE.SpriteMaterial({
         map: TEX.flash, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
       }));
       sp.visible = false;
       scene.add(sp);
 
+      var fb = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: TEX.flash, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      fb.visible = false;
+      scene.add(fb);
+
+      // 蘑菇云：核爆后半拍升起的尘柱，沿球面法线抬升并转暗
+      var sh = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: TEX.smoke, transparent: true, depthWrite: false
+      }));
+      sh.visible = false;
+      scene.add(sh);
+
       var ring = new THREE.Mesh(
-        new THREE.RingGeometry(0.02, 0.028, 40),
+        new THREE.RingGeometry(0.02, 0.032, 48),
         new THREE.MeshBasicMaterial({
           color: 0xffc98a, transparent: true, opacity: 0.9,
           side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending
@@ -392,7 +560,126 @@
       ring.visible = false;
       scene.add(ring);
 
-      fxPool.push({ sp: sp, ring: ring, t: -1, dur: 1.6, big: true });
+      fxPool.push({ sp: sp, fb: fb, sh: sh, ring: ring, t: -1, dur: 2.2, big: true,
+                    lat: 0, lon: 0 });
+    }
+  }
+
+  /* ───────────────────────── 拦截弹演出 ─────────────────────────
+   * 早期拦截只是「空中凭空爆一团光」，玩家根本不知道是谁打的、从哪打的。
+   * 现在补上完整过程：防空阵地点火 → 拦截弹沿弧线爬升 → 撞上来袭弹 → 爆闪。
+   * 起飞点由 sim 记在 m.interceptor 上随 fx 事件带出（见 sim.tryIntercept）。 */
+  var INT_POOL = 14, INT_RISE = 0.34, INT_FLASH = 0.5;
+  var INT_DUR = INT_RISE + INT_FLASH;
+  var intPool = [];
+  var _ia = null, _ib = null;
+
+  function buildInterceptorPool() {
+    for (var i = 0; i < INT_POOL; i++) {
+      var sp = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: TEX.small, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      }));
+      sp.visible = false;
+      scene.add(sp);
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      var line = new THREE.Line(g, new THREE.LineBasicMaterial({
+        color: 0x9fe0ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
+      }));
+      line.frustumCulled = false;
+      line.visible = false;
+      scene.add(line);
+      intPool.push({ sp: sp, line: line, t: -1, from: null, to: null });
+    }
+  }
+
+  function spawnInterceptor(from, to) {
+    var slot = null;
+    for (var i = 0; i < intPool.length; i++) if (intPool[i].t < 0) { slot = intPool[i]; break; }
+    if (!slot) slot = intPool[0];            // 池满则抢占最旧槽位
+    slot.from = from; slot.to = to; slot.t = 0;
+    slot.sp.visible = true; slot.line.visible = true;
+  }
+
+  function pumpInterceptors(dt) {
+    if (!_ia) { _ia = new THREE.Vector3(); _ib = new THREE.Vector3(); }
+    for (var i = 0; i < intPool.length; i++) {
+      var s = intPool[i];
+      if (s.t < 0) continue;
+      s.t += dt;
+      if (s.t >= INT_DUR) { s.t = -1; s.sp.visible = false; s.line.visible = false; continue; }
+
+      var a = G.ll2v(s.from.lat, s.from.lon, R * 1.012);
+      _ia.set(a.x, a.y, a.z);
+      if (s.t < INT_RISE) {
+        var k = s.t / INT_RISE;
+        var b = G.ll2v(s.to.lat, s.to.lon, R * 1.012);
+        _ib.set(b.x, b.y, b.z);
+        // 直线插值后按归一化抬升 —— 得到一条离地的上升弧线，而不是贴着地表的直线
+        _pos.copy(_ia).lerp(_ib, k).normalize()
+            .multiplyScalar(R * (1.012 + Math.sin(k * Math.PI) * 0.07));
+        s.sp.position.copy(_pos);
+        s.sp.scale.setScalar(0.030 + k * 0.022);
+        s.sp.material.opacity = 0.95;
+        var arr = s.line.geometry.getAttribute('position');
+        arr.setXYZ(0, _ia.x, _ia.y, _ia.z);
+        arr.setXYZ(1, _pos.x, _pos.y, _pos.z);
+        arr.needsUpdate = true;
+        s.line.material.opacity = 0.6;
+      } else {
+        var k2 = (s.t - INT_RISE) / INT_FLASH;
+        var q = G.ll2v(s.to.lat, s.to.lon, R * 1.014);
+        s.sp.position.set(q.x, q.y, q.z);
+        s.sp.scale.setScalar(0.05 + k2 * 0.24);
+        s.sp.material.opacity = Math.pow(1 - k2, 1.4) * 0.95;
+        s.line.visible = false;
+      }
+    }
+  }
+
+  /* ───────────────────────── 落地尾痕渐隐池 ─────────────────────────
+   * 核弹落地后尾痕保留约 1.5s 渐隐再消失（DESIGN §7.9 演出）：
+   * 在飞时 syncMissiles 画从发射井到当前位置的完整尾痕，
+   * 落地后由本池接管，画从发射井到目的地的完整弹道线，opacity 随时间衰减。 */
+  var TRAIL_POOL = 24, TRAIL_DUR = 1.5;
+  var trailPool = [];
+
+  function buildTrailPool() {
+    for (var i = 0; i < TRAIL_POOL; i++) {
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_PTS * 3), 3));
+      var line = new THREE.Line(g, new THREE.LineBasicMaterial({
+        color: 0xff9a4a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending
+      }));
+      line.frustumCulled = false;
+      line.visible = false;
+      scene.add(line);
+      trailPool.push({ line: line, t: -1, from: null, to: null });
+    }
+  }
+
+  function spawnTrail(from, to) {
+    var slot = null;
+    for (var i = 0; i < trailPool.length; i++) if (trailPool[i].t < 0) { slot = trailPool[i]; break; }
+    if (!slot) slot = trailPool[0];
+    slot.from = from; slot.to = to; slot.t = 0;
+    slot.line.visible = true;
+  }
+
+  function pumpTrails(dt) {
+    for (var i = 0; i < trailPool.length; i++) {
+      var s = trailPool[i];
+      if (s.t < 0) continue;
+      s.t += dt;
+      if (s.t >= TRAIL_DUR) { s.t = -1; s.line.visible = false; continue; }
+      var arr = s.line.geometry.getAttribute('position');
+      for (var k = 0; k < TRAIL_PTS; k++) {
+        var tt = k / (TRAIL_PTS - 1);
+        var q = G.ballistic(s.from, s.to, tt, R, 9);
+        arr.setXYZ(k, q.x, q.y, q.z);
+      }
+      arr.needsUpdate = true;
+      s.line.material.opacity = Math.pow(1 - s.t / TRAIL_DUR, 1.3) * 0.8;
     }
   }
 
@@ -400,38 +687,216 @@
   function pumpFx(state, dt) {
     while (state.fx.length) {
       var e = state.fx.shift();
+      // 拦截且带得上起飞点 → 走拦截弹演出（升空 → 撞击 → 爆闪），不吃特效池的槽位
+      if (e.type === 'intercept' && e.sam) {
+        spawnInterceptor(e.sam, { lat: e.lat, lon: e.lon });
+        continue;
+      }
       var slot = null, i;
       for (i = 0; i < fxPool.length; i++) if (fxPool[i].t < 0) { slot = fxPool[i]; break; }
       if (!slot) { slot = fxPool[0]; }   // 池满则抢占最旧槽位
       var v = G.ll2v(e.lat, e.lon, R * 1.008);
       slot.sp.position.set(v.x, v.y, v.z);
+      slot.fb.position.set(v.x, v.y, v.z);
+      slot.sh.position.set(v.x, v.y, v.z);
       slot.ring.position.set(v.x, v.y, v.z);
       slot.ring.lookAt(0, 0, 0);
       slot.big = (e.type === 'impact');
+      slot.lat = e.lat; slot.lon = e.lon;
       slot.t = 0;
-      slot.dur = slot.big ? 1.8 : 0.6;
+      slot.dur = slot.big ? 2.6 : 0.6;
       slot.sp.visible = true;
+      slot.fb.visible = slot.big;
+      slot.sh.visible = slot.big;
       slot.ring.visible = slot.big;
-      if (slot.big) addScorch(e.lat, e.lon);
+      if (slot.big) {
+        if (e.from && e.to) spawnTrail(e.from, e.to);   // 落地尾痕渐隐
+        addScorch(e.lat, e.lon);   // 白闪/震动由 ui 监听 state.impacts 触发，这里只管 3D 侧
+        bloomPulse = 1;            // 核爆瞬间把辉光强度顶上去，0.6s 内衰减回来
+      }
     }
 
     for (var j = 0; j < fxPool.length; j++) {
       var f = fxPool[j];
       if (f.t < 0) continue;
       f.t += dt;
-      var k = f.t / f.dur;
-      if (k >= 1) { f.t = -1; f.sp.visible = false; f.ring.visible = false; continue; }
-      var ease = 1 - k;
-      if (f.big) {
-        f.sp.scale.setScalar(0.10 + k * 0.42);
-        f.sp.material.opacity = ease * 0.95;
-        f.ring.scale.setScalar(1 + k * 7);
-        f.ring.material.opacity = ease * 0.55;
-      } else {
-        f.sp.scale.setScalar(0.07 + k * 0.10);
-        f.sp.material.opacity = ease * 0.8;
+      if (f.t >= f.dur) {
+        f.t = -1;
+        f.sp.visible = false; f.fb.visible = false; f.sh.visible = false; f.ring.visible = false;
+        continue;
       }
+
+      if (!f.big) {                                    // 拦截：一枚小蓝白闪光
+        var ki = f.t / f.dur;
+        f.sp.scale.setScalar(0.06 + ki * 0.10);
+        f.sp.material.opacity = (1 - ki) * 0.85;
+        continue;
+      }
+
+      /* ── 核爆四层的逐帧动画 ── */
+      var t = f.t;
+      // 白闪：0.45s 打满然后急灭（ease-out 的幂曲线，前 20% 时间就贡献 80% 亮度）
+      var kf = Math.min(1, t / 0.45);
+      f.sp.scale.setScalar(0.12 + kf * 0.70);
+      f.sp.material.opacity = Math.pow(1 - kf, 1.3);
+      // 火球：先快涨后慢涨，颜色白 → 橙 → 暗红
+      var kb = Math.min(1, t / f.dur);
+      var grow = 1 - Math.pow(1 - Math.min(1, kb * 1.7), 2);
+      f.fb.scale.setScalar(0.10 + grow * 0.36);
+      f.fb.material.opacity = Math.pow(1 - kb, 1.5) * 0.95;
+      f.fb.material.color.setRGB(1, 0.95 - kb * 0.72, 0.75 - kb * 0.70);
+      /* 蘑菇云：比火球延后 0.35s 才起来，沿球面法线抬升、边升边暗边散。
+       * 没有它，爆炸只是「一团光散掉」；有尘柱才有核爆该有的重量感。 */
+      var km = Math.max(0, Math.min(1, (t - 0.35) / (f.dur - 0.35)));
+      if (km > 0) {
+        if (!_sn) _sn = new THREE.Vector3();
+        var bv = G.ll2v(f.lat, f.lon, R * 1.008);
+        _sn.set(bv.x, bv.y, bv.z).normalize();
+        f.sh.position.set(
+          bv.x + _sn.x * km * 0.30,
+          bv.y + _sn.y * km * 0.30,
+          bv.z + _sn.z * km * 0.30);
+        f.sh.scale.setScalar(0.12 + km * 0.30);
+        f.sh.material.opacity = Math.pow(1 - km, 1.2) * 0.55;
+      }
+      // 冲击波：1.4s 内掠过 15° 左右的地表弧长
+      var kr = Math.min(1, t / 1.4);
+      f.ring.scale.setScalar(1 + kr * 15);
+      f.ring.material.opacity = Math.pow(1 - kr, 1.6) * 0.75;
     }
+  }
+
+  /* ───────────────────────── 手写 bloom 后处理 ─────────────────────────
+   * 包里只带 three.min.js 核心（608 KB），没有 examples 的 EffectComposer/UnrealBloomPass，
+   * 所以 bloom 自己写：场景先渲到离屏 RT → 亮度提取（smoothstep 软阈值）→
+   * 两趟可分离高斯模糊（1/4 分辨率，各迭代 2 次）→ 与原画面加法叠加。
+   * 全屏三角形走 OrthographicCamera + PlaneGeometry(2,2)，材质复用同一个 quad 切换。
+   *
+   * 降级策略（DESIGN §7.5）：建 RT 或编 shader 抛错 → bloom.failed = true，
+   * 之后永远直渲不重试；quality=0（降级档）也直接不用。context restored 后重建。
+   */
+  var POST_VS = [
+    'varying vec2 vUv;',
+    'void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }'
+  ].join('\n');
+
+  // 亮度提取：阈值取得偏高（0.72 起），因为染色后的地球陆地亮度能摸到 0.5~0.6，
+  // 阈值低了整个星球都会泛光，画面直接糊掉；城市光核 / 导弹头 / 核爆都在 0.9 以上。
+  var POST_BRIGHT_FS = [
+    'uniform sampler2D tDiffuse;',
+    'varying vec2 vUv;',
+    'void main(){',
+    '  vec3 c = texture2D(tDiffuse, vUv).rgb;',
+    '  float l = dot(c, vec3(0.299, 0.587, 0.114));',
+    '  float k = smoothstep(0.72, 1.0, l);',
+    '  gl_FragColor = vec4(c * k, 1.0);',
+    '}'
+  ].join('\n');
+
+  // 5 采样可分离高斯（线性采样优化版：3 次纹理读取等效 5 tap）
+  var POST_BLUR_FS = [
+    'uniform sampler2D tDiffuse;',
+    'uniform vec2 uDir;',
+    'varying vec2 vUv;',
+    'void main(){',
+    '  vec3 s = texture2D(tDiffuse, vUv).rgb * 0.2270270;',
+    '  s += (texture2D(tDiffuse, vUv + uDir * 1.3846154).rgb + texture2D(tDiffuse, vUv - uDir * 1.3846154).rgb) * 0.3162162;',
+    '  s += (texture2D(tDiffuse, vUv + uDir * 3.2307692).rgb + texture2D(tDiffuse, vUv - uDir * 3.2307692).rgb) * 0.0702703;',
+    '  gl_FragColor = vec4(s, 1.0);',
+    '}'
+  ].join('\n');
+
+  var POST_COMP_FS = [
+    'uniform sampler2D tScene;',
+    'uniform sampler2D tBloom;',
+    'uniform float uStrength;',
+    'varying vec2 vUv;',
+    'void main(){',
+    '  vec3 c = texture2D(tScene, vUv).rgb;',
+    '  vec3 b = texture2D(tBloom, vUv).rgb;',
+    '  gl_FragColor = vec4(c + b * uStrength, 1.0);',
+    '}'
+  ].join('\n');
+
+  var bloom = { built: false, ok: false, failed: false,
+                rtScene: null, rtA: null, rtB: null,
+                quad: null, scene: null, cam: null,
+                mBright: null, mBlur: null, mComp: null };
+
+  function makeRT(w, h) {
+    return new THREE.WebGLRenderTarget(w, h, {
+      minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat, depthBuffer: true, stencilBuffer: false
+    });
+  }
+
+  function disposeBloomTargets() {
+    ['rtScene', 'rtA', 'rtB'].forEach(function (k) {
+      if (bloom[k]) { bloom[k].dispose(); bloom[k] = null; }
+    });
+  }
+
+  function buildBloom() {
+    var cv = renderer.domElement;
+    var w = Math.max(2, cv.width), h = Math.max(2, cv.height);
+    var q = 4;                                     // 模糊通道 1/4 分辨率
+    disposeBloomTargets();
+    bloom.rtScene = makeRT(w, h);
+    bloom.rtA = makeRT(Math.max(2, w / q | 0), Math.max(2, h / q | 0));
+    bloom.rtB = makeRT(Math.max(2, w / q | 0), Math.max(2, h / q | 0));
+
+    if (!bloom.scene) {
+      bloom.scene = new THREE.Scene();
+      bloom.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+      bloom.quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), null);
+      bloom.quad.frustumCulled = false;
+      bloom.scene.add(bloom.quad);
+      bloom.mBright = new THREE.ShaderMaterial({
+        uniforms: { tDiffuse: { value: null } },
+        vertexShader: POST_VS, fragmentShader: POST_BRIGHT_FS, depthTest: false, depthWrite: false
+      });
+      bloom.mBlur = new THREE.ShaderMaterial({
+        uniforms: { tDiffuse: { value: null }, uDir: { value: new THREE.Vector2() } },
+        vertexShader: POST_VS, fragmentShader: POST_BLUR_FS, depthTest: false, depthWrite: false
+      });
+      bloom.mComp = new THREE.ShaderMaterial({
+        uniforms: { tScene: { value: null }, tBloom: { value: null }, uStrength: { value: 1.25 } },
+        vertexShader: POST_VS, fragmentShader: POST_COMP_FS, depthTest: false, depthWrite: false
+      });
+    }
+    bloom.built = true;
+    bloom.ok = true;
+  }
+
+  function bloomPass() {
+    // 1) 场景 → rtScene
+    renderer.setRenderTarget(bloom.rtScene);
+    renderer.render(scene, camera);
+    // 2) 亮度提取 → rtA
+    bloom.quad.material = bloom.mBright;
+    bloom.mBright.uniforms.tDiffuse.value = bloom.rtScene.texture;
+    renderer.setRenderTarget(bloom.rtA);
+    renderer.render(bloom.scene, bloom.cam);
+    // 3) 横→纵高斯，迭代两轮让辉光铺得开
+    var tw = bloom.rtA.width, th = bloom.rtA.height;
+    for (var i = 0; i < 2; i++) {
+      bloom.quad.material = bloom.mBlur;
+      bloom.mBlur.uniforms.tDiffuse.value = bloom.rtA.texture;
+      bloom.mBlur.uniforms.uDir.value.set(1.15 / tw, 0);
+      renderer.setRenderTarget(bloom.rtB);
+      renderer.render(bloom.scene, bloom.cam);
+      bloom.mBlur.uniforms.tDiffuse.value = bloom.rtB.texture;
+      bloom.mBlur.uniforms.uDir.value.set(0, 1.15 / th);
+      renderer.setRenderTarget(bloom.rtA);
+      renderer.render(bloom.scene, bloom.cam);
+    }
+    // 4) 叠加回屏
+    bloom.quad.material = bloom.mComp;
+    bloom.mComp.uniforms.tScene.value = bloom.rtScene.texture;
+    bloom.mComp.uniforms.uStrength.value = 1.25 + bloomPulse * 1.35;   // 核爆瞬间把辉光顶到 2.6
+    bloom.mComp.uniforms.tBloom.value = bloom.rtA.texture;
+    renderer.setRenderTarget(null);
+    renderer.render(bloom.scene, bloom.cam);
   }
 
   /* ───────────────────────── 相机控制（手写，无 OrbitControls）───────────────────────── */
@@ -443,7 +908,20 @@
       cam.radius * Math.cos(cam.phi),
       cam.radius * sp * Math.cos(cam.theta)
     );
+    /* 震动：核爆落地时给相机一个衰减的随机偏移。
+     * 用 Math.random 而非 state.rng —— 这是纯表现层，绝不能污染决定性模拟的随机序列。 */
+    if (shakeAmt > 0.001) {
+      var s = shakeAmt * 0.10;
+      camera.position.x += (Math.random() - 0.5) * s;
+      camera.position.y += (Math.random() - 0.5) * s;
+      camera.position.z += (Math.random() - 0.5) * s;
+    }
     camera.lookAt(0, 0, 0);
+  }
+
+  // 核爆落地时调用；多次爆炸叠加，上限 1.6 防止多弹齐爆把画面甩飞
+  function shake(a) {
+    shakeAmt = Math.min(1.6, shakeAmt + (a == null ? 1 : a));
   }
 
   var R_MIN = 2.4, R_MAX = 14;
@@ -500,24 +978,49 @@
 
   /* ───────────────────────── 拾取（D4 下发指令用）───────────────────────── */
 
-  function pickCity(state, clientX, clientY, w, h) {
-    if (!raycaster) raycaster = new THREE.Raycaster();
-    var nd = new THREE.Vector2((clientX / w) * 2 - 1, -(clientY / h) * 2 + 1);
-    raycaster.setFromCamera(nd, camera);
-    var hits = raycaster.intersectObject(globe, false);
-    if (!hits.length) return null;
-    var p = hits[0].point;
-    var ll = G.v2ll({ x: p.x, y: p.y, z: p.z });
-    var best = null, bestD = Infinity;
-    state.cities.forEach(function (c) {
-      if (!c.alive) return;
-      var d = G.angular({ lat: c.lat, lon: c.lon }, ll) * 180 / Math.PI;
+  /* 屏幕空间拾取（移动端重做）：
+   * 旧版走「射线打球面 → 反算经纬度 → 找 4° 内最近城市」，两条硬伤：
+   *   1) 4° 是角度常量，不随画布尺寸/缩放变化 —— 390px 宽的手机屏上 1° 只有约 1.6px，
+   *      4° 才 6~7px，手指根本点不中，而缩放到大陆尺度时 4° 又会误抓邻城。
+   *   2) 射线必须命中球体才有效，点在地球边缘外侧时会直接返回 null，手感断。
+   * 改为把城市投影到屏幕坐标比距离，容差按画布宽度取 7%（22~44px），
+   * 与「手指能点到的范围」同一量纲；背面城市用视向点乘剔除，避免穿透球体选中。 */
+  var _pv = null, _pn = null, _cd = null;
+  function pickCity(state, clientX, clientY, w, h, tolPx) {
+    if (!camera) return null;
+    if (!_pv) { _pv = new THREE.Vector3(); _pn = new THREE.Vector3(); _cd = new THREE.Vector3(); }
+    if (!tolPx) tolPx = Math.max(22, Math.min(44, w * 0.07));
+    _cd.copy(camera.position).normalize();
+    var best = null, bestD = tolPx;
+    for (var i = 0; i < state.cities.length; i++) {
+      var c = state.cities[i];
+      if (!c.alive) continue;
+      var p = G.ll2v(c.lat, c.lon, R * CITY_LIFT);
+      _pn.set(p.x, p.y, p.z).normalize();
+      if (_pn.dot(_cd) < 0.10) continue;        // 背面：手指点到的是它前面的地表
+      _pv.set(p.x, p.y, p.z).project(camera);
+      var sx = (_pv.x * 0.5 + 0.5) * w;
+      var sy = (-_pv.y * 0.5 + 0.5) * h;
+      var d = Math.sqrt((sx - clientX) * (sx - clientX) + (sy - clientY) * (sy - clientY));
       if (d < bestD) { bestD = d; best = c; }
-    });
-    return (best && bestD < 4) ? best : null;   // 4° 容差，约 440 km
+    }
+    return best;
   }
 
   /* ───────────────────────── 初始化 / 每帧 ───────────────────────── */
+
+  /* WebGL 预检：在开局阵营选择弹窗之前判断能不能跑 3D。
+   * 用**临时 canvas** 而非真实画布 —— 真实画布一旦取过上下文，
+   * 后续 WebGLRenderer 会复用它，探测与初始化纠缠在一起不好排查。 */
+  function probe() {
+    if (typeof THREE === 'undefined') return false;
+    try {
+      var c = document.createElement('canvas');
+      return !!(c.getContext('webgl2') || c.getContext('webgl'));
+    } catch (e) {
+      return false;
+    }
+  }
 
   function init(state, canvas) {
     var gl = null;
@@ -539,8 +1042,8 @@
     camera = new THREE.PerspectiveCamera(52, w / h, 0.1, 5000);
     clock = new THREE.Clock();
 
-    scene.add(new THREE.AmbientLight(0x2a3a4a, 1.1));
-    var key = new THREE.DirectionalLight(0xdfe9f2, 1.5);
+    scene.add(new THREE.AmbientLight(0x3a4a5a, 2.0));
+    var key = new THREE.DirectionalLight(0xdfe9f2, 1.8);
     key.position.set(4, 3, 5);
     scene.add(key);
     var rim = new THREE.DirectionalLight(0x2f6f8f, 0.7);
@@ -548,14 +1051,23 @@
     scene.add(rim);
 
     buildTextures();
+    buildIcons();
+    buildStars();
     buildGlobe();
+    buildAtmosphere();
     buildCities(state);
     syncPointScale();          // 必须在 setSize 之后：uScale 依赖画布实际像素高
     buildUnits(state);
     buildRadarRings(state);
     buildMissilePool();
     buildFxPool();
+    buildInterceptorPool();
+    buildTrailPool();
     bindCam(canvas);
+    /* 竖屏开场镜头：竖屏宽高比只有 ~0.46，横向视场是短板 ——
+     * 球径 R*2=3.2 要塞进屏宽，距离至少 3.2 / (2·tan26°·0.46) ≈ 7.1，
+     * 取 7.4（球占屏宽 93%，上下留出 HUD 空间）；再从 12 缓推进场。 */
+    if (h > w) { cam.radius = 12; cam.tRadius = 7.4; cam.phi = 1.25; cam.tPhi = 1.25; }
     applyCam();
 
     canvas.addEventListener('webglcontextlost', function (e) {
@@ -565,6 +1077,9 @@
     }, false);
     canvas.addEventListener('webglcontextrestored', function () {
       api.ok = true;
+      // 上下文重建后旧 RT 全部失效：置回未构建，下一帧 lazy 重建
+      disposeBloomTargets();
+      bloom.built = false; bloom.ok = false; bloom.failed = false;
       if (api.onContextRestored) api.onContextRestored();
     }, false);
 
@@ -572,13 +1087,23 @@
     return true;
   }
 
+  /* 必须读画布自身的 clientWidth/clientHeight，不能用 window.innerWidth/Height：
+   * 竖屏重构后画布被装进 #app（max-width:480px、桌面端居中），
+   * 桌面浏览器里窗口宽 1280 而画布只有 480 —— 用窗口尺寸 setSize 会把宽高比算错，
+   * 地球被横向拉扁（改竖屏布局后第一版就踩了这个坑）。 */
   function resize() {
     if (!renderer) return;
-    var w = global.innerWidth, h = global.innerHeight;
+    var cv = renderer.domElement;
+    var w = cv.clientWidth || global.innerWidth;
+    var h = cv.clientHeight || global.innerHeight;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
     syncPointScale();
+    // 画布缓冲尺寸变了，离屏 RT 必须跟着重建，否则 bloom 分辨率错位（画面被拉伸重影）
+    if (bloom.built && !bloom.failed) {
+      try { buildBloom(); } catch (e) { bloom.ok = false; bloom.failed = true; }
+    }
   }
 
   // dt 为真实帧间隔；state 由 game.js 按固定步长推进，这里只做表现层同步
@@ -589,13 +1114,23 @@
     syncRadarRings(state);
     syncMissiles(state);
     pumpFx(state, dt);
+    pumpInterceptors(dt);
+    pumpTrails(dt);
 
     cam.theta += (cam.tTheta - cam.theta) * 0.12;
     cam.phi += (cam.tPhi - cam.phi) * 0.12;
     cam.radius += (cam.tRadius - cam.radius) * 0.10;
+    if (shakeAmt > 0) { shakeAmt -= dt * 2.2; if (shakeAmt < 0) shakeAmt = 0; }
+    if (bloomPulse > 0) { bloomPulse -= dt * 1.7; if (bloomPulse < 0) bloomPulse = 0; }
     applyCam();
 
-    renderer.render(scene, camera);
+    if (quality === 1) {
+      if (!bloom.built && !bloom.failed) {
+        try { buildBloom(); } catch (e) { bloom.ok = false; bloom.failed = true; }
+      }
+      if (bloom.ok) { bloomPass(); return; }
+    }
+    renderer.render(scene, camera);   // 降级档 / bloom 构建失败：直渲
   }
 
   function setQuality(level) {
@@ -606,12 +1141,21 @@
   DC.render = {
     ok: false,
     texOk: false,
+    probe: probe,
     init: init,
     frame: frame,
     resize: resize,
     flyTo: flyTo,
     pickCity: pickCity,
+    shake: shake,
     setQuality: setQuality,
+    get bloomOk() { return bloom.ok; },
+    // 正在演出的拦截弹数量（供冒烟断言「拦截不是只改了数字，画面上真有东西」）
+    get intActive() {
+      var n = 0;
+      for (var i = 0; i < intPool.length; i++) if (intPool[i].t >= 0) n++;
+      return n;
+    },
     get scene() { return scene; },
     get camera() { return camera; }
   };
