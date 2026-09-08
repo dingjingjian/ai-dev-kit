@@ -43,7 +43,7 @@ ai-dev-kit/
 | 网站截图 | `vibetool/screenshot/` | 多网站批量截图，处理懒加载/Cloudflare/字体 | 自用 · 不投稿 |
 | AI 新闻日报 | `vibetool/ai-news/` | AI 新闻采集、飞书写入、HTML 日报生成 | 自用 · 不投稿 |
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
-| 小工具打包器 | `vibetool/minitool-zip-builder-1.6.0.skill` | 把单文件 HTML 打成符合小红书规范的小工具 zip | 自用 · 不投稿 |
+| 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） | 自用 · 不投稿 |
 
 ## #vibegame　互动游戏（4）
 
