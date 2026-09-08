@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>人工智能OS</title>
+
+  <!-- 样式加载顺序有意义：
+       base  —— 容器适配层，只声明 app.css 未覆盖的属性
+       icons —— 本地化的 Material Icons 字体
+       app   —— 应用主题与布局（构建产物）
+       compat—— 安卓9(Chrome 69) 兼容性补丁，在 app 之后覆盖降级 -->
+  <link rel="stylesheet" href="./assets/css/base.css" />
+  <link rel="stylesheet" href="./assets/css/icons.css" />
+  <link rel="stylesheet" href="./assets/css/app.css" />
+  <link rel="stylesheet" href="./assets/css/compat.css" />
+
+  <!-- 适配模块：<head> 内的普通脚本按序同步执行，
+       保证 window.lingguang 垫片与安全区变量早于应用运行时就绪。
+       flex-gap-polyfill 在 DOMContentLoaded 后检测并垫片 flex gap，
+       随后 MutationObserver 适配 React 动态渲染 -->
+  <script src="./assets/js/modules/platform-shim.js"></script>
+  <script src="./assets/js/modules/safe-area.js"></script>
+  <script src="./assets/js/modules/viewport.js"></script>
+  <script src="./assets/js/modules/flex-gap-polyfill.js"></script>
+  <script src="./assets/js/bootstrap.js"></script>
+</head>
+<body>
+  <!-- 应用挂载点：app.runtime.js 通过 React createRoot 在此渲染整个界面 -->
+  <div id="root"></div>
+
+  <script src="./assets/js/app.runtime.js"></script>
+</body>
+</html>

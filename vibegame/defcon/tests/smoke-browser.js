@@ -1,0 +1,285 @@
+/*
+ * defcon — tests/smoke-browser.js
+ * 浏览器冒烟：用 Playwright 起真实 Chromium/Edge 打开 index.html，
+ * 校验控制台报错、WebGL 启动、HUD 填充，并真实点击一次「事件卡选项」与一次「敌方城市发射」。
+ * 不进提交包。
+ *
+ * ⚠ 必须同时跑 http:// 与 file:// 两个通道：
+ *   本工具的真实使用场景是「打 zip 后双击 index.html」，即 file:// 协议。
+ *   而 file:// 下 Chrome 把本地图片的 origin 视为 null，会以 CORS 拒绝它作为 WebGL 纹理
+ *   —— 早期版本只跑 http，贴图问题因此完全漏检，交付出去是个没有地球的灰蓝素球。
+ *   教训：冒烟环境必须复刻真实打开方式，否则测试只证明了「在它的环境里能跑」。
+ *
+ * 运行：node tests/smoke-browser.js
+ */
+'use strict';
+
+var http = require('http');
+var fs = require('fs');
+var path = require('path');
+var ROOT = path.join(__dirname, '..');
+var PORT = 8731;
+
+var MIME = { '.html': 'text/html', '.js': 'application/javascript', '.jpg': 'image/jpeg', '.png': 'image/png' };
+
+function serve() {
+  return new Promise(function (res) {
+    var srv = http.createServer(function (req, rep) {
+      var p = decodeURIComponent(req.url.split('?')[0]);
+      if (p === '/') p = '/index.html';
+      var f = path.join(ROOT, p);
+      if (!f.startsWith(ROOT) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) {
+        rep.writeHead(404); rep.end('nope'); return;
+      }
+      rep.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' });
+      fs.createReadStream(f).pipe(rep);
+    });
+    srv.listen(PORT, function () { res(srv); });
+  });
+}
+
+var PLAYWRIGHT = 'C:/Users/ASUS/.workbuddy/binaries/node/workspace/node_modules/playwright';
+var EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+
+/* 画面体检（可编程，不靠肉眼看图）：手动渲染一帧后立刻 readPixels，
+ * 统计近白像素占比与平均亮度。城市光点尺寸写错时会把整屏染白，这个指标会直接炸。
+ * 注意：必须在同一个 JS 任务里「渲染 → 读像素」，否则缓冲区已被交换清空。 */
+function sampleShot(page) {
+  return page.evaluate(function () {
+    var cv = document.getElementById('stage');
+    var gl = cv.getContext('webgl2') || cv.getContext('webgl');
+    if (!gl) return { err: 'no gl', whiteFrac: 1, meanLum: 999 };
+    window.DC.render.frame(window.DC.game.state, 0);
+    var w = cv.width, h = cv.height;
+    var buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    var white = 0, sum = 0, n = w * h;
+    for (var i = 0; i < n; i++) {
+      var r = buf[i * 4], g = buf[i * 4 + 1], b = buf[i * 4 + 2];
+      if (r > 240 && g > 240 && b > 240) white++;
+      sum += (r * 0.299 + g * 0.587 + b * 0.114);
+    }
+    return { w: w, h: h, whiteFrac: white / n, meanLum: sum / n };
+  });
+}
+
+async function runCase(browser, opt) {
+  var page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  var errors = [], reqFails = [];
+  page.on('console', function (m) { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', function (e) { errors.push('PAGEERROR: ' + e.message); });
+  page.on('requestfailed', function (r) { reqFails.push(r.url().split('/').pop()); });
+
+  await page.goto(opt.url, { waitUntil: 'load' });
+  await page.waitForTimeout(3500);
+
+  var probe = await page.evaluate(function () {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      hasDC: typeof window.DC === 'object',
+      renderOk: !!(window.DC && window.DC.render && window.DC.render.ok),
+      texOk: !!(window.DC && window.DC.render && window.DC.render.texOk),
+      autoPlay: window.DC && window.DC.game ? window.DC.game.autoPlay : null,
+      inlineTex: typeof window.DC_EARTH_TEX === 'string' && window.DC_EARTH_TEX.length > 1000,
+      phase: window.DC && window.DC.game ? window.DC.game.state.phase : null,
+      gpu: (function () {
+        var cv = document.getElementById('stage');
+        var gl = cv && (cv.getContext('webgl2') || cv.getContext('webgl'));
+        if (!gl) return 'none';
+        var d = gl.getExtension('WEBGL_debug_renderer_info');
+        return d ? String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
+      })(),
+      factionRows: g('fList') ? g('fList').children.length : 0,
+      cityRows: g('cList') ? g('cList').children.length : 0,
+      fallbackShown: g('fallback') ? g('fallback').classList.contains('show') : false
+    };
+  });
+  var shot1 = await sampleShot(page);
+  await page.screenshot({ path: path.join(ROOT, 'docs', opt.shotA) });
+
+  /* 危机博弈：把 briefing 计时压到临界，让主循环自然翻到 crisis 发出事件卡，
+   * 然后真实点第 2 个选项（索引 1）。 */
+  await page.evaluate(function () {
+    window.DC.game.state.t = window.DC.CONFIG.briefingSeconds - 0.3;
+  });
+  await page.waitForTimeout(1200);
+  var cardProbe = await page.evaluate(function () {
+    var g = function (id) { return document.getElementById(id); };
+    var st = window.DC.game.state;
+    return {
+      phase: st.phase,
+      cardShown: g('card').classList.contains('show'),
+      optCount: g('cOpts').children.length,
+      warbarShown: g('warbar').classList.contains('show')
+    };
+  });
+  await page.click('#cOpts .opt:nth-child(2)');
+  var pickProbe = await page.evaluate(function () {
+    var st = window.DC.game.state;
+    var sel = document.querySelectorAll('#cOpts .opt.sel');
+    return {
+      choice: st.choices[st.playerFaction],
+      selCount: sel.length,
+      selIndex: sel.length ? parseInt(sel[0].getAttribute('data-opt'), 10) : -1
+    };
+  });
+
+  /* 热核战争：推过危机阈值，进 war 后点敌方城市发射。 */
+  await page.evaluate(function () {
+    var st = window.DC.game.state;
+    st.phase = 'crisis'; st.crisis = 95;
+    st.t = window.DC.CONFIG.roundSeconds - 0.3;
+  });
+  await page.waitForTimeout(1500);
+  var warPre = await page.evaluate(function () {
+    var st = window.DC.game.state;
+    return {
+      phase: st.phase,
+      ammo: window.DC.sim.totalMissiles(st, st.playerFaction),
+      launched: st.stats[st.playerFaction].launched,
+      warbarShown: document.getElementById('warbar').classList.contains('show'),
+      cardShown: document.getElementById('card').classList.contains('show')
+    };
+  });
+  await page.click('#cList .crow.tgt');
+  await page.waitForTimeout(600);
+  var warPost = await page.evaluate(function () {
+    var st = window.DC.game.state;
+    return {
+      launched: st.stats[st.playerFaction].launched,
+      ammo: window.DC.sim.totalMissiles(st, st.playerFaction)
+    };
+  });
+
+  await page.waitForTimeout(22000);        // 让导弹飞完、特效跑一轮
+  var war = await page.evaluate(function () {
+    var st = window.DC.game.state;
+    var launched = 0, intercepts = 0;
+    Object.keys(st.stats).forEach(function (k) {
+      launched += st.stats[k].launched;
+      intercepts += st.stats[k].intercepts;
+    });
+    return { phase: st.phase, launched: launched, intercepts: intercepts };
+  });
+  var shot2 = await sampleShot(page);
+  await page.screenshot({ path: path.join(ROOT, 'docs', opt.shotB) });
+  await page.close();
+
+  // 已知无害噪声：逐条写明理由，且仍会打印出来，绝不静默吞掉。
+  var ALLOWED = [
+    { re: /earth\.jpg/i, why: '内联贴图已是首选外链 earth.jpg 仅作兜底，加载失败属预期' },
+    { re: /VALIDATE_STATUS false/i, why: 'SwiftShader 软渲染伪影，真实 GPU 下不出现' },
+    { re: /favicon\.ico/i, why: '浏览器自动请求，已用 data:, 内联图标抑制' }
+  ];
+  var allowedHits = [], real = [];
+  errors.forEach(function (e) {
+    var hit = ALLOWED.filter(function (a) { return a.re.test(e); })[0];
+    if (hit) allowedHits.push(e.slice(0, 90) + '  ← ' + hit.why);
+    else real.push(e);
+  });
+  return {
+    opt: opt, probe: probe, shot1: shot1, cardProbe: cardProbe, pickProbe: pickProbe,
+    warPre: warPre, warPost: warPost, war: war, shot2: shot2,
+    errors: real, knownNoise: allowedHits,
+    reqFails: reqFails.filter(function (u) { return !/earth\.jpg|favicon/i.test(u); })
+  };
+}
+
+function verdict(r) {
+  var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, q = r.warPost, bad = [];
+  if (!p.hasDC) bad.push('window.DC 缺失');
+  if (!p.renderOk) bad.push('WebGL 未启动');
+  if (!p.texOk) bad.push('地球贴图未加载（走了纯色兜底）');
+  if (!p.inlineTex) bad.push('内联贴图 DC_EARTH_TEX 未注入');
+  if (p.autoPlay !== false) bad.push('玩家席位被 AI 托管');
+  if (p.fallbackShown) bad.push('兜底界面误触发');
+  if (p.factionRows !== 6) bad.push('阵营行数 ' + p.factionRows);
+  if (p.cityRows !== 60) bad.push('城市行数 ' + p.cityRows);
+  if (c.phase !== 'crisis' || !c.cardShown) bad.push('事件卡未显示');
+  if (c.optCount < 2 || c.optCount > 3) bad.push('选项数 ' + c.optCount);
+  if (k.choice !== 1 || k.selCount !== 1 || k.selIndex !== 1) bad.push('选项点击未生效');
+  if (w.phase !== 'war' || w.ammo !== 18) bad.push('未进入 war 或弹头数 ' + w.ammo);
+  if (!w.warbarShown || w.cardShown) bad.push('战争条/卡片互斥失败');
+  if (q.launched !== w.launched + 1) bad.push('点击未发射');
+  if (q.ammo !== w.ammo - 1) bad.push('弹头未扣减');
+  if (r.shot1.whiteFrac > 0.08 || r.shot1.meanLum > 120) bad.push('首屏画面过曝');
+  if (r.shot2.whiteFrac > 0.08 || r.shot2.meanLum > 160) bad.push('核战画面过曝');
+  if (r.errors.length) bad.push('控制台错误 ' + r.errors.length + ' 条');
+  if (r.reqFails.length) bad.push('资源加载失败 ' + r.reqFails.join(','));
+  return bad;
+}
+
+(async function () {
+  var srv = await serve();
+  var pw;
+  try { pw = require(PLAYWRIGHT); }
+  catch (e) { console.log('未找到 playwright，跳过浏览器冒烟'); srv.close(); process.exit(0); }
+
+  // 默认走真实 GPU。SwiftShader（软件渲染）仅作为 CI 兜底，需显式设 DC_SMOKE_SWIFTSHADER=1。
+  // 原因：SwiftShader 在创建首个 program 时会误报
+  //   THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false（Program Info Log 为空）
+  // 而真实 GPU（ANGLE D3D11）下同一份代码零报错——逐个材质强制 needsUpdate 重编译也全部干净，
+  // 说明它是软渲染驱动的伪影，不是本项目代码缺陷。用真 GPU 跑才能反映用户实际看到的画面。
+  var useSwift = !!process.env.DC_SMOKE_SWIFTSHADER;
+  var browser = await pw.chromium.launch({
+    executablePath: fs.existsSync(EDGE) ? EDGE : undefined,
+    args: useSwift ? ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] : []
+  });
+
+  var cases = [
+    {
+      label: 'http:// 本地服务', url: 'http://127.0.0.1:' + PORT + '/index.html',
+      shotA: 'screenshot-d3.png', shotB: 'screenshot-war.png'
+    },
+    {
+      label: 'file:// 双击打开（真实交付场景）',
+      url: 'file:///' + path.join(ROOT, 'index.html').replace(/\\/g, '/'),
+      shotA: 'screenshot-file-d3.png', shotB: 'screenshot-file-war.png'
+    }
+  ];
+
+  var results = [];
+  for (var i = 0; i < cases.length; i++) results.push(await runCase(browser, cases[i]));
+  await browser.close();
+  srv.close();
+
+  console.log('\n==== DEFCON 浏览器冒烟（D3 渲染 + D4 交互）====');
+  var allBad = [];
+  results.forEach(function (r) {
+    var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, q = r.warPost;
+    var bad = verdict(r);
+    console.log('\n── ' + r.opt.label + ' ──');
+    console.log('  GPU 后端              : ' + p.gpu);
+    console.log('  WebGL / 兜底界面      : ' + (p.renderOk ? '✓' : '✗') + ' / ' + (p.fallbackShown ? '✗ 误触发' : '✓'));
+    console.log('  地球贴图已加载        : ' + (p.texOk ? '✓' : '✗ 走了纯色兜底'));
+    console.log('  内联贴图已注入        : ' + (p.inlineTex ? '✓' : '✗'));
+    console.log('  玩家席位未被托管      : ' + (p.autoPlay === false ? '✓' : '✗'));
+    console.log('  阵营/城市行数         : ' + p.factionRows + ' / ' + p.cityRows);
+    console.log('  首屏 近白/亮度        : ' + (r.shot1.whiteFrac * 100).toFixed(2) + '% / ' + r.shot1.meanLum.toFixed(1));
+    console.log('  事件卡 选项数/点击后  : ' + c.optCount + ' / choice=' + k.choice + ' sel=' + k.selCount);
+    console.log('  war 弹头 / 点击发射   : ' + w.ammo + ' / ' + w.launched + '→' + q.launched + '（余 ' + q.ammo + '）');
+    console.log('  全场发射 / 拦截       : ' + r.war.launched + ' / ' + r.war.intercepts);
+    console.log('  战争画面 近白/亮度    : ' + (r.shot2.whiteFrac * 100).toFixed(2) + '% / ' + r.shot2.meanLum.toFixed(1));
+    console.log('  控制台错误 / 资源失败 : ' + (r.errors.length ? '✗ ' + r.errors.length : '✓') + ' / ' +
+                (r.reqFails.length ? '✗ ' + r.reqFails.join(',') : '✓'));
+    r.errors.slice(0, 6).forEach(function (e) { console.log('      · ' + e.slice(0, 200)); });
+    if (r.knownNoise.length) {
+      console.log('  已知无害噪声 ' + r.knownNoise.length + ' 条（已豁免）:');
+      r.knownNoise.slice(0, 6).forEach(function (e) { console.log('      · ' + e); });
+    }
+    if (bad.length) {
+      console.log('  ✗ 未通过：' + bad.join('；'));
+      allBad.push(r.opt.label + ' → ' + bad.join('；'));
+    } else {
+      console.log('  ✓ 通过');
+    }
+  });
+
+  console.log('\n截图：docs/screenshot-d3.png · screenshot-war.png（http）');
+  console.log('      docs/screenshot-file-d3.png · screenshot-file-war.png（file）');
+  if (allBad.length) {
+    console.log('\n结论：冒烟未通过。\n  ' + allBad.join('\n  '));
+    process.exit(1);
+  }
+  console.log('\n结论：两条通道全部通过（file:// 下地球贴图正常，与 http 一致）。');
+})();

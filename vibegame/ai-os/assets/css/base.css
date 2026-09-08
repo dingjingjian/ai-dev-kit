@@ -1,0 +1,137 @@
+/*!
+ * base.css —— 小工具容器基础适配层
+ *
+ * 职责：只做「容器适配」，不做业务样式。
+ * 约束：本文件在 app.css 之前加载，且只声明 app.css 未覆盖的属性，
+ *       以保证拆分前后的视觉表现完全一致。
+ *
+ * 说明：盒模型重置、字体栈、user-select、body 背景等已由 app.css
+ *       （Tailwind preflight + 应用主题）提供，此处不再重复声明，
+ *       避免产生优先级冲突导致视觉漂移。
+ */
+
+/* ---------- 触摸行为（cross-platform-h5.md §1） ---------- */
+
+html {
+  /* 关闭双击缩放，保留正常滚动与捏合以外的手势 */
+  touch-action: manipulation;
+}
+
+body {
+  /* 容器内系统长按菜单已禁用，这里同步关闭 iOS 的长按呼出 */
+  -webkit-touch-callout: none;
+  /* 去掉点击时的灰色高亮块，PC 模拟器与真机表现一致 */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- 滚动（cross-platform-h5.md §2） ---------- */
+
+.scroll-container,
+[data-scroll] {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+/* ---------- 媒体自适应（cross-platform-h5.md §4） ---------- */
+
+img,
+canvas,
+video {
+  max-width: 100%;
+}
+
+/* ---------- 软键盘（viewport.js 写入，供布局按需消费） ---------- */
+
+:root {
+  --keyboard-inset-height: 0px;
+}
+
+/* ---------- 返回按钮右移（避免与容器顶部返回键重叠） ----------
+ *
+ * 背景：小工具容器在顶部自带一个返回键，与应用内每个页面顶部的
+ *       返回按钮位置重叠。将应用内所有返回按钮统一右移 35px
+ *       （基线 25px，本轮再右移 10px）。
+ *
+ * 实现：position:relative + left 不影响 flex 布局占位，仅做视觉
+ *       偏移，因此标题居中与右侧占位元素保持原位，不会跟随移动。
+ *       不使用 transform，避免与 btn-press / hover:scale 的动画冲突。
+ *       选择器特异性（属性+元素=0,1,1）高于 app.css 中的 Tailwind
+ *       类选择器（0,1,0），无需 !important。
+ */
+button[data-testid$="-back-btn"] {
+  position: relative;
+  left: 35px;
+}
+
+/* ---------- 移动端隐藏桌面状态栏（避免与手机系统状态栏重复） ----------
+ *
+ * 背景：应用内的 .status-bar 是模拟手机状态栏的「假顶栏」，在桌面
+ *       预览时充当顶栏；但在移动端真机/容器内，系统已自带状态栏，
+ *       二者位置重叠、内容重复，故移动端隐藏。
+ *
+ * 实现：用 .status-bar.status-bar（特异性 0,2,0）压制 app.css 中
+ *       .status-bar{display:flex}（0,1,0），确保加载顺序不影响结果。
+ *       app.css 已使用 safe-area-inset-top 等安全区变量，隐藏后页面
+ *       内容仍从系统状态栏下方开始，布局不受破坏。
+ */
+@media (max-width: 600px) {
+  .status-bar.status-bar,
+  .status-bar-enhanced.status-bar-enhanced {
+    display: none;
+  }
+}
+
+/* ---------- 滚动修复（内容超过一屏可滑动） ----------
+ *
+ * 根因：应用根容器使用 min-h-screen（min-height:100vh，高度由内容撑开），
+ *       本就依赖「整页滚动」；但 app.css 的 body{overflow:hidden} 把整页
+ *       滚动关掉了，导致内容超一屏时无法滑动。
+ *
+ * 修复：
+ *   1) 建立 html/body/#root 高度链，使 body 高度等于视口。
+ *   2) 用 html body（特异性 0,0,2）覆盖 app.css 的 body（0,0,1），
+ *      把纵向滚动恢复为 auto，横向保持 hidden。
+ *   3) 让 flex 纵向容器内的 flex-1 子项可被压缩（min-height:0），
+ *      使内部 .overflow-y-auto 容器也能在固定高度父级下正常滚动。
+ */
+html, body, #root {
+  height: 100%;
+}
+
+html body {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+
+.flex-col > .flex-1 {
+  min-height: 0;
+}
+
+/* ---------- 相机顶部按钮避让（参考返回按钮，left/right:35px） ----------
+ *
+ * 背景：相机预览页顶部栏为「重拍(左) | 预览 | 保存(右)」的 justify-between
+ *       布局；拍摄页顶部栏右侧为闪光灯。这些按钮紧贴左右边缘，与容器自带
+ *       的返回键/操作区重叠，需要像返回按钮一样预留安全空间。
+ *
+ * 实现：position:relative + left/right 仅做视觉偏移，不改变 flex 占位，
+ *       因此中间「预览」文字与对侧按钮位置不变。选择器特异性（元素+属性
+ *       =0,1,1）高于 Tailwind 类（0,1,0），且按钮内联 style 未声明位置，
+ *       故无需 !important。
+ */
+button[data-testid="camera-retake-btn"] {
+  position: relative;
+  left: 35px;
+}
+
+button[data-testid="camera-save-btn"] {
+  position: relative;
+  right: 35px;
+}
+
+button[data-testid="camera-flash-btn"] {
+  position: relative;
+  right: 35px;
+}
