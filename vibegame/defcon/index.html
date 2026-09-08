@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="bdIO6ZECvErG1PG9GKG9aq">
+<head data-page-node-id="yJfqCUeHeGXVlG1v65EKsV">
+<meta charset="utf-8" data-page-node-id="RKk9jfBCgwr5VQr1NWdvqE">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" data-page-node-id="sBP2Z27uuCiQVATOTfzILN">
+<title>核战危机 DEFCON</title>
+<style>
+  :root{
+    --bg:#05080d; --panel:rgba(10,18,26,.82); --line:rgba(127,212,232,.22);
+    --cyan:#7fd4e8; --cyan-dim:#4a8ba0; --amber:#f0b429; --red:#e24b4a;
+    --text:#c6d8e2; --text-dim:#6d8899;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;user-select:none}
+  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* 扫描线 + 暗角：军事终端质感，纯 CSS 不额外消耗 draw call */
+  #scan{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:repeating-linear-gradient(180deg,rgba(127,212,232,.035) 0 1px,transparent 1px 3px)}
+  #vig{position:fixed;inset:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.55) 100%)}
+
+  .hud{position:fixed;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
+  .panel{background:var(--panel);border:1px solid var(--line);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+
+  /* 顶栏：DEFCON 等级 + 危机值 */
+  #top{top:0;left:0;right:0;display:flex;align-items:stretch;
+    gap:1px;padding:0;border-bottom:1px solid var(--line);background:var(--panel)}
+  #defcon{padding:10px 16px;display:flex;flex-direction:column;gap:2px;min-width:112px;
+    border-right:1px solid var(--line)}
+  #defcon .lv{font-size:26px;font-weight:700;letter-spacing:2px;color:var(--cyan);
+    text-shadow:0 0 14px rgba(127,212,232,.5)}
+  #defcon .lb{font-size:10px;color:var(--text-dim);letter-spacing:3px}
+  #defcon.d1 .lv{color:var(--red);text-shadow:0 0 16px rgba(226,75,74,.65)}
+  #defcon.d2 .lv{color:var(--amber);text-shadow:0 0 14px rgba(240,180,41,.5)}
+
+  #crisis{flex:1;padding:10px 16px;display:flex;flex-direction:column;justify-content:center;gap:5px}
+  #crisis .row{display:flex;justify-content:space-between;font-size:10px;
+    color:var(--text-dim);letter-spacing:1px}
+  #bar{height:5px;background:rgba(127,212,232,.1);overflow:hidden}
+  #bar i{display:block;height:100%;width:10%;background:linear-gradient(90deg,#3d8fa8,var(--amber),var(--red));
+    transition:width .35s ease}
+  #phase{padding:10px 16px;display:flex;flex-direction:column;justify-content:center;
+    align-items:flex-end;gap:2px;border-left:1px solid var(--line);min-width:130px}
+  #phase .pt{font-size:13px;color:var(--text);letter-spacing:1px}
+  #phase .pd{font-size:10px;color:var(--text-dim)}
+
+  /* 左侧阵营列表 */
+  #side{left:12px;top:74px;width:196px;padding:8px}
+  #side h4{font-size:10px;color:var(--text-dim);letter-spacing:2px;font-weight:400;
+    padding:2px 4px 6px}
+  .frow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:11px}
+  .frow .sw{width:8px;height:8px;flex:none;border-radius:1px}
+  .frow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .frow .pp{color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .frow.dead{opacity:.35}
+  .frow.me .nm{color:#fff}
+
+  /* 右下城市列表 */
+  #cities{right:12px;bottom:12px;width:210px;max-height:40vh;overflow:auto;padding:8px}
+  #cities h4{font-size:10px;color:var(--text-dim);letter-spacing:2px;font-weight:400;
+    padding:2px 4px 6px;position:sticky;top:-8px;background:var(--panel);margin:-8px -8px 0;padding:8px 12px 6px}
+  .crow{display:flex;justify-content:space-between;gap:6px;padding:2px 4px;font-size:11px;cursor:pointer}
+  .crow:hover{background:rgba(127,212,232,.09)}
+  .crow .cn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .crow .cp{color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .crow.gone{opacity:.3;text-decoration:line-through;cursor:default}
+  /* 战争阶段：敌方存活城市即可打击目标 */
+  .crow.tgt .cn::before{content:"◎ ";color:var(--red);font-size:9px}
+  .crow.tgt:hover{background:rgba(226,75,74,.16)}
+
+  /* 底部事件卡 */
+  #card{left:50%;transform:translateX(-50%);bottom:12px;width:min(560px,calc(100vw - 24px));
+    padding:14px 16px;display:none}
+  #card.show{display:block}
+  #card .ct{font-family:var(--sans);font-size:15px;color:#fff;margin-bottom:5px}
+  #card .cd{font-family:var(--sans);font-size:12px;color:var(--text-dim);
+    line-height:1.6;margin-bottom:11px}
+  .opts{display:flex;flex-direction:column;gap:5px}
+  .opt{text-align:left;background:rgba(127,212,232,.06);border:1px solid var(--line);
+    color:var(--text);padding:8px 11px;font-family:var(--sans);font-size:12.5px;
+    cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .15s}
+  .opt:hover{background:rgba(127,212,232,.15)}
+  .opt.sel{background:rgba(127,212,232,.24);border-color:var(--cyan)}
+  .opt .ol{flex:1}
+  .opt .oe{font-size:10.5px;color:var(--amber);opacity:.85;white-space:nowrap}
+  .opt .or{display:flex;align-items:center;gap:7px;flex:none}
+  .opt .cc{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+  .opt .cc.up{color:var(--red)} .opt .cc.down{color:var(--cyan)} .opt .cc.zero{color:var(--text-dim)}
+  .opt .kk{font-size:9px;color:var(--text-dim);border:1px solid var(--line);
+    padding:0 4px;line-height:14px}
+  #card .timer{height:2px;background:rgba(127,212,232,.12);margin-bottom:11px}
+  #card .timer i{display:block;height:100%;background:var(--cyan)}
+
+  /* 战争操作条（与事件卡互斥，同位置）*/
+  #warbar{left:50%;transform:translateX(-50%);bottom:12px;padding:9px 15px;display:none;
+    align-items:center;gap:14px;white-space:nowrap}
+  #warbar.show{display:flex}
+  #warbar .am{font-size:11px;color:var(--text-dim);letter-spacing:1px}
+  #warbar .am b{color:var(--cyan);font-size:16px;margin-left:6px;font-variant-numeric:tabular-nums}
+  #warbar.empty .am b{color:var(--red)}
+  #warbar .tip{font-size:10.5px;color:var(--text-dim)}
+  #warbar{max-width:calc(100vw - 24px);overflow:hidden}
+  #warbar.deny{animation:deny .45s ease}
+  @keyframes deny{0%,100%{border-color:var(--line)}45%{border-color:var(--red)}}
+
+  /* 终局 */
+  #over{left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 24px));
+    padding:20px;display:none}
+  #over.show{display:block}
+  #over h2{font-family:var(--sans);font-size:17px;color:#fff;font-weight:600;margin-bottom:3px}
+  #over .sub{font-size:11px;color:var(--text-dim);margin-bottom:14px}
+  #over table{width:100%;border-collapse:collapse;font-size:11.5px}
+  #over th{text-align:left;font-weight:400;color:var(--text-dim);font-size:10px;
+    letter-spacing:1px;padding:0 4px 6px;border-bottom:1px solid var(--line)}
+  #over td{padding:5px 4px;border-bottom:1px solid rgba(127,212,232,.08)}
+  #over td.sc{font-variant-numeric:tabular-nums;color:#fff}
+  #over tr.me td{background:rgba(127,212,232,.08)}
+  #again{margin-top:15px;width:100%;background:rgba(127,212,232,.08);border:1px solid var(--line);
+    color:var(--cyan);padding:9px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
+    cursor:pointer}
+  #again:hover{background:rgba(127,212,232,.18)}
+
+  /* 载入 / 兜底 */
+  #loader{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+    justify-content:center;flex-direction:column;gap:12px;background:var(--bg);
+    font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:2px}
+  #loader.hide{display:none}
+  #fallback{position:fixed;inset:0;z-index:60;display:none;align-items:center;
+    justify-content:center;flex-direction:column;gap:10px;background:var(--bg);
+    padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--text-dim)}
+  #fallback.show{display:flex}
+  #fallback b{color:var(--cyan);font-size:14px;font-weight:400}
+
+  @media (max-width:720px){
+    #side{display:none}
+    #cities{width:150px;max-height:30vh}
+    #defcon{min-width:88px;padding:8px 11px}
+    #defcon .lv{font-size:21px}
+    #phase{min-width:96px}
+  }
+</style>
+</head>
+<body data-page-node-id="TO1x1H2HNdiH9H9tcGgXZD">
+
+<canvas id="stage" data-page-node-id="OwSdxKsiG83xk1lAW9MdYH"></canvas>
+<div id="scan" data-page-node-id="D8YNW666xUoVGAi5OmOrtJ"></div>
+<div id="vig" data-page-node-id="jrHA7u5C4L8JyvG8cR8rJL"></div>
+
+<div id="top" class="hud" data-page-node-id="MEPJ6gQApEv1snLfOOrGLA">
+  <div id="defcon" data-page-node-id="6Gbkx6IS56bLYGJENpDIjO">
+    <span class="lb" data-page-node-id="sDV4Swfa8x9Sdct7I4dit9">DEFCON</span>
+    <span class="lv" id="dcLv" data-page-node-id="AeoU0huQgAKhbCI1q3CVGI">5</span>
+  </div>
+  <div id="crisis" data-page-node-id="wzYSnlwaj6ELVoh0XDZA8B">
+    <div class="row" data-page-node-id="tdWh8RqsfbE302FVjtyrxX"><span data-page-node-id="PBSzmr8d8EGPOlIYDdAUh8">全局危机值</span><span id="crVal" data-page-node-id="ygDmGgHyKermpZfnn86e3k">10</span></div>
+    <div id="bar" data-page-node-id="gEvIKn5JYIdfGlz4LqoxRI"><i id="crBar" data-page-node-id="4mjkx99LgSyBfVqASALKMj"></i></div>
+  </div>
+  <div id="phase" data-page-node-id="RGCivfZv8U9AbA2rvmoFjf">
+    <span class="pt" id="phName" data-page-node-id="chr0SyaECBzEuqCwiwf9cv">态势简报</span>
+    <span class="pd" id="phTime" data-page-node-id="AJGQ8ADkQu2uZ2P6PfuCDD">10s</span>
+  </div>
+</div>
+
+<div id="side" class="hud panel" data-page-node-id="nY1CPxEJnNomYQE2aPwIDH">
+  <h4 data-page-node-id="bRBGQVsgwLh1LgKN8XkvTY">阵营 · 存活人口</h4>
+  <div id="fList" data-page-node-id="G2qzMolD4ODOVWy1nFgzts"></div>
+</div>
+
+<div id="cities" class="hud panel" data-page-node-id="ac44m1nDrH1rA71Y5QGq7t">
+  <h4 data-page-node-id="AyWeYBZn1datkkxqkRGWpB">目标城市</h4>
+  <div id="cList" data-page-node-id="V213TpLUZOb3unCuOBu7cT"></div>
+</div>
+
+<div id="card" class="hud panel" data-page-node-id="GCQKSDx6m8DxMRc8lmPOn6">
+  <div class="ct" id="cTitle" data-page-node-id="sENqUNSf68KLAAUJEgGdPT"></div>
+  <div class="cd" id="cDesc" data-page-node-id="KP2BLPU2W7lH8NVEdovEB9"></div>
+  <div class="timer" data-page-node-id="LUzTthtLGgB98Rwfon1w3t"><i id="cTimer" data-page-node-id="zRB7Kv4W2o84xHY1EYjiZL"></i></div>
+  <div class="opts" id="cOpts" data-page-node-id="hANmR4XZvPuMVMBVlbEDh6"></div>
+</div>
+
+<div id="warbar" class="hud panel" data-page-node-id="i1vVuEcNLdAneb0yWGn6M2">
+  <span class="am" data-page-node-id="pF9yaxcvcRFloOmQhpfvDa">我方弹头<b id="wbAmmo" data-page-node-id="6ygzXYLTVYP2oa7tMMeFen">18</b></span>
+  <span class="tip" id="wbTip" data-page-node-id="M4l2PUt8RVVHGnsILbCPjT">点击敌方城市或地球上的光点发射</span>
+</div>
+
+<div id="over" class="hud panel" data-page-node-id="xHVakehwvoXrcPMpLuSK0J">
+  <h2 data-page-node-id="mkFZIanE8Y6Iuowz1J1w7Q">终局计分</h2>
+  <div class="sub" data-page-node-id="7sQLVnSfNqpex7ANQQrfA4">得分 = 造成伤亡 − 己方伤亡（百万人）</div>
+  <table data-page-node-id="eACB1jazLzsEbOGNoksEy2"><thead data-page-node-id="x8eZsOHT5ULX9DCDseObBb"><tr data-page-node-id="KGFaD6BJrHvWMhHeTEr0qD"><th data-page-node-id="5BBGGTgAqvHyRc2utPx9Os">#</th><th data-page-node-id="8kOOr23CBmRvrX8xvfHePX">阵营</th><th data-page-node-id="BS0oMUzfyGJQhLZmq1LTgg">造成</th><th data-page-node-id="hAbC9w85YFzfPV4GsF4vva">伤亡</th><th data-page-node-id="ZCEO9Y0P8LtnXKxJX7PgJt">得分</th></tr></thead>
+  <tbody id="ovBody" data-page-node-id="arnn6t8bZ0tfYq6Bu1b5hc"></tbody></table>
+  <button type="button" id="again" data-page-node-id="rcgpadEz2iMjuH18dqpnNz">再来一局</button>
+</div>
+
+<div id="loader" data-page-node-id="jKoeyXE9rjbrE0iAcDy3zo">正在装载作战地图…</div>
+<div id="fallback" data-page-node-id="zLRhFJIUxNFN7XWFCAzsg8">
+  <b data-page-node-id="Xxa1ROGDfKxCdPRbNDnF9B">无法启动 3D 渲染</b>
+  <span data-page-node-id="dU76JPZ7LkC60aeJrA4Wg8">当前浏览器或设备不支持 WebGL。</span>
+  <span data-page-node-id="pyBVI0z3VRTcbrdquZIpiV">请更换现代浏览器（Chrome / Edge / Safari）后重试。</span>
+</div>
+
+<script src="assets/three.min.js"></script>
+<!-- 地球贴图内联版（file:// 下外链 jpg 会被 CORS 拒绝，见 tools/gen-earth-tex.js） -->
+<script src="assets/earth-tex.js"></script>
+<script src="src/data.js"></script>
+<script src="src/geo.js"></script>
+<script src="src/sim.js"></script>
+<script src="src/ai.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui.js"></script>
+<script src="src/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+# 小工具提交产物（按需生成，不入库）
+dist/*.zip
+
+# 开发依赖与垃圾文件
+node_modules/
+*.map
+.DS_Store
+Thumbs.db
+
+# 编辑器与系统
+.vscode/
+*.swp
