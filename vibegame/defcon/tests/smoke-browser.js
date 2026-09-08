@@ -82,6 +82,13 @@ async function runCase(browser, opt) {
       autoPlay: window.DC && window.DC.game ? window.DC.game.autoPlay : null,
       inlineTex: typeof window.DC_EARTH_TEX === 'string' && window.DC_EARTH_TEX.length > 1000,
       phase: window.DC && window.DC.game ? window.DC.game.state.phase : null,
+      gpu: (function () {
+        var cv = document.getElementById('stage');
+        var gl = cv && (cv.getContext('webgl2') || cv.getContext('webgl'));
+        if (!gl) return 'none';
+        var d = gl.getExtension('WEBGL_debug_renderer_info');
+        return d ? String(gl.getParameter(d.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
+      })(),
       factionRows: g('fList') ? g('fList').children.length : 0,
       cityRows: g('cList') ? g('cList').children.length : 0,
       fallbackShown: g('fallback') ? g('fallback').classList.contains('show') : false
@@ -158,14 +165,23 @@ async function runCase(browser, opt) {
   await page.screenshot({ path: path.join(ROOT, 'docs', opt.shotB) });
   await page.close();
 
-  // file:// 下 earth.jpg 外链必然失败（这正是内联贴图要绕开的问题），不计为错误
-  var real = errors.filter(function (e) {
-    return !/earth\.jpg|Failed to load resource|CORS policy/i.test(e);
+  // 已知无害噪声：逐条写明理由，且仍会打印出来，绝不静默吞掉。
+  var ALLOWED = [
+    { re: /earth\.jpg/i, why: '内联贴图已是首选外链 earth.jpg 仅作兜底，加载失败属预期' },
+    { re: /VALIDATE_STATUS false/i, why: 'SwiftShader 软渲染伪影，真实 GPU 下不出现' },
+    { re: /favicon\.ico/i, why: '浏览器自动请求，已用 data:, 内联图标抑制' }
+  ];
+  var allowedHits = [], real = [];
+  errors.forEach(function (e) {
+    var hit = ALLOWED.filter(function (a) { return a.re.test(e); })[0];
+    if (hit) allowedHits.push(e.slice(0, 90) + '  ← ' + hit.why);
+    else real.push(e);
   });
   return {
     opt: opt, probe: probe, shot1: shot1, cardProbe: cardProbe, pickProbe: pickProbe,
     warPre: warPre, warPost: warPost, war: war, shot2: shot2,
-    errors: real, reqFails: reqFails.filter(function (u) { return !/earth\.jpg/.test(u); })
+    errors: real, knownNoise: allowedHits,
+    reqFails: reqFails.filter(function (u) { return !/earth\.jpg|favicon/i.test(u); })
   };
 }
 
@@ -199,9 +215,15 @@ function verdict(r) {
   try { pw = require(PLAYWRIGHT); }
   catch (e) { console.log('未找到 playwright，跳过浏览器冒烟'); srv.close(); process.exit(0); }
 
+  // 默认走真实 GPU。SwiftShader（软件渲染）仅作为 CI 兜底，需显式设 DC_SMOKE_SWIFTSHADER=1。
+  // 原因：SwiftShader 在创建首个 program 时会误报
+  //   THREE.WebGLProgram: Shader Error 0 - VALIDATE_STATUS false（Program Info Log 为空）
+  // 而真实 GPU（ANGLE D3D11）下同一份代码零报错——逐个材质强制 needsUpdate 重编译也全部干净，
+  // 说明它是软渲染驱动的伪影，不是本项目代码缺陷。用真 GPU 跑才能反映用户实际看到的画面。
+  var useSwift = !!process.env.DC_SMOKE_SWIFTSHADER;
   var browser = await pw.chromium.launch({
     executablePath: fs.existsSync(EDGE) ? EDGE : undefined,
-    args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader']
+    args: useSwift ? ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] : []
   });
 
   var cases = [
@@ -227,6 +249,7 @@ function verdict(r) {
     var p = r.probe, c = r.cardProbe, k = r.pickProbe, w = r.warPre, q = r.warPost;
     var bad = verdict(r);
     console.log('\n── ' + r.opt.label + ' ──');
+    console.log('  GPU 后端              : ' + p.gpu);
     console.log('  WebGL / 兜底界面      : ' + (p.renderOk ? '✓' : '✗') + ' / ' + (p.fallbackShown ? '✗ 误触发' : '✓'));
     console.log('  地球贴图已加载        : ' + (p.texOk ? '✓' : '✗ 走了纯色兜底'));
     console.log('  内联贴图已注入        : ' + (p.inlineTex ? '✓' : '✗'));
@@ -240,6 +263,10 @@ function verdict(r) {
     console.log('  控制台错误 / 资源失败 : ' + (r.errors.length ? '✗ ' + r.errors.length : '✓') + ' / ' +
                 (r.reqFails.length ? '✗ ' + r.reqFails.join(',') : '✓'));
     r.errors.slice(0, 6).forEach(function (e) { console.log('      · ' + e.slice(0, 200)); });
+    if (r.knownNoise.length) {
+      console.log('  已知无害噪声 ' + r.knownNoise.length + ' 条（已豁免）:');
+      r.knownNoise.slice(0, 6).forEach(function (e) { console.log('      · ' + e); });
+    }
     if (bad.length) {
       console.log('  ✗ 未通过：' + bad.join('；'));
       allBad.push(r.opt.label + ' → ' + bad.join('；'));
