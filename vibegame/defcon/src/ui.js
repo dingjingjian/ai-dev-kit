@@ -175,7 +175,12 @@
       right.appendChild(cc); right.appendChild(kbd);
 
       b.appendChild(lb); b.appendChild(ex); b.appendChild(right);
-      b.addEventListener('click', function () { if (cmd.onChoose) cmd.onChoose(i); });
+      // 立即回显选中态，不等下一帧：一是点击反馈必须符合直觉，
+      // 二是依赖下一帧会让外部（如冒烟测试）读到「状态已改、UI 未变」的不一致窗口。
+      b.addEventListener('click', function () {
+        if (cmd.onChoose) cmd.onChoose(i);
+        if (cur) updateCard(cur);
+      });
       el.cOpts.appendChild(b);
     });
     el.card.classList.add('show');
