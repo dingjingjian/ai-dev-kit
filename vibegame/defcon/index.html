@@ -1,209 +1,334 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-page-node-id="bdIO6ZECvErG1PG9GKG9aq">
-<head data-page-node-id="yJfqCUeHeGXVlG1v65EKsV">
-<meta charset="utf-8" data-page-node-id="RKk9jfBCgwr5VQr1NWdvqE">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" data-page-node-id="sBP2Z27uuCiQVATOTfzILN">
+<html lang="zh-CN" data-page-node-id="sN8ZPxNZWN75HPNq35kfxA">
+<head data-page-node-id="3HXLYzr4IlC3DIl1fsyE5T">
+<meta charset="utf-8" data-page-node-id="E4tHxZGvcir2Vs0eKL2QSm">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" data-page-node-id="EpW1xfrVU5ZyC9vIuAn7GT">
 <title>核战危机 DEFCON</title>
 <!-- 内联空图标：http 场景下抑制浏览器默认的 /favicon.ico 请求（404 会污染冒烟的错误计数） -->
-<link rel="icon" href="data:,">
+<link rel="icon" href="data:," data-page-node-id="XYSEIvR2AgtLC8Xl8JgckS">
 <style>
   :root{
-    --bg:#05080d; --panel:rgba(10,18,26,.82); --line:rgba(127,212,232,.22);
+    --bg:#05080d; --panel:rgba(10,18,26,.86); --line:rgba(127,212,232,.22);
     --cyan:#7fd4e8; --cyan-dim:#4a8ba0; --amber:#f0b429; --red:#e24b4a;
     --text:#c6d8e2; --text-dim:#6d8899;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  html,body{height:100%;overflow:hidden;background:#02040a;color:var(--text);
     font-family:var(--sans);-webkit-font-smoothing:antialiased;
-    -webkit-tap-highlight-color:transparent;user-select:none}
-  #stage{position:fixed;inset:0;width:100%;height:100%;display:block;touch-action:none}
+    -webkit-tap-highlight-color:transparent;user-select:none;overscroll-behavior:none}
 
-  /* 扫描线 + 暗角：军事终端质感，纯 CSS 不额外消耗 draw call */
-  #scan{position:fixed;inset:0;pointer-events:none;z-index:5;
+  /* 竖屏手机容器：桌面端居中成一条 480 宽的竖屏，移动端铺满。
+     只维护一套竖屏布局，不再为桌面做第二套 —— 本作定位就是移动端游戏。 */
+  body{display:flex;justify-content:center}
+  #app{position:relative;width:100%;max-width:480px;height:100%;overflow:hidden;background:var(--bg)}
+
+  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+  #scan{position:absolute;inset:0;pointer-events:none;z-index:5;
     background:repeating-linear-gradient(180deg,rgba(127,212,232,.035) 0 1px,transparent 1px 3px)}
-  #vig{position:fixed;inset:0;pointer-events:none;z-index:5;
+  #vig{position:absolute;inset:0;pointer-events:none;z-index:5;
     background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.55) 100%)}
 
-  .hud{position:fixed;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
-  .panel{background:var(--panel);border:1px solid var(--line);
-    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
+  .panel{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
-  /* 顶栏：DEFCON 等级 + 危机值 */
-  #top{top:0;left:0;right:0;display:flex;align-items:stretch;
-    gap:1px;padding:0;border-bottom:1px solid var(--line);background:var(--panel)}
-  #defcon{padding:10px 16px;display:flex;flex-direction:column;gap:2px;min-width:112px;
-    border-right:1px solid var(--line)}
-  #defcon .lv{font-size:26px;font-weight:700;letter-spacing:2px;color:var(--cyan);
-    text-shadow:0 0 14px rgba(127,212,232,.5)}
-  #defcon .lb{font-size:10px;color:var(--text-dim);letter-spacing:3px}
-  #defcon.d1 .lv{color:var(--red);text-shadow:0 0 16px rgba(226,75,74,.65)}
-  #defcon.d2 .lv{color:var(--amber);text-shadow:0 0 14px rgba(240,180,41,.5)}
+  /* ── 顶栏：一行四格，压到 46px ── */
+  #top{top:0;left:0;right:0;display:flex;align-items:stretch;gap:1px;
+    padding-top:var(--safe-t);border-bottom:1px solid var(--line);background:var(--panel)}
+  #defcon{padding:5px 10px;display:flex;flex-direction:column;justify-content:center;
+    min-width:70px;border-right:1px solid var(--line)}
+  #defcon .lv{font-size:19px;font-weight:700;letter-spacing:1px;color:var(--cyan);
+    text-shadow:0 0 12px rgba(127,212,232,.5)}
+  #defcon .lb{font-size:9px;color:var(--text-dim);letter-spacing:2px}
+  #defcon.d1 .lv{color:var(--red);text-shadow:0 0 14px rgba(226,75,74,.65)}
+  #defcon.d2 .lv{color:var(--amber);text-shadow:0 0 12px rgba(240,180,41,.5)}
+  #defcon.bump{animation:bump .5s ease}
+  @keyframes bump{0%,100%{transform:scale(1)}30%{transform:scale(1.14)}}
 
-  #crisis{flex:1;padding:10px 16px;display:flex;flex-direction:column;justify-content:center;gap:5px}
-  #crisis .row{display:flex;justify-content:space-between;font-size:10px;
+  #crisis{flex:1;padding:5px 10px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  #crisis .row{display:flex;justify-content:space-between;font-size:9.5px;
     color:var(--text-dim);letter-spacing:1px}
-  #bar{height:5px;background:rgba(127,212,232,.1);overflow:hidden}
+  #bar{height:4px;background:rgba(127,212,232,.1);overflow:hidden}
   #bar i{display:block;height:100%;width:10%;background:linear-gradient(90deg,#3d8fa8,var(--amber),var(--red));
     transition:width .35s ease}
-  #phase{padding:10px 16px;display:flex;flex-direction:column;justify-content:center;
-    align-items:flex-end;gap:2px;border-left:1px solid var(--line);min-width:130px}
-  #phase .pt{font-size:13px;color:var(--text);letter-spacing:1px}
-  #phase .pd{font-size:10px;color:var(--text-dim)}
 
-  /* 左侧阵营列表 */
-  #side{left:12px;top:74px;width:196px;padding:8px}
-  #side h4{font-size:10px;color:var(--text-dim);letter-spacing:2px;font-weight:400;
-    padding:2px 4px 6px}
-  .frow{display:flex;align-items:center;gap:6px;padding:3px 4px;font-size:11px}
-  .frow .sw{width:8px;height:8px;flex:none;border-radius:1px}
-  .frow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .frow .pp{color:var(--text-dim);font-variant-numeric:tabular-nums}
-  .frow.dead{opacity:.35}
-  .frow.me .nm{color:#fff}
+  /* 96px 是「第 12 回合 · 20s」在 9.5px 字号下的实测宽度，再窄就会被省略号截断 */
+  #phase{padding:5px 8px;display:flex;flex-direction:column;justify-content:center;
+    align-items:flex-end;border-left:1px solid var(--line);min-width:96px;flex:none}
+  #phase .pt{font-size:12px;color:var(--text);letter-spacing:1px}
+  #phase .pd{font-size:9.5px;color:var(--text-dim)}
 
-  /* 右下城市列表 */
-  #cities{right:12px;bottom:12px;width:210px;max-height:40vh;overflow:auto;padding:8px}
-  #cities h4{font-size:10px;color:var(--text-dim);letter-spacing:2px;font-weight:400;
-    padding:2px 4px 6px;position:sticky;top:-8px;background:var(--panel);margin:-8px -8px 0;padding:8px 12px 6px}
-  .crow{display:flex;justify-content:space-between;gap:6px;padding:2px 4px;font-size:11px;cursor:pointer}
-  .crow:hover{background:rgba(127,212,232,.09)}
-  .crow .cn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .crow .cp{color:var(--text-dim);font-variant-numeric:tabular-nums}
-  .crow.gone{opacity:.3;text-decoration:line-through;cursor:default}
-  /* 战争阶段：敌方存活城市即可打击目标 */
-  .crow.tgt .cn::before{content:"◎ ";color:var(--red);font-size:9px}
-  .crow.tgt:hover{background:rgba(226,75,74,.16)}
+  #drawerBtn{width:42px;flex:none;background:transparent;border:none;
+    border-left:1px solid var(--line);color:var(--cyan);font-size:17px;cursor:pointer;
+    font-family:var(--mono);line-height:1}
 
-  /* 底部事件卡 */
-  #card{left:50%;transform:translateX(-50%);bottom:12px;width:min(560px,calc(100vw - 24px));
-    padding:14px 16px;display:none}
+  /* ── 底部情境面板 ── */
+  #sheet{left:0;right:0;bottom:0;z-index:12;background:var(--panel);
+    border-top:1px solid var(--line);padding:10px 12px calc(10px + var(--safe-b))}
+  /* 简报期既没有事件卡也没有战争条 —— 空面板不该白占一条屏高（地球才是主视觉） */
+  #sheet.none{display:none}
+
+  #card{display:none}
   #card.show{display:block}
-  #card .ct{font-family:var(--sans);font-size:15px;color:#fff;margin-bottom:5px}
-  #card .cd{font-family:var(--sans);font-size:12px;color:var(--text-dim);
-    line-height:1.6;margin-bottom:11px}
-  .opts{display:flex;flex-direction:column;gap:5px}
+  #card .ct{font-family:var(--sans);font-size:14px;color:#fff;margin-bottom:4px}
+  #card .cd{font-family:var(--sans);font-size:11.5px;color:var(--text-dim);
+    line-height:1.6;margin-bottom:8px;max-height:3.2em;overflow:hidden}
+  .opts{display:flex;flex-direction:column;gap:6px}
   .opt{text-align:left;background:rgba(127,212,232,.06);border:1px solid var(--line);
-    color:var(--text);padding:8px 11px;font-family:var(--sans);font-size:12.5px;
-    cursor:pointer;display:flex;align-items:center;gap:10px;transition:background .15s}
-  .opt:hover{background:rgba(127,212,232,.15)}
+    color:var(--text);padding:0 12px;min-height:46px;font-family:var(--sans);font-size:13.5px;
+    cursor:pointer;display:flex;align-items:center;gap:10px}
+  .opt:active{background:rgba(127,212,232,.2)}
   .opt.sel{background:rgba(127,212,232,.24);border-color:var(--cyan)}
   .opt .ol{flex:1}
   .opt .oe{font-size:10.5px;color:var(--amber);opacity:.85;white-space:nowrap}
   .opt .or{display:flex;align-items:center;gap:7px;flex:none}
-  .opt .cc{font-family:var(--mono);font-size:11px;font-variant-numeric:tabular-nums}
+  .opt .cc{font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums}
   .opt .cc.up{color:var(--red)} .opt .cc.down{color:var(--cyan)} .opt .cc.zero{color:var(--text-dim)}
-  .opt .kk{font-size:9px;color:var(--text-dim);border:1px solid var(--line);
-    padding:0 4px;line-height:14px}
-  #card .timer{height:2px;background:rgba(127,212,232,.12);margin-bottom:11px}
+  .opt .cc.max{color:var(--red);font-weight:700}
+  #card .timer{height:2px;background:rgba(127,212,232,.12);margin-bottom:9px}
   #card .timer i{display:block;height:100%;background:var(--cyan)}
+  #cMax{margin-top:8px;width:100%;min-height:38px;background:rgba(226,75,74,.08);
+    border:1px solid rgba(226,75,74,.4);color:var(--red);padding:0 8px;
+    font-family:var(--mono);font-size:11px;letter-spacing:1px;cursor:pointer}
 
-  /* 战争操作条（与事件卡互斥，同位置）*/
-  #warbar{left:50%;transform:translateX(-50%);bottom:12px;padding:9px 15px;display:none;
-    align-items:center;gap:14px;white-space:nowrap}
+  /* 战争条：两段式发射（先选目标 → 再确认），核弹不可逆，不能一键打出去 */
+  #warbar{display:none;flex-direction:column;gap:8px}
   #warbar.show{display:flex}
-  #warbar .am{font-size:11px;color:var(--text-dim);letter-spacing:1px}
-  #warbar .am b{color:var(--cyan);font-size:16px;margin-left:6px;font-variant-numeric:tabular-nums}
-  #warbar.empty .am b{color:var(--red)}
-  #warbar .tip{font-size:10.5px;color:var(--text-dim)}
-  #warbar{max-width:calc(100vw - 24px);overflow:hidden}
+  #tgtPick{display:flex;align-items:center;gap:10px;padding:8px 10px;
+    border:1px solid var(--line);background:rgba(127,212,232,.05);min-height:44px}
+  #tgtPick.empty{color:var(--text-dim)}
+  #tgtPick .tn{font-family:var(--sans);font-size:14px;color:#fff;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #tgtPick.empty .tn{color:var(--text-dim)}
+  #tgtPick .tp{margin-left:auto;font-size:11px;color:var(--text-dim);
+    white-space:nowrap;flex:none}
+  .fireRow{display:flex;align-items:center;gap:10px}
+  .fireRow .am{font-size:11px;color:var(--text-dim);letter-spacing:1px}
+  .fireRow .am b{color:var(--cyan);font-size:16px;margin-left:5px;font-variant-numeric:tabular-nums}
+  .fireRow.empty .am b{color:var(--red)}
+  #fireBtn{flex:1;min-height:46px;background:rgba(226,75,74,.14);border:1px solid rgba(226,75,74,.55);
+    color:var(--red);font-family:var(--mono);font-size:14px;letter-spacing:3px;cursor:pointer}
+  #fireBtn:disabled{opacity:.35;cursor:default}
+  .fireBtnWrap{display:flex;gap:8px;flex:1}
+  #salvoBtn{min-width:60px;min-height:46px;background:rgba(127,212,232,.08);
+    border:1px solid var(--line);color:var(--cyan);font-family:var(--mono);font-size:12px;cursor:pointer}
+  #salvoBtn.on{background:rgba(226,75,74,.14);border-color:rgba(226,75,74,.5);color:var(--red)}
+  #warbar .tip{font-size:10.5px;color:var(--text-dim);text-align:center}
   #warbar.deny{animation:deny .45s ease}
-  @keyframes deny{0%,100%{border-color:var(--line)}45%{border-color:var(--red)}}
+  @keyframes deny{0%,100%{border-top-color:var(--line)}45%{border-top-color:var(--red)}}
 
-  /* 终局 */
-  #over{left:50%;top:50%;transform:translate(-50%,-50%);width:min(480px,calc(100vw - 24px));
-    padding:20px;display:none}
+  /* ── 抽屉：阵营 / 图例 / 城市 ── */
+  #drawer{position:absolute;top:0;right:0;bottom:0;width:84%;max-width:340px;z-index:30;
+    background:rgba(6,12,18,.97);border-left:1px solid var(--line);
+    transform:translateX(100%);transition:transform .24s ease;
+    display:flex;flex-direction:column;overflow:hidden}
+  #drawer.open{transform:translateX(0)}
+  #drawer .dhead{display:flex;align-items:center;padding:calc(10px + var(--safe-t)) 12px 8px;
+    font-size:10px;color:var(--text-dim);letter-spacing:2px;
+    border-bottom:1px solid rgba(127,212,232,.14)}
+  #drawerClose{position:absolute;top:calc(6px + var(--safe-t));right:8px;width:36px;height:36px;
+    background:transparent;border:none;color:var(--cyan);font-size:16px;cursor:pointer}
+  #drawer .dbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 24px}
+  .frow{display:flex;align-items:center;gap:6px;padding:5px 2px;font-size:12px}
+  .frow .sw{width:9px;height:9px;flex:none;border-radius:1px}
+  .frow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .frow .pp{color:var(--text-dim);font-variant-numeric:tabular-nums}
+  .frow.dead{opacity:.35}
+  .frow.me .nm{color:#fff}
+  .crow{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12px;cursor:pointer}
+  .crow:active{background:rgba(127,212,232,.1)}
+  .crow.gone{opacity:.3;text-decoration:line-through;cursor:default}
+  /* 战争期可打击的敌方城市：只有这一类名会带红色，选中态再叠一层底色 */
+  .crow.tgt .cn{color:#e8b96a}
+  .crow.sel{background:rgba(226,75,74,.16)}
+  .crow.sel .cn{color:#fff}
+  .crow .sw{width:8px;height:8px;flex:none;border-radius:1px}
+  .crow .cn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .crow .cf{color:var(--text-dim);font-size:10px;flex:none;margin-right:6px;white-space:nowrap}
+  .crow .cp{color:var(--text-dim);font-variant-numeric:tabular-nums;flex:none}
+  #legend .lrow{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12px}
+  #legend .lrow svg{flex:none}
+  #legend .ln{color:var(--text)}
+  #legend .ld{margin-left:auto;color:var(--text-dim);font-size:10px;white-space:nowrap}
+  #legend .note{font-size:10.5px;color:var(--text-dim);line-height:1.7;padding:6px 2px 0}
+
+  /* ── 开局：阵营选择 ── */
+  #setup{position:absolute;inset:0;z-index:45;display:none;flex-direction:column;
+    background:rgba(5,8,13,.94);padding:calc(18px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
+  #setup.show{display:flex}
+  #setup h1{font-size:15px;color:var(--cyan);letter-spacing:4px;font-weight:400;font-family:var(--mono)}
+  #setup .sub{font-family:var(--sans);font-size:12px;color:var(--text-dim);
+    line-height:1.75;margin:8px 0 14px}
+  #pickList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+  .pick{display:flex;align-items:center;gap:10px;width:100%;padding:0 12px;min-height:52px;text-align:left;
+    background:rgba(127,212,232,.05);border:1px solid var(--line);color:var(--text);
+    font-family:var(--sans);font-size:13.5px;cursor:pointer}
+  .pick:active{background:rgba(127,212,232,.18);border-color:var(--cyan)}
+  .pick .sw{width:11px;height:11px;flex:none;border-radius:1px}
+  .pick .nm{color:#fff;flex:none;min-width:66px}
+  .pick .rg{color:var(--text-dim);font-size:11px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pick .pk{font-size:11px;color:var(--amber);white-space:nowrap;flex:none}
+  .pick .ms{font-size:12px;color:var(--cyan);white-space:nowrap;flex:none;font-family:var(--mono);margin-left:6px}
+  #setup .hint{font-family:var(--sans);font-size:11px;color:var(--text-dim);
+    line-height:1.8;margin-top:12px;border-top:1px solid rgba(127,212,232,.14);padding-top:11px}
+
+  /* ── 终局 ── */
+  #over{left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,400px);
+    z-index:35;padding:18px;border:1px solid var(--line);display:none}
   #over.show{display:block}
-  #over h2{font-family:var(--sans);font-size:17px;color:#fff;font-weight:600;margin-bottom:3px}
-  #over .sub{font-size:11px;color:var(--text-dim);margin-bottom:14px}
+  #over h2{font-family:var(--sans);font-size:16px;color:#fff;font-weight:600;margin-bottom:3px}
+  #over .sub{font-size:11px;color:var(--text-dim);margin-bottom:12px}
   #over table{width:100%;border-collapse:collapse;font-size:11.5px}
   #over th{text-align:left;font-weight:400;color:var(--text-dim);font-size:10px;
     letter-spacing:1px;padding:0 4px 6px;border-bottom:1px solid var(--line)}
-  #over td{padding:5px 4px;border-bottom:1px solid rgba(127,212,232,.08)}
+  #over td{padding:6px 4px;border-bottom:1px solid rgba(127,212,232,.08)}
   #over td.sc{font-variant-numeric:tabular-nums;color:#fff}
   #over tr.me td{background:rgba(127,212,232,.08)}
-  #again{margin-top:15px;width:100%;background:rgba(127,212,232,.08);border:1px solid var(--line);
-    color:var(--cyan);padding:9px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
-    cursor:pointer}
-  #again:hover{background:rgba(127,212,232,.18)}
+  #again{margin-top:14px;width:100%;min-height:44px;background:rgba(127,212,232,.08);
+    border:1px solid var(--line);color:var(--cyan);font-family:var(--mono);
+    font-size:12px;letter-spacing:2px;cursor:pointer}
 
-  /* 载入 / 兜底 */
-  #loader{position:fixed;inset:0;z-index:50;display:flex;align-items:center;
+  /* ── 演出层：核爆白闪 / DEFCON 1 边缘红脉冲 ── */
+  #flash{position:absolute;inset:0;z-index:40;background:#fff;opacity:0;pointer-events:none}
+  #flash.on{animation:flashOut .55s ease-out}
+  @keyframes flashOut{0%{opacity:.9}100%{opacity:0}}
+  #alarm{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;
+    box-shadow:inset 0 0 80px rgba(226,75,74,.6)}
+  /* 两档红脉冲：warn = 危机值临界（≥85）的心跳预警，柔和慢；on = DEFCON 1 的全力警报。
+     .on 写在 .warn 后面，两级同时满足时后者胜出。 */
+  #alarm.warn{animation:warnPulse 2.6s ease-in-out infinite}
+  @keyframes warnPulse{0%,100%{opacity:.08}50%{opacity:.4}}
+  #alarm.on{animation:alarmPulse 1.5s ease-in-out infinite}
+  @keyframes alarmPulse{0%,100%{opacity:.22}50%{opacity:.8}}
+
+  /* ── 载入 / 兜底 ── */
+  #loader{position:absolute;inset:0;z-index:50;display:flex;align-items:center;
     justify-content:center;flex-direction:column;gap:12px;background:var(--bg);
     font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:2px}
   #loader.hide{display:none}
-  #fallback{position:fixed;inset:0;z-index:60;display:none;align-items:center;
+  #fallback{position:absolute;inset:0;z-index:60;display:none;align-items:center;
     justify-content:center;flex-direction:column;gap:10px;background:var(--bg);
     padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--text-dim)}
   #fallback.show{display:flex}
   #fallback b{color:var(--cyan);font-size:14px;font-weight:400}
 
-  @media (max-width:720px){
-    #side{display:none}
-    #cities{width:150px;max-height:30vh}
-    #defcon{min-width:88px;padding:8px 11px}
-    #defcon .lv{font-size:21px}
-    #phase{min-width:96px}
+  /* 矮屏（≤700px 高）：压缩描述与按钮，保证地球还有可视高度 */
+  @media (max-height:700px){
+    #card .cd{display:none}
+    .opt{min-height:42px}
+    #cMax{min-height:34px}
   }
 </style>
 </head>
-<body data-page-node-id="TO1x1H2HNdiH9H9tcGgXZD">
+<body data-page-node-id="0fZgEo1HUAFcjl7zCoNht8">
 
-<canvas id="stage" data-page-node-id="OwSdxKsiG83xk1lAW9MdYH"></canvas>
-<div id="scan" data-page-node-id="D8YNW666xUoVGAi5OmOrtJ"></div>
-<div id="vig" data-page-node-id="jrHA7u5C4L8JyvG8cR8rJL"></div>
+<div id="app" data-page-node-id="Gn5F1CPMAuTTLhCOBduANQ">
 
-<div id="top" class="hud" data-page-node-id="MEPJ6gQApEv1snLfOOrGLA">
-  <div id="defcon" data-page-node-id="6Gbkx6IS56bLYGJENpDIjO">
-    <span class="lb" data-page-node-id="sDV4Swfa8x9Sdct7I4dit9">DEFCON</span>
-    <span class="lv" id="dcLv" data-page-node-id="AeoU0huQgAKhbCI1q3CVGI">5</span>
+<canvas id="stage" data-page-node-id="sI31AXWagNTOzG2Z9MmLiP"></canvas>
+<div id="scan" data-page-node-id="58ZB2tAZbd75GhbCM4Fala"></div>
+<div id="vig" data-page-node-id="WgjmswFdQxLTQGr3BppIhC"></div>
+<div id="alarm" data-page-node-id="2tabJVmVBl1ifssfSD7x5u"></div>
+<div id="flash" data-page-node-id="1haZ4gY7pk0x70LUDl9mAi"></div>
+
+<div id="top" class="hud" data-page-node-id="PrjdZlYS7rUvZc7ybdqoay">
+  <div id="defcon" data-page-node-id="wpqG1HqSbxEL3vMADxDskv">
+    <span class="lb" data-page-node-id="lBY5GeVcBYGdsF4fizWrgV">DEFCON</span>
+    <span class="lv" id="dcLv" data-page-node-id="0uc88tKyEhtQYM0i3SDVy4">5</span>
   </div>
-  <div id="crisis" data-page-node-id="wzYSnlwaj6ELVoh0XDZA8B">
-    <div class="row" data-page-node-id="tdWh8RqsfbE302FVjtyrxX"><span data-page-node-id="PBSzmr8d8EGPOlIYDdAUh8">全局危机值</span><span id="crVal" data-page-node-id="ygDmGgHyKermpZfnn86e3k">10</span></div>
-    <div id="bar" data-page-node-id="gEvIKn5JYIdfGlz4LqoxRI"><i id="crBar" data-page-node-id="4mjkx99LgSyBfVqASALKMj"></i></div>
+  <div id="crisis" data-page-node-id="vKLJ4anDFuCMS20TSfFpLl">
+    <div class="row" data-page-node-id="Eq2qGOh2yC2zgeUhrHSsmH"><span data-page-node-id="Qpwr6oZLGNfQZChDfiXEY6">全局危机值</span><span id="crVal" data-page-node-id="0wigzCWk8zZiQj8J4Gysz7">10</span></div>
+    <div id="bar" data-page-node-id="Q4gzA9oLiRYUfZhCl6ronB"><i id="crBar" data-page-node-id="RSddvmvRu5aQdCtf2oIBbK"></i></div>
   </div>
-  <div id="phase" data-page-node-id="RGCivfZv8U9AbA2rvmoFjf">
-    <span class="pt" id="phName" data-page-node-id="chr0SyaECBzEuqCwiwf9cv">态势简报</span>
-    <span class="pd" id="phTime" data-page-node-id="AJGQ8ADkQu2uZ2P6PfuCDD">10s</span>
+  <div id="phase" data-page-node-id="jRegQHB8qIXDn7Q5ix0jEt">
+    <span class="pt" id="phName" data-page-node-id="WLH5cTYrzqQ5LMjbeyt0uV">态势简报</span>
+    <span class="pd" id="phTime" data-page-node-id="INGx883A7aHdhtLaOeoh1g">10s</span>
+  </div>
+  <button type="button" id="drawerBtn" aria-label="阵营与图例" data-page-node-id="CqNDOEAbdkZi9orcEQIaxF">≡</button>
+</div>
+
+<div id="sheet" class="hud panel" data-page-node-id="Veaw8eEe6tVIMTrmem2OG5">
+  <div id="card" data-page-node-id="ShxqC1o9dviTiFesfEiebe">
+    <div class="ct" id="cTitle" data-page-node-id="rZgqbzxhQD38dzrndTD00I"></div>
+    <div class="cd" id="cDesc" data-page-node-id="zqN8vGX2NhPM5xloPShkfT"></div>
+    <div class="timer" data-page-node-id="NO5Z4rQYBIvVnAIp3BhVEG"><i id="cTimer" data-page-node-id="zzsIABbawoO0r1C5gebnXy"></i></div>
+    <div class="opts" id="cOpts" data-page-node-id="xC3B9DeNdgQhYTYpKOHoTf"></div>
+    <button type="button" id="cMax" data-page-node-id="rCkHMabvdUDB8g5YFWJmor">直接拉满危机值 —— 立即全面开战</button>
+  </div>
+
+  <div id="warbar" data-page-node-id="uyZESFuPCB9pGgoqonMicd">
+    <div id="tgtPick" class="empty" data-page-node-id="MDIAiNBFDGUeLVhYA18TQN">
+      <span class="tn" data-page-node-id="7uHXMfYn9IrlP1QZLPYRSV">未选定目标</span>
+      <span class="tp" data-page-node-id="h2BvvpkUboG8V9ct96tlVG">点地球上的敌方城市</span>
+    </div>
+    <div class="fireRow" data-page-node-id="orjixIF601tyoOt3pBjNY1">
+      <span class="am" data-page-node-id="9XD0r8QToRXOoNcvlAyd2t">弹头<b id="wbAmmo" data-page-node-id="uYcLPs9WjYHMuLNkuqB2ch">18</b></span>
+      <span class="fireBtnWrap" data-page-node-id="NJBoccRn0BMuIgj1z66kCu">
+        <button type="button" id="salvoBtn" data-page-node-id="Rt1TnoqcSD5eyiYV7bC5TS">齐射 ×3</button>
+        <button type="button" id="fireBtn" disabled data-page-node-id="qESQQzaVHDrxHgFjbPFl7V">发 射</button>
+      </span>
+    </div>
+    <div class="tip" id="wbTip" data-page-node-id="eBKYnAxXjYQWnCmu5IuSt5">核弹不可逆 —— 先选目标，再确认发射</div>
   </div>
 </div>
 
-<div id="side" class="hud panel" data-page-node-id="nY1CPxEJnNomYQE2aPwIDH">
-  <h4 data-page-node-id="bRBGQVsgwLh1LgKN8XkvTY">阵营 · 存活人口</h4>
-  <div id="fList" data-page-node-id="G2qzMolD4ODOVWy1nFgzts"></div>
+<div id="drawer" data-page-node-id="Pzql6NdPXBo6JLsHnFtN0A">
+  <button type="button" id="drawerClose" aria-label="关闭" data-page-node-id="t5Oj6G2Zu1jxLrRj1QVMkJ">✕</button>
+  <div class="dhead" data-page-node-id="YpDtklGUS0NC7vPrbMj67g">阵营 · 存活人口</div>
+  <div class="dbody" data-page-node-id="l6N1RXA4m4YjJNQUtNl9FD">
+    <div id="fList" data-page-node-id="FGPKF5Oj3nktRqeuMe2FND"></div>
+    <div class="dhead" style="padding-left:0" data-page-node-id="2kfTJqdCbEehQIWKUePuvc">图例 · 军事单位</div>
+    <div id="legend" data-page-node-id="oDugszKjdWrkF1Vl8rrOrb">
+      <div class="lrow" data-page-node-id="SuZRrUHoGBoKE1o6E1tg2v">
+        <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="BhUcn2scY7JGeYIAh8vlIe"><polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="1X8m5DMVWzmFXwvS9f0zPv"></polygon></svg>
+        <span class="ln" data-page-node-id="aKDS2rufugHkC1qxjrCO7c">发射井</span>
+        <span class="ld" data-page-node-id="p1JAHYXZbtSkQ1PFuCw3kv">6 座 × 3 枚</span>
+      </div>
+      <div class="lrow" data-page-node-id="4GQ6FtvtE4e8E40RkfVIPe">
+        <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="rQYqTebsL5nV4Jiyrnds9I"><polygon points="6,1.5 10.5,10.5 1.5,10.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="CmrABtLoy6fh9KzCX21Zam"></polygon></svg>
+        <span class="ln" data-page-node-id="sBTB2TvgzFx7tEtKv33W0m">防空阵地</span>
+        <span class="ld" data-page-node-id="gzSUvBhMsH6yvOaGhhT2kA">拦截来袭导弹</span>
+      </div>
+      <div class="lrow" data-page-node-id="4hpnIVssrmA49SMxF6i2f7">
+        <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="hCOz6XFs2xXp1JgiBBnCIn"><ellipse cx="6" cy="5" rx="5" ry="2.6" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="yxbEugzW7a9eAhetXM1A1F"></ellipse><line x1="6" y1="7.6" x2="6" y2="11" stroke="#7fd4e8" stroke-width="1" data-page-node-id="pamPBhUs8E1qfqMLlH3eJI"></line></svg>
+        <span class="ln" data-page-node-id="FamTSPVD5IPX71OsSwyOM2">雷达站</span>
+        <span class="ld" data-page-node-id="CPPaF00QAWN0uMLRVXuBMz">覆盖 · 弹道溯源</span>
+      </div>
+      <div class="lrow" data-page-node-id="lWH1NPGeJKk5ENbvEGkHLF">
+        <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="jgjAVBvfJOxkGvXNwMLpFY"><circle cx="6" cy="6" r="3.2" fill="#7fd4e8" opacity="0.85" data-page-node-id="zRjpttI1IhpCZ1HOzhyGmP"></circle></svg>
+        <span class="ln" data-page-node-id="inlylF5wrKDmZKboGyDeP8">城市</span>
+        <span class="ld" data-page-node-id="2RPAHn78WRChihSwUGMVbU">光点越大人口越多</span>
+      </div>
+      <div class="note" data-page-node-id="G7e1MQP3bxnYgisPodimRV">敌方单位默认不可见 —— 只有被雷达捕获并弹道溯源标记后才会显形。</div>
+    </div>
+    <div class="dhead" style="padding-left:0" data-page-node-id="K45CcQ6sBCRJHV1aUED4PV">城市 · 点选可定位</div>
+    <div id="cList" data-page-node-id="jEor31NbnskosIHJGZTLEG"></div>
+  </div>
 </div>
 
-<div id="cities" class="hud panel" data-page-node-id="ac44m1nDrH1rA71Y5QGq7t">
-  <h4 data-page-node-id="AyWeYBZn1datkkxqkRGWpB">目标城市</h4>
-  <div id="cList" data-page-node-id="V213TpLUZOb3unCuOBu7cT"></div>
+<div id="setup" data-page-node-id="eamJBoCXawJDAjqqzDg6Pr">
+  <h1 data-page-node-id="IqVS0jrvW6k24mVtlCCCwN">核战危机 DEFCON</h1>
+  <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方在一颗星球上互相威慑。危机值由六方共同的选择推高，跌到 DEFCON 1 即解锁核弹。核弹有限、不可逆，死得比对手少的才算赢 —— 先选一个阵营。</p>
+  <div id="pickList" data-page-node-id="pl7vh6QPQprS4RxiyaNPA0"></div>
+  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈（每回合 20 秒）→ 热核战争（2–3 分钟）→ 按「造成伤亡 − 己方伤亡」计分。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点城市选中。</p>
 </div>
 
-<div id="card" class="hud panel" data-page-node-id="GCQKSDx6m8DxMRc8lmPOn6">
-  <div class="ct" id="cTitle" data-page-node-id="sENqUNSf68KLAAUJEgGdPT"></div>
-  <div class="cd" id="cDesc" data-page-node-id="KP2BLPU2W7lH8NVEdovEB9"></div>
-  <div class="timer" data-page-node-id="LUzTthtLGgB98Rwfon1w3t"><i id="cTimer" data-page-node-id="zRB7Kv4W2o84xHY1EYjiZL"></i></div>
-  <div class="opts" id="cOpts" data-page-node-id="hANmR4XZvPuMVMBVlbEDh6"></div>
+<div id="over" class="hud panel" data-page-node-id="eupBWInVAOHPkMaT9lFKxZ">
+  <h2 data-page-node-id="clB4uohScjCw8SHXBMpm2u">终局计分</h2>
+  <div class="sub" data-page-node-id="ftPSgPA6EsZ5QNX5FFmgXv">得分 = 造成伤亡 − 己方伤亡（百万人）</div>
+  <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">伤亡</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">得分</th></tr></thead>
+  <tbody id="ovBody" data-page-node-id="DoPmGw1cGmRMcfs31mO7LB"></tbody></table>
+  <button type="button" id="again" data-page-node-id="Z5iD2aCR9gKYubGvGTyWL6">再来一局</button>
 </div>
 
-<div id="warbar" class="hud panel" data-page-node-id="i1vVuEcNLdAneb0yWGn6M2">
-  <span class="am" data-page-node-id="pF9yaxcvcRFloOmQhpfvDa">我方弹头<b id="wbAmmo" data-page-node-id="6ygzXYLTVYP2oa7tMMeFen">18</b></span>
-  <span class="tip" id="wbTip" data-page-node-id="M4l2PUt8RVVHGnsILbCPjT">点击敌方城市或地球上的光点发射</span>
+<div id="loader" data-page-node-id="o5FZYaP2OKJG2AdGR2xWW1">正在装载作战地图…</div>
+<div id="fallback" data-page-node-id="Bp6UK7VV9bkQzRQCIjjG9P">
+  <b data-page-node-id="cFwIn2mDI7nbB2XXxKukwC">无法启动 3D 渲染</b>
+  <span data-page-node-id="b2IDhrvpQdAyViBY3HEJ3L">当前浏览器或设备不支持 WebGL。</span>
+  <span data-page-node-id="5r38i2tHggZ1LAMBme7Umt">请更换现代浏览器（Chrome / Edge / Safari）后重试。</span>
 </div>
 
-<div id="over" class="hud panel" data-page-node-id="xHVakehwvoXrcPMpLuSK0J">
-  <h2 data-page-node-id="mkFZIanE8Y6Iuowz1J1w7Q">终局计分</h2>
-  <div class="sub" data-page-node-id="7sQLVnSfNqpex7ANQQrfA4">得分 = 造成伤亡 − 己方伤亡（百万人）</div>
-  <table data-page-node-id="eACB1jazLzsEbOGNoksEy2"><thead data-page-node-id="x8eZsOHT5ULX9DCDseObBb"><tr data-page-node-id="KGFaD6BJrHvWMhHeTEr0qD"><th data-page-node-id="5BBGGTgAqvHyRc2utPx9Os">#</th><th data-page-node-id="8kOOr23CBmRvrX8xvfHePX">阵营</th><th data-page-node-id="BS0oMUzfyGJQhLZmq1LTgg">造成</th><th data-page-node-id="hAbC9w85YFzfPV4GsF4vva">伤亡</th><th data-page-node-id="ZCEO9Y0P8LtnXKxJX7PgJt">得分</th></tr></thead>
-  <tbody id="ovBody" data-page-node-id="arnn6t8bZ0tfYq6Bu1b5hc"></tbody></table>
-  <button type="button" id="again" data-page-node-id="rcgpadEz2iMjuH18dqpnNz">再来一局</button>
-</div>
-
-<div id="loader" data-page-node-id="jKoeyXE9rjbrE0iAcDy3zo">正在装载作战地图…</div>
-<div id="fallback" data-page-node-id="zLRhFJIUxNFN7XWFCAzsg8">
-  <b data-page-node-id="Xxa1ROGDfKxCdPRbNDnF9B">无法启动 3D 渲染</b>
-  <span data-page-node-id="dU76JPZ7LkC60aeJrA4Wg8">当前浏览器或设备不支持 WebGL。</span>
-  <span data-page-node-id="pyBVI0z3VRTcbrdquZIpiV">请更换现代浏览器（Chrome / Edge / Safari）后重试。</span>
 </div>
 
 <script src="assets/three.min.js"></script>

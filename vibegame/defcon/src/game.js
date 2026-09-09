@@ -10,7 +10,8 @@
  *
  * 玩家指令入口（D4）：
  *   危机博弈 —— 点事件卡选项，或按数字键 1..n；回合内可改主意，超时按最保守项结算。
- *   热核战争 —— 点敌方城市（列表或地球上的光点）即从最近的可用发射井打一发。
+ *   热核战争 —— 两段式：先轻点敌方城市（地球光点或抽屉列表）选中，再按「发 射」确认；
+ *               已选中的目标再点一次等价于确认。核弹不可逆，不做一键发射。
  * 发射井选择规则放在 sim.nearestSilo，玩家与 AI 共用，避免两套口径。
  */
 (function (global) {
@@ -23,8 +24,27 @@
     var loader = document.getElementById('loader');
     var fallback = document.getElementById('fallback');
 
+    /* 先做 WebGL 预检，再弹阵营选择 —— 顺序不能反：
+     * 不支持 WebGL 的设备上，让玩家挑完阵营才告诉他跑不了 3D，是纯粹的浪费。
+     * 预检用临时 canvas，不会占用真实画布的上下文。 */
+    if (!DC.render.probe()) {
+      loader.classList.add('hide');
+      fallback.classList.add('show');
+      return;
+    }
+    loader.classList.add('hide');
+    DC.ui.showSetup(start);
+
+  /* ── 选定阵营后真正开局 ─────────────────────────────────
+   * 阵营必须在 create 时就定下来：雷达环、己方单位可见性、城市列表敌我划分
+   * 全部依赖 playerFaction，开局后再改要重建半个渲染层。 */
+  function start(factionCode) {
+    DC.ui.hideSetup();
+
     // autoPlayer=false：玩家席位不再由 AI 托管（D3 曾临时开启以便无人值守跑完整局）
-    var state = S.create({ seed: Date.now() % 2147483647, autoPlayer: false });
+    var state = S.create({
+      seed: Date.now() % 2147483647, autoPlayer: false, playerFaction: factionCode
+    });
 
     var ok = false;
     try {
@@ -33,10 +53,13 @@
       ok = false;
     }
     if (!ok || !DC.render.ok) {
-      loader.classList.add('hide');
       fallback.classList.add('show');
       return;
     }
+
+    // 开局定位到所选阵营的中心位置（DESIGN §2.4）：相机飞到该阵营城市质心
+    var ctr = DC.geo.centroid(DC.CITIES_BY_FACTION[factionCode]);
+    DC.render.flyTo(ctr.lat, ctr.lon);
 
     /* ── 玩家指令 ───────────────────────────────────────────── */
 
@@ -44,13 +67,26 @@
       if (!S.choose(state, state.playerFaction, i)) DC.ui.deny();
     }
 
-    function fireAt(cityId) {
-      var m = S.playerFire(state, cityId);
-      if (!m) DC.ui.deny();
+    // 齐射：同一目标连打 n 发。逐发调用 playerFire 而非一次扣 n 枚 ——
+    // 每发都要单独过「井里还有没有弹」的检查，井打空了就自然停在第 k 发。
+    function fireAt(cityId, count) {
+      var n = (count > 0) ? count : 1, fired = 0, m = null;
+      for (var i = 0; i < n; i++) {
+        var r = S.playerFire(state, cityId);
+        if (!r) break;
+        m = r; fired++;
+      }
+      if (!fired) DC.ui.deny();
       return m;
     }
 
-    DC.ui.init(state, { onChoose: chooseOption, onFire: fireAt });
+    // 主动引爆：跳过剩下的危机博弈，直接进入热核战争
+    function maxCrisis() {
+      if (state.phase !== 'crisis') return;
+      S.forceWar(state, '我方主动全面开战');
+    }
+
+    DC.ui.init(state, { onChoose: chooseOption, onFire: fireAt, onCrisisMax: maxCrisis });
 
     var again = document.getElementById('again');
     if (again) again.addEventListener('click', function () { global.location.reload(); });
@@ -62,6 +98,9 @@
     var downX = 0, downY = 0, downT = 0;
     canvas.addEventListener('pointerdown', function (e) {
       downX = e.clientX; downY = e.clientY; downT = Date.now();
+      // 抽屉开着时点地球 = 收起抽屉：竖屏上抽屉盖掉 84% 宽度，
+      // 先让它自己消失，玩家才看得见自己点在哪。
+      if (DC.ui.isDrawerOpen()) DC.ui.closeDrawer();
     }, { passive: true });
     canvas.addEventListener('pointerup', function (e) {
       if (Date.now() - downT > 400) return;
@@ -69,7 +108,12 @@
       var r = canvas.getBoundingClientRect();
       var c = DC.render.pickCity(state, e.clientX - r.left, e.clientY - r.top, r.width, r.height);
       if (!c) return;
-      if (state.phase === 'war' && c.faction !== state.playerFaction) { fireAt(c.id); return; }
+      if (state.phase === 'war' && c.faction !== state.playerFaction) {
+        // 两段式：首次轻点只是选中目标，再点同一座城才真的发射（与城市列表同一口径）
+        if (DC.ui.getPending() === c.id) DC.ui.fire();
+        else DC.ui.selectTarget(c.id);
+        return;
+      }
       DC.render.flyTo(c.lat, c.lon);
     }, { passive: true });
 
@@ -110,8 +154,13 @@
     global.requestAnimationFrame(loop);
 
     // 便于调试与无头核查
-    DC.game = { state: state, autoPlay: false, fireAt: fireAt, chooseOption: chooseOption };
-  }
+    DC.game = {
+      state: state, autoPlay: false,
+      fireAt: fireAt, chooseOption: chooseOption, maxCrisis: maxCrisis,
+      selectTarget: function (id) { return DC.ui.selectTarget(id); }
+    };
+  }                                  // ── end start ──
+  }                                  // ── end boot ──
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

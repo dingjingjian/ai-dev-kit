@@ -10,14 +10,16 @@ require(path.join(__dirname, '..', 'src', 'data.js'));
 require(path.join(__dirname, '..', 'src', 'geo.js'));
 var DC = global.DC, G = DC.geo;
 
-/* ── 1. 城市名与 DESIGN.md §2.2 逐字比对 ── */
+/* ── 1. 城市名与 DESIGN.md §2.2 逐字比对 ──
+ * ⚠ 2026-09-08 全表替换：城市坐标改用真实城市、名称改为别称后，旧名全部作废。
+ *   这里比的是新表；real 字段（真实城市原型）单独打印，便于人工核对坐标有没有录错。 */
 var DESIGN_CITIES = {
-  ALFA: '霜港 铁峰 白桦 寒溪 北塔 钢脊 雪原 孤松 黑岩 晨岭'.split(' '),
-  BRAVO: '雾湾 长堤 暗礁 风岩 灰石 潮汐 断崖 远岬 盐洲 沉湾'.split(' '),
-  CHARLIE: '铁砧 铜谷 中坻 炉城 磨坊 麦浪 石桥 轮城 仓野 平畴'.split(' '),
-  DELTA: '赤砂 烈阳 孤峰 深屿 瀚原 玄铁 朔风 穹顶 戈壁 荒垣'.split(' '),
-  ECHO: '蕉林 雨穹 蒸泽 棕榈 烈日 湿谷 藤桥 雾林 暖流 翠屿'.split(' '),
-  FOXTROT: '珊瑚 珠礁 帆屿 南浦 浪谷 碧环 浅滩 潮门 屿链 晏岛'.split(' ')
+  ALFA: '白京 北港 极港 使城 岭城 新原 湖京 桦岛 雪湾 冻城'.split(' '),
+  BRAVO: '雾湾 金岬 雨港 枫湾 风城 油港 长港 湖城 谷京 高城'.split(' '),
+  CHARLIE: '雾京 光城 铁京 丘城 台京 平城 峡京 沙京 山京 石港'.split(' '),
+  DELTA: '燕京 江口 穗港 锦城 江城 秦城 沈城 东湾 汉阳 原京'.split(' '),
+  ECHO: '糖港 松京 旱城 岭京 泻港 河京 高原 椰港 狮港 棕城'.split(' '),
+  FOXTROT: '帆港 金湾 晴港 孤港 酒湾 北门 云港 岬城 珠屿 珊屿 塔港 震城'.split(' ')
 };
 console.log('=== 1. 城市名 vs DESIGN §2.2 ===');
 var nmIssues = 0;
@@ -32,6 +34,12 @@ Object.keys(DESIGN_CITIES).forEach(function (f) {
   }
 });
 console.log(nmIssues === 0 ? '  ✓ 60 城名称逐字一致' : '  ' + nmIssues + ' 个阵营有出入');
+// 真实城市原型对照：坐标一旦录错，肉眼很难从别称看出来，打印出来逐条核
+DC.FACTIONS.forEach(function (f) {
+  console.log('    ' + f.code.padEnd(8) + DC.CITIES_BY_FACTION[f.code].map(function (c) {
+    return c.name + '←' + (c.real || '?');
+  }).join(' '));
+});
 
 /* ── 2. 阵营主色 vs DESIGN §2.1 ── */
 var DESIGN_COLOR = { ALFA: '#378ADD', BRAVO: '#639922', CHARLIE: '#1D9E75', DELTA: '#E24B4A', ECHO: '#EF9F27', FOXTROT: '#7F77DD' };
@@ -51,17 +59,19 @@ for (var i = 0; i < DC.CITIES.length; i++) {
 }
 pairs.sort(function (p, q) { return p.d - q.d; });
 var dup = pairs.filter(function (p) { return p.d < 1; });
-var near = pairs.filter(function (p) { return p.d >= 1 && p.d < 400; });
+// 阈值 400 → 150 km：真实城市必然出现同城圈（西雅图↔温哥华 195 km），150 km 仍是「录入错误」的量级
+var NEAR_KM = 150;
+var near = pairs.filter(function (p) { return p.d >= 1 && p.d < NEAR_KM; });
 if (dup.length) {
   console.log('  ✗ 坐标重合（<1km）：');
   dup.forEach(function (p) { console.log('      ' + p.a.id + ' ' + p.a.name + ' (' + p.a.lat + ',' + p.a.lon + ')  ==  ' + p.b.id + ' ' + p.b.name + ' (' + p.b.lat + ',' + p.b.lon + ')'); });
 } else console.log('  ✓ 无完全重合');
 if (near.length) {
-  console.log('  ⚠ 过近（<400km）共 ' + near.length + ' 对，最近 8 对：');
+  console.log('  ⚠ 过近（<' + NEAR_KM + 'km）共 ' + near.length + ' 对，最近 8 对：');
   near.slice(0, 8).forEach(function (p) {
     console.log('      ' + p.d.toFixed(0).padStart(5) + ' km  ' + p.a.faction + '/' + p.a.name + '  ↔  ' + p.b.faction + '/' + p.b.name);
   });
-} else console.log('  ✓ 无 <400km 的近距离对');
+} else console.log('  ✓ 无 <' + NEAR_KM + 'km 的近距离对');
 // 同阵营内最小间距
 var sameMin = pairs.filter(function (p) { return p.a.faction === p.b.faction; })[0];
 console.log('  同阵营最小间距: ' + sameMin.d.toFixed(0) + ' km (' + sameMin.a.name + '↔' + sameMin.b.name + ')');
@@ -114,10 +124,12 @@ if (!txtIssues) console.log('  ✓ 无英文残留 / 空格异常');
 console.log('\n=== 7. 事件卡区分度（最鸽 ~ 最鹰） ===');
 var lowSum = 0, highSum = 0;
 DC.EVENTS.forEach(function (e) {
-  var cs = e.options.map(function (o) { return o.crisis; });
+  // 走 crisisValue：crisis:'MAX' 是字符串，直接塞进 Math.min/max 会算出 NaN
+  var cs = e.options.map(DC.crisisValue);
   var lo = Math.min.apply(null, cs), hi = Math.max.apply(null, cs);
   lowSum += lo; highSum += hi;
-  var flag = (hi - lo) < 8 ? '  ⚠ 区分度小' : '';
+  var hasMax = e.options.some(function (o) { return DC.isCrisisMax(o); });
+  var flag = (hi - lo) < 8 ? '  ⚠ 区分度小' : (hasMax ? '  [含拉满]' : '');
   console.log('  ' + e.id + ' ' + String(lo).padStart(4) + ' ~ ' + String(hi).padStart(3) + '  幅度 ' + String(hi - lo).padStart(3) + '   ' + e.title + flag);
 });
 var n = DC.EVENTS.length;

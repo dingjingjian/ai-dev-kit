@@ -67,9 +67,9 @@ var rs = stat(rounds), ls = stat(launched), is = stat(intercepted);
 
 console.log('\n==== DEFCON 节奏与平衡审计（' + done + ' 局）====\n');
 
-console.log('【节奏】达 DEFCON 1 的回合数（DESIGN §6.1 设计区间 8–14）');
+console.log('【节奏】达 DEFCON 1 的回合数（DESIGN §6.1：中位 8–14，允许极少数 7 回合快速局）');
 console.log('  min ' + rs.min + ' / 中位 ' + rs.med + ' / max ' + rs.max + ' / 均值 ' + rs.avg.toFixed(1));
-var outside = rounds.filter(function (r) { return r < 8 || r > 14; }).length;
+var outside = rounds.filter(function (r) { return r < 7 || r > 14; }).length;
 console.log('  落在区间外: ' + outside + '/' + done + '   ' + (outside === 0 ? '✓' : '⚠ 需调 crisis 数值或 hawkishness'));
 console.log('  卡死未终局: ' + stuck + (stuck ? '  ✗' : '  ✓'));
 

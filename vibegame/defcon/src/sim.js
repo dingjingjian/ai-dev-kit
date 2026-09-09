@@ -49,10 +49,15 @@
       round: 0,
       crisis: CONFIG.initialCrisis,
       defcon: 5,
+      maxedBy: null,             // 危机值被拉满的原因（'MAX' 选项 / 核弹落地），供日志与终局回溯
       playerFaction: opts.playerFaction || 'ALFA',
       autoPlayer: !!opts.autoPlayer,   // 开启后玩家席位也交给 AI（用于无人值守跑完整局演示/测试）
       warEndedEarly: false,
       missileSeq: 0,
+      /* 累计核爆落地数。render 每帧会 shift 清空 state.fx，UI 读不到「刚刚爆炸了」，
+       * 故在逻辑层留一个单调计数器：UI 比对前后值即可触发全屏白闪与相机震动。
+       * 同时它也是无头断言「核弹真的落地了」的最直接读数。 */
+      impacts: 0,
       cities: [],
       units: [],
       missiles: [],
@@ -68,11 +73,14 @@
     };
 
     // 城市：位置与人口为公开信息（DESIGN §2.2）
+    // 阵营特色（perk）按 DC.perkOf 调整人口：DELTA ×1.3（人口最多）、FOXTROT ×0.8（稀疏）
     DC.CITIES.forEach(function (c) {
+      var mul = DC.perkOf(c.faction).popMul;
+      var p = Math.max(3, Math.round(c.pop * mul));
       state.cities.push({
         id: c.id, faction: c.faction, name: c.name,
         lat: c.lat, lon: c.lon,
-        pop0: c.pop, pop: c.pop, alive: true,
+        pop0: p, pop: p, alive: true,
         defCharges: 0          // 事件卡 city_defense 挂上的防御层，抵扣命中
       });
     });
@@ -113,6 +121,7 @@
     var GOLDEN = 137.507765;
 
     DC.FACTIONS.forEach(function (f) {
+      var perk = DC.perkOf(f.code);
       var cities = DC.CITIES_BY_FACTION[f.code].slice();
       // 确定性排序：人口降序，同人口按 id，保证同种子布阵一致
       cities.sort(function (a, b) { return (b.pop - a.pop) || (a.id < b.id ? -1 : 1); });
@@ -123,33 +132,34 @@
         return G.destination(city, brg, spreadDeg);
       }
 
-      // SAM：守人口最高的 4 城，贴城布防
-      for (var s = 0; s < CONFIG.samPerFaction; s++) {
-        var ps = place(cities[s % cities.length], 1.5, s);
+      // SAM：守人口最高的若干城，贴城布防（数量由 perk 决定）
+      for (var s = 0; s < perk.sam; s++) {
+        var cs = cities[s % cities.length];
+        var ps = place(cs, 1.5, s);
         units.push({
           id: f.code + '-SAM-' + s, faction: f.code, type: 'sam',
-          lat: ps.lat, lon: ps.lon,
+          lat: ps.lat, lon: ps.lon, cityId: cs.id, disabled: false,
           ammo: CONFIG.samCapacity, maxAmmo: CONFIG.samCapacity, cooldown: 0
         });
       }
-      // 雷达：间隔取样，分散覆盖
-      for (var r = 0; r < CONFIG.radarPerFaction; r++) {
+      // 雷达：间隔取样，分散覆盖（数量与半径由 perk 决定）
+      for (var r = 0; r < perk.radar; r++) {
         var cr = cities[(r * 3 + 4) % cities.length];
         var pr = place(cr, 3, r + 10);
         units.push({
           id: f.code + '-RAD-' + r, faction: f.code, type: 'radar',
-          lat: pr.lat, lon: pr.lon, radiusDeg: CONFIG.radarRadiusDeg,
-          down: 0
+          lat: pr.lat, lon: pr.lon, cityId: cr.id, disabled: false,
+          radiusDeg: perk.radarRadiusDeg, down: 0
         });
       }
-      // 发射井：偏移更大（置于城市后方），6 座 × 3 枚
-      for (var k = 0; k < CONFIG.silosPerFaction; k++) {
+      // 发射井：偏移更大（置于城市后方），数量由 perk 决定
+      for (var k = 0; k < perk.silos; k++) {
         var ck = cities[(k * 2) % cities.length];
         var pk = place(ck, 5 + (k % 3) * 2.5, k + 20);
         units.push({
           id: f.code + '-SILO-' + k, faction: f.code, type: 'silo',
-          lat: pk.lat, lon: pk.lon,
-          missiles: CONFIG.missilesPerSilo, exposed: false
+          lat: pk.lat, lon: pk.lon, cityId: ck.id, disabled: false,
+          missiles: perk.missilesPerSilo, exposed: false
         });
       }
     });
@@ -177,6 +187,10 @@
   }
   function citiesOf(state, faction) {
     return state.cities.filter(function (c) { return c.faction === faction; });
+  }
+  // 某城市关联的全部设施（发射井/防空/雷达绑定到城市，城市被毁则关联设施失效）
+  function unitsOfCity(state, cityId) {
+    return state.units.filter(function (u) { return u.cityId === cityId; });
   }
   // 敌方存活城市（按人口降序，人口相同按 id）—— AI 与 UI 共用同一排序，保证所见即所选
   function enemyCities(state, faction) {
@@ -290,27 +304,116 @@
           .slice(0, e.amount || 1)
           .forEach(function (c) { c.defCharges = (c.defCharges || 0) + 1; n++; });
         log(state, f.code + ' 为 ' + n + ' 座城市加装防御层');
+
+      /* ── 事件奖励 effect（DESIGN §4.2 奖励驱动）──
+       * 给"正面"选项挂奖励，让危机博弈不只是"加还是减"的危机值选择：
+       *   add_radar / add_sam   —— 己方增建雷达/防空（和平红利、科研突破）
+       *   add_missiles          —— 己方发射井补充核弹
+       *   boost_pop             —— 己方城市人口回升（战后重建、难民安置）
+       *   intel_city            —— 获取敌方城市情报，暴露其关联设施 */
+      } else if (e.type === 'add_radar') {
+        var cr = citiesOf(state, f.code).filter(function (c) { return c.alive; })
+          .sort(function (a, b) { return b.pop - a.pop; })[0];
+        if (cr) {
+          var pk = G.destination(cr, 37, 3);
+          state.units.push({
+            id: f.code + '-RAD-X' + state.units.length, faction: f.code, type: 'radar',
+            lat: pk.lat, lon: pk.lon, cityId: cr.id, disabled: false,
+            radiusDeg: DC.perkOf(f.code).radarRadiusDeg, down: 0
+          });
+          log(state, f.code + ' 新增 1 座雷达预警站');
+        }
+
+      } else if (e.type === 'add_sam') {
+        var cs = citiesOf(state, f.code).filter(function (c) { return c.alive; })
+          .sort(function (a, b) { return b.pop - a.pop; })[0];
+        if (cs) {
+          var ps = G.destination(cs, 71, 1.5);
+          state.units.push({
+            id: f.code + '-SAM-X' + state.units.length, faction: f.code, type: 'sam',
+            lat: ps.lat, lon: ps.lon, cityId: cs.id, disabled: false,
+            ammo: CONFIG.samCapacity, maxAmmo: CONFIG.samCapacity, cooldown: 0
+          });
+          log(state, f.code + ' 新增 1 处防空阵地');
+        }
+
+      } else if (e.type === 'add_missiles') {
+        unitsOf(state, f.code, 'silo').forEach(function (u) {
+          if (u.disabled) return;
+          u.missiles += (e.amount || 1); n++;
+        });
+        if (n) log(state, f.code + ' 为 ' + n + ' 座发射井各补充 ' + (e.amount || 1) + ' 枚核弹');
+
+      } else if (e.type === 'boost_pop') {
+        var cb = citiesOf(state, f.code).filter(function (c) { return c.alive; })
+          .sort(function (a, b) { return b.pop - a.pop; })[0];
+        if (cb) {
+          var gain = e.amount || 1;
+          cb.pop = Math.min(20, cb.pop + gain);
+          cb.pop0 = Math.max(cb.pop0, cb.pop);
+          log(state, f.code + ' ' + cb.name + ' 人口回升 +' + gain + 'M');
+        }
+
+      } else if (e.type === 'intel_city') {
+        var tgts = state.cities.filter(function (c) { return c.faction !== f.code && c.alive; })
+          .sort(function (a, b) { return b.pop - a.pop; })
+          .slice(0, e.amount || 1);
+        tgts.forEach(function (c) {
+          unitsOfCity(state, c.id).forEach(function (u) { if (!u.exposed) { u.exposed = true; n++; } });
+        });
+        log(state, f.code + ' 获取 ' + tgts.length + ' 座敌方城市情报，暴露 ' + n + ' 处设施');
       }
     });
+  }
+
+  /* 「拉满」：把全局危机值直接推到 CONFIG.crisisMax 并立即进入热核战争（§4.4）。
+   * 两个触发源 —— 任一方选中 crisis:'MAX' 的选项、或任一枚核弹落地。
+   * 这是玩家手里唯一的「主动引爆」权：不想再被 8–14 回合的博弈拖着，就自己按下按钮。
+   * 放在 sim 而非 ui：无头测试要能直接断言「选了 MAX 就一定开战」。 */
+  function forceWar(state, reason) {
+    if (state.phase === 'war' || state.phase === 'over') return false;
+    state.crisis = (CONFIG.crisisMax != null) ? CONFIG.crisisMax : 100;
+    state.defcon = defconOf(state.crisis);
+    state.maxedBy = reason || 'unknown';
+    log(state, '危机值拉满 100 —— ' + reason);
+    if (state.card) applyEffects(state);
+    enterPhase(state, 'war');
+    return true;
   }
 
   // 危机值由六方共同选择推出（DESIGN §4.1）：取六方 crisis 修正的均值 + 基础漂移。
   // 取均值而非求和，使危机值的量纲与单张卡的修正一致，漂移 +4 才有可预期的权重。
   function resolveRound(state) {
+    // 拉满优先：只要有一方选了 crisis:'MAX'，本回合直接开战，不再走均值结算
+    var maxedBy = null;
+    state.factions.forEach(function (f) {
+      if (maxedBy) return;
+      var opt = state.card && state.card.options[state.choices[f.code]];
+      if (opt && DC.isCrisisMax(opt)) maxedBy = f.code;
+    });
+    if (maxedBy) {
+      var who = findFaction(state, maxedBy);
+      forceWar(state, (who ? who.name : maxedBy) + ' 选择全面开战');
+      return;
+    }
+
     var sum = 0, n = 0;
     state.factions.forEach(function (f) {
       var idx = state.choices[f.code];
       var opt = state.card && state.card.options[idx];
-      if (opt) { sum += opt.crisis; n++; }
+      if (opt) { sum += DC.crisisValue(opt); n++; }
     });
     // 玩家超时未选：按最保守（crisis 最小）项计入，避免拖时间等于弃权
     if (n < state.factions.length && state.card) {
-      var minC = Math.min.apply(null, state.card.options.map(function (o) { return o.crisis; }));
+      var minC = Math.min.apply(null, state.card.options.map(DC.crisisValue));
       sum += minC * (state.factions.length - n);
       n = state.factions.length;
     }
     var avg = n ? sum / n : 0;
-    state.crisis = Math.max(0, Math.min(100, state.crisis + CONFIG.crisisDrift + avg));
+    // 阵营外交加成（perk: diplomacy）—— 每回合额外降温，体现外交斡旋的持续努力
+    var dipSum = 0;
+    state.factions.forEach(function (f) { dipSum += DC.perkOf(f.code).dipDrift; });
+    state.crisis = Math.max(0, Math.min(100, state.crisis + CONFIG.crisisDrift + avg + dipSum));
     state.defcon = defconOf(state.crisis);
     log(state, '第 ' + state.round + ' 回合结算：平均 ' + avg.toFixed(1) + ' → 危机值 ' + state.crisis.toFixed(1) + '（DEFCON ' + state.defcon + '）');
 
@@ -330,7 +433,7 @@
 
   function launch(state, faction, siloId, targetCityId) {
     var silo = findUnit(state, siloId);
-    if (!silo || silo.type !== 'silo' || silo.missiles <= 0 || silo.faction !== faction) return null;
+    if (!silo || silo.type !== 'silo' || silo.missiles <= 0 || silo.faction !== faction || silo.disabled) return null;
     var city = findCity(state, targetCityId);
     if (!city || !city.alive || city.pop <= 0) return null;
 
@@ -364,20 +467,57 @@
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
       if (u.type !== 'sam' || u.faction !== m.targetFaction) continue;
-      if (u.ammo <= 0 || m.tried[u.id]) continue;
+      if (u.disabled || u.ammo <= 0 || m.tried[u.id]) continue;
       if (G.angular(cur, u) * RAD2DEG > CONFIG.samRadiusDeg) continue;
       m.tried[u.id] = 1;
-      if (state.rng() < CONFIG.samInterceptProb) {
+      // 拦截率按 SAM 所属阵营的 perk（BRAVO 防空加成）
+      var prob = DC.perkOf(u.faction).samProb;
+      if (state.rng() < prob) {
         u.ammo--;
         u.cooldown = CONFIG.samCooldownSec;
         m.alive = false;
         m.intercepted = true;
+        // 记下拦截弹的起飞点：渲染层要据此画「拦截弹升空 → 撞上目标 → 爆闪」，
+        // 否则玩家只看到空中凭空冒出一团光，不知道是谁打的。
+        m.interceptor = { lat: u.lat, lon: u.lon };
+        // 我方核弹遭遇拦截 → 获取敌方防空位置（DESIGN §5 情报获取）
+        u.exposed = true;
         state.stats[u.faction].intercepts++;
-        log(state, u.faction + ' 防空拦截 1 枚来自 ' + m.faction + ' 的导弹');
+        log(state, u.faction + ' 防空拦截 1 枚来自 ' + m.faction + ' 的导弹，阵地暴露');
         return true;
       }
     }
     return false;
+  }
+
+  /* 弹道溯源（DESIGN §5）：我方雷达探测到敌方核弹 → 反推发射点 → 标记估算区内的
+   * 敌方发射井暴露（exposed=true），此后玩家可对其发起反击。
+   * 每枚弹只溯源一次；雷达停摆或被毁（disabled）时不工作。 */
+  function traceOrigin(state, m) {
+    if (m.traced) return;
+    if (m.faction === state.playerFaction) return;   // 只溯源敌方弹
+    var cur = G.slerpLL(m.from, m.to, m.progress);
+    var radars = unitsOf(state, state.playerFaction, 'radar');
+    var radarDown = !!(state.radarDown[state.playerFaction] > 0);
+    for (var i = 0; i < radars.length; i++) {
+      var rd = radars[i];
+      if (rd.disabled || radarDown) continue;
+      if (G.angular(cur, rd) * RAD2DEG > rd.radiusDeg) continue;
+      // 进入我方雷达覆盖 → 反推发射点并叠加误差
+      var est = G.reverseTrace(m.from, m.to, m.progress);
+      var sigma = G.traceSigma(CONFIG.traceSigma0, CONFIG.traceK, G.angular(rd, m.from) * RAD2DEG);
+      var off = G.offsetLL(est, sigma, state.rng(), state.rng());
+      m.traced = true;
+      m.estFrom = off;
+      // 标记估算区（2σ）内的敌方发射井暴露
+      var n = 0, radiusKm = sigma * 2 * 111;
+      state.units.forEach(function (u) {
+        if (u.type !== 'silo' || u.faction !== m.faction || u.exposed) return;
+        if (G.distKm(u, off) < radiusKm) { u.exposed = true; n++; }
+      });
+      if (n) log(state, '我方雷达捕获来袭弹，溯源暴露 ' + n + ' 处 ' + m.faction + ' 发射井');
+      return;
+    }
   }
 
   function resolveImpact(state, m) {
@@ -395,10 +535,25 @@
     var lost = city.pop * rate;
     city.pop = Math.max(0, city.pop - lost);
     // 人口被打到不足 1 百万即视为抹除：光点熄灭，不再是可打击目标
-    if (city.pop < 1) { city.pop = 0; city.alive = false; }
+    if (city.pop < 1) {
+      city.pop = 0; city.alive = false;
+      // 城市被毁 → 关联设施（发射井/防空/雷达）随之失效，不可再发射/拦截/探测
+      unitsOfCity(state, city.id).forEach(function (u) { u.disabled = true; });
+      log(state, city.name + ' 被抹除，关联设施全部失效');
+    }
     state.stats[m.faction].killed += lost;
     state.stats[city.faction].casualties += lost;
+    state.impacts++;
     log(state, m.faction + ' 命中 ' + city.faction + '/' + city.name + '，损失 ' + lost.toFixed(1) + 'M');
+    /* 核弹落地 = 没有回头路（§4.4）：只要有一枚弹真正砸到城市，全局危机值立刻拉满。
+     * 在 war 阶段它在数值上只是把顶栏推到 100，但语义上必须落在结算里 ——
+     * 这样「先落地的那一方」在日志与后续任何读 crisis 的逻辑里都被钉死为「已全面开战」。 */
+    if (state.crisis < (CONFIG.crisisMax != null ? CONFIG.crisisMax : 100)) {
+      state.crisis = CONFIG.crisisMax;
+      state.defcon = defconOf(state.crisis);
+      state.maxedBy = state.maxedBy || (m.faction + ' 核弹落地');
+      log(state, '核弹落地 —— 危机值拉满 100');
+    }
   }
 
   // 特效事件队列：导弹结算后不再留在 missiles 里，改为把结果投递到 state.fx，
@@ -410,7 +565,10 @@
     state.fx.push({
       type: type, lat: at.lat, lon: at.lon,
       faction: m.faction, targetFaction: m.targetFaction,
-      cityId: m.targetCityId, t: state.t
+      cityId: m.targetCityId, t: state.t,
+      sam: m.interceptor || null,         // 拦截弹起飞点（仅 intercept 类型有）
+      from: { lat: m.from.lat, lon: m.from.lon },   // 落地尾痕渐隐用
+      to: { lat: m.to.lat, lon: m.to.lon }
     });
     if (state.fx.length > 200) state.fx.shift();
   }
@@ -422,6 +580,8 @@
       if (!m.alive) continue;
       m.t += dt;
       m.progress = Math.min(1, m.t / m.dur);
+      // 弹道溯源：敌方弹进入我方雷达覆盖即反推发射点（不限飞行阶段）
+      if (m.progress > 0.05) traceOrigin(state, m);
       // 飞过六成航程后才可能进入对方防空圈，省去大部分无谓计算
       if (m.progress > 0.6 && !m.intercepted) tryIntercept(state, m);
       if (!m.alive) { pushFx(state, 'intercept', m); continue; }
@@ -540,7 +700,7 @@
     var best = null, bestD = Infinity;
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.type !== 'silo' || u.faction !== faction || u.missiles <= 0) continue;
+      if (u.type !== 'silo' || u.faction !== faction || u.missiles <= 0 || u.disabled) continue;
       var d = G.distKm(u, target);
       if (d < bestD) { bestD = d; best = u; }
     }
@@ -569,6 +729,7 @@
     tick: tick,
     advance: advance,
     choose: choose,
+    forceWar: forceWar,
     launch: launch,
     nearestSilo: nearestSilo,
     playerFire: playerFire,
@@ -579,6 +740,7 @@
     findFaction: findFaction,
     unitsOf: unitsOf,
     citiesOf: citiesOf,
+    unitsOfCity: unitsOfCity,
     enemyCities: enemyCities,
     totalMissiles: totalMissiles
   };

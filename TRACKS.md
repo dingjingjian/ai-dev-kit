@@ -43,7 +43,7 @@ ai-dev-kit/
 | 网站截图 | `vibetool/screenshot/` | 多网站批量截图，处理懒加载/Cloudflare/字体 | 自用 · 不投稿 |
 | AI 新闻日报 | `vibetool/ai-news/` | AI 新闻采集、飞书写入、HTML 日报生成 | 自用 · 不投稿 |
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
-| 小工具打包器 | `vibetool/minitool-zip-builder-1.6.0.skill` | 把单文件 HTML 打成符合小红书规范的小工具 zip | 自用 · 不投稿 |
+| 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） | 自用 · 不投稿 |
 
 ## #vibegame　互动游戏（7）
 
@@ -55,11 +55,11 @@ ai-dev-kit/
 | AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
 | 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM | 开发完成 · 待投稿物料 |
 | 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟，React 构建，含旧版安卓 WebView 适配层 | 构建产物 · 未打包 |
-| 核战危机 | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 | 立项 · 未开发 |
+| 核战危机 | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 | 竖屏移动端 · 可玩（headless 115 项过，待打包） |
 
 > `ai-calculator` 外壳是计算器，但有判断对错、得分、连对加成、实时战绩——爽点是"上头"而非"算得快"，故归 `#vibegame`。
 >
-> `defcon` 复用 `vibeknow/earth-3d` 的 three.js 与地球贴图；世界设定全部虚构，不使用真实国家与城市名。
+> `defcon` 复用 `vibeknow/earth-3d` 的 three.js 与地球贴图；半架空命名（阵营带地缘指代、不出现真实国家与政治军事组织名），城市用真实坐标 + 中文别称。竖屏移动端优先，桌面端居中成 480px 竖屏。
 
 ## #vibeart　数字艺术（0）
 
