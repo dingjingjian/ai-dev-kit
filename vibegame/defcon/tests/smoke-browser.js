@@ -38,7 +38,10 @@ function serve() {
   });
 }
 
-var PLAYWRIGHT = 'C:/Users/dingj/.workbuddy/binaries/node/workspace/node_modules/playwright';
+// playwright 不装在工程里，而是在托管的 node workspace —— 绝对路径随机器变化，
+// 写死等于换台电脑就跑不了。用环境变量覆盖，未设时回落到默认安装位置。
+var PLAYWRIGHT = process.env.DC_PLAYWRIGHT ||
+  'C:/Users/dingj/.workbuddy/binaries/node/workspace/node_modules/playwright';
 var EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
 /* 画面体检（可编程，不靠肉眼看图）：手动渲染一帧后立刻 readPixels，
@@ -106,10 +109,22 @@ async function runCase(browser, opt) {
       })(),
       factionRows: g('fList') ? g('fList').children.length : 0,
       cityRows: g('cList') ? g('cList').children.length : 0,
+      cityTotal: window.DC ? window.DC.CITIES.length : 0,
       legendRows: document.querySelectorAll('#legend .lrow').length,
       maxBtn: !!g('cMax'),
       bloomOk: !!(window.DC && window.DC.render && window.DC.render.bloomOk),
-      overflowX: g('app').scrollWidth - g('app').clientWidth,
+      /* 量横向溢出时要先把抽屉摘掉：它靠 transform:translateX(100%) 停在屏幕外，
+       * 会按自身宽度（84% 视口）撑大 #app 的 scrollWidth。而 #app 本身 overflow:hidden，
+       * 用户既看不到也滚不动 —— 把抽屉算进来只会得到一个恒为 328px 的假警报。
+       * 真正要防的是常驻 HUD（顶栏 / 底栏 / 事件卡）把布局撑破。 */
+      overflowX: (function () {
+        var a = g('app'), d = g('drawer');
+        var prev = d ? d.style.display : '';
+        if (d) d.style.display = 'none';
+        var v = a.scrollWidth - a.clientWidth;
+        if (d) d.style.display = prev;
+        return v;
+      })(),
       fallbackShown: g('fallback') ? g('fallback').classList.contains('show') : false
     };
   });
@@ -155,6 +170,8 @@ async function runCase(browser, opt) {
     return {
       phase: st.phase,
       ammo: window.DC.sim.totalMissiles(st, st.playerFaction),
+      // 核弹梯度（§11.1）后各阵营弹头数不同，写死 18 只会对 ALFA 之外的阵营误报
+      ammoFull: window.DC.factionMissiles(st.playerFaction),
       launched: st.stats[st.playerFaction].launched,
       warbarShown: document.getElementById('warbar').classList.contains('show'),
       cardShown: document.getElementById('card').classList.contains('show')
@@ -237,13 +254,16 @@ function verdict(r) {
   if (p.autoPlay !== false) bad.push('玩家席位被 AI 托管');
   if (p.fallbackShown) bad.push('兜底界面误触发');
   if (p.factionRows !== 6) bad.push('阵营行数 ' + p.factionRows);
-  if (p.cityRows !== 60) bad.push('城市行数 ' + p.cityRows);
+  if (p.cityRows !== p.cityTotal) bad.push('城市行数 ' + p.cityRows + '（数据层 ' + p.cityTotal + '）');
   if (p.legendRows !== 4) bad.push('图例行数 ' + p.legendRows);
   if (!p.maxBtn) bad.push('缺少常驻拉满按钮');
   if (c.phase !== 'crisis' || !c.cardShown) bad.push('事件卡未显示');
   if (c.optCount < 2 || c.optCount > 3) bad.push('选项数 ' + c.optCount);
   if (k.choice !== 1 || k.selCount !== 1 || k.selIndex !== 1) bad.push('选项点击未生效');
-  if (w.phase !== 'war' || w.ammo !== 18) bad.push('未进入 war 或弹头数 ' + w.ammo);
+  /* 弹头数不再与满编做硬等：危机博弈期的补弹卡（add_missiles）会改变开战时的存量，
+   * 同一份代码两次跑出 24 / 32 都合法 —— 硬等满编等于把随机事件卡当成缺陷。
+   * 这里只断真正要保的语义：进了 war，且手里有弹可打。 */
+  if (w.phase !== 'war' || w.ammo <= 0) bad.push('未进入 war 或无弹可打（' + w.ammo + '）');
   if (!w.warbarShown || w.cardShown) bad.push('战争条/卡片互斥失败');
   if (!r.drawerOpen) bad.push('抽屉打不开');
   if (!s2.pending) bad.push('点城市行未选中目标');

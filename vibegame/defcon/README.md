@@ -33,7 +33,7 @@
 
 ## 技术路线
 
-- `index.html` + `src/` 下 7 个外置经典脚本，**无构建步骤**，作为小红书「小工具」上传挂载
+- `index.html` + `src/` 下 8 个外置经典脚本，**无构建步骤**，作为小红书「小工具」上传挂载
 - 竖屏移动端布局（390×844 基准，桌面端居中成 480px 竖屏）
 - 渲染：three.js r149（本地，无 CDN）+ 一张 2048×1024 等距圆柱地球贴图 + 手写 bloom 后处理（亮度提取 → 两趟高斯 → 叠加，含自动降级）
 - 逻辑 10 Hz 固定步长 + 渲染 60 fps 插值，确定性便于无头测试
@@ -51,8 +51,9 @@ src/
   geo.js            # 经纬度数学、大圆航线、弹道、溯源
   sim.js            # 阶段机、实体状态、tick、伤害结算
   ai.js             # AI 决策
-  render.js         # three.js 渲染
-  ui.js             # HUD、事件卡、城市列表
+  render.js         # three.js 渲染（球体、单位、导弹、城市光点与定位环、特效）
+  audio.js          # WebAudio 程序化音效（不引任何音频文件，默认静音）
+  ui.js             # HUD、事件卡、城市列表、终局复盘
   game.js           # 主循环、事件绑定
 tests/              # 无头校验脚本，不进提交包
 dist/               # 提交用的 zip 包
@@ -61,7 +62,7 @@ DESIGN.md           # 设计文档
 # 小工具打包规范见工作区根 .skill/minitool-zip-builder/（本目录不内嵌副本）
 ```
 
-脚本加载顺序即依赖顺序：`data → geo → sim → ai → render → ui → game`，靠 `window.DC` 命名空间协作。
+脚本加载顺序即依赖顺序：`data → geo → sim → ai → render → audio → ui → game`，靠 `window.DC` 命名空间协作。
 
 ## 打包
 

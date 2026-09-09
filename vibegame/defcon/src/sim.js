@@ -58,6 +58,10 @@
        * 故在逻辑层留一个单调计数器：UI 比对前后值即可触发全屏白闪与相机震动。
        * 同时它也是无头断言「核弹真的落地了」的最直接读数。 */
       impacts: 0,
+      /* 首枚落地核弹的记录（终局复盘用）。
+       * 「谁先动手」在核战题材里是复盘的第一问题，但 stats 只有累计伤亡，
+       * 事后无法回答 —— 于是在落地那一刻把这一发单独钉下来。 */
+      firstImpact: null,
       cities: [],
       units: [],
       missiles: [],
@@ -94,7 +98,9 @@
         isPlayer: f.code === state.playerFaction,
         alive: true
       });
-      state.stats[f.code] = { killed: 0, casualties: 0, launched: 0, intercepts: 0 };
+      // hits / lost 是**枚数**口径（killed 是人口口径，算不出命中率）：
+      // 命中率 = hits / (hits + lost)，终局复盘用它回答「我的弹都去哪了」。
+      state.stats[f.code] = { killed: 0, casualties: 0, launched: 0, intercepts: 0, hits: 0, lost: 0 };
     });
 
     state.units = deployUnits();
@@ -542,6 +548,7 @@
         // 我方核弹遭遇拦截 → 获取敌方防空位置（DESIGN §5 情报获取）
         u.exposed = true;
         state.stats[u.faction].intercepts++;
+        state.stats[m.faction].lost++;        // 发射方视角：这一枚没打到
         log(state, u.faction + ' 防空拦截 1 枚来自 ' + m.faction + ' 的导弹，阵地暴露');
         pushFx(state, 'intercept', m);
         return true;
@@ -603,7 +610,14 @@
     }
     state.stats[m.faction].killed += lost;
     state.stats[city.faction].casualties += lost;
+    state.stats[m.faction].hits++;
     state.impacts++;
+    if (!state.firstImpact) {
+      state.firstImpact = {
+        from: m.faction, to: city.faction, city: city.name,
+        round: state.round, t: state.t
+      };
+    }
     log(state, m.faction + ' 命中 ' + city.faction + '/' + city.name + '，损失 ' + lost.toFixed(1) + 'M');
     /* 核弹落地 = 没有回头路（§4.4）：只要有一枚弹真正砸到城市，全局危机值立刻拉满。
      * 在 war 阶段它在数值上只是把顶栏推到 100，但语义上必须落在结算里 ——

@@ -41,6 +41,11 @@
   var api = { ok: false };
   var renderer, scene, camera, globe, gridGroup;
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
+  var cityBaseColor;                       // 阵营色基准，脉冲时在其上乘亮（见 syncCities）
+  var cityPulse;                           // 城市受击辉光脉冲剩余量 0..1（§11.6 剩余项）
+  var cityLastPop;                         // 上一帧人口，用于检测「本帧挨打了」
+  // §12 城市定位环：与光点同一批坐标的第二层 Points，只是贴图是空心圆环
+  var ringPoints, ringGeom, ringPos, ringColor, ringSize, ringAlpha;
   var unitMeshes = {};         // type -> InstancedMesh
   var missilePool = [], fxPool = [];
   var scorchMarks = [];
@@ -51,7 +56,11 @@
   var cam = { theta: 0.9, phi: 1.15, radius: 6.2, tTheta: 0.9, tPhi: 1.15, tRadius: 6.2 };
   var dragging = false, lastX = 0, lastY = 0, pinch = 0;
   var radarRings = [];
+  var tgtRing = null, tgtRingT = 0;        // 选中目标的锁定环（§12，独立于城市环，带脉冲）
   var quality = 1;             // 1=默认档 0=降级档（DESIGN §7.5）
+  var CITY_RING_MUL = 1.55;    // 定位环直径 / 光点直径
+  var CITY_RING_ALPHA = 0.55;  // 定位环基础亮度（环是辅助信息，不能盖过光点）
+  var CITY_PULSE_SEC = 0.25;   // 受击辉光脉冲时长（DESIGN §11.6）
 
   /* ───────────────────────── 工具 ───────────────────────── */
 
@@ -66,9 +75,26 @@
     return new THREE.CanvasTexture(c);
   }
 
+  // §12 城市定位环的空心圆环贴图：外圈柔光 + 内圈实线。
+  // 只用一圈细线的话，缩到 20 来像素会被纹理过滤吃掉，环断成虚线；
+  // 先描一道宽而淡的底、再压一道窄而实的线，任何尺寸下都是完整的一圈。
+  function ringTex() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    x.strokeStyle = 'rgba(255,255,255,0.26)';
+    x.lineWidth = 14;
+    x.beginPath(); x.arc(64, 64, 45, 0, Math.PI * 2); x.stroke();
+    x.strokeStyle = 'rgba(255,255,255,0.95)';
+    x.lineWidth = 4;
+    x.beginPath(); x.arc(64, 64, 45, 0, Math.PI * 2); x.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+
   var TEX = {};
   function buildTextures() {
     TEX.dot = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)');
+    TEX.ring = ringTex();
     TEX.flash = radialTex('rgba(255,250,225,1)', 'rgba(255,190,90,0.65)', 'rgba(255,120,30,0)');
     TEX.small = radialTex('rgba(200,235,255,0.95)', 'rgba(120,190,255,0.4)', 'rgba(60,120,255,0)');
     TEX.scorch = radialTex('rgba(20,14,10,0.85)', 'rgba(35,25,18,0.45)', 'rgba(40,30,20,0)');
@@ -317,19 +343,38 @@
     var n = state.cities.length;
     cityPos = new Float32Array(n * 3);
     cityColor = new Float32Array(n * 3);
+    cityBaseColor = new Float32Array(n * 3);
     citySize = new Float32Array(n);
     cityAlpha = new Float32Array(n);
+    cityPulse = new Float32Array(n);
+    cityLastPop = new Float32Array(n);
+    ringPos = new Float32Array(n * 3);
+    ringColor = new Float32Array(n * 3);
+    ringSize = new Float32Array(n);
+    ringAlpha = new Float32Array(n);
 
     state.cities.forEach(function (c, i) {
       var v = G.ll2v(c.lat, c.lon, R * CITY_LIFT);
       cityPos[i * 3] = v.x; cityPos[i * 3 + 1] = v.y; cityPos[i * 3 + 2] = v.z;
+      // 环贴得比光点略高一点点：两者都不写深度，同深度下不同层的绘制顺序无从保证
+      var vr = G.ll2v(c.lat, c.lon, R * (CITY_LIFT + 0.004));
+      ringPos[i * 3] = vr.x; ringPos[i * 3 + 1] = vr.y; ringPos[i * 3 + 2] = vr.z;
       var rgb = hexToRgb((DC.FACTIONS_BY_CODE[c.faction] || {}).color || '#ffffff');
+      cityBaseColor[i * 3] = rgb[0]; cityBaseColor[i * 3 + 1] = rgb[1]; cityBaseColor[i * 3 + 2] = rgb[2];
       cityColor[i * 3] = rgb[0]; cityColor[i * 3 + 1] = rgb[1]; cityColor[i * 3 + 2] = rgb[2];
+      // §12 环是「位置锚」、不抢阵营色：写成白色让光点的阵营色透出来作主分类信息。
+      // 一开始让环也带阵营色，结果 DELTA 红环套红光点过曝成实心团，反而看不清边缘。
+      ringColor[i * 3] = 1; ringColor[i * 3 + 1] = 1; ringColor[i * 3 + 2] = 1;
       // aSize 为「期望像素直径 × 距离」的系数；uScale = 画布高/2（见 syncPointScale）。
       // 首版 26+pop×1.6 配 uScale=320 糊满全屏；光核收紧到 ~20px，余下的辉光交给 bloom，
       // 「亮核 + 泛光」比「一个大软斑」干净得多。
       citySize[i] = 0.15 + c.pop0 * 0.010;
       cityAlpha[i] = 1;
+      // §12 定位环：直径取光点的 1.55 倍 —— 环要套在光点外侧（光点纹理的亮核只占约 1/3），
+      // 再大就会在城市密集区（欧洲、东亚）互相压圈，反而看不清有几座城。
+      ringSize[i] = (0.15 + c.pop0 * 0.010) * CITY_RING_MUL;
+      ringAlpha[i] = CITY_RING_ALPHA;
+      cityLastPop[i] = c.pop;      // 初值取当前人口，避免开局把「创建」误判成「挨打」
     });
 
     cityGeom = new THREE.BufferGeometry();
@@ -345,13 +390,27 @@
     });
     cityPoints = new THREE.Points(cityGeom, mat);
     scene.add(cityPoints);
+
+    // 定位环：与光点共用同一套 shader，只换贴图（环是空心线，不是径向渐变）
+    ringGeom = new THREE.BufferGeometry();
+    ringGeom.setAttribute('position', new THREE.BufferAttribute(ringPos, 3));
+    ringGeom.setAttribute('aColor', new THREE.BufferAttribute(ringColor, 3));
+    ringGeom.setAttribute('aSize', new THREE.BufferAttribute(ringSize, 1));
+    ringGeom.setAttribute('aAlpha', new THREE.BufferAttribute(ringAlpha, 1));
+    var rmat = new THREE.ShaderMaterial({
+      uniforms: { uTex: { value: TEX.ring }, uScale: { value: 400 } },
+      vertexShader: CITY_VS, fragmentShader: CITY_FS,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    });
+    ringPoints = new THREE.Points(ringGeom, rmat);
+    scene.add(ringPoints);
   }
 
   // 点大小随画布高度缩放，保证不同分辨率下城市光点视觉尺寸一致
   function syncPointScale() {
-    if (!cityPoints) return;
     var h = (renderer ? renderer.domElement.height : global.innerHeight) || 800;
-    cityPoints.material.uniforms.uScale.value = h * 0.5;
+    if (cityPoints) cityPoints.material.uniforms.uScale.value = h * 0.5;
+    if (ringPoints) ringPoints.material.uniforms.uScale.value = h * 0.5;
   }
 
   /* §11.6 城市受击→熄灭→焦痕连贯演出：
@@ -359,27 +418,99 @@
    * - 存活但受打击（0 < pop < pop0）：alpha 按人口比例衰减（最低 0.35），size 按比例缩
    * - 被毁（!alive 或 pop<=0）：alpha=0 彻底淡出（原 0.12 会叠 bloom 残留「幽灵光点」）
    * 按比例变暗让「打了一半人」的城市自然变暗缩点，而非二值化骤变。 */
-  function syncCities(state) {
+  function syncCities(state, dt) {
     if (!cityGeom) return;
-    var dirty = false, sizeDirty = false;
-    state.cities.forEach(function (c, i) {
-      var a, s;
+    var dirty = false, sizeDirty = false, colorDirty = false;
+    var rDirty = false, rSizeDirty = false;
+    var decay = (dt > 0) ? dt / CITY_PULSE_SEC : 0;
+    for (var i = 0; i < state.cities.length; i++) {
+      var c = state.cities[i];
+      /* §11.6 剩余项 —— 受击瞬间辉光脉冲。
+       * 触发条件直接看「本帧人口比上一帧少」，不必让 sim 为表现层多投递一个事件：
+       * pop 变化只有 resolveImpact 一处来源，语义上就是「挨了一发」。
+       * 脉冲把颜色乘到 2.8 倍，正好越过 bloom 阈值 0.72，只在这一瞬炸开一圈光晕。 */
+      if (c.pop < cityLastPop[i] - 1e-4) cityPulse[i] = 1;
+      cityLastPop[i] = c.pop;
+      if (cityPulse[i] > 0) {
+        cityPulse[i] -= decay;
+        if (cityPulse[i] < 0) cityPulse[i] = 0;
+        dirty = sizeDirty = colorDirty = true;
+      }
+      var p = cityPulse[i];
+      var base = 0.15 + c.pop0 * 0.010;
+      var rbase = base * CITY_RING_MUL;
+      var a, s, ra, rs;
       if (!c.alive || c.pop <= 0) {
         a = 0;                                   // 彻底淡出，不残留
-        s = citySize[i] * 0.5;                    // 缩点
+        s = base * 0.5;                           // 缩点
+        ra = 0; rs = rbase * 0.6;
       } else if (c.pop0 > 0 && c.pop < c.pop0) {
         var ratio = c.pop / c.pop0;               // 人口损失比例
         a = 0.35 + 0.65 * ratio;                  // 0.35 ~ 1.0
-        s = (0.15 + c.pop0 * 0.010) * (0.6 + 0.4 * ratio);
+        s = base * (0.6 + 0.4 * ratio);
+        ra = CITY_RING_ALPHA * (0.4 + 0.6 * ratio);
+        rs = rbase * (0.7 + 0.3 * ratio);
       } else {
-        a = 1;
-        s = 0.15 + c.pop0 * 0.010;
+        a = 1; s = base; ra = CITY_RING_ALPHA; rs = rbase;
+      }
+      if (p > 0) {
+        a = Math.min(1.6, a * (1 + 0.9 * p));     // alpha 允许 >1：additive 下就是过曝
+        s = s * (1 + 0.35 * p);
+        rs = rs * (1 + 0.25 * p);
+        ra = Math.min(1.2, ra * (1 + 1.4 * p));
       }
       if (cityAlpha[i] !== a) { cityAlpha[i] = a; dirty = true; }
       if (Math.abs(citySize[i] - s) > 1e-6) { citySize[i] = s; sizeDirty = true; }
-    });
+      var br = cityBaseColor[i * 3], bg = cityBaseColor[i * 3 + 1], bb = cityBaseColor[i * 3 + 2];
+      var k = 1 + 1.8 * p;
+      if (Math.abs(cityColor[i * 3] - br * k) > 1e-6) {
+        cityColor[i * 3] = br * k; cityColor[i * 3 + 1] = bg * k; cityColor[i * 3 + 2] = bb * k;
+        colorDirty = true;
+      }
+      if (ringAlpha[i] !== ra) { ringAlpha[i] = ra; rDirty = true; }
+      if (Math.abs(ringSize[i] - rs) > 1e-6) { ringSize[i] = rs; rSizeDirty = true; }
+    }
     if (dirty) cityGeom.getAttribute('aAlpha').needsUpdate = true;
     if (sizeDirty) cityGeom.getAttribute('aSize').needsUpdate = true;
+    if (colorDirty) cityGeom.getAttribute('aColor').needsUpdate = true;
+    if (rDirty) ringGeom.getAttribute('aAlpha').needsUpdate = true;
+    if (rSizeDirty) ringGeom.getAttribute('aSize').needsUpdate = true;
+  }
+
+  /* §12 锁定环：选中的目标在球面上要有明确标记。
+   * 城市环是「这里有城」，锁定环是「我要打的是这一座」——
+   * 62 个同色同形的环里没有这个标记，玩家只能靠底部文字确认自己锁了谁。
+   * 用 Sprite 而非 Points：它是一个独立对象，位置可以直接 setTarget 改，不必动 buffer。 */
+  function setTarget(lat, lon) {
+    if (!scene || !TEX.ring) return;
+    if (!tgtRing) {
+      tgtRing = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: TEX.ring, color: 0xff6a5a, transparent: true,
+        depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending
+      }));
+      tgtRing.visible = false;
+      scene.add(tgtRing);
+    }
+    var v = G.ll2v(lat, lon, R * (CITY_LIFT + 0.008));
+    tgtRing.position.set(v.x, v.y, v.z);
+    tgtRing.visible = true;
+    tgtRingT = 0;
+  }
+
+  function clearTarget() {
+    if (tgtRing) { tgtRing.visible = false; tgtRingT = 0; }
+  }
+
+  // 锁定环按屏幕像素恒定缩放 + 呼吸脉冲：Sprite 的世界尺寸会随距离透视缩放，
+  // 不每帧按距离反算的话，镜头拉近时环会大到糊住整座城。
+  function pumpTargetRing(dt) {
+    if (!tgtRing || !tgtRing.visible || !camera) return;
+    tgtRingT += dt;
+    var d = camera.position.distanceTo(tgtRing.position);
+    var breathe = 1 + 0.11 * Math.sin(tgtRingT * 5.2);
+    // 0.050：与 Points 层口径对齐经验值 —— d≈4.6 时约 40px，比城市环略大一圈
+    tgtRing.scale.setScalar(d * 0.050 * breathe);
+    tgtRing.material.opacity = 0.72 + 0.24 * Math.sin(tgtRingT * 5.2);
   }
 
   /* §11.6 焦痕柔和浮现：初始 opacity=0、scale 偏小，在 pumpScorch 里 0.6s 渐入到目标值，
@@ -1188,7 +1319,7 @@
   // dt 为真实帧间隔；state 由 game.js 按固定步长推进，这里只做表现层同步
   function frame(state, dt) {
     if (!api.ok || !renderer) return;
-    syncCities(state);
+    syncCities(state, dt);
     syncUnits(state);
     syncRadarRings(state);
     syncMissiles(state);
@@ -1196,6 +1327,7 @@
     pumpInterceptors(dt);
     pumpTrails(dt);
     pumpScorch(dt);
+    pumpTargetRing(dt);
 
     cam.theta += (cam.tTheta - cam.theta) * 0.12;
     cam.phi += (cam.tPhi - cam.phi) * 0.12;
@@ -1227,6 +1359,8 @@
     resize: resize,
     flyTo: flyTo,
     pickCity: pickCity,
+    setTarget: setTarget,
+    clearTarget: clearTarget,
     shake: shake,
     setQuality: setQuality,
     get bloomOk() { return bloom.ok; },

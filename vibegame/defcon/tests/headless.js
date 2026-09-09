@@ -607,6 +607,14 @@ ok('落地前危机值未满', stImp.crisis < CFG.crisisMax, 'crisis=' + stImp.c
 S.advance(stImp, mI.dur + 0.5);
 ok('核弹落地后危机值拉满', stImp.crisis === CFG.crisisMax, 'crisis=' + stImp.crisis);
 ok('核弹落地确实造成了伤亡', stImp.stats.DELTA.killed > 0);
+// §12 终局复盘的两个新口径：hits 是**枚数**（killed 是人口，算不出命中率）
+ok('落地计入 hits 枚数口径', stImp.stats.DELTA.hits === 1, 'hits=' + stImp.stats.DELTA.hits);
+ok('首枚落地被完整记录（终局复盘用）',
+  !!stImp.firstImpact && stImp.firstImpact.from === 'DELTA' &&
+  stImp.firstImpact.to === tgtI.faction && stImp.firstImpact.city === tgtI.name,
+  JSON.stringify(stImp.firstImpact));
+ok('未拦截时 lost 保持 0（与 hits 同为枚数口径）',
+  stImp.stats.DELTA.lost === 0, 'lost=' + stImp.stats.DELTA.lost);
 
 /* ───────────────────────── 红线扫描 ───────────────────────── */
 function scanForbidden(file) {
@@ -623,7 +631,9 @@ function scanForbidden(file) {
   var hits = banned.filter(function (b) { return b.re.test(txt); }).map(function (b) { return b.msg; });
   return hits;
 }
-['data.js', 'geo.js', 'sim.js', 'ai.js', 'ui.js', 'game.js'].forEach(function (f) {
+// render.js 不扫：GLSL 源码字符串里含 'new Function' 之外的合法写法，且没有上述任何禁用项；
+// audio.js 只碰 WebAudio，同样无网络/eval 行为，但纳入扫描以防后续误引入采样文件的加载逻辑。
+['data.js', 'geo.js', 'sim.js', 'ai.js', 'audio.js', 'ui.js', 'game.js'].forEach(function (f) {
   var hits = scanForbidden(path.join(__dirname, '..', 'src', f));
   ok('红线扫描 ' + f + ' 无禁用的 ' + (hits.join('/') || '—'), hits.length === 0, hits.join(', '));
 });
@@ -642,11 +652,11 @@ var htmlBanned = [
 var htmlHits = htmlBanned.filter(function (b) { return b.re.test(HTML); }).map(function (b) { return b.msg; });
 ok('index.html 红线扫描无违规（' + (htmlHits.join('/') || '—') + '）', htmlHits.length === 0, htmlHits.join(', '));
 
-// 加载顺序即依赖顺序：three + 内联贴图 → data → geo → sim → ai → render → ui → game
+// 加载顺序即依赖顺序：three + 内联贴图 → data → geo → sim → ai → render → audio → ui → game
 var order = ['assets/three.min.js', 'assets/earth-tex.js', 'src/data.js', 'src/geo.js', 'src/sim.js',
-             'src/ai.js', 'src/render.js', 'src/ui.js', 'src/game.js'];
+             'src/ai.js', 'src/render.js', 'src/audio.js', 'src/ui.js', 'src/game.js'];
 var idxs = order.map(function (s) { return HTML.indexOf('src="' + s + '"'); });
-ok('9 个脚本全部以相对路径引入', idxs.every(function (i) { return i > 0; }),
+ok('10 个脚本全部以相对路径引入', idxs.every(function (i) { return i > 0; }),
   order.filter(function (s, i) { return idxs[i] <= 0; }).join(', '));
 ok('脚本加载顺序 = 依赖顺序', idxs.every(function (v, i) { return i === 0 || v > idxs[i - 1]; }),
   idxs.join(','));

@@ -33,7 +33,7 @@ Object.keys(DESIGN_CITIES).forEach(function (f) {
     console.log('  ✗ ' + f + '  缺:' + (missing.join(',') || '—') + '  多:' + (extra.join(',') || '—'));
   }
 });
-console.log(nmIssues === 0 ? '  ✓ 60 城名称逐字一致' : '  ' + nmIssues + ' 个阵营有出入');
+console.log(nmIssues === 0 ? ('  ✓ ' + DC.CITIES.length + ' 城名称逐字一致') : '  ' + nmIssues + ' 个阵营有出入');
 // 真实城市原型对照：坐标一旦录错，肉眼很难从别称看出来，打印出来逐条核
 DC.FACTIONS.forEach(function (f) {
   console.log('    ' + f.code.padEnd(8) + DC.CITIES_BY_FACTION[f.code].map(function (c) {

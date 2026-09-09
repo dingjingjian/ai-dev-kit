@@ -35,9 +35,9 @@ function stat(a) {
 function pad(v, n) { return String(v).padStart(n); }
 
 var rounds = [], warSecs = [], launched = [], intercepted = [], stuck = 0;
-var wins = {}, score = {}, cas = {}, killed = {}, citiesLost = {};
+var wins = {}, popLeft = {}, cas = {}, killed = {}, citiesLost = {};
 DC.FACTIONS.forEach(function (f) {
-  wins[f.code] = 0; score[f.code] = 0; cas[f.code] = 0; killed[f.code] = 0; citiesLost[f.code] = 0;
+  wins[f.code] = 0; popLeft[f.code] = 0; cas[f.code] = 0; killed[f.code] = 0; citiesLost[f.code] = 0;
 });
 
 for (var s = 1; s <= N; s++) {
@@ -55,10 +55,11 @@ for (var s = 1; s <= N; s++) {
   var rk = S.ranking(st);
   wins[rk[0].code]++;
   rk.forEach(function (r) {
-    score[r.code] += r.score;
+    popLeft[r.code] += r.popLeft;
     cas[r.code] += r.casualties;
     killed[r.code] += r.killed;
-    citiesLost[r.code] += (10 - r.citiesAlive);
+    // 各阵营城市数不同（FOXTROT 12 城），不能写死 10 —— 否则它的失城数恒少 2
+    citiesLost[r.code] += (DC.CITIES_BY_FACTION[r.code].length - r.citiesAlive);
   });
 }
 
@@ -77,12 +78,14 @@ console.log('\n【核战】每局总发射 ' + ls.avg.toFixed(0) + ' 枚 / 总�
 console.log('  拦截率 ' + (is.avg / ls.avg * 100).toFixed(0) + '%  （CONFIG.samInterceptProb = ' +
   (CFG.samInterceptProb * 100).toFixed(0) + '%，实际偏低因部分导弹未进入 SAM 覆盖）');
 
-console.log('\n【平衡】阵营    胜率      平均得分    平均伤亡    平均造成    平均失城');
+// 主列是「平均剩余人口」—— §11.8 起它就是 ranking 的排序键。
+// 旧的「平均得分 = 造成 − 伤亡」不再是排序键，继续摆在主列会把调参引向错误方向。
+console.log('\n【平衡】阵营    胜率    平均剩余人口  平均伤亡    平均造成    平均失城');
 DC.FACTIONS.forEach(function (f) {
   var c = f.code;
   console.log('        ' + c.padEnd(8) +
     pad((wins[c] / done * 100).toFixed(0) + '%', 6) + '   ' +
-    pad((score[c] / done).toFixed(1), 9) + '   ' +
+    pad((popLeft[c] / done).toFixed(1) + 'M', 11) + '   ' +
     pad((cas[c] / done).toFixed(1) + 'M', 9) + '   ' +
     pad((killed[c] / done).toFixed(1) + 'M', 9) + '   ' +
     pad((citiesLost[c] / done).toFixed(1), 8));
