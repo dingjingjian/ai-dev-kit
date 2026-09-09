@@ -345,13 +345,26 @@
         if (n) log(state, f.code + ' 为 ' + n + ' 座发射井各补充 ' + (e.amount || 1) + ' 枚核弹');
 
       } else if (e.type === 'boost_pop') {
-        var cb = citiesOf(state, f.code).filter(function (c) { return c.alive; })
-          .sort(function (a, b) { return b.pop - a.pop; })[0];
-        if (cb) {
-          var gain = e.amount || 1;
-          cb.pop = Math.min(20, cb.pop + gain);
-          cb.pop0 = Math.max(cb.pop0, cb.pop);
-          log(state, f.code + ' ' + cb.name + ' 人口回升 +' + gain + 'M');
+        /* §11.2 扩展：mode='ratio' 时按阵营初始人口总量等比放大（巩固基本盘），
+         * mode='fixed'（默认）保持原「最大城市 +N」行为。
+         * ratio 模式下 amount=0.05 表示全阵营各城 pop ×1.05，与 §6.2 改为「看剩余人口计分」呼应。 */
+        if (e.mode === 'ratio') {
+          var r = (e.amount || 0.05);
+          citiesOf(state, f.code).forEach(function (c) {
+            if (!c.alive || c.pop <= 0) return;
+            var np = Math.min(20, c.pop * (1 + r));
+            if (np > c.pop) { c.pop = np; c.pop0 = Math.max(c.pop0, c.pop); n++; }
+          });
+          if (n) log(state, f.code + ' 全境人口回升 +' + (r * 100).toFixed(0) + '%（共 ' + n + ' 城）');
+        } else {
+          var cb = citiesOf(state, f.code).filter(function (c) { return c.alive; })
+            .sort(function (a, b) { return b.pop - a.pop; })[0];
+          if (cb) {
+            var gain = e.amount || 1;
+            cb.pop = Math.min(20, cb.pop + gain);
+            cb.pop0 = Math.max(cb.pop0, cb.pop);
+            log(state, f.code + ' ' + cb.name + ' 人口回升 +' + gain + 'M');
+          }
         }
 
       } else if (e.type === 'intel_city') {
@@ -362,6 +375,50 @@
           unitsOfCity(state, c.id).forEach(function (u) { if (!u.exposed) { u.exposed = true; n++; } });
         });
         log(state, f.code + ' 获取 ' + tgts.length + ' 座敌方城市情报，暴露 ' + n + ' 处设施');
+
+      /* ── §11.2 新增：削弱 / 摧毁敌方设施 ──
+       * 让危机博弈选项能直接削弱或摧毁敌方发射井 / 雷达 / 防空，
+       * 与 §5 弹道溯源「先手暴露→被反击」形成因果闭环。
+       *   degrade_facility —— 降低设施效能（不摧毁，但削弱战力）
+       *     mode: 'ammo_half'（SAM 弹药减半）/ 'radius_half'（雷达半径减半）/ 'missiles_half'（井弹减半）
+       *   destroy_facility —— 直接摧毁若干座敌方设施（disabled=true，不可恢复）
+       * 两者都按人口最高的敌方城市优先选目标，体现「打掉对手的核心防备」。 */
+      } else if (e.type === 'degrade_facility' || e.type === 'destroy_facility') {
+        var fac = e.facility || 'silo';
+        var amt = e.amount || 1;
+        // 候选：敌方该类设施，按关联城市人口降序（打掉对手的核心防备）
+        var cands = state.units.filter(function (u) {
+          if (u.faction === f.code || u.disabled) return false;
+          if (u.type !== fac) return false;
+          return true;
+        }).sort(function (a, b) {
+          var ca = findCity(state, a.cityId), cb = findCity(state, b.cityId);
+          return ((cb ? cb.pop : 0) - (ca ? ca.pop : 0)) || (a.id < b.id ? -1 : 1);
+        });
+        var hits = cands.slice(0, amt);
+        if (e.type === 'destroy_facility') {
+          hits.forEach(function (u) {
+            u.disabled = true;
+            if (u.type === 'silo') u.missiles = 0;
+            if (u.type === 'sam') u.ammo = 0;
+            u.exposed = true;     // 被打掉的设施自然暴露，玩家能看到战果
+            n++;
+          });
+          if (n) log(state, f.code + ' 摧毁 ' + n + ' 处敌方 ' + fac + ' 设施');
+        } else {
+          var mode = e.mode || 'ammo_half';
+          hits.forEach(function (u) {
+            if (mode === 'ammo_half' && u.type === 'sam') {
+              u.ammo = Math.floor(u.ammo / 2); n++;
+            } else if (mode === 'radius_half' && u.type === 'radar') {
+              u.radiusDeg = Math.max(5, (u.radiusDeg || CONFIG.radarRadiusDeg) / 2); n++;
+            } else if (mode === 'missiles_half' && u.type === 'silo') {
+              u.missiles = Math.floor(u.missiles / 2); n++;
+            }
+            u.exposed = true;
+          });
+          if (n) log(state, f.code + ' 削弱 ' + n + ' 处敌方 ' + fac + '（' + mode + '）');
+        }
       }
     });
   }
@@ -475,15 +532,18 @@
       if (state.rng() < prob) {
         u.ammo--;
         u.cooldown = CONFIG.samCooldownSec;
-        m.alive = false;
+        /* §11.5 视觉同步：不立刻 m.alive=false，而是标记 intercepted 并开始拦截计时。
+         * 立刻 pushFx('intercept') 让渲染层 spawnInterceptor 开始升空演出；
+         * updateMissiles 在 interceptDelaySec 后才 m.alive=false，让核弹渐隐与拦截弹抵达同步。
+         * 逻辑上「拦截已成功」—— ammo 已扣、阵地已暴露、stats 已计 —— 只是「击毁」推迟到视觉接触时。 */
         m.intercepted = true;
-        // 记下拦截弹的起飞点：渲染层要据此画「拦截弹升空 → 撞上目标 → 爆闪」，
-        // 否则玩家只看到空中凭空冒出一团光，不知道是谁打的。
+        m.interceptT = 0;
         m.interceptor = { lat: u.lat, lon: u.lon };
         // 我方核弹遭遇拦截 → 获取敌方防空位置（DESIGN §5 情报获取）
         u.exposed = true;
         state.stats[u.faction].intercepts++;
         log(state, u.faction + ' 防空拦截 1 枚来自 ' + m.faction + ' 的导弹，阵地暴露');
+        pushFx(state, 'intercept', m);
         return true;
       }
     }
@@ -584,7 +644,18 @@
       if (m.progress > 0.05) traceOrigin(state, m);
       // 飞过六成航程后才可能进入对方防空圈，省去大部分无谓计算
       if (m.progress > 0.6 && !m.intercepted) tryIntercept(state, m);
-      if (!m.alive) { pushFx(state, 'intercept', m); continue; }
+      /* §11.5 拦截已判定成功但视觉尚未抵达：继续推进导弹（让核弹渐隐），
+       * 累加 interceptT，到 interceptDelaySec 才真正击毁。
+       * pushFx('intercept') 已在 tryIntercept 里发出，此处不重复。 */
+      if (m.intercepted) {
+        m.interceptT = (m.interceptT || 0) + dt;
+        if (m.interceptT >= (CONFIG.interceptDelaySec || 0.34)) {
+          m.alive = false;
+          continue;
+        }
+        alive.push(m);
+        continue;
+      }
       if (m.progress >= 1) { resolveImpact(state, m); pushFx(state, 'impact', m); continue; }
       alive.push(m);
     }
@@ -667,21 +738,33 @@
   }
 
   /* ───────────────────────── 8. 计分 ─────────────────────────
-   * DESIGN §6.2：得分 = 敌方伤亡 − 己方伤亡（百万人为单位）。赢不是灭了对手，是死得比他少。
-   */
+   * DESIGN §6.2（§11.8 修订）：排名按**剩余存活人口**降序，同分再比己方伤亡升序。
+   * 原「得分 = 敌方伤亡 − 己方伤亡」等价但不完全相同（剩余 = 初始人口 − 己方伤亡，
+   * 初始人口各阵营不同），玩家直觉更关心「谁活下来的人多」。
+   * score 字段保留（= killed − casualties）供审计与历史对比，排序键改为 popLeft。 */
   function ranking(state) {
     return state.factions.map(function (f) {
       var s = state.stats[f.code] || { killed: 0, casualties: 0 };
-      var alive = citiesOf(state, f.code).reduce(function (n, c) { return n + (c.alive ? 1 : 0); }, 0);
+      var alive = 0, popLeft = 0;
+      citiesOf(state, f.code).forEach(function (c) {
+        if (c.alive) alive++;
+        popLeft += c.pop;
+      });
       return {
         code: f.code, name: f.name, color: f.color,
         killed: s.killed, casualties: s.casualties,
         score: s.killed - s.casualties,
+        popLeft: popLeft,                       // 剩余存活人口（百万）—— §11.8 主排序键
         citiesAlive: alive,
         missilesLeft: totalMissiles(state, f.code)
       };
     }).sort(function (a, b) {
-      return (b.score - a.score) || (a.casualties - b.casualties) || (a.code < b.code ? -1 : 1);
+      /* §11.8 主键：剩余存活人口降序（活下来的人多的排前）；
+       * 次键：己方伤亡升序（同分时死得少的排前）；
+       * 末键：代号字典序，保证排序稳定可复现。 */
+      return (b.popLeft - a.popLeft) ||
+             (a.casualties - b.casualties) ||
+             (a.code < b.code ? -1 : 1);
     });
   }
 

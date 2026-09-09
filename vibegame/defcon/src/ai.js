@@ -33,13 +33,20 @@
     add_sam:       0.30,       // 增建防空
     add_missiles:  0.35,       // 补充核弹
     boost_pop:     0.20,       // 人口回升
-    intel_city:   -0.35        // 获取敌方城市情报（target:'enemy' 取反后为正收益）
+    intel_city:   -0.35,       // 获取敌方城市情报（target:'enemy' 取反后为正收益）
+    // §11.2 新增：削弱 / 摧毁敌方设施（target:'enemy' 取反后为正收益）
+    degrade_facility: -0.40,   // 削弱敌方设施（比 intel 更直接的战力削弱）
+    destroy_facility: -0.55    // 摧毁敌方设施（不可恢复，比 degrade 更强）
   };
 
   function effectAmount(eff) {
     if (eff.type === 'pop_loss') return eff.amount || 1;
     if (eff.type === 'city_defense') return eff.amount || 1;
     if (eff.type === 'radar_down') return eff.turns || 1;
+    if (eff.type === 'add_missiles') return eff.amount || 1;
+    if (eff.type === 'degrade_facility') return eff.amount || 1;
+    if (eff.type === 'destroy_facility') return eff.amount || 1;
+    if (eff.type === 'intel_city') return eff.amount || 1;
     return 1;
   }
 

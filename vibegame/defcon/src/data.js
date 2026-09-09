@@ -168,7 +168,7 @@
       id: 'E03', title: '敌方提议裁军谈判',
       desc: '一份照会悄然递到各国使馆，措辞客气，却暗藏试探。',
       options: [
-        { label: '接受谈判', crisis: -14, effect: { type: 'boost_pop', target: 'self', amount: 3 } },
+        { label: '接受谈判', crisis: -14, effect: { type: 'boost_pop', target: 'self', mode: 'ratio', amount: 0.05 } },
         { label: '拖延观望', crisis: 0 },
         { label: '拒绝并增兵', crisis: 8 }
       ]
@@ -204,8 +204,8 @@
       desc: '一个摇摇欲坠的伙伴希望借你的力量壮胆，代价是引火烧身的风险。',
       options: [
         { label: '婉拒请求', crisis: -8 },
-        { label: '有条件部署', crisis: 4 },
-        { label: '立即前沿部署', crisis: 13 }
+        { label: '有条件部署', crisis: 4, effect: { type: 'add_missiles', target: 'self', amount: 1 } },
+        { label: '立即前沿部署', crisis: 13, effect: { type: 'add_missiles', target: 'self', amount: 2 } }
       ]
     },
     {
@@ -232,7 +232,7 @@
       options: [
         { label: '强硬镇压', crisis: 9 },
         { label: '安抚民意', crisis: -5 },
-        { label: '暂缓军备', crisis: -9 }
+        { label: '暂缓军备转民生', crisis: -9, effect: { type: 'boost_pop', target: 'self', mode: 'ratio', amount: 0.04 } }
       ]
     },
     {
@@ -250,7 +250,7 @@
       options: [
         { label: '视作严重威胁', crisis: 10 },
         { label: '要求解释', crisis: -2 },
-        { label: '同步试射', crisis: 15 }
+        { label: '同步试射干扰预警', crisis: 15, effect: { type: 'degrade_facility', target: 'enemy', facility: 'radar', amount: 1, mode: 'radius_half' } }
       ]
     },
     {
@@ -295,7 +295,7 @@
       options: [
         { label: '静观其变', crisis: -2 },
         { label: '递出橄榄枝', crisis: -8 },
-        { label: '趁乱施压', crisis: 12 }
+        { label: '趁乱突袭敌方雷达', crisis: 12, effect: { type: 'destroy_facility', target: 'enemy', facility: 'radar', amount: 1 } }
       ]
     },
     {
@@ -369,6 +369,33 @@
         { label: '婉拒共享', crisis: 2 },
         { label: '借机渗透其卫星系统', crisis: 13, effect: { type: 'intel_city', target: 'enemy', amount: 3 } }
       ]
+    },
+    {
+      id: 'E26', title: '秘密扩军计划',
+      desc: '军方提交了一份地下工事扩建方案，可在不惊动外界的情况下补充核武库存。',
+      options: [
+        { label: '否决计划专注民生', crisis: -10, effect: { type: 'boost_pop', target: 'self', mode: 'ratio', amount: 0.03 } },
+        { label: '小规模补充', crisis: 3, effect: { type: 'add_missiles', target: 'self', amount: 1 } },
+        { label: '全面扩军', crisis: 11, effect: { type: 'add_missiles', target: 'self', amount: 2 } }
+      ]
+    },
+    {
+      id: 'E27', title: '特种部队突袭发射井',
+      desc: '一支精锐小队待命出击，目标是一座敌方发射井。得手可削弱其核武库存，失手则授人以柄。',
+      options: [
+        { label: '取消行动', crisis: -4 },
+        { label: '有限破坏', crisis: 7, effect: { type: 'degrade_facility', target: 'enemy', facility: 'silo', amount: 1, mode: 'missiles_half' } },
+        { label: '全力摧毁', crisis: 14, effect: { type: 'destroy_facility', target: 'enemy', facility: 'silo', amount: 1 } }
+      ]
+    },
+    {
+      id: 'E28', title: '情报渗透敌方防空指挥',
+      desc: '网络部队报告已摸到敌方防空网的边缘节点，可植入假指令瘫痪其部分阵地。',
+      options: [
+        { label: '收手不前', crisis: -3 },
+        { label: '瘫痪一处防空', crisis: 6, effect: { type: 'degrade_facility', target: 'enemy', facility: 'sam', amount: 1, mode: 'ammo_half' } },
+        { label: '全面入侵暴露其体系', crisis: 10, effect: { type: 'intel_city', target: 'enemy', amount: 2 } }
+      ]
     }
   ];
 
@@ -437,6 +464,10 @@
      *   与改坐标前的 68% 基本持平。附带好处：地缘造成的伤亡极差从 3.7x 压到 1.6x。 */
     samRadiusDeg: 9,
     samCooldownSec: 12,        // SAM 每拦 1 枚后恢复 1 发所需秒数（§3.1 的"冷却 2 回合"换算）
+    /* §11.5 拦截视觉同步：逻辑层判定拦截成功后，不立刻 m.alive=false，
+     * 而是延迟 interceptDelaySec（与渲染层 INT_RISE 对齐）让拦截弹升空演出完成，
+     * 核弹在此期间渐隐，二者在接触点同时消失/爆闪。 */
+    interceptDelaySec: 0.34,
     aiFireMinSec: 4,           // AI 两批发射之间的最小间隔
     aiFireMaxSec: 11,          // AI 两批发射之间的最大间隔
     aiSalvoMax: 3,             // AI 单批最多发射枚数
@@ -495,15 +526,37 @@
 
     /* ── 阵营特色加成参数（DESIGN §2.1 perk）──
      * 各阵营在单位数量 / 拦截率 / 雷达半径 / 人口 / 外交上有差异化加成，
-     * 让选阵营有策略意义而非纯配色区别。helper 见 DC.perkOf。 */
-    perkMissileSilos: 8,        // ALFA 发射井数（其他阵营 silosPerFaction=6）
+     * 让选阵营有策略意义而非纯配色区别。helper 见 DC.perkOf。
+     *
+     * ⚠ 2026-09-09 核武梯度（DESIGN §11.1）：原设定除 ALFA 外五方都是 18 枚，
+     *   阵营差异只剩颜色与几个 perk，核武体量没有策略区分度。
+     *   改为按 §2.1 鹰鸽系数拉开梯度：鹰派多弹、鸽派少弹、南洋多井少弹。
+     *   梯度（枚）：ALFA 24 / BRAVO 18 / CHARLIE 18 / DELTA 15 / ECHO 12 / FOXTROT 14。
+     *   - ALFA  8 井 × 3 弹 = 24（倚核自重，核弹基数最多，沿用 perkMissileSilos）
+     *   - BRAVO 6 井 × 3 弹 = 18（默认，全域打击但精算得失）
+     *   - CHARLIE 6 井 × 3 弹 = 18（默认，外交优先但保有常规核武）
+     *   - DELTA 5 井 × 3 弹 = 15（不首先使用 + 经济依存，少井少弹，与人口 perk 形成取舍）
+     *   - ECHO  6 井 × 2 弹 = 12（法定无核地带，核武存量最少）
+     *   - FOXTROT 7 井 × 2 弹 = 14（无核但分散部署，多井少弹，与 spread perk 对齐）
+     *   合计 101 枚（原 108），梯度更明显，与 §2.1 perk 体系对齐。 */
+    perkMissileSilos: 8,        // ALFA 发射井数（其他阵营按 perkSilosByFaction 取）
     perkSamCount: 6,            // BRAVO SAM 数（其他 samPerFaction=4）
-    perkSamProbBonus: 0.15,     // BRAVO 拦截概率加成
+    perkSamProbBonus: 0.08,     // BRAVO 拦截概率加成（§11.8 后从 0.15 降到 0.08：剩余人口计分下防空优势放大，需回调）
     perkRadarCount: 5,          // CHARLIE 雷达数（其他 radarPerFaction=3）
     perkRadarRadiusBonus: 15,   // CHARLIE 雷达覆盖半径加成（度）
     perkPopMultiplier: 1.3,     // DELTA 城市人口倍率
     perkSpreadPopMul: 0.8,      // FOXTROT 城市人口倍率（稀疏）
-    perkDiplomacyDrift: -1.5    // ECHO 每回合危机值额外降温（外交斡旋）
+    perkDiplomacyDrift: -1.5,   // ECHO 每回合危机值额外降温（外交斡旋）
+    /* 各阵营发射井数（按 §11.1 拉开梯度）。不带 perk 的阵营回退到 silosPerFaction。
+     * ALFA 走 perkMissileSilos 兼容旧调用，其余按此表取。 */
+    perkSilosByFaction: {
+      ALFA: 8, BRAVO: 6, CHARLIE: 6, DELTA: 5, ECHO: 6, FOXTROT: 7
+    },
+    /* 各阵营每井 ICBM 数（按 §11.1 拉开梯度）。鸽派阵营每井弹数下调，
+     * 与发射井数配合形成「核武存量」维度的阵营差异化。 */
+    perkMissilesPerSiloByFaction: {
+      ALFA: 3, BRAVO: 3, CHARLIE: 3, DELTA: 3, ECHO: 2, FOXTROT: 2
+    }
   };
 
   /* ───────────────────────── 5. 危机值读取工具 ─────────────────────────
@@ -543,7 +596,16 @@
     var silos = C.silosPerFaction, sam = C.samPerFaction, radar = C.radarPerFaction;
     var samProb = C.samInterceptProb, radarR = C.radarRadiusDeg;
     var popMul = 1, dipDrift = 0;
-    if (p === 'missiles')   silos = C.perkMissileSilos;
+    var mps = C.missilesPerSilo;
+    /* §11.1 核武梯度：每阵营的发射井数 / 每井弹数按 perk 表取值，
+     * 不再只有 ALFA 拿到 perkMissileSilos、其余全默认。 */
+    if (C.perkSilosByFaction && C.perkSilosByFaction[code] != null) {
+      silos = C.perkSilosByFaction[code];
+    }
+    if (p === 'missiles')   silos = C.perkMissileSilos;   // ALFA 仍走旧字段，保持向后兼容
+    if (C.perkMissilesPerSiloByFaction && C.perkMissilesPerSiloByFaction[code] != null) {
+      mps = C.perkMissilesPerSiloByFaction[code];
+    }
     if (p === 'airDefense') { sam = C.perkSamCount; samProb = C.samInterceptProb + C.perkSamProbBonus; }
     if (p === 'radar')      { radar = C.perkRadarCount; radarR = C.radarRadiusDeg + C.perkRadarRadiusBonus; }
     if (p === 'population') popMul = C.perkPopMultiplier;
@@ -551,7 +613,7 @@
     if (p === 'diplomacy')  dipDrift = C.perkDiplomacyDrift;
     return {
       silos: silos, sam: sam, radar: radar,
-      missilesPerSilo: C.missilesPerSilo,
+      missilesPerSilo: mps,
       samProb: samProb, radarRadiusDeg: radarR,
       popMul: popMul, dipDrift: dipDrift,
       perk: p, perkDesc: f.perkDesc || ''

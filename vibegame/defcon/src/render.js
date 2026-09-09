@@ -26,6 +26,18 @@
   var FX_POOL = 32;            // 核爆/拦截特效槽位
   var TRAIL_PTS = 24;           // 每枚导弹尾迹采样点数（完整弹道从发射井到当前位置）
 
+  /* §11.7 来袭导弹与拦截弹统一色板（集中管理，避免散落各处各自为政）。
+   * 来袭导弹：炽白核心 → 暖橙 → 暗红余烬，与核爆火球色（pumpFx 里 fb.material.color）呼应；
+   * 拦截弹：青蓝色，与来袭导弹的暖色系形成清晰对比，让玩家一眼区分「我方拦截」与「敌方来袭」。
+   * 尾焰用 RGB 分量表达，便于按 progress 在 hot/cool 间线性插值。 */
+  var PALETTE = {
+    missileHeadHex: 0xffffff,                  // 弹头核心：炽白
+    missileTrailHot:  [1.00, 0.88, 0.66],      // 尾焰起始（冷白偏暖，平飞段）
+    missileTrailCool: [1.00, 0.52, 0.16],      // 尾焰末端（炽橙偏暗红，再入段，与火球色呼应）
+    interceptorHex:   0x8fdfff,                // 拦截弹头与尾线：青蓝
+    trailFadeHex:     0xff7a30                 // 落地尾痕渐隐：暖橙（与尾焰末端同色系）
+  };
+
   var api = { ok: false };
   var renderer, scene, camera, globe, gridGroup;
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
@@ -342,27 +354,58 @@
     cityPoints.material.uniforms.uScale.value = h * 0.5;
   }
 
-  // 城市被摧毁后由明转暗（光点熄灭）；焦痕另用 Sprite 贴在球面
+  /* §11.6 城市受击→熄灭→焦痕连贯演出：
+   * - 存活且未受打击（pop >= pop0）：alpha=1, size=base
+   * - 存活但受打击（0 < pop < pop0）：alpha 按人口比例衰减（最低 0.35），size 按比例缩
+   * - 被毁（!alive 或 pop<=0）：alpha=0 彻底淡出（原 0.12 会叠 bloom 残留「幽灵光点」）
+   * 按比例变暗让「打了一半人」的城市自然变暗缩点，而非二值化骤变。 */
   function syncCities(state) {
     if (!cityGeom) return;
-    var dirty = false;
+    var dirty = false, sizeDirty = false;
     state.cities.forEach(function (c, i) {
-      var a = c.alive ? 1 : 0.12;
+      var a, s;
+      if (!c.alive || c.pop <= 0) {
+        a = 0;                                   // 彻底淡出，不残留
+        s = citySize[i] * 0.5;                    // 缩点
+      } else if (c.pop0 > 0 && c.pop < c.pop0) {
+        var ratio = c.pop / c.pop0;               // 人口损失比例
+        a = 0.35 + 0.65 * ratio;                  // 0.35 ~ 1.0
+        s = (0.15 + c.pop0 * 0.010) * (0.6 + 0.4 * ratio);
+      } else {
+        a = 1;
+        s = 0.15 + c.pop0 * 0.010;
+      }
       if (cityAlpha[i] !== a) { cityAlpha[i] = a; dirty = true; }
+      if (Math.abs(citySize[i] - s) > 1e-6) { citySize[i] = s; sizeDirty = true; }
     });
     if (dirty) cityGeom.getAttribute('aAlpha').needsUpdate = true;
+    if (sizeDirty) cityGeom.getAttribute('aSize').needsUpdate = true;
   }
 
+  /* §11.6 焦痕柔和浮现：初始 opacity=0、scale 偏小，在 pumpScorch 里 0.6s 渐入到目标值，
+   * 与城市光点熄灭形成连贯过渡（光点淡出 → 焦痕柔和浮现），而非焦痕突兀贴上。 */
   function addScorch(lat, lon) {
     var sp = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: TEX.scorch, transparent: true, depthWrite: false, opacity: 0.9
+      map: TEX.scorch, transparent: true, depthWrite: false, opacity: 0
     }));
     var v = G.ll2v(lat, lon, R * 1.006);
     sp.position.set(v.x, v.y, v.z);
-    sp.scale.setScalar(0.16);
+    sp.scale.setScalar(0.08);
     scene.add(sp);
-    scorchMarks.push(sp);
-    if (scorchMarks.length > 60) { var old = scorchMarks.shift(); scene.remove(old); }
+    scorchMarks.push({ sp: sp, t: 0, target: { opacity: 0.85, scale: 0.16 } });
+    if (scorchMarks.length > 60) { var old = scorchMarks.shift(); scene.remove(old.sp); }
+  }
+
+  // §11.6 焦痕渐入动画：0.6s 内 opacity 0→target、scale 0.08→target
+  function pumpScorch(dt) {
+    for (var i = 0; i < scorchMarks.length; i++) {
+      var s = scorchMarks[i];
+      if (s.t >= 1) continue;
+      s.t = Math.min(1, s.t + dt / 0.6);
+      var k = 1 - Math.pow(1 - s.t, 2);           // ease-out
+      s.sp.material.opacity = k * s.target.opacity;
+      s.sp.scale.setScalar(0.08 + k * (s.target.scale - 0.08));
+    }
   }
 
   /* ───────────────────────── 单位（InstancedMesh）─────────────────────────
@@ -437,14 +480,19 @@
   }
 
   // 玩家雷达覆盖圈（角半径 → 球面圆环）
-  // 配色换洋红（2026-09-08）：原青色 0x39d0ff 与经纬网 0x5f9fb5 太近，看不清
+  // §11.3 配色改为玩家阵营色（原写死洋红 0xff4fa0 与阵营色体系脱节）。
+  // 阵营色与经纬网（青灰 0x5f9fb5）对比不足时，靠 opacity 0.55 + 加法混合提亮，
+  // 而非脱离阵营色换一个不相关的颜色。
   function buildRadarRings(state) {
     radarRings.forEach(function (r) { scene.remove(r); });
     radarRings = [];
+    var fac = DC.FACTIONS_BY_CODE[state.playerFaction] || {};
+    var ringColor = new THREE.Color(fac.color || '#7fd4e8');
     DC.sim.unitsOf(state, state.playerFaction, 'radar').forEach(function (u) {
       var ring = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(circlePts(u, u.radiusDeg || CONFIG.radarRadiusDeg, R * 1.005)),
-        new THREE.LineBasicMaterial({ color: 0xff4fa0, transparent: true, opacity: 0.45 })
+        new THREE.LineBasicMaterial({ color: ringColor, transparent: true, opacity: 0.55,
+                                       blending: THREE.AdditiveBlending })
       );
       scene.add(ring);
       radarRings.push(ring);
@@ -482,8 +530,11 @@
 
       var tg = new THREE.BufferGeometry();
       tg.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_PTS * 3), 3));
+      /* §11.7 尾迹基色用 PALETTE（每帧会被 syncMissiles 按 progress 覆盖，
+       * 这里只是初始值，但保持与统一色板一致避免首帧闪烁）。 */
       var trail = new THREE.Line(tg, new THREE.LineBasicMaterial({
-        color: 0xffd8a0, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending
+        color: PALETTE.missileTrailHot[0] * 255 * 65536 + PALETTE.missileTrailHot[1] * 255 * 256 + PALETTE.missileTrailHot[2] * 255,
+        transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending
       }));
       trail.frustumCulled = false;
       trail.visible = false;
@@ -500,12 +551,27 @@
       var p = G.ballistic(m.from, m.to, m.progress, R, 9);
       slot.head.position.set(p.x, p.y, p.z);
       slot.head.visible = true;
-      slot.head.material.color.setHex(0xffffff);
-      /* 再入段增亮增粗：弹头越接近目标越亮越大，尾迹由冷白转炽橙 ——
-       * 「最后几秒」的紧张感全靠这条渐变，平飞的白色细线没人会盯着看。 */
+      /* §11.7 弹头用 PALETTE 统一色板：炽白核心，与尾焰同色系。
+       * 再入段增亮增粗：弹头越接近目标越亮越大。 */
+      slot.head.material.color.setHex(PALETTE.missileHeadHex);
       slot.head.scale.setScalar(0.045 + m.progress * 0.038);
-      slot.trail.material.opacity = 0.55 + m.progress * 0.35;
-      slot.trail.material.color.setRGB(1, 0.85 - m.progress * 0.30, 0.63 - m.progress * 0.45);
+      /* 尾焰：从冷白偏暖（hot）→ 炽橙偏暗红（cool），与核爆火球色呼应，
+       * 「最后几秒」的紧张感全靠这条渐变，平飞的白色细线没人会盯着看。 */
+      var p01 = m.progress;
+      var tr = PALETTE.missileTrailHot[0] + (PALETTE.missileTrailCool[0] - PALETTE.missileTrailHot[0]) * p01;
+      var tg = PALETTE.missileTrailHot[1] + (PALETTE.missileTrailCool[1] - PALETTE.missileTrailHot[1]) * p01;
+      var tb = PALETTE.missileTrailHot[2] + (PALETTE.missileTrailCool[2] - PALETTE.missileTrailHot[2]) * p01;
+      slot.trail.material.opacity = 0.55 + p01 * 0.35;
+      slot.trail.material.color.setRGB(tr, tg, tb);
+      /* §11.5 拦截已判定但视觉尚未抵达：核弹 head 渐隐（与拦截弹升空同步），
+       * 尾迹保留至接触点。interceptT 从 0 增到 interceptDelaySec，opacity 从 1 衰减到 0。 */
+      if (m.intercepted) {
+        var k = Math.min(1, (m.interceptT || 0) / (DC.CONFIG.interceptDelaySec || 0.34));
+        slot.head.material.opacity = Math.pow(1 - k, 1.5);
+        slot.trail.material.opacity *= (1 - k * 0.6);
+      } else {
+        slot.head.material.opacity = 1;
+      }
 
       var arr = slot.trail.geometry.getAttribute('position');
       // 完整尾痕：从发射井（t=0）到当前位置（t=progress）均匀采样
@@ -579,12 +645,16 @@
       var sp = new THREE.Sprite(new THREE.SpriteMaterial({
         map: TEX.small, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
       }));
+      /* §11.7 拦截弹头也用青蓝色，与拦截线统一，区别于来袭导弹的暖色系。 */
+      sp.material.color.setHex(PALETTE.interceptorHex);
       sp.visible = false;
       scene.add(sp);
       var g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      /* §11.7 拦截弹用青蓝色（PALETTE.interceptorHex），与来袭导弹的暖色系形成清晰对比，
+       * 让玩家一眼区分「我方拦截」与「敌方来袭」。 */
       var line = new THREE.Line(g, new THREE.LineBasicMaterial({
-        color: 0x9fe0ff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
+        color: PALETTE.interceptorHex, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending
       }));
       line.frustumCulled = false;
       line.visible = false;
@@ -648,8 +718,9 @@
     for (var i = 0; i < TRAIL_POOL; i++) {
       var g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TRAIL_PTS * 3), 3));
+      /* §11.7 落地尾痕用 PALETTE.trailFadeHex，与尾焰末端同色系。 */
       var line = new THREE.Line(g, new THREE.LineBasicMaterial({
-        color: 0xff9a4a, transparent: true, opacity: 0, blending: THREE.AdditiveBlending
+        color: PALETTE.trailFadeHex, transparent: true, opacity: 0, blending: THREE.AdditiveBlending
       }));
       line.frustumCulled = false;
       line.visible = false;
@@ -971,7 +1042,15 @@
   // 相机飞向某点（点击城市列表时用；DESIGN §2.3 砍掉 2D 视图后的操作补偿手段）
   function flyTo(lat, lon) {
     var v = G.ll2v(lat, lon, 1);
-    cam.tTheta = Math.atan2(v.x, v.z);
+    var targetTheta = Math.atan2(v.x, v.z);
+    /* §11.4 修复绕大圈 bug：theta 是 0–2π 的角度，目标可能落在 0.1 而当前在 6.2，
+     * 线性插值会走 6.2 → 0.1 的长弧（约 6 rad）而不是 +0.1 的短弧。
+     * 把目标 theta 相对当前 cam.tTheta 归一到 [-π, π]，保证永远走最短弧。
+     * phi 被 clamp 到 [0.08, π-0.08]，不存在环绕问题，无需归一。 */
+    var dTheta = targetTheta - cam.tTheta;
+    while (dTheta > Math.PI) dTheta -= 2 * Math.PI;
+    while (dTheta < -Math.PI) dTheta += 2 * Math.PI;
+    cam.tTheta = cam.tTheta + dTheta;
     cam.tPhi = Math.acos(Math.max(-1, Math.min(1, v.y)));
     cam.tPhi = Math.max(0.08, Math.min(Math.PI - 0.08, cam.tPhi));
   }
@@ -1116,6 +1195,7 @@
     pumpFx(state, dt);
     pumpInterceptors(dt);
     pumpTrails(dt);
+    pumpScorch(dt);
 
     cam.theta += (cam.tTheta - cam.theta) * 0.12;
     cam.phi += (cam.tPhi - cam.phi) * 0.12;

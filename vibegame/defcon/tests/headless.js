@@ -76,7 +76,7 @@ ok('CITIES_BY_FACTION 可用', DC.FACTIONS.every(function (f) {
 }));
 
 // 3. 事件卡
-ok('事件卡数量 = 25', DC.EVENTS.length === 25, 'got ' + DC.EVENTS.length);
+ok('事件卡数量 = 28', DC.EVENTS.length === 28, 'got ' + DC.EVENTS.length);
 var validEvent = DC.EVENTS.every(function (e) {
   if (!e.id || !e.title || !e.desc) return false;
   if (!Array.isArray(e.options) || e.options.length < 2 || e.options.length > 3) return false;
@@ -87,7 +87,8 @@ var validEvent = DC.EVENTS.every(function (e) {
     if (o.effect) {
       var t = o.effect.type;
       var allowed = ['expose_silo', 'reveal_radar', 'city_defense', 'pop_loss', 'radar_down',
-                     'add_radar', 'add_sam', 'add_missiles', 'boost_pop', 'intel_city'];
+                     'add_radar', 'add_sam', 'add_missiles', 'boost_pop', 'intel_city',
+                     'degrade_facility', 'destroy_facility'];
       if (allowed.indexOf(t) < 0) return false;
       if (o.effect.target && ['self', 'enemy', 'random'].indexOf(o.effect.target) < 0) return false;
     }
@@ -286,8 +287,11 @@ ok('每阵营单位数按 perk', DC.FACTIONS.every(function (f) {
          S.unitsOf(st0, f.code, 'sam').length === k.sam &&
          S.unitsOf(st0, f.code, 'radar').length === k.radar;
 }));
-ok('每井 3 枚 ICBM', st0.units.filter(function (u) { return u.type === 'silo'; })
-  .every(function (u) { return u.missiles === CFG.missilesPerSilo; }));
+ok('每井弹数按 perkMissilesPerSiloByFaction（§11.1 核武梯度）', st0.units.filter(function (u) { return u.type === 'silo'; })
+  .every(function (u) {
+    var expect = CFG.perkMissilesPerSiloByFaction[u.faction] || CFG.missilesPerSilo;
+    return u.missiles === expect;
+  }));
 ok('每阵营核弹数按 perk', DC.FACTIONS.every(function (f) {
   return S.totalMissiles(st0, f.code) === DC.factionMissiles(f.code);
 }));
@@ -347,6 +351,16 @@ ok('DEFCON 映射 5/4/3/2/1',
 ok('得分 = 造成伤亡 − 己方伤亡', S.ranking(runA).every(function (r) {
   return Math.abs(r.score - (r.killed - r.casualties)) < 1e-9;
 }));
+// §11.8 排序按剩余存活人口降序，同分再比伤亡升序
+ok('§11.8 排序按剩余存活人口降序', (function () {
+  var rk = S.ranking(runA);
+  for (var i = 1; i < rk.length; i++) {
+    if (rk[i - 1].popLeft < rk[i].popLeft - 1e-9) return false;
+    if (Math.abs(rk[i - 1].popLeft - rk[i].popLeft) < 1e-9 && rk[i - 1].casualties > rk[i].casualties + 1e-9) return false;
+  }
+  return true;
+})());
+ok('§11.8 ranking 含 popLeft 字段', S.ranking(runA).every(function (r) { return typeof r.popLeft === 'number'; }));
 
 // 发射与命中结算：隔离出一个只剩一枚弹的局面，避免其他 AI 干扰断言
 var stw = S.create({ seed: 3, autoPlayer: true });

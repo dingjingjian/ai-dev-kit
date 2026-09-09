@@ -146,7 +146,9 @@
   .crow.sel .cn{color:#fff}
   .crow .sw{width:8px;height:8px;flex:none;border-radius:1px}
   .crow .cn{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .crow .cf{color:var(--text-dim);font-size:10px;flex:none;margin-right:6px;white-space:nowrap}
+  .crow .cf{color:var(--text-dim);font-size:10px;flex:none;margin-right:6px;white-space:nowrap;
+    display:flex;align-items:center;gap:1px}
+  .crow .cf b{font-size:9px;font-weight:400;color:var(--text-dim);margin-right:2px}
   .crow .cp{color:var(--text-dim);font-variant-numeric:tabular-nums;flex:none}
   #legend .lrow{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12px}
   #legend .lrow svg{flex:none}
@@ -311,13 +313,13 @@
   <h1 data-page-node-id="IqVS0jrvW6k24mVtlCCCwN">核战危机 DEFCON</h1>
   <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方在一颗星球上互相威慑。危机值由六方共同的选择推高，跌到 DEFCON 1 即解锁核弹。核弹有限、不可逆，死得比对手少的才算赢 —— 先选一个阵营。</p>
   <div id="pickList" data-page-node-id="pl7vh6QPQprS4RxiyaNPA0"></div>
-  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈（每回合 20 秒）→ 热核战争（2–3 分钟）→ 按「造成伤亡 − 己方伤亡」计分。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点城市选中。</p>
+  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈（每回合 20 秒）→ 热核战争（2–3 分钟）→ 按「剩余存活人口」排名。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点城市选中。</p>
 </div>
 
 <div id="over" class="hud panel" data-page-node-id="eupBWInVAOHPkMaT9lFKxZ">
   <h2 data-page-node-id="clB4uohScjCw8SHXBMpm2u">终局计分</h2>
-  <div class="sub" data-page-node-id="ftPSgPA6EsZ5QNX5FFmgXv">得分 = 造成伤亡 − 己方伤亡（百万人）</div>
-  <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">伤亡</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">得分</th></tr></thead>
+  <div class="sub" data-page-node-id="ftPSgPA6EsZ5QNX5FFmgXv">按剩余存活人口排名 —— 谁活下来的人多谁赢</div>
+  <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">伤亡</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">剩余</th></tr></thead>
   <tbody id="ovBody" data-page-node-id="DoPmGw1cGmRMcfs31mO7LB"></tbody></table>
   <button type="button" id="again" data-page-node-id="Z5iD2aCR9gKYubGvGTyWL6">再来一局</button>
 </div>
