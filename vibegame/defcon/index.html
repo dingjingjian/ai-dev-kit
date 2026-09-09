@@ -34,14 +34,17 @@
   .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
   .panel{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
-  /* ── 顶栏：背景通栏拉满，内容左右各留 80px 空白 ──
-     背景（--panel + 底边细线）是满宽的，只有内容区缩进 80px —— 顶部有整条横向衬底，
-     两侧留白给星球主视觉留出呼吸感，而不是让顶栏悬空。 */
-  #top{top:0;left:0;right:0;display:flex;align-items:stretch;gap:1px;
-    padding:var(--safe-t) 80px 0;
+  /* ── 顶栏：背景通栏拉满，内容左右各留 48px 空白 ──
+     背景（--panel + 底边细线）是满宽的，只有内容区缩进 —— 顶部有整条横向衬底，
+     两侧留白给星球主视觉留出呼吸感，而不是让顶栏悬空。
+     两行结构：第一行 DEFCON 格 + 阶段格左右分布；危机值条换行独占第二行 ——
+     390px 手机上左右各 80px 留白后内容区只剩 230px，DEFCON(70) + 阶段(86) 占掉大半，
+     危机值条被挤到 ~70px 宽、数字与条形图都挤成一团，独占一行才有完整的进度条可读性。 */
+  #top{top:0;left:0;right:0;display:flex;flex-wrap:wrap;align-items:stretch;gap:1px;
+    padding:var(--safe-t) 48px 0;
     border-bottom:1px solid var(--line);background:var(--panel)}
   #defcon{padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    min-width:70px;border-right:1px solid var(--line)}
+    min-width:70px;flex:none;order:0;border-right:1px solid var(--line)}
   /* 两格都用固定行高锁行块：即使大字字号不同（19px 数字 / 17px 汉字），上下行也严格对齐 */
   #defcon .lv{font-size:19px;font-weight:700;letter-spacing:1px;color:var(--cyan);
     line-height:22px;text-shadow:0 0 12px rgba(127,212,232,.5)}
@@ -51,10 +54,14 @@
   #defcon.bump{animation:bump .5s ease}
   @keyframes bump{0%,100%{transform:scale(1)}30%{transform:scale(1.14)}}
 
-  #crisis{flex:1;min-width:0;padding:5px 8px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  /* 危机值独占第二行：order 排到第一行三格之后，flex-basis 100% 强制换行占满。
+   * 进度条加高到 5px —— 独占一行后有完整宽度，稍粗一点更醒目。 */
+  #crisis{order:3;flex:1 1 100%;min-width:0;padding:4px 2px 7px;
+    border-top:1px solid var(--line);
+    display:flex;flex-direction:column;justify-content:center;gap:4px}
   #crisis .row{display:flex;justify-content:space-between;gap:6px;font-size:9.5px;
     color:var(--text-dim);letter-spacing:1px;white-space:nowrap}
-  #bar{height:4px;background:rgba(127,212,232,.1);overflow:hidden}
+  #bar{height:5px;background:rgba(127,212,232,.1);overflow:hidden}
   /* 危机值条：整条单色、按危机值分档换色（不再用固定渐变 —— 渐变会随宽度被压缩，
      危机值 10 时右端也发红，等于开局就在报警）。初始即纯蓝。 */
   #bar i{display:block;height:100%;width:10%;background:#3d8fa8;
@@ -65,9 +72,18 @@
 
   /* 顶栏第三格：阶段（§11.15 / §11.17）。与 DEFCON 格同构的「小标签 + 大字」结构、内容居中，
    * 行高与 DEFCON 格一一锁定（标签 12px / 大字 22px）—— 两格高度严格一致；
-   * 大字字形 15px（4 个汉字 19px 太撑），行块高度不受字号影响。仅按阶段保留着色差异。 */
+   * 大字字形 15px（4 个汉字 19px 太撑），行块高度不受字号影响。仅按阶段保留着色差异。
+   * 两行化后第一行为 DEFCON · 阶段 · 阵营名 三段：DEFCON 左、阶段居中、阵营名推到右端。 */
   #phase{padding:5px 8px;display:flex;flex-direction:column;justify-content:center;
-    align-items:center;border-left:1px solid var(--line);min-width:86px;flex:none}
+    align-items:center;border-left:none;flex:1;min-width:0;order:1}
+
+  /* 顶栏右端：当前阵营（色块 + 名称）。贴右对齐，
+   * 名字过长时省略号截断，不把中间的阶段格挤变形。 */
+  #facTag{order:2;margin-left:auto;min-width:0;max-width:45%;padding-left:6px;
+    display:flex;align-items:center;justify-content:flex-end;gap:7px}
+  #facTag .sw{width:10px;height:10px;border-radius:1px;flex:none}
+  #facTag .nm{font-family:var(--mono);font-size:12px;font-weight:700;
+    letter-spacing:2px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #phase .lb{font-size:9px;color:var(--text-dim);letter-spacing:2px;line-height:12px}
   #phase .pt{font-size:15px;font-weight:700;color:var(--cyan);letter-spacing:1px;
     line-height:22px;text-shadow:0 0 10px rgba(127,212,232,.35);white-space:nowrap}
@@ -80,18 +96,19 @@
   #sheet{left:0;right:0;bottom:0;z-index:12;background:var(--panel);
     border-top:1px solid var(--line);padding:9px 12px calc(9px + var(--safe-b))}
 
-  /* 指令条：左侧「回合 / 计时 / 我方存量」，右侧三个操作按钮（音效 · 加速 · 抽屉）。
-     顶部只留阶段名，回合与倒计时下沉到这里 —— 避免和顶栏重复、也贴近手指。 */
-  #cmdbar{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:9px}
-  #cmdbar:last-child{margin-bottom:0}
+  /* 指令条：「回合 / 计时 / 我方存量」统计行。顶部只留阶段名，回合与倒计时下沉到这里 ——
+   * 避免和顶栏重复、也贴近手指。三个操作按钮已移出统计行（见 #hudBtns），
+   * 统计独占一行不再和按钮抢宽度，也不占事件卡 / 发射条的面板内空间。 */
+  #cmdbar{margin-bottom:9px}
+  /* 统计行：规模 / 弹头（战争期换战损口径）· 倒计时。回合数不在这里显示 ——
+   * 危机期事件卡标题自带回合徽章，再写一遍就是重复；倒计时推到行最右端，数字最常变，离手指也最近。 */
   #hudLeft{display:flex;flex-direction:column;gap:2px;min-width:0}
-  #hudLeft .hl1{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:11px;
-    color:var(--text-dim);letter-spacing:1px;white-space:nowrap}
-  #hudLeft .hl1 b{color:var(--text);font-weight:400}
-  #hudLeft .hl1 .rd{color:var(--cyan);font-variant-numeric:tabular-nums}
   #hudLeft .hl2{display:flex;align-items:baseline;gap:10px;font-family:var(--mono);font-size:10px;
     color:var(--text-dim);letter-spacing:.5px;white-space:nowrap}
   #hudLeft .hl2 em{font-style:normal;color:var(--cyan);font-size:12px;font-variant-numeric:tabular-nums}
+  /* 倒计时（统计行最右）：整行唯一的大号青色数字，baseline 对齐不抖动 */
+  #hudLeft .rd{margin-left:auto;font-size:13px;font-weight:700;color:var(--cyan);
+    font-variant-numeric:tabular-nums;letter-spacing:1px}
   /* 每回合基础产能的常驻标记（§11.13）：告诉玩家「即使什么都不选，下回合结算也有这份进账」。
    * 仅简报期展示（§11.17）：进入危机博弈后「还拖得起几个回合」不再有意义，整组隐藏。
    * 紧贴前值：.hl2 的 flex gap 是 10px，这里用 -10px 负边距完全抵消，零间距贴住前面的数字。 */
@@ -103,12 +120,18 @@
     transition:opacity .4s ease}
   #hudLeft .dl.show{opacity:1}
   #hudLeft .dl.up{color:#5fbf7a} #hudLeft .dl.down{color:var(--red)}
-  #hudBtns{display:flex;gap:8px;flex:none}
-  #cmdbar button{width:46px;height:34px;background:rgba(127,212,232,.05);
+  /* 操作按钮：悬浮在情境面板上缘之外的右侧（bottom:100% + 8px 缝）。
+   * 不占面板内部空间 —— 事件卡 / 发射条拿回完整宽度；面板全阶段常驻，按钮也就全阶段可点。
+   * bottom:100% 跟随面板高度：卡片高按钮就浮得高，始终贴着面板顶边，不会盖住卡内内容。
+   * 底色换成面板色加 backdrop 模糊：直接浮在球面上，原来的半透明淡青底不够读。 */
+  #hudBtns{position:absolute;right:10px;bottom:100%;margin-bottom:8px;
+    display:flex;gap:8px;z-index:2}
+  #hudBtns button{width:46px;height:34px;background:rgba(10,18,26,.78);
     border:1px solid var(--line);color:var(--cyan);
     font-family:var(--mono);font-size:17px;line-height:1;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;padding:0}
-  #cmdbar button:active{background:rgba(127,212,232,.18)}
+    display:flex;align-items:center;justify-content:center;padding:0;
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #hudBtns button:active{background:rgba(127,212,232,.25)}
   /* 音效：开态两道声波弧，静音态一个叉（✕）—— 叉比斜杠更像"关闭"，识别度高。 */
   #sndBtn{color:var(--cyan-dim)}
   #sndBtn .wave{display:block}
@@ -119,11 +142,13 @@
   #sndBtn:not(.on) .wave{display:none}
   #sndBtn:not(.on) .slash{display:block}
   #speedBtn{font-size:12px;letter-spacing:0}
-  #speedBtn.on{color:var(--amber);border-color:rgba(240,180,41,.5);background:rgba(240,180,41,.1)}
+  /* 激活态底色同样要实（浮在球面上）：暗底 + 琥珀描边 + 淡琥珀罩面 */
+  #speedBtn.on{color:var(--amber);border-color:rgba(240,180,41,.5);background:rgba(64,48,12,.85)}
   #drawerBtn{color:var(--cyan)}
 
-  /* 我方军事设备在线统计（热核阶段）：被打掉的设施实时扣除 */
-  #forceStat{display:flex;gap:12px;font-family:var(--mono);font-size:10px;
+  /* 我方军事设备在线统计（热核阶段）：被打掉的设施实时扣除。
+   * 允许 wrap：窄屏放不下四格时换到第二行，不再单行硬挤出面板。 */
+  #forceStat{display:flex;flex-wrap:wrap;gap:4px 12px;font-family:var(--mono);font-size:10px;
     color:var(--text-dim);letter-spacing:.5px;padding:0 2px 7px;white-space:nowrap}
   /* 图例小图标（§11.17）：与抽屉图例区同一套 SVG path，基线对齐后下压 1px 视觉居中 */
   #forceStat svg{flex:none;transform:translateY(1px)}
@@ -134,7 +159,11 @@
 
   #card{display:none}
   #card.show{display:block}
-  #card .ct{font-family:var(--sans);font-size:14px;color:#fff;margin-bottom:4px}
+  #card .ct{display:flex;align-items:center;gap:8px;font-family:var(--sans);font-size:14px;color:#fff;margin-bottom:4px}
+  /* 回合徽章：与标题分离的小标签（描边 mono 小字），底部统计行不再重复回合数 */
+  #card .ct .cr{flex:none;font-family:var(--mono);font-size:10px;font-weight:400;
+    color:var(--cyan);border:1px solid var(--line);padding:1px 7px;
+    letter-spacing:2px;line-height:1.7}
   #card .cd{font-family:var(--sans);font-size:11.5px;color:var(--text-dim);
     line-height:1.6;margin-bottom:8px;max-height:3.2em;overflow:hidden}
   .opts{display:flex;flex-direction:column;gap:6px}
@@ -230,9 +259,9 @@
 
   /* ── 开局：阵营选择 ── */
   #setup{position:absolute;inset:0;z-index:45;display:none;flex-direction:column;
-    background:rgba(5,8,13,.94);padding:calc(18px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
+    background:rgba(5,8,13,.94);padding:calc(80px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
   #setup.show{display:flex}
-  #setup h1{font-size:15px;color:var(--cyan);letter-spacing:4px;font-weight:400;font-family:var(--mono)}
+  #setup h1{font-size:22px;color:var(--cyan);letter-spacing:6px;font-weight:400;font-family:var(--mono)}
   #setup .sub{font-family:var(--sans);font-size:12px;color:var(--text-dim);
     line-height:1.75;margin:8px 0 14px}
   #pickList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
@@ -286,7 +315,7 @@
 
   /* ── DEFCON 1 提醒：跌到 1 是一次性事件，必须有明确的"核打击权限已解锁"告知 ──
      放在地球上方偏上，3 秒自动淡出；只在跨越到 1 的那一刻弹一次。 */
-  #alert{position:absolute;left:0;right:0;top:calc(58px + var(--safe-t));z-index:28;
+  #alert{position:absolute;left:0;right:0;top:calc(96px + var(--safe-t));z-index:28;
     display:flex;justify-content:center;pointer-events:none;opacity:0}
   #alert .box{background:rgba(226,75,74,.14);border:1px solid rgba(226,75,74,.55);
     padding:7px 16px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
@@ -300,9 +329,12 @@
   }
 
   /* ── 演出层：核爆白闪 / DEFCON 1 边缘红脉冲 ── */
-  #flash{position:absolute;inset:0;z-index:40;background:#fff;opacity:0;pointer-events:none}
-  #flash.on{animation:flashOut .55s ease-out}
-  @keyframes flashOut{0%{opacity:.9}100%{opacity:0}}
+  /* 核爆白闪：纯白 + 0.9 峰值 + 0.55s 急灭在手机上等于闪光弹，密集轰炸时反复触发就是频闪。
+   * 柔化三件套：① 峰值 0.9 → 0.5；② 曲线改为 10% 快速起亮 + 约 1s 缓慢退光（眼有适应时间）；
+   * ③ 纯白 → 核爆暖白（#fff8ea），去掉刺眼的冷白感。连续命中的节流见 ui.js pumpImpacts。 */
+  #flash{position:absolute;inset:0;z-index:40;background:#fff8ea;opacity:0;pointer-events:none}
+  #flash.on{animation:flashOut 1.15s ease-out}
+  @keyframes flashOut{0%{opacity:0}10%{opacity:.5}100%{opacity:0}}
   #alarm{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;
     box-shadow:inset 0 0 80px rgba(226,75,74,.6)}
   /* 两档红脉冲：warn = 危机值临界（≥85）的心跳预警，柔和慢；on = DEFCON 1 的全力警报。
@@ -351,6 +383,10 @@
     <div class="row" data-page-node-id="Eq2qGOh2yC2zgeUhrHSsmH"><span data-page-node-id="Qpwr6oZLGNfQZChDfiXEY6">危机值</span><span id="crVal" data-page-node-id="0wigzCWk8zZiQj8J4Gysz7">10</span></div>
     <div id="bar" data-page-node-id="Q4gzA9oLiRYUfZhCl6ronB"><i id="crBar" data-page-node-id="RSddvmvRu5aQdCtf2oIBbK"></i></div>
   </div>
+  <div id="facTag" data-page-node-id="jRegQHB8qIXDn7Q5ix0jEt">
+    <span class="sw" id="facSw"></span>
+    <span class="nm" id="facName"></span>
+  </div>
   <div id="phase" data-page-node-id="jRegQHB8qIXDn7Q5ix0jEt">
     <span class="lb" data-page-node-id="WLH5cTYrzqQ5LMjbeyt0uV">阶段</span>
     <span class="pt" id="phName" data-page-node-id="WLH5cTYrzqQ5LMjbeyt0uV">态势简报</span>
@@ -361,17 +397,16 @@
 <div id="sheet" class="hud panel" data-page-node-id="Veaw8eEe6tVIMTrmem2OG5">
   <div id="cmdbar">
     <div id="hudLeft">
-      <div class="hl1">第 <b id="rdNum">1</b> 回合<span class="rd" id="rdTime">20s</span></div>
       <div class="hl2">规模 <em id="myPop">0</em>M<span class="dl" id="popDelta"></span><span class="gr" id="popGr"></span>
-        <span id="msLab">弹头</span> <em id="myMs">0</em><span class="dl" id="msDelta"></span><span class="gr" id="msGr"></span></div>
+        <span id="msLab">弹头</span> <em id="myMs">0</em><span class="dl" id="msDelta"></span><span class="gr" id="msGr"></span><span class="rd" id="rdTime">20s</span></div>
     </div>
-    <div id="hudBtns">
-      <button type="button" id="sndBtn" aria-label="音效开关" aria-pressed="true" data-page-node-id="kQ2mSnd9wLtRvXb7ZpNc3E">
-        <svg viewBox="0 0 14 14" width="15" height="15" data-page-node-id="tRv5nHc2XkLpQw8YbMd6Zs"><path d="M2.2,5.3 h2.3 L7.7,2.7 v8.6 L4.5,8.7 H2.2 z" fill="rgba(127,212,232,.20)" stroke="currentColor" stroke-width="1" stroke-linejoin="round" data-page-node-id="wY8kLp3NqRvTc6XbMd2Zs1"></path><path class="wave" d="M9.3,5.0 A3.0,3.0 0 0 1 9.3,9.0" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><path class="wave" d="M11.2,3.3 A5.2,5.2 0 0 1 11.2,10.7" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><g class="slash"><line x1="9.1" y1="4.9" x2="12.3" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" data-page-node-id="nQ9wLp2XkRvT5c8bMd3Zs6"></line><line x1="12.3" y1="4.9" x2="9.1" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></line></g></svg>
-      </button>
-      <button type="button" id="speedBtn" aria-label="倍速">×1</button>
-      <button type="button" id="drawerBtn" aria-label="阵营与图例" data-page-node-id="CqNDOEAbdkZi9orcEQIaxF">≡</button>
-    </div>
+  </div>
+  <div id="hudBtns">
+    <button type="button" id="sndBtn" aria-label="音效开关" aria-pressed="true" data-page-node-id="kQ2mSnd9wLtRvXb7ZpNc3E">
+      <svg viewBox="0 0 14 14" width="15" height="15" data-page-node-id="tRv5nHc2XkLpQw8YbMd6Zs"><path d="M2.2,5.3 h2.3 L7.7,2.7 v8.6 L4.5,8.7 H2.2 z" fill="rgba(127,212,232,.20)" stroke="currentColor" stroke-width="1" stroke-linejoin="round" data-page-node-id="wY8kLp3NqRvTc6XbMd2Zs1"></path><path class="wave" d="M9.3,5.0 A3.0,3.0 0 0 1 9.3,9.0" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><path class="wave" d="M11.2,3.3 A5.2,5.2 0 0 1 11.2,10.7" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><g class="slash"><line x1="9.1" y1="4.9" x2="12.3" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" data-page-node-id="nQ9wLp2XkRvT5c8bMd3Zs6"></line><line x1="12.3" y1="4.9" x2="9.1" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></line></g></svg>
+    </button>
+    <button type="button" id="speedBtn" aria-label="倍速">×1</button>
+    <button type="button" id="drawerBtn" aria-label="阵营与图例" data-page-node-id="CqNDOEAbdkZi9orcEQIaxF">≡</button>
   </div>
   <div id="card" data-page-node-id="ShxqC1o9dviTiFesfEiebe">
     <div class="ct" id="cTitle" data-page-node-id="rZgqbzxhQD38dzrndTD00I"></div>
@@ -444,9 +479,9 @@
 
 <div id="setup" data-page-node-id="eamJBoCXawJDAjqqzDg6Pr">
   <h1 data-page-node-id="IqVS0jrvW6k24mVtlCCCwN">核战危机 DEFCON</h1>
-  <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方阵营隔洋对峙，威慑天平悬于一线。危机等级随各方抉择持续浮动，一旦触达 DEFCON 1，核打击权限即刻解锁。弹头数量有限，发射指令无法撤回，落点即成废墟 —— 尽力保护你的人民。请选择你的阵营。</p>
+  <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方阵营相互对峙，威慑天平悬于一线。危机等级随各方抉择持续浮动，一旦触达 DEFCON 1，核打击权限即刻解锁。弹头数量有限，发射指令无法撤回，落点即成废墟 —— 尽力保护你的人民。请选择你的阵营。</p>
   <div id="pickList" data-page-node-id="pl7vh6QPQprS4RxiyaNPA0"></div>
-  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈 → 热核战争 → 全球伤亡清算。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点敌方城市装订目标。</p>
+  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈 → 热核战争 → 终局清算。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点敌方城市装订目标。</p>
 </div>
 
 <div id="over" class="hud panel" data-page-node-id="eupBWInVAOHPkMaT9lFKxZ">

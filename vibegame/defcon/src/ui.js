@@ -70,14 +70,19 @@
     el.dcBox = $('defcon'); el.dcLv = $('dcLv');
     el.crVal = $('crVal'); el.crBar = $('crBar');
     el.phName = $('phName');
-    // 回合与倒计时下沉到底部面板左侧（顶栏只留阶段名，避免两处重复）
-    el.rdNum = $('rdNum'); el.rdTime = $('rdTime');
+    // 倒计时下沉到底部统计行最右端（回合数只体现在事件卡的回合徽章上，不再多处重复）
+    el.rdTime = $('rdTime');
     el.hudLeft = $('hudLeft');
     el.myPop = $('myPop'); el.myMs = $('myMs');
     el.msLab = $('msLab');
     el.popDelta = $('popDelta'); el.msDelta = $('msDelta');
     el.popGr = $('popGr'); el.msGr = $('msGr');
     el.phase = $('phase');
+    // 顶栏中段的当前阵营（色块 + 名称）：阵营在开局就定死，这里写一次即可
+    el.facSw = $('facSw'); el.facName = $('facName');
+    var fac = DC.FACTIONS_BY_CODE[state.playerFaction] || {};
+    if (el.facSw) el.facSw.style.background = fac.color || '#ffffff';
+    if (el.facName) el.facName.textContent = fac.name || state.playerFaction;
     el.speedBtn = $('speedBtn');
     el.alert = $('alert');
     el.fs = { silo: $('fsSilo'), sub: $('fsSub'), sam: $('fsSam'), radar: $('fsRadar') };
@@ -102,6 +107,7 @@
     pending = null; salvo = 1;
     sig.factions = ''; sig.cities = ''; sig.card = ''; sig.choice = -2;
     sig.war = -1; sig.over = false; sig.dc = 0; sig.impacts = 0; sig.intercepts = -1;
+    lastFlashAt = -1e9;
     sig.target = null; sig.fireOk = null; sig.tip = ''; sig.sheet = null; sig.tone = '';
     sig.pop = null; sig.ms = null; sig.fs = ''; sig.dcAlerted = false;
     speedIdx = 0; renderSpeed(1);
@@ -234,9 +240,8 @@
     if (state.phase === 'briefing') left = Math.max(0, CONFIG.briefingSeconds - state.t);
     else if (state.phase === 'crisis') left = Math.max(0, CONFIG.roundSeconds - state.t);
     else if (state.phase === 'war') left = Math.max(0, CONFIG.warSeconds - state.t);
-    /* 回合 + 倒计时：底部面板左侧空间宽裕，不必再挤成「12 回合 · 20s」的缩写。
-     * 终局没有倒计时，只留回合数。 */
-    if (el.rdNum && el.rdNum.textContent !== String(state.round)) el.rdNum.textContent = state.round;
+    /* 倒计时：统计行最右端。终局没有倒计时，显示「本局结束」。
+     * 回合数不再单独展示 —— 危机期看事件卡的回合徽章，战争期只剩倒计时重要。 */
     if (el.rdTime) {
       var rt = state.phase === 'over' ? '本局结束'
         : state.phase === 'war' ? ('剩 ' + left.toFixed(0) + 's')
@@ -347,13 +352,21 @@
 
   /* state.impacts 是逻辑层的单调计数（sim 在 resolveImpact 里 +1）。
    * 不能读 state.fx —— render.frame 每帧 shift 清空队列，UI 永远读不到。 */
+  /* 白闪节流：齐射落地时 impacts 短时间连跳多次，每次都重播动画就是频闪（手机上尤其刺眼）。
+   * 两次白闪之间至少隔 FLASH_GAP —— 被跳过的命中依然有音效、震屏和球面焦痕，演出不缺席，只是不闪眼。 */
+  var FLASH_GAP = 1100;              // ms，与 CSS 动画时长一致：上一次退光结束前不重播
+  var lastFlashAt = -1e9;
   function pumpImpacts(state) {
     if (state.impacts === sig.impacts) return;
     sig.impacts = state.impacts;
     sfx('nuke');
-    el.flash.classList.remove('on');
-    void el.flash.offsetWidth;
-    el.flash.classList.add('on');
+    var now = Date.now();
+    if (now - lastFlashAt >= FLASH_GAP) {
+      lastFlashAt = now;
+      el.flash.classList.remove('on');
+      void el.flash.offsetWidth;         // 强制回流，动画才能连续触发
+      el.flash.classList.add('on');
+    }
     if (DC.render && DC.render.shake) DC.render.shake(1);
   }
 
@@ -550,7 +563,10 @@
 
   function buildCard(state) {
     var c = state.card;
-    el.cTitle.textContent = '第 ' + state.round + ' 回合 · ' + c.title;
+    /* 标题行 = 回合徽章 + 事件名：回合从标题文本里拆出来做成描边小徽章，
+     * 与底部统计行不再有重复的「第 X 回合」纯文本（底部已删）。 */
+    el.cTitle.innerHTML = '<span class="cr">第 ' + state.round + ' 回合</span>';
+    el.cTitle.appendChild(document.createTextNode(c.title));
     el.cDesc.textContent = c.desc;
     el.cOpts.textContent = '';
 

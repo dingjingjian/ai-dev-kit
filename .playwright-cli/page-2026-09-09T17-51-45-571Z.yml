@@ -1,0 +1,82 @@
+- generic [ref=e2]:
+  - generic: DEFCON 1 · 核打击权限已解锁
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: DEFCON
+      - generic [ref=e7]: "5"
+    - generic [ref=e9]:
+      - generic [ref=e10]: 危机值
+      - generic [ref=e11]: "10"
+    - generic [ref=e16]:
+      - generic [ref=e17]: 阶段
+      - generic [ref=e18]: 态势简报
+  - generic [ref=e19]:
+    - generic [ref=e22]:
+      - text: 规模
+      - emphasis [ref=e23]: "0"
+      - text: M
+      - generic [ref=e24]: 弹头
+      - emphasis [ref=e25]: "0"
+      - generic [ref=e26]: 20s
+    - generic [ref=e27]:
+      - button "音效开关" [pressed] [ref=e28] [cursor=pointer]
+      - button "倍速" [ref=e34] [cursor=pointer]: ×1
+      - button "阵营与图例" [ref=e35] [cursor=pointer]: ≡
+  - generic [ref=e36]:
+    - button "关闭" [ref=e37] [cursor=pointer]: ✕
+    - generic [ref=e38]: 阵营 · 存续规模
+    - generic [ref=e39]:
+      - generic [ref=e40]: 图例 · 军事单位
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e45]: 发射井
+          - generic [ref=e46]: 6 座 × 3 枚
+        - generic [ref=e47]:
+          - generic [ref=e52]: 战略核潜艇
+          - generic [ref=e53]: 2 艘 × 2 枚 · 机动发射
+        - generic [ref=e54]:
+          - generic [ref=e57]: 防空阵地
+          - generic [ref=e58]: 拦截来袭导弹
+        - generic [ref=e59]:
+          - generic [ref=e62]: 雷达站
+          - generic [ref=e63]: 覆盖 · 弹道溯源
+        - generic [ref=e64]:
+          - generic [ref=e67]: 城市
+          - generic [ref=e68]: 光点越大规模越高
+        - generic [ref=e69]: 敌方单位默认不可见 —— 只有被雷达捕获并弹道溯源标记后才会显形。
+      - generic [ref=e70]: 城市 · 点选可定位
+  - generic [ref=e71]:
+    - heading "核战危机 DEFCON" [level=1] [ref=e72]
+    - paragraph [ref=e73]: 六方阵营相互对峙，威慑天平悬于一线。危机等级随各方抉择持续浮动，一旦触达 DEFCON 1，核打击权限即刻解锁。弹头数量有限，发射指令无法撤回，落点即成废墟 —— 尽力保护你的人民。请选择你的阵营。
+    - generic [ref=e74]:
+      - button "北方联邦 北亚 · 北欧 · 北极圈 核弹基数最多 28 枚" [ref=e75] [cursor=pointer]:
+        - generic [ref=e77]: 北方联邦
+        - generic [ref=e78]: 北亚 · 北欧 · 北极圈
+        - generic [ref=e79]: 核弹基数最多
+        - generic [ref=e80]: 28 枚
+      - button "美洲同盟 北美 · 中美 防空拦截加成 22 枚" [ref=e81] [cursor=pointer]:
+        - generic [ref=e83]: 美洲同盟
+        - generic [ref=e84]: 北美 · 中美
+        - generic [ref=e85]: 防空拦截加成
+        - generic [ref=e86]: 22 枚
+      - button "欧亚公约 欧洲 · 地中海 · 中东 雷达探测加成 19 枚" [ref=e87] [cursor=pointer]:
+        - generic [ref=e89]: 欧亚公约
+        - generic [ref=e90]: 欧洲 · 地中海 · 中东
+        - generic [ref=e91]: 雷达探测加成
+        - generic [ref=e92]: 19 枚
+      - button "东亚联盟 东亚 · 西太平洋 城市规模最大 22 枚" [ref=e93] [cursor=pointer]:
+        - generic [ref=e95]: 东亚联盟
+        - generic [ref=e96]: 东亚 · 西太平洋
+        - generic [ref=e97]: 城市规模最大
+        - generic [ref=e98]: 22 枚
+      - button "赤道共同体 拉美 · 非洲 · 东南亚 外交降温加成 16 枚" [ref=e99] [cursor=pointer]:
+        - generic [ref=e101]: 赤道共同体
+        - generic [ref=e102]: 拉美 · 非洲 · 东南亚
+        - generic [ref=e103]: 外交降温加成
+        - generic [ref=e104]: 16 枚
+      - button "南洋联邦 大洋洲 · 太平洋群岛 城市多而分散 18 枚" [ref=e105] [cursor=pointer]:
+        - generic [ref=e107]: 南洋联邦
+        - generic [ref=e108]: 大洋洲 · 太平洋群岛
+        - generic [ref=e109]: 城市多而分散
+        - generic [ref=e110]: 18 枚
+    - paragraph [ref=e111]: 一局约 6–8 分钟：危机博弈 → 热核战争 → 终局清算。单指拖动旋转地球，双指缩放，轻点敌方城市装订目标。

@@ -1,0 +1,332 @@
+- generic [ref=e2]:
+  - generic: DEFCON 1 · 核打击权限已解锁
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]: DEFCON
+      - generic [ref=e7]: "5"
+    - generic [ref=e9]:
+      - generic [ref=e10]: 危机值
+      - generic [ref=e11]: "10"
+    - generic [ref=e14]:
+      - generic [ref=e15]: 阶段
+      - generic [ref=e16]: 态势简报
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - text: 第
+        - generic [ref=e21]: "0"
+        - text: 回合
+        - generic [ref=e22]: 9s
+      - generic [ref=e23]:
+        - text: 规模
+        - emphasis [ref=e24]: "92.0"
+        - text: M
+        - generic [ref=e112]: +0.7/回合
+        - generic [ref=e25]: 弹头
+        - emphasis [ref=e26]: "28"
+        - generic [ref=e113]: +1/回合
+    - generic [ref=e27]:
+      - button "音效开关" [pressed] [ref=e28] [cursor=pointer]
+      - button "倍速" [ref=e34] [cursor=pointer]: ×1
+      - button "阵营与图例" [ref=e35] [cursor=pointer]: ≡
+  - generic [ref=e36]:
+    - button "关闭" [ref=e37] [cursor=pointer]: ✕
+    - generic [ref=e38]: 阵营 · 存续规模
+    - generic [ref=e39]:
+      - generic [ref=e116]:
+        - generic [ref=e117]:
+          - generic [ref=e119]: 北方联邦（你）
+          - generic [ref=e120]: 92M
+        - generic [ref=e121]:
+          - generic [ref=e123]: 美洲同盟
+          - generic [ref=e124]: 91M
+        - generic [ref=e125]:
+          - generic [ref=e127]: 欧亚公约
+          - generic [ref=e128]: 86M
+        - generic [ref=e129]:
+          - generic [ref=e131]: 东亚联盟
+          - generic [ref=e132]: 113M
+        - generic [ref=e133]:
+          - generic [ref=e135]: 赤道共同体
+          - generic [ref=e136]: 85M
+        - generic [ref=e137]:
+          - generic [ref=e139]: 南洋联邦
+          - generic [ref=e140]: 75M
+      - generic [ref=e40]: 图例 · 军事单位
+      - generic [ref=e41]:
+        - generic [ref=e42]:
+          - generic [ref=e45]: 发射井
+          - generic [ref=e46]: 6 座 × 3 枚
+        - generic [ref=e47]:
+          - generic [ref=e52]: 战略核潜艇
+          - generic [ref=e53]: 2 艘 × 2 枚 · 机动发射
+        - generic [ref=e54]:
+          - generic [ref=e57]: 防空阵地
+          - generic [ref=e58]: 拦截来袭导弹
+        - generic [ref=e59]:
+          - generic [ref=e62]: 雷达站
+          - generic [ref=e63]: 覆盖 · 弹道溯源
+        - generic [ref=e64]:
+          - generic [ref=e67]: 城市
+          - generic [ref=e68]: 光点越大规模越高
+        - generic [ref=e69]: 敌方单位默认不可见 —— 只有被雷达捕获并弹道溯源标记后才会显形。
+      - generic [ref=e70]: 城市 · 点选可定位
+      - generic [ref=e141]:
+        - generic [ref=e142] [cursor=pointer]:
+          - generic [ref=e144]: 白京
+          - generic [ref=e145]:
+            - generic [ref=e148]: "1"
+            - generic [ref=e151]: "1"
+            - generic [ref=e154]: "1"
+          - generic [ref=e155]: 14.0M
+        - generic [ref=e156] [cursor=pointer]:
+          - generic [ref=e158]: 北港
+          - generic [ref=e159]: "1"
+          - generic [ref=e163]: 12.0M
+        - generic [ref=e164] [cursor=pointer]:
+          - generic [ref=e166]: 极港
+          - generic [ref=e167]:
+            - generic [ref=e170]: "2"
+            - generic [ref=e173]: "1"
+            - generic [ref=e176]: "1"
+          - generic [ref=e177]: 9.0M
+        - generic [ref=e178] [cursor=pointer]:
+          - generic [ref=e180]: 使城
+          - generic [ref=e181]:
+            - generic [ref=e184]: "3"
+            - generic [ref=e187]: "1"
+          - generic [ref=e188]: 8.0M
+        - generic [ref=e189] [cursor=pointer]:
+          - generic [ref=e191]: 岭城
+          - generic [ref=e192]:
+            - generic [ref=e195]: "1"
+            - generic [ref=e198]: "1"
+          - generic [ref=e199]: 10.0M
+        - generic [ref=e200] [cursor=pointer]:
+          - generic [ref=e202]: 新原
+          - generic [ref=e203]: —
+          - generic [ref=e204]: 9.0M
+        - generic [ref=e205] [cursor=pointer]:
+          - generic [ref=e207]: 湖京
+          - generic [ref=e208]: —
+          - generic [ref=e209]: 8.0M
+        - generic [ref=e210] [cursor=pointer]:
+          - generic [ref=e212]: 桦岛
+          - generic [ref=e213]: —
+          - generic [ref=e214]: 9.0M
+        - generic [ref=e215] [cursor=pointer]:
+          - generic [ref=e217]: 雪湾
+          - generic [ref=e218]: "1"
+          - generic [ref=e222]: 7.0M
+        - generic [ref=e223] [cursor=pointer]:
+          - generic [ref=e225]: 冻城
+          - generic [ref=e226]: —
+          - generic [ref=e227]: 6.0M
+        - generic [ref=e228] [cursor=pointer]:
+          - generic [ref=e230]: 雾湾
+          - generic [ref=e231]: "?"
+          - generic [ref=e232]: 10.0M
+        - generic [ref=e233] [cursor=pointer]:
+          - generic [ref=e235]: 金岬
+          - generic [ref=e236]: "?"
+          - generic [ref=e237]: 8.0M
+        - generic [ref=e238] [cursor=pointer]:
+          - generic [ref=e240]: 雨港
+          - generic [ref=e241]: "?"
+          - generic [ref=e242]: 7.0M
+        - generic [ref=e243] [cursor=pointer]:
+          - generic [ref=e245]: 枫湾
+          - generic [ref=e246]: "?"
+          - generic [ref=e247]: 7.0M
+        - generic [ref=e248] [cursor=pointer]:
+          - generic [ref=e250]: 风城
+          - generic [ref=e251]: "?"
+          - generic [ref=e252]: 11.0M
+        - generic [ref=e253] [cursor=pointer]:
+          - generic [ref=e255]: 油港
+          - generic [ref=e256]: "?"
+          - generic [ref=e257]: 9.0M
+        - generic [ref=e258] [cursor=pointer]:
+          - generic [ref=e260]: 长港
+          - generic [ref=e261]: "?"
+          - generic [ref=e262]: 13.0M
+        - generic [ref=e263] [cursor=pointer]:
+          - generic [ref=e265]: 湖城
+          - generic [ref=e266]: "?"
+          - generic [ref=e267]: 8.0M
+        - generic [ref=e268] [cursor=pointer]:
+          - generic [ref=e270]: 谷京
+          - generic [ref=e271]: "?"
+          - generic [ref=e272]: 12.0M
+        - generic [ref=e273] [cursor=pointer]:
+          - generic [ref=e275]: 高城
+          - generic [ref=e276]: "?"
+          - generic [ref=e277]: 6.0M
+        - generic [ref=e278] [cursor=pointer]:
+          - generic [ref=e280]: 雾京
+          - generic [ref=e281]: "?"
+          - generic [ref=e282]: 10.0M
+        - generic [ref=e283] [cursor=pointer]:
+          - generic [ref=e285]: 光城
+          - generic [ref=e286]: "?"
+          - generic [ref=e287]: 10.0M
+        - generic [ref=e288] [cursor=pointer]:
+          - generic [ref=e290]: 铁京
+          - generic [ref=e291]: "?"
+          - generic [ref=e292]: 8.0M
+        - generic [ref=e293] [cursor=pointer]:
+          - generic [ref=e295]: 丘城
+          - generic [ref=e296]: "?"
+          - generic [ref=e297]: 7.0M
+        - generic [ref=e298] [cursor=pointer]:
+          - generic [ref=e300]: 台京
+          - generic [ref=e301]: "?"
+          - generic [ref=e302]: 7.0M
+        - generic [ref=e303] [cursor=pointer]:
+          - generic [ref=e305]: 平城
+          - generic [ref=e306]: "?"
+          - generic [ref=e307]: 6.0M
+        - generic [ref=e308] [cursor=pointer]:
+          - generic [ref=e310]: 峡京
+          - generic [ref=e311]: "?"
+          - generic [ref=e312]: 11.0M
+        - generic [ref=e313] [cursor=pointer]:
+          - generic [ref=e315]: 沙京
+          - generic [ref=e316]: "?"
+          - generic [ref=e317]: 12.0M
+        - generic [ref=e318] [cursor=pointer]:
+          - generic [ref=e320]: 山京
+          - generic [ref=e321]: "?"
+          - generic [ref=e322]: 9.0M
+        - generic [ref=e323] [cursor=pointer]:
+          - generic [ref=e325]: 石港
+          - generic [ref=e326]: "?"
+          - generic [ref=e327]: 6.0M
+        - generic [ref=e328] [cursor=pointer]:
+          - generic [ref=e330]: 燕京
+          - generic [ref=e331]: "?"
+          - generic [ref=e332]: 14.0M
+        - generic [ref=e333] [cursor=pointer]:
+          - generic [ref=e335]: 江口
+          - generic [ref=e336]: "?"
+          - generic [ref=e337]: 16.0M
+        - generic [ref=e338] [cursor=pointer]:
+          - generic [ref=e340]: 穗港
+          - generic [ref=e341]: "?"
+          - generic [ref=e342]: 12.0M
+        - generic [ref=e343] [cursor=pointer]:
+          - generic [ref=e345]: 锦城
+          - generic [ref=e346]: "?"
+          - generic [ref=e347]: 10.0M
+        - generic [ref=e348] [cursor=pointer]:
+          - generic [ref=e350]: 江城
+          - generic [ref=e351]: "?"
+          - generic [ref=e352]: 10.0M
+        - generic [ref=e353] [cursor=pointer]:
+          - generic [ref=e355]: 秦城
+          - generic [ref=e356]: "?"
+          - generic [ref=e357]: 9.0M
+        - generic [ref=e358] [cursor=pointer]:
+          - generic [ref=e360]: 沈城
+          - generic [ref=e361]: "?"
+          - generic [ref=e362]: 9.0M
+        - generic [ref=e363] [cursor=pointer]:
+          - generic [ref=e365]: 东湾
+          - generic [ref=e366]: "?"
+          - generic [ref=e367]: 16.0M
+        - generic [ref=e368] [cursor=pointer]:
+          - generic [ref=e370]: 汉阳
+          - generic [ref=e371]: "?"
+          - generic [ref=e372]: 12.0M
+        - generic [ref=e373] [cursor=pointer]:
+          - generic [ref=e375]: 原京
+          - generic [ref=e376]: "?"
+          - generic [ref=e377]: 5.0M
+        - generic [ref=e378] [cursor=pointer]:
+          - generic [ref=e380]: 糖港
+          - generic [ref=e381]: "?"
+          - generic [ref=e382]: 9.0M
+        - generic [ref=e383] [cursor=pointer]:
+          - generic [ref=e385]: 松京
+          - generic [ref=e386]: "?"
+          - generic [ref=e387]: 10.0M
+        - generic [ref=e388] [cursor=pointer]:
+          - generic [ref=e390]: 旱城
+          - generic [ref=e391]: "?"
+          - generic [ref=e392]: 8.0M
+        - generic [ref=e393] [cursor=pointer]:
+          - generic [ref=e395]: 岭京
+          - generic [ref=e396]: "?"
+          - generic [ref=e397]: 7.0M
+        - generic [ref=e398] [cursor=pointer]:
+          - generic [ref=e400]: 泻港
+          - generic [ref=e401]: "?"
+          - generic [ref=e402]: 11.0M
+        - generic [ref=e403] [cursor=pointer]:
+          - generic [ref=e405]: 河京
+          - generic [ref=e406]: "?"
+          - generic [ref=e407]: 9.0M
+        - generic [ref=e408] [cursor=pointer]:
+          - generic [ref=e410]: 高原
+          - generic [ref=e411]: "?"
+          - generic [ref=e412]: 7.0M
+        - generic [ref=e413] [cursor=pointer]:
+          - generic [ref=e415]: 椰港
+          - generic [ref=e416]: "?"
+          - generic [ref=e417]: 10.0M
+        - generic [ref=e418] [cursor=pointer]:
+          - generic [ref=e420]: 狮港
+          - generic [ref=e421]: "?"
+          - generic [ref=e422]: 6.0M
+        - generic [ref=e423] [cursor=pointer]:
+          - generic [ref=e425]: 棕城
+          - generic [ref=e426]: "?"
+          - generic [ref=e427]: 8.0M
+        - generic [ref=e428] [cursor=pointer]:
+          - generic [ref=e430]: 帆港
+          - generic [ref=e431]: "?"
+          - generic [ref=e432]: 10.0M
+        - generic [ref=e433] [cursor=pointer]:
+          - generic [ref=e435]: 金湾
+          - generic [ref=e436]: "?"
+          - generic [ref=e437]: 9.0M
+        - generic [ref=e438] [cursor=pointer]:
+          - generic [ref=e440]: 晴港
+          - generic [ref=e441]: "?"
+          - generic [ref=e442]: 7.0M
+        - generic [ref=e443] [cursor=pointer]:
+          - generic [ref=e445]: 孤港
+          - generic [ref=e446]: "?"
+          - generic [ref=e447]: 7.0M
+        - generic [ref=e448] [cursor=pointer]:
+          - generic [ref=e450]: 酒湾
+          - generic [ref=e451]: "?"
+          - generic [ref=e452]: 6.0M
+        - generic [ref=e453] [cursor=pointer]:
+          - generic [ref=e455]: 北门
+          - generic [ref=e456]: "?"
+          - generic [ref=e457]: 5.0M
+        - generic [ref=e458] [cursor=pointer]:
+          - generic [ref=e460]: 云港
+          - generic [ref=e461]: "?"
+          - generic [ref=e462]: 7.0M
+        - generic [ref=e463] [cursor=pointer]:
+          - generic [ref=e465]: 岬城
+          - generic [ref=e466]: "?"
+          - generic [ref=e467]: 6.0M
+        - generic [ref=e468] [cursor=pointer]:
+          - generic [ref=e470]: 珠屿
+          - generic [ref=e471]: "?"
+          - generic [ref=e472]: 6.0M
+        - generic [ref=e473] [cursor=pointer]:
+          - generic [ref=e475]: 珊屿
+          - generic [ref=e476]: "?"
+          - generic [ref=e477]: 5.0M
+        - generic [ref=e478] [cursor=pointer]:
+          - generic [ref=e480]: 塔港
+          - generic [ref=e481]: "?"
+          - generic [ref=e482]: 4.0M
+        - generic [ref=e483] [cursor=pointer]:
+          - generic [ref=e485]: 震城
+          - generic [ref=e486]: "?"
+          - generic [ref=e487]: 3.0M
