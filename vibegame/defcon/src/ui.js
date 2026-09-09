@@ -30,7 +30,7 @@
   var salvo = 1;                  // 单次发射枚数：1 或 3（齐射）
   var bound = false;              // 事件只绑一次：init 若被重入不会叠加出双份监听
   var sig = { factions: '', cities: '', card: '', choice: -2, war: -1, over: false,
-              dc: 0, impacts: 0, target: null, fireOk: null, tip: '', sheet: null };
+              dc: 0, impacts: 0, target: null, fireOk: null, tip: '', sheet: null, tone: '' };
 
   var PHASE_NAME = {
     briefing: '态势简报', crisis: '危机博弈', war: '热核战争', over: '终局'
@@ -41,12 +41,12 @@
     reveal_radar: '暴露全部敌方雷达',
     expose_silo: '暴露己方全部发射井',
     radar_down: '己方预警网失效',
-    pop_loss: '己方人口损失',
+    pop_loss: '己方规模受损',
     city_defense: '己方城市获得防御层',
     add_radar: '己方增建雷达',
     add_sam: '己方增建防空',
     add_missiles: '己方补充核弹',
-    boost_pop: '己方人口回升',
+    boost_pop: '己方规模回升',
     intel_city: '获取敌方城市情报',
     degrade_facility: '削弱敌方设施',
     destroy_facility: '摧毁敌方设施'
@@ -58,6 +58,8 @@
   var SVG_SILO = '<svg width="11" height="11" viewBox="0 0 12 12"><polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/></svg>';
   var SVG_SAM = '<svg width="11" height="11" viewBox="0 0 12 12"><polygon points="6,1.5 10.5,10.5 1.5,10.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/></svg>';
   var SVG_RADAR = '<svg width="11" height="11" viewBox="0 0 12 12"><ellipse cx="6" cy="5" rx="5" ry="2.6" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/><line x1="6" y1="7.6" x2="6" y2="11" stroke="#7fd4e8" stroke-width="1"/></svg>';
+  /* §11.10 战略核潜艇：艇身椭圆 + 指挥塔 + 潜望镜 + 尾舵，与球面图标同一侧影。 */
+  var SVG_SUB = '<svg width="11" height="11" viewBox="0 0 12 12"><ellipse cx="5.2" cy="7.4" rx="3.6" ry="1.4" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/><path d="M4,6.2 L4.2,4.4 L6.4,4.4 L6.6,6.2 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/><line x1="5.3" y1="4.4" x2="5.3" y2="2.8" stroke="#7fd4e8" stroke-width="1"/><path d="M8.4,7.4 L11,5.8 L11,9 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"/></svg>';
 
   function $(id) { return document.getElementById(id); }
 
@@ -67,7 +69,20 @@
     cmd = commands || {};
     el.dcBox = $('defcon'); el.dcLv = $('dcLv');
     el.crVal = $('crVal'); el.crBar = $('crBar');
-    el.phName = $('phName'); el.phTime = $('phTime');
+    el.phName = $('phName');
+    // 回合与倒计时下沉到底部面板左侧（顶栏只留阶段名，避免两处重复）
+    el.rdNum = $('rdNum'); el.rdTime = $('rdTime');
+    el.hudLeft = $('hudLeft');
+    el.myPop = $('myPop'); el.myMs = $('myMs');
+    el.msLab = $('msLab');
+    el.popDelta = $('popDelta'); el.msDelta = $('msDelta');
+    el.popGr = $('popGr'); el.msGr = $('msGr');
+    el.phase = $('phase');
+    el.speedBtn = $('speedBtn');
+    el.alert = $('alert');
+    el.fs = { silo: $('fsSilo'), sub: $('fsSub'), sam: $('fsSam'), radar: $('fsRadar') };
+    el.ft = { silo: $('ftSilo'), sub: $('ftSub'), sam: $('ftSam'), radar: $('ftRadar') };
+    el.fsWrap = { silo: $('fsSiloWrap'), sub: $('fsSubWrap'), sam: $('fsSamWrap'), radar: $('fsRadarWrap') };
     el.fList = $('fList'); el.cList = $('cList');
     el.card = $('card'); el.cTitle = $('cTitle'); el.cDesc = $('cDesc');
     el.cTimer = $('cTimer'); el.cOpts = $('cOpts'); el.cMax = $('cMax');
@@ -82,11 +97,14 @@
     el.sndBtn = $('sndBtn');
     el.flash = $('flash'); el.alarm = $('alarm');
     el.over = $('over'); el.ovBody = $('ovBody'); el.ovRecap = $('ovRecap');
+    el.ovTotal = $('ovTotal');
 
     pending = null; salvo = 1;
     sig.factions = ''; sig.cities = ''; sig.card = ''; sig.choice = -2;
     sig.war = -1; sig.over = false; sig.dc = 0; sig.impacts = 0; sig.intercepts = -1;
-    sig.target = null; sig.fireOk = null; sig.tip = ''; sig.sheet = null;
+    sig.target = null; sig.fireOk = null; sig.tip = ''; sig.sheet = null; sig.tone = '';
+    sig.pop = null; sig.ms = null; sig.fs = ''; sig.dcAlerted = false;
+    speedIdx = 0; renderSpeed(1);
 
     if (!bound) { bindStatic(); bound = true; }
     buildCityList(state);
@@ -110,7 +128,18 @@
     if (el.fireBtn) el.fireBtn.addEventListener('click', function () { fire(); });
     if (el.salvoBtn) el.salvoBtn.addEventListener('click', function () { toggleSalvo(); });
 
-    /* 音效开关：默认关，点一下才开。AudioContext 的 resume 必须发生在真实手势里，
+    /* 倍速：危机博弈每回合 20 秒、战争 3 分钟，看熟了会想快进。
+     * 只加速时间推进（game.js 的 acc 累积），逻辑仍是 10 Hz 固定步长 —— 战局结果与倍速无关。 */
+    if (el.speedBtn) el.speedBtn.addEventListener('click', function () { toggleSpeed(); });
+
+    /* 音效默认开启（audio.js）：init 时把按钮初始态与 DC.audio.enabled 对齐，
+     * 开态画声波线、关态画静音斜杠，不靠 HTML 里的写死初始值。 */
+    if (el.sndBtn && DC.audio) {
+      el.sndBtn.classList.toggle('on', DC.audio.enabled);
+      el.sndBtn.setAttribute('aria-pressed', DC.audio.enabled ? 'true' : 'false');
+    }
+
+    /* 音效开关：点一下切换。AudioContext 的 resume 必须发生在真实手势里，
      * 所以解锁动作放在这个 click 上，而不是放在 init 里。 */
     if (el.sndBtn) el.sndBtn.addEventListener('click', function () {
       var on = DC.audio ? DC.audio.toggle() : false;
@@ -176,21 +205,142 @@
     }
     el.crVal.textContent = Math.round(state.crisis);
     el.crBar.style.width = Math.max(0, Math.min(100, state.crisis)) + '%';
+    /* DEFCON 跌到 1 = 核打击权限解锁，这是一局里唯一不可回头的门槛，
+     * 必须有一次明确的告知（红脉冲 + 音效是氛围，这条横幅才是"说清楚"）。 */
+    if (state.defcon === 1 && sig.dcAlerted !== true && state.phase !== 'over') {
+      sig.dcAlerted = true;
+      el.alert.classList.remove('show');
+      void el.alert.offsetWidth;
+      el.alert.classList.add('show');
+      if (DC.render && DC.render.shake) DC.render.shake(0.6);
+    }
+    /* 危机值条分档着色（2026-09-09）：旧版是一条固定的 蓝→琥珀→红 渐变，
+     * 宽度一变整条渐变就被压缩，危机值 10 的时候右侧照样是红的 —— 等于"永远在警戒"。
+     * 改为按危机值本身分三档整条换色：开局是纯蓝，越接近开战越烫。 */
+    var tone = state.crisis >= 80 ? 'hot' : state.crisis >= 45 ? 'mid' : 'low';
+    if (sig.tone !== tone) { sig.tone = tone; el.crBar.className = tone; }
     el.phName.textContent = PHASE_NAME[state.phase] || state.phase;
+    // 阶段着色（§11.15）：简报青 / 危机琥珀 / 战争红 / 终局灰
+    if (el.phase) {
+      var pc = 'p-' + state.phase;
+      if (el.phase._pc !== pc) {
+        el.phase._pc = pc;
+        el.phase.classList.remove('p-briefing', 'p-crisis', 'p-war', 'p-over');
+        el.phase.classList.add(pc);
+      }
+    }
 
     var left = 0;
     if (state.phase === 'briefing') left = Math.max(0, CONFIG.briefingSeconds - state.t);
     else if (state.phase === 'crisis') left = Math.max(0, CONFIG.roundSeconds - state.t);
     else if (state.phase === 'war') left = Math.max(0, CONFIG.warSeconds - state.t);
-    // 顶栏第三格只有 ~96px，写「第 12 回合 · 20s」会撑破，战争期只报剩余秒数
-    el.phTime.textContent = state.phase === 'over' ? ('第 ' + state.round + ' 回合')
-      : state.phase === 'war' ? ('剩 ' + left.toFixed(0) + 's')
-      : state.phase === 'crisis' ? (state.round + ' 回合 · ' + left.toFixed(0) + 's')
-      : (left.toFixed(0) + 's');
+    /* 回合 + 倒计时：底部面板左侧空间宽裕，不必再挤成「12 回合 · 20s」的缩写。
+     * 终局没有倒计时，只留回合数。 */
+    if (el.rdNum && el.rdNum.textContent !== String(state.round)) el.rdNum.textContent = state.round;
+    if (el.rdTime) {
+      var rt = state.phase === 'over' ? '本局结束'
+        : state.phase === 'war' ? ('剩 ' + left.toFixed(0) + 's')
+        : (left.toFixed(0) + 's');
+      if (el.rdTime.textContent !== rt) el.rdTime.textContent = rt;
+    }
 
     // 两档红脉冲：DEFCON 1 全力警报；危机博弈期临界（≥85）先用心跳预警吊住紧张感
     el.alarm.classList.toggle('on', state.defcon === 1 && state.phase !== 'over');
     el.alarm.classList.toggle('warn', state.phase === 'crisis' && state.crisis >= 85);
+  }
+
+  /* ───────────────────────── 我方存量（规模 / 核弹）与回合变化 ─────────────────────────
+   * §11.11：每回合的规模与弹头变化必须在界面上看得见 —— 否则玩家只知道自己按了个选项，
+   * 不知道这一按换来了什么（事件卡加成、城市被核平、打出去的弹头都是在这里体现）。
+   * Δ 显示 2.5s 后淡出，不常驻，免得变成又一个需要解读的数字。
+   * §11.13：旁边常驻一格「+X/回合」的基础产能标记 —— 即使什么都不选，回合结算也有进账，
+   * 玩家据此能算出「还拖得起几个回合」。 */
+  function bumpDelta(node, d, unit) {
+    if (!node) return;
+    node.textContent = (d > 0 ? '+' : '') + d + (unit || '');
+    node.classList.toggle('up', d > 0);
+    node.classList.toggle('down', d < 0);
+    node.classList.add('show');
+    if (node._t) clearTimeout(node._t);
+    node._t = setTimeout(function () { node.classList.remove('show'); }, 2500);
+  }
+
+  function pumpDelta(state) {
+    var pop = 0;
+    S.citiesOf(state, state.playerFaction).forEach(function (c) { pop += c.pop; });
+    var ms = S.totalMissiles(state, state.playerFaction);
+    /* §11.17 热核阶段（含终局）：弹头存量在发射条里已有且更醒目，
+     * 左上这格改口径为「战损」（己方累计伤亡规模）—— 遵循 §11.16 回避「人」的表述。 */
+    var war = state.phase === 'war' || state.phase === 'over';
+
+    // 产能标记仅简报期展示（§11.17）：进入危机博弈后「还拖得起几个回合」不再有意义
+    if (el.hudLeft) {
+      var ng = state.phase !== 'briefing';
+      if (el.hudLeft._ng !== ng) { el.hudLeft._ng = ng; el.hudLeft.classList.toggle('nogrowth', ng); }
+    }
+
+    if (el.myPop) {
+      var ps = pop.toFixed(1);
+      if (el.myPop.textContent !== ps) el.myPop.textContent = ps;
+    }
+    if (el.msLab) {
+      var lab = war ? '战损' : '弹头';
+      if (el.msLab.textContent !== lab) el.msLab.textContent = lab;
+    }
+    if (el.myMs) {
+      var msText = war
+        ? (((state.stats[state.playerFaction] || {}).casualties) || 0).toFixed(1) + 'M'
+        : String(ms);
+      if (el.myMs.textContent !== msText) el.myMs.textContent = msText;
+    }
+
+    // 基础产能常驻标记（§11.13）：读 sim.roundGrowthOf，与回合结算完全同一套口径
+    if ((el.popGr || el.msGr) && state.phase === 'briefing') {
+      var g = S.roundGrowthOf(state, state.playerFaction);
+      var pgs = '+' + g.pop.toFixed(1) + '/回合';
+      var mgs = '+' + g.missiles + '/回合';
+      if (el.popGr && el.popGr.textContent !== pgs) el.popGr.textContent = pgs;
+      if (el.msGr && el.msGr.textContent !== mgs) el.msGr.textContent = mgs;
+    }
+
+    if (sig.pop == null) { sig.pop = pop; sig.ms = ms; return; }   // 首帧只记基线
+    if (Math.abs(pop - sig.pop) > 0.05) {
+      bumpDelta(el.popDelta, +((pop - sig.pop).toFixed(1)), 'M');
+      sig.pop = pop;
+    }
+    if (ms !== sig.ms) {
+      // 热核阶段这格已换成战损口径，弹头增减不再闪烁 Δ（发射条自己会扣数字）
+      if (!war) bumpDelta(el.msDelta, ms - sig.ms, '');
+      sig.ms = ms;
+    }
+  }
+
+  /* ───────────────────────── 我方军事设备在线统计（热核阶段）─────────────────────────
+   * 「在线 / 总数」两个口径：设施被核平 → disabled → 在线数实时扣除，红色标出。
+   * 玩家在战争期唯一能判断"我还有多少还手之力"的地方，比只看弹头数更完整
+   * （发射井打空但还在 = 能补弹；发射井没了 = 彻底没了）。 */
+  function updateForceStat(state) {
+    if (!el.fs || !el.fs.silo) return;
+    var me = state.playerFaction;
+    var vals = {}, key = [];
+    ['silo', 'sub', 'sam', 'radar'].forEach(function (t) {
+      var all = 0, on = 0;
+      state.units.forEach(function (u) {
+        if (u.faction !== me || u.type !== t) return;
+        all++;
+        if (!u.disabled) on++;
+      });
+      vals[t] = [on, all];
+      key.push(t + on + '/' + all);
+    });
+    var s = key.join('|');
+    if (s === sig.fs) return;
+    sig.fs = s;
+    ['silo', 'sub', 'sam', 'radar'].forEach(function (t) {
+      if (el.fs[t]) el.fs[t].textContent = vals[t][0];
+      if (el.ft[t]) el.ft[t].textContent = vals[t][1];
+      if (el.fsWrap[t]) el.fsWrap[t].classList.toggle('hit', vals[t][0] < vals[t][1]);
+    });
   }
 
   /* ───────────────────────── 演出：核爆白闪 ───────────────────────── */
@@ -289,19 +439,23 @@
                           (tgt ? ' tgt' : '') + (pending === c.id ? ' sel' : '');
       // 关联设施：己方直接显示，敌方需情报（任一关联设施 exposed）才显示，否则 "?"
       // §11.9 改用图例 SVG 图形 × 数量徽章，复用 index.html 图例区 path
+      // §11.12 失效设施单独成组、整组染灰（opacity .35）—— 与球面灰图标同一口径
       var cfHtml = '';
       if (c.alive) {
         var us = S.unitsOfCity(state, c.id);
         var isOurs = c.faction === state.playerFaction;
         var hasIntel = us.some(function (u) { return u.exposed; });
         if (isOurs || hasIntel) {
-          var ns = 0, na = 0, nr = 0;
-          us.forEach(function (u) {
-            if (u.type === 'silo') ns++; else if (u.type === 'sam') na++; else if (u.type === 'radar') nr++;
-          });
-          cfHtml = (ns ? SVG_SILO + '<b>' + ns + '</b>' : '') +
-                   (na ? SVG_SAM + '<b>' + na + '</b>' : '') +
-                   (nr ? SVG_RADAR + '<b>' + nr + '</b>' : '') || '—';
+          var ICONS = { silo: SVG_SILO, sub: SVG_SUB, sam: SVG_SAM, radar: SVG_RADAR };
+          var TYPES = ['silo', 'sub', 'sam', 'radar'];
+          cfHtml = TYPES.map(function (t) {
+            var on = 0, off = 0;
+            us.forEach(function (u) { if (u.type === t) { u.disabled ? off++ : on++; } });
+            var html = '';
+            if (on) html += ICONS[t] + '<b>' + on + '</b>';
+            if (off) html += ICONS[t].replace('<svg ', '<svg style="opacity:.35" ') + '<b style="opacity:.35">' + off + '</b>';
+            return html;
+          }).join('') || '—';
         } else {
           cfHtml = '?';
         }
@@ -341,13 +495,27 @@
     if (!c) {
       el.tgtPick.classList.add('empty');
       el.tgtName.textContent = '未选定目标';
-      el.tgtHint.textContent = '点这里挑一座敌方城市';
+      el.tgtHint.textContent = '点选敌方坐标，或从城市列表挑选';
       return;
     }
     el.tgtPick.classList.remove('empty');
     el.tgtName.textContent = c.name + ' · ' + c.pop.toFixed(1) + 'M';
     var f = DC.FACTIONS_BY_CODE[c.faction];
     el.tgtHint.textContent = (f ? f.name : c.faction) + ' · 再点一次确认';
+  }
+
+  var SPEEDS = [1, 2, 4];
+  var speedIdx = 0;
+  function toggleSpeed() {
+    speedIdx = (speedIdx + 1) % SPEEDS.length;
+    var v = SPEEDS[speedIdx];
+    renderSpeed(v);
+    if (cmd.onSpeed) cmd.onSpeed(v);
+  }
+  function renderSpeed(v) {
+    if (!el.speedBtn) return;
+    el.speedBtn.textContent = '×' + v;
+    el.speedBtn.classList.toggle('on', v !== 1);
   }
 
   function toggleSalvo() {
@@ -463,9 +631,9 @@
 
     var ok = !!pending && ammo > 0;
     if (sig.fireOk !== ok) { sig.fireOk = ok; el.fireBtn.disabled = !ok; }
-    var tip = ammo <= 0 ? '弹头耗尽 —— 等待终局结算'
-      : pending ? '再点一次确认 —— 核弹不可逆'
-      : '先选一座敌方城市，再按发射';
+    var tip = ammo <= 0 ? '弹头耗尽 —— 转入终局战果结算'
+      : pending ? '再按一次确认发射 —— 弹道不可撤收'
+      : '先装订敌方目标坐标，再按发射';
     if (sig.tip !== tip) { sig.tip = tip; el.wbTip.textContent = tip; }
     el.warbar.classList.add('show');
   }
@@ -477,8 +645,14 @@
     sig.over = true;
     var rk = S.ranking(state);
     el.ovBody.textContent = '';
-    /* §11.8 终局面板：排名按剩余存活人口降序，最后一列显示剩余人口（主排序键）。
-     * 保留造成/伤亡供参考，但主胜负判定改为「谁活下来的人多」。 */
+    /* 全球战损总数：整局最该被看见的数字（§11.8b）。
+     * 单位是百万，写成「X.XX 亿」比「XXX.XM」更像一条新闻标题 —— 反战表达要的是体感。 */
+    if (el.ovTotal) {
+      var dead = S.globalCasualties ? S.globalCasualties(state) : 0;
+      el.ovTotal.textContent = (dead / 100).toFixed(2);
+    }
+    /* §11.8 终局面板：排名按剩余存续规模降序，最后一列显示存续规模（主排序键）。
+     * 保留造成/战损供参考，但主胜负判定是「谁的存续规模大」。 */
     rk.forEach(function (r, i) {
       var tr = document.createElement('tr');
       if (r.code === state.playerFaction) tr.className = 'me';
@@ -539,7 +713,7 @@
     var rate = (st.hits + st.lost) > 0 ? (st.hits / (st.hits + st.lost) * 100) : 0;
     row('你的战果', '发射 <b>' + st.launched + '</b> 枚 · 命中 <span class="hl">' + st.hits +
       '</span>（' + rate.toFixed(0) + '%）· 被拦 ' + st.lost +
-      ' · 己方伤亡 <b>' + st.casualties.toFixed(1) + 'M</b>');
+      ' · 己方战损 <b>' + st.casualties.toFixed(1) + 'M</b>');
   }
 
   /* ───────────────────────── 每帧 ───────────────────────── */
@@ -560,6 +734,8 @@
     updateTop(state);
     updateFactions(state);
     updateCities(state);
+    pumpDelta(state);
+    updateForceStat(state);
     updateCard(state);
     updateWarBar(state);
     pumpImpacts(state);

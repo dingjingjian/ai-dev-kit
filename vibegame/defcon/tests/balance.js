@@ -18,6 +18,7 @@ var path = require('path');
 global.window = global;
 require(path.join(__dirname, '..', 'src', 'data.js'));
 require(path.join(__dirname, '..', 'src', 'geo.js'));
+require(path.join(__dirname, '..', 'src', 'landmask.js'));   // 布阵走真实海陆（与线上一致）
 require(path.join(__dirname, '..', 'src', 'sim.js'));
 require(path.join(__dirname, '..', 'src', 'ai.js'));
 

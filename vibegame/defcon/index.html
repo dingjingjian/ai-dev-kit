@@ -34,52 +34,103 @@
   .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
   .panel{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
 
-  /* ── 顶栏：一行四格，压到 46px ── */
+  /* ── 顶栏：背景通栏拉满，内容左右各留 80px 空白 ──
+     背景（--panel + 底边细线）是满宽的，只有内容区缩进 80px —— 顶部有整条横向衬底，
+     两侧留白给星球主视觉留出呼吸感，而不是让顶栏悬空。 */
   #top{top:0;left:0;right:0;display:flex;align-items:stretch;gap:1px;
-    padding-top:var(--safe-t);border-bottom:1px solid var(--line);background:var(--panel)}
-  #defcon{padding:5px 10px;display:flex;flex-direction:column;justify-content:center;
+    padding:var(--safe-t) 80px 0;
+    border-bottom:1px solid var(--line);background:var(--panel)}
+  #defcon{padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
     min-width:70px;border-right:1px solid var(--line)}
+  /* 两格都用固定行高锁行块：即使大字字号不同（19px 数字 / 17px 汉字），上下行也严格对齐 */
   #defcon .lv{font-size:19px;font-weight:700;letter-spacing:1px;color:var(--cyan);
-    text-shadow:0 0 12px rgba(127,212,232,.5)}
-  #defcon .lb{font-size:9px;color:var(--text-dim);letter-spacing:2px}
+    line-height:22px;text-shadow:0 0 12px rgba(127,212,232,.5)}
+  #defcon .lb{font-size:9px;color:var(--text-dim);letter-spacing:2px;line-height:12px}
   #defcon.d1 .lv{color:var(--red);text-shadow:0 0 14px rgba(226,75,74,.65)}
   #defcon.d2 .lv{color:var(--amber);text-shadow:0 0 12px rgba(240,180,41,.5)}
   #defcon.bump{animation:bump .5s ease}
   @keyframes bump{0%,100%{transform:scale(1)}30%{transform:scale(1.14)}}
 
-  #crisis{flex:1;padding:5px 10px;display:flex;flex-direction:column;justify-content:center;gap:4px}
-  #crisis .row{display:flex;justify-content:space-between;font-size:9.5px;
-    color:var(--text-dim);letter-spacing:1px}
+  #crisis{flex:1;min-width:0;padding:5px 8px;display:flex;flex-direction:column;justify-content:center;gap:4px}
+  #crisis .row{display:flex;justify-content:space-between;gap:6px;font-size:9.5px;
+    color:var(--text-dim);letter-spacing:1px;white-space:nowrap}
   #bar{height:4px;background:rgba(127,212,232,.1);overflow:hidden}
-  #bar i{display:block;height:100%;width:10%;background:linear-gradient(90deg,#3d8fa8,var(--amber),var(--red));
-    transition:width .35s ease}
+  /* 危机值条：整条单色、按危机值分档换色（不再用固定渐变 —— 渐变会随宽度被压缩，
+     危机值 10 时右端也发红，等于开局就在报警）。初始即纯蓝。 */
+  #bar i{display:block;height:100%;width:10%;background:#3d8fa8;
+    transition:width .35s ease,background .45s ease}
+  #bar i.low{background:#3d8fa8}
+  #bar i.mid{background:var(--amber)}
+  #bar i.hot{background:var(--red);box-shadow:0 0 8px rgba(226,75,74,.6)}
 
-  /* 96px 是「第 12 回合 · 20s」在 9.5px 字号下的实测宽度，再窄就会被省略号截断 */
+  /* 顶栏第三格：阶段（§11.15 / §11.17）。与 DEFCON 格同构的「小标签 + 大字」结构、内容居中，
+   * 行高与 DEFCON 格一一锁定（标签 12px / 大字 22px）—— 两格高度严格一致；
+   * 大字字形 15px（4 个汉字 19px 太撑），行块高度不受字号影响。仅按阶段保留着色差异。 */
   #phase{padding:5px 8px;display:flex;flex-direction:column;justify-content:center;
-    align-items:flex-end;border-left:1px solid var(--line);min-width:96px;flex:none}
-  #phase .pt{font-size:12px;color:var(--text);letter-spacing:1px}
-  #phase .pd{font-size:9.5px;color:var(--text-dim)}
+    align-items:center;border-left:1px solid var(--line);min-width:86px;flex:none}
+  #phase .lb{font-size:9px;color:var(--text-dim);letter-spacing:2px;line-height:12px}
+  #phase .pt{font-size:15px;font-weight:700;color:var(--cyan);letter-spacing:1px;
+    line-height:22px;text-shadow:0 0 10px rgba(127,212,232,.35);white-space:nowrap}
+  #phase.p-crisis .pt{color:var(--amber);text-shadow:0 0 10px rgba(240,180,41,.35)}
+  #phase.p-war .pt{color:var(--red);text-shadow:0 0 12px rgba(226,75,74,.5)}
+  #phase.p-over .pt{color:var(--text-dim);text-shadow:none}
 
-  #drawerBtn{width:42px;flex:none;background:transparent;border:none;
-    border-left:1px solid var(--line);color:var(--cyan);font-size:17px;cursor:pointer;
-    font-family:var(--mono);line-height:1}
+  /* ── 底部情境面板：常驻一条，指令条在最上、事件卡 / 战争条在其下 ──
+     常驻的理由：操作按钮（音效 / 抽屉）必须随时可点，不能因为简报期没有答题卡就消失。 */
+  #sheet{left:0;right:0;bottom:0;z-index:12;background:var(--panel);
+    border-top:1px solid var(--line);padding:9px 12px calc(9px + var(--safe-b))}
 
-  /* 音效开关：默认关 —— 手机外放时毫无预兆的低频轰鸣不是沉浸感，是惊吓。
-     关态画静音斜杠、开态画声波线，同一张 SVG 靠 class 切换，不引第二套图标。 */
-  #sndBtn{width:38px;flex:none;background:transparent;border:none;
-    border-left:1px solid var(--line);color:var(--cyan-dim);cursor:pointer;
+  /* 指令条：左侧「回合 / 计时 / 我方存量」，右侧三个操作按钮（音效 · 加速 · 抽屉）。
+     顶部只留阶段名，回合与倒计时下沉到这里 —— 避免和顶栏重复、也贴近手指。 */
+  #cmdbar{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:9px}
+  #cmdbar:last-child{margin-bottom:0}
+  #hudLeft{display:flex;flex-direction:column;gap:2px;min-width:0}
+  #hudLeft .hl1{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:11px;
+    color:var(--text-dim);letter-spacing:1px;white-space:nowrap}
+  #hudLeft .hl1 b{color:var(--text);font-weight:400}
+  #hudLeft .hl1 .rd{color:var(--cyan);font-variant-numeric:tabular-nums}
+  #hudLeft .hl2{display:flex;align-items:baseline;gap:10px;font-family:var(--mono);font-size:10px;
+    color:var(--text-dim);letter-spacing:.5px;white-space:nowrap}
+  #hudLeft .hl2 em{font-style:normal;color:var(--cyan);font-size:12px;font-variant-numeric:tabular-nums}
+  /* 每回合基础产能的常驻标记（§11.13）：告诉玩家「即使什么都不选，下回合结算也有这份进账」。
+   * 仅简报期展示（§11.17）：进入危机博弈后「还拖得起几个回合」不再有意义，整组隐藏。
+   * 紧贴前值：.hl2 的 flex gap 是 10px，这里用 -10px 负边距完全抵消，零间距贴住前面的数字。 */
+  #hudLeft .gr{font-style:normal;font-size:9px;color:var(--cyan-dim);opacity:.9;
+    font-variant-numeric:tabular-nums;letter-spacing:0;margin-left:-10px}
+  #hudLeft.nogrowth .gr{display:none}
+  /* 每回合变化的增减量：绿/红瞬时提示，2.5s 后淡出（见 ui.js pumpDelta） */
+  #hudLeft .dl{font-size:10px;margin-left:3px;font-variant-numeric:tabular-nums;opacity:0;
+    transition:opacity .4s ease}
+  #hudLeft .dl.show{opacity:1}
+  #hudLeft .dl.up{color:#5fbf7a} #hudLeft .dl.down{color:var(--red)}
+  #hudBtns{display:flex;gap:8px;flex:none}
+  #cmdbar button{width:46px;height:34px;background:rgba(127,212,232,.05);
+    border:1px solid var(--line);color:var(--cyan);
+    font-family:var(--mono);font-size:17px;line-height:1;cursor:pointer;
     display:flex;align-items:center;justify-content:center;padding:0}
-  #sndBtn .wave{display:none}
-  #sndBtn .slash{display:block}
+  #cmdbar button:active{background:rgba(127,212,232,.18)}
+  /* 音效：开态两道声波弧，静音态一个叉（✕）—— 叉比斜杠更像"关闭"，识别度高。 */
+  #sndBtn{color:var(--cyan-dim)}
+  #sndBtn .wave{display:block}
+  #sndBtn .slash{display:none}
   #sndBtn.on{color:var(--cyan)}
   #sndBtn.on .wave{display:block}
   #sndBtn.on .slash{display:none}
+  #sndBtn:not(.on) .wave{display:none}
+  #sndBtn:not(.on) .slash{display:block}
+  #speedBtn{font-size:12px;letter-spacing:0}
+  #speedBtn.on{color:var(--amber);border-color:rgba(240,180,41,.5);background:rgba(240,180,41,.1)}
+  #drawerBtn{color:var(--cyan)}
 
-  /* ── 底部情境面板 ── */
-  #sheet{left:0;right:0;bottom:0;z-index:12;background:var(--panel);
-    border-top:1px solid var(--line);padding:10px 12px calc(10px + var(--safe-b))}
-  /* 简报期既没有事件卡也没有战争条 —— 空面板不该白占一条屏高（地球才是主视觉） */
-  #sheet.none{display:none}
+  /* 我方军事设备在线统计（热核阶段）：被打掉的设施实时扣除 */
+  #forceStat{display:flex;gap:12px;font-family:var(--mono);font-size:10px;
+    color:var(--text-dim);letter-spacing:.5px;padding:0 2px 7px;white-space:nowrap}
+  /* 图例小图标（§11.17）：与抽屉图例区同一套 SVG path，基线对齐后下压 1px 视觉居中 */
+  #forceStat svg{flex:none;transform:translateY(1px)}
+  #forceStat span{display:flex;align-items:baseline;gap:3px}
+  #forceStat b{font-weight:400;font-size:12px;color:var(--cyan);font-variant-numeric:tabular-nums}
+  #forceStat i{font-style:normal;opacity:.55}
+  #forceStat .hit b{color:var(--red)}
 
   #card{display:none}
   #card.show{display:block}
@@ -132,23 +183,33 @@
 
   /* ── 抽屉：阵营 / 图例 / 城市 ── */
   #drawer{position:absolute;top:0;right:0;bottom:0;width:84%;max-width:340px;z-index:30;
-    background:rgba(6,12,18,.97);border-left:1px solid var(--line);
+    background:rgba(6,12,18,.98);border-left:1px solid var(--line);
     transform:translateX(100%);transition:transform .24s ease;
     display:flex;flex-direction:column;overflow:hidden}
   #drawer.open{transform:translateX(0)}
-  #drawer .dhead{display:flex;align-items:center;padding:calc(10px + var(--safe-t)) 12px 8px;
-    font-size:10px;color:var(--text-dim);letter-spacing:2px;
+  /* 顶部安全区（§11.14）：抽屉在小红书等平台是挂在 iframe 里的，
+   * iframe 内 env(safe-area-inset-top) 恒为 0 —— 只写 calc(14px + safe-t) 等于没留。
+   * 因此头部用 max(26px, calc(14px + safe-t)) 给一个静态最小安全间距兜底：
+   * 有刘海的宿主环境吃 env 值，iframe 场景吃 26px，两端都留得住。
+   * 该规则只作用于抽屉自己的标题栏（#drawer 直接子级）；正文里的分组标题不受影响。 */
+  #drawer .dhead{display:flex;align-items:center;padding:calc(14px + var(--safe-t)) 12px 9px 14px;
+    font-size:9.5px;color:var(--cyan-dim);letter-spacing:3px;
     border-bottom:1px solid rgba(127,212,232,.14)}
-  #drawerClose{position:absolute;top:calc(6px + var(--safe-t));right:8px;width:36px;height:36px;
+  #drawer > .dhead{padding-top:max(26px, calc(14px + var(--safe-t)))}
+  #drawerClose{position:absolute;top:max(14px, calc(8px + var(--safe-t)));right:8px;width:36px;height:36px;
     background:transparent;border:none;color:var(--cyan);font-size:16px;cursor:pointer}
-  #drawer .dbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 24px}
-  .frow{display:flex;align-items:center;gap:6px;padding:5px 2px;font-size:12px}
+  #drawer .dbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 24px}
+  /* 分组标题（图例 / 城市）：缩进后另起一段，与 dhead 形成两级层次 */
+  #drawer .dbody .dhead{padding-left:0;margin-top:14px;letter-spacing:2px}
+  .frow{display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:12px;
+    border-bottom:1px solid rgba(127,212,232,.06)}
   .frow .sw{width:9px;height:9px;flex:none;border-radius:1px}
   .frow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .frow .pp{color:var(--text-dim);font-variant-numeric:tabular-nums}
   .frow.dead{opacity:.35}
   .frow.me .nm{color:#fff}
-  .crow{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12px;cursor:pointer}
+  .crow{display:flex;align-items:center;gap:8px;padding:7px 6px;font-size:12px;cursor:pointer;
+    border-bottom:1px solid rgba(127,212,232,.06);border-radius:2px}
   .crow:active{background:rgba(127,212,232,.1)}
   .crow.gone{opacity:.3;text-decoration:line-through;cursor:default}
   /* 战争期可打击的敌方城市：只有这一类名会带红色，选中态再叠一层底色 */
@@ -192,6 +253,15 @@
     z-index:35;padding:18px;border:1px solid var(--line);display:none}
   #over.show{display:block}
   #over h2{font-family:var(--sans);font-size:16px;color:#fff;font-weight:600;margin-bottom:3px}
+  /* 全球伤亡：整局最该被看见的数字 —— 标签一行、数字一行（标题已说"战损通报"，
+     这里就不再重复"总数"二字），大红字压过排名表。 */
+  #over .total{margin:8px 0 6px;padding:8px 0 9px;
+    border-top:1px solid rgba(226,75,74,.25);border-bottom:1px solid rgba(226,75,74,.25)}
+  #over .total .lab{display:block;font-family:var(--sans);font-size:10.5px;
+    color:var(--text-dim);letter-spacing:3px;margin-bottom:1px}
+  #over .total b{display:inline-block;font-family:var(--mono);font-size:46px;line-height:1;
+    color:var(--red);text-shadow:0 0 22px rgba(226,75,74,.55);font-variant-numeric:tabular-nums}
+  #over .total .unit{font-family:var(--sans);font-size:12px;color:var(--red);opacity:.8;margin-left:5px}
   #over .sub{font-size:11px;color:var(--text-dim);margin-bottom:12px}
   #over table{width:100%;border-collapse:collapse;font-size:11.5px}
   #over th{text-align:left;font-weight:400;color:var(--text-dim);font-size:10px;
@@ -213,6 +283,21 @@
   #again{margin-top:14px;width:100%;min-height:44px;background:rgba(127,212,232,.08);
     border:1px solid var(--line);color:var(--cyan);font-family:var(--mono);
     font-size:12px;letter-spacing:2px;cursor:pointer}
+
+  /* ── DEFCON 1 提醒：跌到 1 是一次性事件，必须有明确的"核打击权限已解锁"告知 ──
+     放在地球上方偏上，3 秒自动淡出；只在跨越到 1 的那一刻弹一次。 */
+  #alert{position:absolute;left:0;right:0;top:calc(58px + var(--safe-t));z-index:28;
+    display:flex;justify-content:center;pointer-events:none;opacity:0}
+  #alert .box{background:rgba(226,75,74,.14);border:1px solid rgba(226,75,74,.55);
+    padding:7px 16px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
+    color:var(--red);text-shadow:0 0 12px rgba(226,75,74,.5);white-space:nowrap}
+  #alert.show{animation:alertIn 3s ease forwards}
+  @keyframes alertIn{
+    0%{opacity:0;transform:translateY(-8px)}
+    8%{opacity:1;transform:translateY(0)}
+    80%{opacity:1;transform:translateY(0)}
+    100%{opacity:0;transform:translateY(-4px)}
+  }
 
   /* ── 演出层：核爆白闪 / DEFCON 1 边缘红脉冲 ── */
   #flash{position:absolute;inset:0;z-index:40;background:#fff;opacity:0;pointer-events:none}
@@ -254,6 +339,7 @@
 <div id="scan" data-page-node-id="58ZB2tAZbd75GhbCM4Fala"></div>
 <div id="vig" data-page-node-id="WgjmswFdQxLTQGr3BppIhC"></div>
 <div id="alarm" data-page-node-id="2tabJVmVBl1ifssfSD7x5u"></div>
+<div id="alert"><span class="box">DEFCON 1 · 核打击权限已解锁</span></div>
 <div id="flash" data-page-node-id="1haZ4gY7pk0x70LUDl9mAi"></div>
 
 <div id="top" class="hud" data-page-node-id="PrjdZlYS7rUvZc7ybdqoay">
@@ -262,32 +348,49 @@
     <span class="lv" id="dcLv" data-page-node-id="0uc88tKyEhtQYM0i3SDVy4">5</span>
   </div>
   <div id="crisis" data-page-node-id="vKLJ4anDFuCMS20TSfFpLl">
-    <div class="row" data-page-node-id="Eq2qGOh2yC2zgeUhrHSsmH"><span data-page-node-id="Qpwr6oZLGNfQZChDfiXEY6">全局危机值</span><span id="crVal" data-page-node-id="0wigzCWk8zZiQj8J4Gysz7">10</span></div>
+    <div class="row" data-page-node-id="Eq2qGOh2yC2zgeUhrHSsmH"><span data-page-node-id="Qpwr6oZLGNfQZChDfiXEY6">危机值</span><span id="crVal" data-page-node-id="0wigzCWk8zZiQj8J4Gysz7">10</span></div>
     <div id="bar" data-page-node-id="Q4gzA9oLiRYUfZhCl6ronB"><i id="crBar" data-page-node-id="RSddvmvRu5aQdCtf2oIBbK"></i></div>
   </div>
   <div id="phase" data-page-node-id="jRegQHB8qIXDn7Q5ix0jEt">
+    <span class="lb" data-page-node-id="WLH5cTYrzqQ5LMjbeyt0uV">阶段</span>
     <span class="pt" id="phName" data-page-node-id="WLH5cTYrzqQ5LMjbeyt0uV">态势简报</span>
-    <span class="pd" id="phTime" data-page-node-id="INGx883A7aHdhtLaOeoh1g">10s</span>
   </div>
-  <button type="button" id="sndBtn" aria-label="音效开关" aria-pressed="false" data-page-node-id="kQ2mSnd9wLtRvXb7ZpNc3E">
-    <svg viewBox="0 0 12 12" width="13" height="13" data-page-node-id="tRv5nHc2XkLpQw8YbMd6Zs"><path d="M1.8,4.4 h2.2 L7.2,2 v8 L4,7.6 H1.8 z" fill="rgba(127,212,232,.18)" stroke="currentColor" stroke-width="1" data-page-node-id="wY8kLp3NqRvTc6XbMd2Zs1"></path><line class="wave" x1="8.7" y1="4.2" x2="10.8" y2="7.8" stroke="currentColor" stroke-width="1" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></line><line class="slash" x1="8.7" y1="7.8" x2="10.8" y2="4.2" stroke="currentColor" stroke-width="1" data-page-node-id="nQ9wLp2XkRvT5c8bMd3Zs6"></line></svg>
-  </button>
-  <button type="button" id="drawerBtn" aria-label="阵营与图例" data-page-node-id="CqNDOEAbdkZi9orcEQIaxF">≡</button>
 </div>
 
+
 <div id="sheet" class="hud panel" data-page-node-id="Veaw8eEe6tVIMTrmem2OG5">
+  <div id="cmdbar">
+    <div id="hudLeft">
+      <div class="hl1">第 <b id="rdNum">1</b> 回合<span class="rd" id="rdTime">20s</span></div>
+      <div class="hl2">规模 <em id="myPop">0</em>M<span class="dl" id="popDelta"></span><span class="gr" id="popGr"></span>
+        <span id="msLab">弹头</span> <em id="myMs">0</em><span class="dl" id="msDelta"></span><span class="gr" id="msGr"></span></div>
+    </div>
+    <div id="hudBtns">
+      <button type="button" id="sndBtn" aria-label="音效开关" aria-pressed="true" data-page-node-id="kQ2mSnd9wLtRvXb7ZpNc3E">
+        <svg viewBox="0 0 14 14" width="15" height="15" data-page-node-id="tRv5nHc2XkLpQw8YbMd6Zs"><path d="M2.2,5.3 h2.3 L7.7,2.7 v8.6 L4.5,8.7 H2.2 z" fill="rgba(127,212,232,.20)" stroke="currentColor" stroke-width="1" stroke-linejoin="round" data-page-node-id="wY8kLp3NqRvTc6XbMd2Zs1"></path><path class="wave" d="M9.3,5.0 A3.0,3.0 0 0 1 9.3,9.0" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><path class="wave" d="M11.2,3.3 A5.2,5.2 0 0 1 11.2,10.7" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" data-page-node-id="pL4mNq7RvTc2Xb8YdZs5kW"></path><g class="slash"><line x1="9.1" y1="4.9" x2="12.3" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" data-page-node-id="nQ9wLp2XkRvT5c8bMd3Zs6"></line><line x1="12.3" y1="4.9" x2="9.1" y2="9.1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"></line></g></svg>
+      </button>
+      <button type="button" id="speedBtn" aria-label="倍速">×1</button>
+      <button type="button" id="drawerBtn" aria-label="阵营与图例" data-page-node-id="CqNDOEAbdkZi9orcEQIaxF">≡</button>
+    </div>
+  </div>
   <div id="card" data-page-node-id="ShxqC1o9dviTiFesfEiebe">
     <div class="ct" id="cTitle" data-page-node-id="rZgqbzxhQD38dzrndTD00I"></div>
     <div class="cd" id="cDesc" data-page-node-id="zqN8vGX2NhPM5xloPShkfT"></div>
     <div class="timer" data-page-node-id="NO5Z4rQYBIvVnAIp3BhVEG"><i id="cTimer" data-page-node-id="zzsIABbawoO0r1C5gebnXy"></i></div>
     <div class="opts" id="cOpts" data-page-node-id="xC3B9DeNdgQhYTYpKOHoTf"></div>
-    <button type="button" id="cMax" data-page-node-id="rCkHMabvdUDB8g5YFWJmor">直接拉满危机值 —— 立即全面开战</button>
+    <button type="button" id="cMax" data-page-node-id="rCkHMabvdUDB8g5YFWJmor">下达先发打击令 —— 危机值直拉满格，立即开战</button>
   </div>
 
   <div id="warbar" data-page-node-id="uyZESFuPCB9pGgoqonMicd">
+    <div id="forceStat">
+      <span id="fsSiloWrap"><svg width="11" height="11" viewBox="0 0 12 12"><polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></polygon></svg>发射井 <b id="fsSilo">0</b>/<i id="ftSilo">0</i></span>
+      <span id="fsSubWrap"><svg width="11" height="11" viewBox="0 0 12 12"><ellipse cx="5.2" cy="7.4" rx="3.6" ry="1.4" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></ellipse><path d="M4,6.2 L4.2,4.4 L6.4,4.4 L6.6,6.2 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></path><line x1="5.3" y1="4.4" x2="5.3" y2="2.8" stroke="#7fd4e8" stroke-width="1"></line><path d="M8.4,7.4 L11,5.8 L11,9 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></path></svg>潜艇 <b id="fsSub">0</b>/<i id="ftSub">0</i></span>
+      <span id="fsSamWrap"><svg width="11" height="11" viewBox="0 0 12 12"><polygon points="6,1.5 10.5,10.5 1.5,10.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></polygon></svg>防空 <b id="fsSam">0</b>/<i id="ftSam">0</i></span>
+      <span id="fsRadarWrap"><svg width="11" height="11" viewBox="0 0 12 12"><ellipse cx="6" cy="5" rx="5" ry="2.6" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1"></ellipse><line x1="6" y1="7.6" x2="6" y2="11" stroke="#7fd4e8" stroke-width="1"></line></svg>雷达 <b id="fsRadar">0</b>/<i id="ftRadar">0</i></span>
+    </div>
     <div id="tgtPick" class="empty" data-page-node-id="MDIAiNBFDGUeLVhYA18TQN">
       <span class="tn" data-page-node-id="7uHXMfYn9IrlP1QZLPYRSV">未选定目标</span>
-      <span class="tp" data-page-node-id="h2BvvpkUboG8V9ct96tlVG">点地球上的敌方城市</span>
+      <span class="tp" data-page-node-id="h2BvvpkUboG8V9ct96tlVG">点选敌方城市坐标</span>
     </div>
     <div class="fireRow" data-page-node-id="orjixIF601tyoOt3pBjNY1">
       <span class="am" data-page-node-id="9XD0r8QToRXOoNcvlAyd2t">弹头<b id="wbAmmo" data-page-node-id="uYcLPs9WjYHMuLNkuqB2ch">18</b></span>
@@ -296,13 +399,13 @@
         <button type="button" id="fireBtn" disabled data-page-node-id="qESQQzaVHDrxHgFjbPFl7V">发 射</button>
       </span>
     </div>
-    <div class="tip" id="wbTip" data-page-node-id="eBKYnAxXjYQWnCmu5IuSt5">核弹不可逆 —— 先选目标，再确认发射</div>
+    <div class="tip" id="wbTip" data-page-node-id="eBKYnAxXjYQWnCmu5IuSt5">核打击不可撤收 —— 先装订目标，再确认发射</div>
   </div>
 </div>
 
 <div id="drawer" data-page-node-id="Pzql6NdPXBo6JLsHnFtN0A">
   <button type="button" id="drawerClose" aria-label="关闭" data-page-node-id="t5Oj6G2Zu1jxLrRj1QVMkJ">✕</button>
-  <div class="dhead" data-page-node-id="YpDtklGUS0NC7vPrbMj67g">阵营 · 存活人口</div>
+  <div class="dhead" data-page-node-id="YpDtklGUS0NC7vPrbMj67g">阵营 · 存续规模</div>
   <div class="dbody" data-page-node-id="l6N1RXA4m4YjJNQUtNl9FD">
     <div id="fList" data-page-node-id="FGPKF5Oj3nktRqeuMe2FND"></div>
     <div class="dhead" style="padding-left:0" data-page-node-id="2kfTJqdCbEehQIWKUePuvc">图例 · 军事单位</div>
@@ -311,6 +414,11 @@
         <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="BhUcn2scY7JGeYIAh8vlIe"><polygon points="6,1 10.3,3.5 10.3,8.5 6,11 1.7,8.5 1.7,3.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="1X8m5DMVWzmFXwvS9f0zPv"></polygon></svg>
         <span class="ln" data-page-node-id="aKDS2rufugHkC1qxjrCO7c">发射井</span>
         <span class="ld" data-page-node-id="p1JAHYXZbtSkQ1PFuCw3kv">6 座 × 3 枚</span>
+      </div>
+      <div class="lrow" data-page-node-id="SuZRrUHoGBoKE1o6E1tg2v">
+        <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="BhUcn2scY7JGeYIAh8vlIe"><ellipse cx="5.2" cy="7.4" rx="3.6" ry="1.4" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="1X8m5DMVWzmFXwvS9f0zPv"></ellipse><path d="M4,6.2 L4.2,4.4 L6.4,4.4 L6.6,6.2 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="CmrABtLoy6fh9KzCX21Zam"></path><line x1="5.3" y1="4.4" x2="5.3" y2="2.8" stroke="#7fd4e8" stroke-width="1" data-page-node-id="pamPBhUs8E1qfqMLlH3eJI"></line><path d="M8.4,7.4 L11,5.8 L11,9 Z" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="yxbEugzW7a9eAhetXM1A1F"></path></svg>
+        <span class="ln" data-page-node-id="aKDS2rufugHkC1qxjrCO7c">战略核潜艇</span>
+        <span class="ld" data-page-node-id="p1JAHYXZbtSkQ1PFuCw3kv">2 艘 × 2 枚 · 机动发射</span>
       </div>
       <div class="lrow" data-page-node-id="4GQ6FtvtE4e8E40RkfVIPe">
         <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="rQYqTebsL5nV4Jiyrnds9I"><polygon points="6,1.5 10.5,10.5 1.5,10.5" fill="rgba(127,212,232,.22)" stroke="#7fd4e8" stroke-width="1" data-page-node-id="CmrABtLoy6fh9KzCX21Zam"></polygon></svg>
@@ -325,7 +433,7 @@
       <div class="lrow" data-page-node-id="lWH1NPGeJKk5ENbvEGkHLF">
         <svg width="13" height="13" viewBox="0 0 12 12" data-page-node-id="jgjAVBvfJOxkGvXNwMLpFY"><circle cx="6" cy="6" r="3.2" fill="#7fd4e8" opacity="0.85" data-page-node-id="zRjpttI1IhpCZ1HOzhyGmP"></circle></svg>
         <span class="ln" data-page-node-id="inlylF5wrKDmZKboGyDeP8">城市</span>
-        <span class="ld" data-page-node-id="2RPAHn78WRChihSwUGMVbU">光点越大人口越多</span>
+        <span class="ld" data-page-node-id="2RPAHn78WRChihSwUGMVbU">光点越大规模越高</span>
       </div>
       <div class="note" data-page-node-id="G7e1MQP3bxnYgisPodimRV">敌方单位默认不可见 —— 只有被雷达捕获并弹道溯源标记后才会显形。</div>
     </div>
@@ -336,15 +444,16 @@
 
 <div id="setup" data-page-node-id="eamJBoCXawJDAjqqzDg6Pr">
   <h1 data-page-node-id="IqVS0jrvW6k24mVtlCCCwN">核战危机 DEFCON</h1>
-  <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方在一颗星球上互相威慑。危机值由六方共同的选择推高，跌到 DEFCON 1 即解锁核弹。核弹有限、不可逆，死得比对手少的才算赢 —— 先选一个阵营。</p>
+  <p class="sub" data-page-node-id="hsK2HhbUerTUGGM5XvcLci">六方阵营隔洋对峙，威慑天平悬于一线。危机等级随各方抉择持续浮动，一旦触达 DEFCON 1，核打击权限即刻解锁。弹头数量有限，发射指令无法撤回，落点即成废墟 —— 尽力保护你的人民。请选择你的阵营。</p>
   <div id="pickList" data-page-node-id="pl7vh6QPQprS4RxiyaNPA0"></div>
-  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈（每回合 20 秒）→ 热核战争（2–3 分钟）→ 按「剩余存活人口」排名。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点城市选中。</p>
+  <p class="hint" data-page-node-id="C4KJJwH5qyhleoGAHkHnck">一局约 6–8 分钟：危机博弈 → 热核战争 → 全球伤亡清算。<br data-page-node-id="uWbxH8Nrw0swnXt1GTxUvK">单指拖动旋转地球，双指缩放，轻点敌方城市装订目标。</p>
 </div>
 
 <div id="over" class="hud panel" data-page-node-id="eupBWInVAOHPkMaT9lFKxZ">
-  <h2 data-page-node-id="clB4uohScjCw8SHXBMpm2u">终局计分</h2>
-  <div class="sub" data-page-node-id="ftPSgPA6EsZ5QNX5FFmgXv">按剩余存活人口排名 —— 谁活下来的人多谁赢</div>
-  <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">伤亡</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">剩余</th></tr></thead>
+  <h2 data-page-node-id="clB4uohScjCw8SHXBMpm2u">终局 · 战报</h2>
+  <div class="total"><span class="lab">全球战损</span><b id="ovTotal">0.00</b><span class="unit">亿</span></div>
+  <div class="sub" data-page-node-id="ftPSgPA6EsZ5QNX5FFmgXv">这一局没有胜利者 —— 反对战争，珍爱和平</div>
+  <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">战损</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">存续</th></tr></thead>
   <tbody id="ovBody" data-page-node-id="DoPmGw1cGmRMcfs31mO7LB"></tbody></table>
   <div id="ovRecap" data-page-node-id="bN7xRv2LkQwT5c8YdZs3Mp"></div>
   <button type="button" id="again" data-page-node-id="Z5iD2aCR9gKYubGvGTyWL6">再来一局</button>
@@ -364,6 +473,8 @@
 <script src="assets/earth-tex.js"></script>
 <script src="src/data.js"></script>
 <script src="src/geo.js"></script>
+<!-- 海陆掩膜（§11.11）：布阵地理判定用，Natural Earth 光栅化，离线内联 -->
+<script src="src/landmask.js"></script>
 <script src="src/sim.js"></script>
 <script src="src/ai.js"></script>
 <script src="src/render.js"></script>

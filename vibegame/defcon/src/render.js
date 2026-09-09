@@ -27,14 +27,16 @@
   var TRAIL_PTS = 24;           // 每枚导弹尾迹采样点数（完整弹道从发射井到当前位置）
 
   /* §11.7 来袭导弹与拦截弹统一色板（集中管理，避免散落各处各自为政）。
-   * 来袭导弹：炽白核心 → 暖橙 → 暗红余烬，与核爆火球色（pumpFx 里 fb.material.color）呼应；
-   * 拦截弹：青蓝色，与来袭导弹的暖色系形成清晰对比，让玩家一眼区分「我方拦截」与「敌方来袭」。
+   * 2026-09-09 冷暖彻底分家：核弹（来袭弹）走暖色系 —— 弹头暖琥珀、尾焰冷白偏暖→炽橙，
+   * 与核爆火球色呼应；拦截弹走高饱和冷青 —— 弹头与尾线同用一个青蓝 hex。
+   * 旧版核弹弹头是炽白，在 bloom 泛光下与浅青的拦截弹几乎分不出来，玩家分不清
+   * 「哪条是来袭的核弹、哪条是我方拦截」，故把核弹弹头染成尾焰同系的暖色。
    * 尾焰用 RGB 分量表达，便于按 progress 在 hot/cool 间线性插值。 */
   var PALETTE = {
-    missileHeadHex: 0xffffff,                  // 弹头核心：炽白
+    missileHeadHex: 0xffd9a0,                  // 弹头核心：暖琥珀（与尾焰/火球同色系）
     missileTrailHot:  [1.00, 0.88, 0.66],      // 尾焰起始（冷白偏暖，平飞段）
     missileTrailCool: [1.00, 0.52, 0.16],      // 尾焰末端（炽橙偏暗红，再入段，与火球色呼应）
-    interceptorHex:   0x8fdfff,                // 拦截弹头与尾线：青蓝
+    interceptorHex:   0x53c8ff,                // 拦截弹头与尾线：高饱和青蓝，与核弹暖色系一眼区分
     trailFadeHex:     0xff7a30                 // 落地尾痕渐隐：暖橙（与尾焰末端同色系）
   };
 
@@ -125,14 +127,31 @@
     }
 
     if (kind === 'silo') {                       // 六边形（图例：发射井）
+      /* 正六边形：横纵半径必须相等。旧版 rx=20 / ry=26，画出来是压扁的六边形，
+       * 与图例里端正的六边形对不上 —— 2026-09-09 修正为 22/22。 */
       for (i = 0; i < 6; i++) {
         a = (Math.PI / 180) * (60 * i - 90);
-        pts.push([32 + 20 * Math.cos(a), 32 + 26 * Math.sin(a)]);
+        pts.push([32 + 22 * Math.cos(a), 32 + 22 * Math.sin(a)]);
       }
       poly();
     } else if (kind === 'sam') {                 // 三角（图例：防空）
-      pts = [[32, 6], [58, 56], [6, 56]];
+      /* 2026-09-09 尺寸对齐发射井：旧版底 52 × 高 50，比六边形还大一圈，
+       * 防空阵地看着比发射井更抢眼。改为底 42 × 高 40（面积约为六边形的 2/3），
+       * 尖角形状天生比六边形"满"，面积略小才显得与发射井同量级。 */
+      pts = [[32, 10], [53, 50], [11, 50]];
       poly();
+    } else if (kind === 'sub') {                 // 潜艇侧影（图例：战略核潜艇）
+      // 艇身 + 指挥塔（帆罩）+ 潜望镜 + 尾舵 —— 侧影要一眼区别于六边形的固定发射井
+      x.beginPath();
+      x.ellipse(30, 38, 21, 8, 0, 0, Math.PI * 2);
+      x.fill(); x.stroke();
+      x.beginPath();
+      x.moveTo(24, 32); x.lineTo(25.5, 22); x.lineTo(35, 22); x.lineTo(36, 32);
+      x.closePath(); x.fill(); x.stroke();
+      x.beginPath(); x.moveTo(30, 22); x.lineTo(30, 14); x.stroke();
+      x.beginPath();
+      x.moveTo(48, 38); x.lineTo(57, 29); x.lineTo(57, 47); x.closePath();
+      x.fill(); x.stroke();
     } else {                                     // 椭圆 + 支杆（图例：雷达）
       x.beginPath();
       x.ellipse(32, 24, 24, 13, 0, 0, Math.PI * 2);
@@ -149,6 +168,7 @@
     ICON.silo = iconTex('silo');
     ICON.sam = iconTex('sam');
     ICON.radar = iconTex('radar');
+    ICON.sub = iconTex('sub');       // §11.10 战略核潜艇（机动发射平台）
   }
 
   function hexToRgb(hex) {
@@ -417,7 +437,7 @@
    * - 存活且未受打击（pop >= pop0）：alpha=1, size=base
    * - 存活但受打击（0 < pop < pop0）：alpha 按人口比例衰减（最低 0.35），size 按比例缩
    * - 被毁（!alive 或 pop<=0）：alpha=0 彻底淡出（原 0.12 会叠 bloom 残留「幽灵光点」）
-   * 按比例变暗让「打了一半人」的城市自然变暗缩点，而非二值化骤变。 */
+   * 按比例变暗让「挨了一半打击」的城市自然变暗缩点，而非二值化骤变。 */
   function syncCities(state, dt) {
     if (!cityGeom) return;
     var dirty = false, sizeDirty = false, colorDirty = false;
@@ -542,16 +562,23 @@
   /* ───────────────────────── 单位（InstancedMesh）─────────────────────────
    * 只渲染玩家阵营与已被标记的敌方单位 —— 敌方单位默认不可见（DESIGN §3 / §5.1）。
    */
-  var UNIT_SIZE = 0.115;         // 图标边长（球径 3.2 的 3.6%，屏幕上约 13px，与图例图标同尺寸）
+  /* 2026-09-09 由 0.115 缩到 0.082：单位图标和城市光点抢视觉，
+   * 球面上密密麻麻一片图形反而看不清城市在哪 —— 军事符号应该比城市小一号。 */
+  var UNIT_SIZE = 0.082;         // 图标边长
+  /* 失效设施的灰（§11.12）：低饱和青灰，与 HUD 的 --text-dim 同族。
+   * 存成 [r,g,b]（0–1）供 instanceColor 直接 setRGB。 */
+  var DISABLED_RGB = [0x64, 0x74, 0x7c].map(function (v) { return v / 255; });
   function buildUnits(state) {
     /* 三种单位 = 三张与图例同形的图标贴图，贴在永远朝向镜头的方片上（billboard）。
      * 用 InstancedMesh + PlaneGeometry，每帧把实例矩阵的旋转设为相机旋转即可实现朝向。 */
-    ['silo', 'sam', 'radar'].forEach(function (type) {
+    ['silo', 'sam', 'radar', 'sub'].forEach(function (type) {
       // 容量按各阵营 perk 实际单位数求和 + 事件奖励（add_radar/add_sam）余量
       var count = 0;
       DC.FACTIONS.forEach(function (f) {
         var k = DC.perkOf(f.code);
-        count += type === 'silo' ? k.silos : (type === 'sam' ? k.sam : k.radar);
+        count += type === 'silo' ? k.silos
+               : type === 'sam' ? k.sam
+               : type === 'sub' ? k.subs : k.radar;
       });
       count += DC.FACTIONS.length * 4;   // 事件奖励增建的单位余量
       var mat = new THREE.MeshBasicMaterial({
@@ -569,6 +596,28 @@
   }
 
   var _mtx = null, _col = null, _q = null, _pos = null, _nrm = null, _scl = null, _up = null;
+
+  /* ── 单位 ↔ 关联城市的连线池（2026-09-09 新增）──
+   * 每个军事单位都带 cityId（sim.deployUnits 部署时绑定）。单位缩小之后，
+   * 「这个六边形属于哪座城」靠肉眼已经对不上号 —— 用一条细线把它拴回所属城市。
+   * 只画可见单位（己方 + 被溯源标记的敌方），与单位本体同一套可见性口径。 */
+  var LINK_POOL = 96;            // 己方 ~15 条 + 战争后期大量被溯源的敌方单位，留足余量
+  var linkPool = [];
+  function buildUnitLinks() {
+    for (var i = 0; i < LINK_POOL; i++) {
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      var line = new THREE.Line(g, new THREE.LineBasicMaterial({
+        color: 0x7fd4e8, transparent: true, opacity: 0.32,
+        blending: THREE.AdditiveBlending, depthWrite: false
+      }));
+      line.frustumCulled = false;
+      line.visible = false;
+      scene.add(line);
+      linkPool.push(line);
+    }
+  }
+
   function syncUnits(state) {
     if (!_mtx) {
       _mtx = new THREE.Matrix4(); _col = new THREE.Color();
@@ -576,12 +625,13 @@
       _nrm = new THREE.Vector3(); _scl = new THREE.Vector3(1, 1, 1);
       _up = new THREE.Vector3(0, 1, 0);
     }
-    var counts = { silo: 0, sam: 0, radar: 0 };
+    var counts = { silo: 0, sam: 0, radar: 0, sub: 0 };
+    var linkIdx = 0;
 
     state.units.forEach(function (u) {
-      // 失效设施（关联城市被毁）不渲染
-      if (u.disabled) return;
-      // 可见性：己方全部可见；敌方仅在 exposed 时可见（D5 溯源会置位）
+      // 可见性：己方全部可见；敌方仅在 exposed 时可见（D5 溯源会置位）。
+      // 失效设施（关联城市被核平 / 事件卡被毁）不再隐藏 —— §11.12：它应该灰着留在原地，
+      // 玩家需要看到"这里曾经有一口井，现在没了"，隐藏会让战损看起来凭空蒸发。
       var visible = (u.faction === state.playerFaction) || u.exposed;
       if (!visible) return;
       var im = unitMeshes[u.type];
@@ -596,11 +646,35 @@
       _q.copy(camera.quaternion);
       _mtx.compose(_pos, _q, _scl);
       im.setMatrixAt(idx, _mtx);
-      var rgb = hexToRgb((DC.FACTIONS_BY_CODE[u.faction] || {}).color || '#ffffff');
+      /* 失效设施染灰（§11.12）：阵营色只属于还在线的单位；
+       * 灰用低饱和青灰，与 HUD 的 --text-dim 一族，一眼读出"下线"。 */
+      var rgb = u.disabled
+        ? DISABLED_RGB
+        : hexToRgb((DC.FACTIONS_BY_CODE[u.faction] || {}).color || '#ffffff');
       _col.setRGB(rgb[0], rgb[1], rgb[2]);
       im.setColorAt(idx, _col);
       counts[u.type] = idx + 1;
+
+      /* 连线到所属城市：略抬高两端避免与地表/单位贴图打架。
+       * 潜艇 cityId 为 null（大洋深处巡逻，§11.10b）—— 不画线，
+       * 否则会有一条横跨半个地球的长线把球面图面搅乱。
+       * 失效设施保留连线但同样染灰 —— 灰线指向的正是那座把它带走的废墟城市。 */
+      var city = (u.cityId && DC.sim && DC.sim.findCity) ? DC.sim.findCity(state, u.cityId) : null;
+      if (city && linkIdx < linkPool.length) {
+        var line = linkPool[linkIdx++];
+        var vu = G.ll2v(u.lat, u.lon, R * (UNIT_LIFT + 0.004));
+        var vc = G.ll2v(city.lat, city.lon, R * (CITY_LIFT + 0.003));
+        var arr = line.geometry.getAttribute('position');
+        arr.setXYZ(0, vu.x, vu.y, vu.z);
+        arr.setXYZ(1, vc.x, vc.y, vc.z);
+        arr.needsUpdate = true;
+        line.material.color.setRGB(rgb[0], rgb[1], rgb[2]);
+        line.visible = true;
+      }
     });
+
+    // 本帧没用到的连线槽位全部熄灭
+    for (; linkIdx < linkPool.length; linkIdx++) linkPool[linkIdx].visible = false;
 
     Object.keys(unitMeshes).forEach(function (t) {
       var im = unitMeshes[t];
@@ -625,16 +699,31 @@
         new THREE.LineBasicMaterial({ color: ringColor, transparent: true, opacity: 0.55,
                                        blending: THREE.AdditiveBlending })
       );
+      ring.userData.unitId = u.id;
       scene.add(ring);
       radarRings.push(ring);
     });
   }
 
-  // 预警网失效期间隐藏覆盖圈 —— 事件卡 radar_down 的唯一即时反馈
-  // （完整机制收益在 D5 弹道溯源：没有雷达覆盖就无法反推发射点）
+  /* 覆盖圈的可见性（2026-09-09 修）：
+   * 旧版只在 init 时建一次圈、且只处理「预警网临时失效（radar_down）」一种情况 ——
+   * 结果是雷达站被摧毁（关联城市被核平 → unit.disabled）后探测圈还挂在球上，
+   * 而事件卡增建的新雷达（add_radar）反倒一个圈都没有。
+   * 改为每帧比对签名（id + 失效态 + 半径），有变化就重建，再按单位状态逐个决定显隐。 */
+  var radarSig = '';
   function syncRadarRings(state) {
+    var us = DC.sim.unitsOf(state, state.playerFaction, 'radar');
+    var sig = us.map(function (u) {
+      return u.id + (u.disabled ? 'x' : 'o') + (u.radiusDeg || 0);
+    }).join('|');
+    if (sig !== radarSig) { radarSig = sig; buildRadarRings(state); }
+
     var down = (state.radarDown && state.radarDown[state.playerFaction] > 0);
-    for (var i = 0; i < radarRings.length; i++) radarRings[i].visible = !down;
+    for (var i = 0; i < radarRings.length; i++) {
+      var u = us[i];
+      // 雷达被摧毁（disabled）或全网临时失效（down）→ 圈消失
+      radarRings[i].visible = !down && !!u && !u.disabled;
+    }
   }
 
   function circlePts(center, angDeg, r) {
@@ -682,7 +771,7 @@
       var p = G.ballistic(m.from, m.to, m.progress, R, 9);
       slot.head.position.set(p.x, p.y, p.z);
       slot.head.visible = true;
-      /* §11.7 弹头用 PALETTE 统一色板：炽白核心，与尾焰同色系。
+      /* §11.7 弹头用 PALETTE 统一色板：暖琥珀核心，与尾焰同色系（冷青留给拦截弹）。
        * 再入段增亮增粗：弹头越接近目标越亮越大。 */
       slot.head.material.color.setHex(PALETTE.missileHeadHex);
       slot.head.scale.setScalar(0.045 + m.progress * 0.038);
@@ -1268,6 +1357,7 @@
     buildCities(state);
     syncPointScale();          // 必须在 setSize 之后：uScale 依赖画布实际像素高
     buildUnits(state);
+    buildUnitLinks();
     buildRadarRings(state);
     buildMissilePool();
     buildFxPool();
@@ -1371,7 +1461,12 @@
       return n;
     },
     get scene() { return scene; },
-    get camera() { return camera; }
+    get camera() { return camera; },
+    /* 各雷达覆盖圈的可见性（供冒烟断言「雷达站被摧毁后圈同步消失」）。
+     * 顺序与 DC.sim.unitsOf(state, playerFaction, 'radar') 一致。 */
+    get radarRingsVisible() {
+      return radarRings.map(function (r) { return !!r.visible; });
+    }
   };
   api = DC.render;
 

@@ -145,6 +145,48 @@ async def run(pw, url, label):
                  fireDisabled: document.getElementById('fireBtn').disabled };
     }""")
 
+    # 军事设备在线统计（§11.11）：打掉设施后在线数要实时扣除
+    out["force"] = await page.evaluate("""() => {
+        const st = window.DC.game.state, me = st.playerFaction;
+        const cnt = () => { const o = {silo:0, sub:0, sam:0, radar:0}, t = {silo:0, sub:0, sam:0, radar:0};
+          st.units.forEach(u => { if (u.faction !== me) return; t[u.type] = (t[u.type]||0)+1;
+                                  if (!u.disabled) o[u.type] = (o[u.type]||0)+1; });
+          return {on:o, all:t}; };
+        const ui = () => ({ silo: document.getElementById('fsSilo').textContent,
+                            sub: document.getElementById('fsSub').textContent,
+                            sam: document.getElementById('fsSam').textContent,
+                            radar: document.getElementById('fsRadar').textContent,
+                            hit: document.getElementById('fsRadarWrap').classList.contains('hit') });
+        const before = ui();
+        // 摧毁一座带雷达的城市：关联设施应全部失效
+        const radar = st.units.find(u => u.faction === me && u.type === 'radar' && !u.disabled);
+        const city = window.DC.sim.findCity(st, radar.cityId);
+        city.alive = false; city.pop = 0;
+        window.DC.sim.unitsOfCity(st, city.id).forEach(u => { u.disabled = true; });
+        return { before: before, radarCity: city.id, sim: cnt() };
+    }""")
+    await page.wait_for_timeout(600)
+    out["forceAfter"] = await page.evaluate("""() => ({
+        ui: { silo: document.getElementById('fsSilo').textContent,
+              radar: document.getElementById('fsRadar').textContent,
+              hit: document.getElementById('fsRadarWrap').classList.contains('hit') },
+        rings: window.DC.render.radarRingsVisible,
+        radarUnits: window.DC.sim.unitsOf(window.DC.game.state,
+                       window.DC.game.state.playerFaction, 'radar').map(u => !!u.disabled)
+    })""")
+
+    # DEFCON 1 提醒横幅
+    out["alert"] = await page.evaluate("""() => {
+        const a = document.getElementById('alert');
+        return { has: !!a, shown: a.classList.contains('show'), text: a.textContent.trim() };
+    }""")
+
+    # 倍速按钮
+    await page.click("#speedBtn")
+    out["speed"] = await page.evaluate(
+        "() => [document.getElementById('speedBtn').textContent, "
+        "document.getElementById('speedBtn').classList.contains('on')]")
+
     # 齐射 ×3
     await page.click("#salvoBtn")
     out["salvo"] = await page.evaluate(
@@ -227,7 +269,8 @@ async def main():
             r = await run(pw, url, label)
             print("\n==== " + r["label"] + " ====")
             for k in ["setup", "probe", "layout", "card", "picked", "warPre",
-                      "afterSelect", "afterFire", "salvo", "impact", "pixels", "intPeak", "overBox"]:
+                      "afterSelect", "afterFire", "salvo", "impact", "pixels", "intPeak", "overBox",
+                      "force", "forceAfter", "alert", "speed"]:
                 print("  " + k + ": " + str(r.get(k)))
             print("  drawer: open=" + str(r.get("drawerOpened")) +
                   " closed=" + str(r.get("drawerClosed")) + " box=" + str(r.get("drawerBox")))

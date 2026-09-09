@@ -105,7 +105,8 @@
   function pickTarget(state, faction, used) {
     var cands = DC.sim.enemyCities(state, faction).filter(function (c) { return !used[c.id]; });
     if (!cands.length) return null;
-    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0; });
+    // 发射井 + 潜艇都算发射平台（§11.10）
+    var silos = DC.sim.launchersOf(state, faction).filter(function (u) { return u.missiles > 0; });
     if (!silos.length) return null;
 
     var w = (CONFIG.aiDistWeight != null) ? CONFIG.aiDistWeight : 0.5;
@@ -133,9 +134,9 @@
     return top[top.length - 1].c;
   }
 
-  // 井选择：取离目标最近且有弹的井（飞行快、更早命中）
+  // 发射单位选择：取离目标最近且有弹的井/艇（飞行快、更早命中）
   function pickSilo(state, faction, target) {
-    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0 && !u.disabled; });
+    var silos = DC.sim.launchersOf(state, faction).filter(function (u) { return u.missiles > 0 && !u.disabled; });
     var best = null, bestD = Infinity;
     silos.forEach(function (s) {
       var d = G.distKm(s, target);
@@ -149,7 +150,7 @@
    * 伤亡差计分逼出的行为，也是「留几枚反击」内核在 AI 侧的落地。
    */
   function planFire(state, faction) {
-    var silos = DC.sim.unitsOf(state, faction, 'silo').filter(function (u) { return u.missiles > 0 && !u.disabled; });
+    var silos = DC.sim.launchersOf(state, faction).filter(function (u) { return u.missiles > 0 && !u.disabled; });
     if (!silos.length) return [];
     if (!DC.sim.enemyCities(state, faction).length) return [];
 

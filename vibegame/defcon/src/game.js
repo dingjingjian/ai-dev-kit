@@ -41,6 +41,11 @@
   function start(factionCode) {
     DC.ui.hideSetup();
 
+    /* 声音默认开启：此处正处在「点选阵营」的真实手势回调里，
+     * 是解锁 AudioContext（resume suspended）的唯一可靠时机 ——
+     * 过了这一村，后面就没有必然会发生的用户手势了。 */
+    if (DC.audio) DC.audio.unlock();
+
     // autoPlayer=false：玩家席位不再由 AI 托管（D3 曾临时开启以便无人值守跑完整局）
     var state = S.create({
       seed: Date.now() % 2147483647, autoPlayer: false, playerFaction: factionCode
@@ -86,7 +91,14 @@
       S.forceWar(state, '我方主动全面开战');
     }
 
-    DC.ui.init(state, { onChoose: chooseOption, onFire: fireAt, onCrisisMax: maxCrisis });
+    /* 倍速：只放大每帧累积的时间，逻辑仍是 10 Hz 固定步长 ——
+     * 加速不会改变任何一次判定，只是把同样的战局快进播放。 */
+    var speed = 1;
+    function setSpeed(v) { speed = (v > 0) ? v : 1; }
+
+    DC.ui.init(state, {
+      onChoose: chooseOption, onFire: fireAt, onCrisisMax: maxCrisis, onSpeed: setSpeed
+    });
 
     var again = document.getElementById('again');
     if (again) again.addEventListener('click', function () { global.location.reload(); });
@@ -142,7 +154,7 @@
       last = now;
       if (!(dt > 0)) dt = 0;
       if (dt > MAX_STEP) dt = MAX_STEP;
-      acc += dt;
+      acc += dt * speed;
 
       var guard = 0;
       while (acc >= S.TICK && guard < 40) { S.tick(state, S.TICK); acc -= S.TICK; guard++; }

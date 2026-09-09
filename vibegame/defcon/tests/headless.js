@@ -16,6 +16,7 @@ var assert = require('assert');
 global.window = global;
 require(path.join(__dirname, '..', 'src', 'data.js'));
 require(path.join(__dirname, '..', 'src', 'geo.js'));
+require(path.join(__dirname, '..', 'src', 'landmask.js'));   // §11.12 布阵地理断言需要真实海陆
 require(path.join(__dirname, '..', 'src', 'sim.js'));
 require(path.join(__dirname, '..', 'src', 'ai.js'));
 
@@ -275,9 +276,10 @@ ok('offsetLL 极区输出经度合法', poleOff.lon >= -180 && poleOff.lon <= 18
 
 // 建局与开局布阵（DESIGN §3：开局固定，单位数按阵营 perk 差异化）
 var st0 = S.create({ seed: 42 });
-// 单位总数 = 各阵营 (perk.silos + perk.sam + perk.radar) 之和
+// 单位总数 = 各阵营 (perk.silos + perk.sam + perk.radar + perk.subs) 之和
+// （§11.10 起含潜艇：机动发射平台与发射井同权，也计入单位总数）
 var expectUnits = DC.FACTIONS.reduce(function (s, f) {
-  var k = DC.perkOf(f.code); return s + k.silos + k.sam + k.radar;
+  var k = DC.perkOf(f.code); return s + k.silos + k.sam + k.radar + (k.subs || 0);
 }, 0);
 ok('单位总数按 perk', st0.units.length === expectUnits, 'got ' + st0.units.length + ' expect ' + expectUnits);
 ok('城市 62 / 阵营 6', st0.cities.length === 62 && st0.factions.length === 6);
@@ -309,6 +311,73 @@ for (var ui = 0; ui < st0.units.length; ui++) {
 // 阈值 100 km → 40 km：单位绑定城市布阵，城市改用真实坐标后相邻都会圈内的单位必然靠近，
 // 只要不叠在一起（渲染重叠 / 溯源误判）即视为合格。
 ok('单位间距 > 40 km', minU > 40, '最近 ' + minU.toFixed(0) + ' km (' + minUWho + ')');
+
+/* ── §11.11 / §11.12 / §11.13 布阵地理断言（多种子）──
+ * 潜艇必须在深海（掩膜判定 + 不贴岸），发射井/防空/雷达必须在陆上，
+ * 发射井必须离敌国城市足够远（旧版实测有井贴到敌城 1° 内），潜艇相互间距 ≥ 28°。 */
+var geoBad = { sub: 0, silo: 0, sam: 0, radar: 0 };
+var worstFoeDeg = Infinity, worstSubSep = Infinity, worstSiloCity = Infinity;
+for (var gs = 1; gs <= 20; gs++) {
+  var gst = S.create({ seed: gs * 7, playerFaction: 'ALFA' });
+  var gsubs = gst.units.filter(function (u) { return u.type === 'sub'; });
+  gst.units.forEach(function (u) {
+    if (u.type === 'sub') {
+      if (DC.land.isLand(u.lat, u.lon) || !DC.land.isDeepWater(u.lat, u.lon, 2)) geoBad.sub++;
+    } else if (!DC.land.isLand(u.lat, u.lon)) {
+      geoBad[u.type]++;
+    }
+    if (u.type === 'silo') {
+      var fd = S.enemyCities(gst, u.faction).reduce(function (m, c) {
+        return Math.min(m, G.angular(u, c) * 180 / Math.PI);
+      }, Infinity);
+      if (fd < worstFoeDeg) worstFoeDeg = fd;
+      var cd = Math.min.apply(null, DC.CITIES_BY_FACTION[u.faction].map(function (c) {
+        return G.angular(u, c) * 180 / Math.PI;
+      }));
+      if (cd < worstSiloCity) worstSiloCity = cd;
+    }
+  });
+  for (var gi = 0; gi < gsubs.length; gi++) {
+    for (var gj = gi + 1; gj < gsubs.length; gj++) {
+      var sd = G.angular(gsubs[gi], gsubs[gj]) * 180 / Math.PI;
+      if (sd < worstSubSep) worstSubSep = sd;
+    }
+  }
+}
+ok('潜艇全部落在深海（§11.12）', geoBad.sub === 0, geoBad.sub + ' 艘违规');
+ok('发射井 / 防空 / 雷达全部落在陆上（§11.12）',
+   geoBad.silo === 0 && geoBad.sam === 0 && geoBad.radar === 0,
+   JSON.stringify(geoBad));
+ok('发射井离敌国城市 ≥ 8°（§11.12）', worstFoeDeg >= 8, '最小 ' + worstFoeDeg.toFixed(1) + '°');
+ok('发射井不压在城市标记上（≥ 0.5°）', worstSiloCity >= 0.5, '最小 ' + worstSiloCity.toFixed(1) + '°');
+ok('潜艇相互间距 ≥ 28°（§11.12）', worstSubSep >= 28, '最小 ' + worstSubSep.toFixed(1) + '°');
+
+/* ── §11.13 回合基础产能断言 ──
+ * 每回合结算：每座存活城市规模回升（fresh 局各城都在上限之下 → 总量必涨），
+ * 弹头 +1（开局各井都未到 cap，必有井可补）；roundGrowthOf 与实际结算同一口径。 */
+(function () {
+  var gt = S.create({ seed: 11, playerFaction: 'ALFA' });
+  gt.phase = 'crisis'; gt.t = 0; gt.round = 1;
+  // 直接推进一个回合（20s），choice 留空（超时兜底最保守项）
+  var popBefore = gt.cities.reduce(function (s, c) { return s + c.pop; }, 0);
+  var msBefore = S.totalMissiles(gt, 'ALFA');
+  var g0 = S.roundGrowthOf(gt, 'ALFA');
+  ok('roundGrowthOf：新局可产弹 ≥ 1', g0.missiles >= 1, 'got ' + g0.missiles);
+  ok('roundGrowthOf：规模回升 > 0', g0.pop > 0, 'got ' + g0.pop);
+  for (var t = 0; t < 200 && gt.phase === 'crisis'; t++) S.tick(gt, 0.1);
+  var popAfter = gt.cities.reduce(function (s, c) { return s + c.pop; }, 0);
+  var msAfter = S.totalMissiles(gt, 'ALFA');
+  ok('回合结算后弹头数 +≥1（§11.13）', msAfter >= msBefore + 1,
+     msBefore + ' → ' + msAfter);
+  ok('回合结算后总量回升（§11.13）', popAfter > popBefore,
+     popBefore.toFixed(2) + ' → ' + popAfter.toFixed(2));
+  // cap 口径：井弹补到 cap 为止；roundGrowthOf 在满仓时报 0
+  var silo = S.unitsOf(gt, 'ALFA', 'silo')[0];
+  silo.missiles = silo.cap;
+  var gFull = S.roundGrowthOf(gt, 'ALFA');
+  ok('roundGrowthOf 尊重井容量上限', gFull.missiles <= g0.missiles,
+     '满一井后 ' + gFull.missiles);
+})();
 
 // 确定性：同种子必须逐位一致，否则无头断言失去意义
 var rngA = S.makeRng(7), rngB = S.makeRng(7);
@@ -440,7 +509,11 @@ var minD = Math.min.apply(null, S.unitsOf(stn, 'ALFA', 'silo')
   .filter(function (u) { return u.missiles > 0; })
   .map(function (u) { return G.distKm(u, tCity); }));
 ok('nearestSilo 确实是最近的可用井', sN && approx(G.distKm(sN, tCity), minD, 1e-6));
+// 只打空发射井 —— 潜艇是同权的发射平台，此时应由潜艇接手（§11.10）
 S.unitsOf(stn, 'ALFA', 'silo').forEach(function (u) { u.missiles = 0; });
+var sSub = S.nearestSilo(stn, 'ALFA', tCity);
+ok('井弹尽后改用潜艇发射', !!sSub && sSub.type === 'sub' && sSub.missiles > 0);
+S.launchersOf(stn, 'ALFA').forEach(function (u) { u.missiles = 0; });
 ok('弹尽时 nearestSilo 返回 null', S.nearestSilo(stn, 'ALFA', tCity) === null);
 
 // —— playerFire 的拒绝路径与成功路径
@@ -530,8 +603,13 @@ ok('radar_down 置入失效计数（2 回合 − 已过 1 回合）', sDown.rada
 var sLoss = resolveWith('E13', 'pop_loss', 'ALFA');
 var popAfter = S.citiesOf(sLoss, 'ALFA').reduce(function (a, c) { return a + c.pop; }, 0);
 // 阵营总人口随城市表调整而变，这里从数据算基准值，不写死数字
+// §11.13 起回合结算先发基础产能（每城 ×(1+roundPopGrowth)，上限 20M）再扣 pop_loss
 var alfaPop0 = DC.CITIES_BY_FACTION.ALFA.reduce(function (a, c) { return a + c.pop; }, 0);
-ok('pop_loss 扣减己方人口 2M', approx(popAfter, alfaPop0 - 2, 1e-6), 'got ' + popAfter);
+var alfaGrowth = DC.CITIES_BY_FACTION.ALFA.reduce(function (a, c) {
+  return a + Math.min(20, c.pop * (1 + CFG.roundPopGrowth)) - c.pop;
+}, 0);
+ok('pop_loss 扣减己方 2M（含 §11.13 回合基础回升）',
+   approx(popAfter, alfaPop0 + alfaGrowth - 2, 1e-6), 'got ' + popAfter);
 ok('pop_loss 计入己方伤亡（§6.2 口径）', approx(sLoss.stats.ALFA.casualties, 2, 1e-9),
   'got ' + sLoss.stats.ALFA.casualties);
 

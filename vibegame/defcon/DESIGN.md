@@ -618,6 +618,65 @@ earth-3d 只有一张贴图，没有矢量国界、城市数据、单位系统�
 
 ---
 
+### 11.10 [✅ 已落地·补记] 战略核潜艇（此前仅代码注释，未入档）
+
+- **机制**：每阵营 2 艘 × 2 枚 SLBM（`subsPerFaction` / `missilesPerSub`），与发射井同权的机动发射平台：带弹、可发射、发射后同样被弹道溯源暴露；不绑定城市（`cityId = null`），不画连线。
+- **落点**：`src/sim.js deployUnits`、`src/data.js CONFIG`。平衡代价记录见 `CONFIG` 内注释（BRAVO `perkSamProbBonus` 0.08 → 0.03 的对冲）。
+
+### 11.11 [✅ 已落地] 海陆掩膜与布阵地理（潜艇上岸 / 发射井落水 / 井贴敌城）
+
+- **现象**（2026-09-10 用户核查 + 实测复现，seed 20260908）：旧深海判据「离最近城市 ≥ 9°」把撒哈拉 / 澳洲内陆 / 中亚当海洋 —— **12 艘潜艇 7 艘爬上了陆**；发射井方位用黄金角随机撒，**ALFA 一口井落在距敌城（铁京）1° 处**，另有一批修进了海里。
+- **修订**：
+  1. 新增 `src/landmask.js`（1° 分辨率海陆位图，8.1 KB / base64 10.8 KB），由 `tools/gen-landmask.py` 从 Natural Earth 110m 陆地边界（公有领域，`tools/ne_110m_land.geojson`）光栅化产出：3×3 子采样取多数 + 扫描线填充 + 奇偶计数（湖泊自动成水）。改贴图 / 改判据时重跑 `python tools/gen-landmask.py`。
+  2. 布阵统一走 `pickAround`（城市环上采样 36 方位选最优）：发射井硬性要求陆上 + 内陆加分 + 「离敌国最近城市尽量远」，窄长国土半径递减重试（10° → 6° → 3.5°）；防空 / 雷达同样硬性要求陆上；潜艇只从「深海四邻皆水」的格点里选。
+  3. 潜艇选点口径（用户定稿）：① 尽量远离本土（主项）；② 覆盖远离本土的目标区（离敌城过远有惩罚）；③ 相互间距 ≥ 28°（全局共享，三档放松兜底）。
+- **验收**（已入 `tests/headless.js`，20 种子）：潜艇 0 上岸 / 发射井·防空·雷达 0 落水 / 发射井离敌城 ≥ 8°（实测最小 13.2°）/ 潜艇间距 ≥ 28°。
+- **关联文件**：`src/sim.js`、`src/landmask.js`、`tools/gen-landmask.py`、`tools/ne_110m_land.geojson`、`index.html`（脚本加载链多一个 `landmask.js`）。
+
+### 11.12 [✅ 已落地] 城市被毁后，关联设施应灰显而非消失
+
+- **现象**：城市被抹除时 `sim` 已把关联设施置 `disabled`，但 `render.syncUnits` 对 disabled 单位直接跳过 —— 战损凭空蒸发，玩家看不到"这里曾有设施"。
+- **修订**：失效设施照常渲染，图标与连线染灰（`DISABLED_RGB` 低饱和青灰，与 HUD `--text-dim` 同族）；抽屉城市列表的设施徽章按「在线 N + 失效 M（opacity .35）」分两组显示。雷达覆盖圈对 disabled 雷达仍然隐藏（失效圈没有信息量）。
+- **关联文件**：`src/render.js syncUnits`、`src/ui.js updateCities`。
+
+### 11.13 [✅ 已落地] 每回合基础产能，并在统计栏标记
+
+- **需求**（用户）：每回合有基础的规模与核弹数量增加，并在统计栏标记。
+- **修订**：`CONFIG.roundPopGrowth = 0.008`（每座存活城市每回合 ×1.008，上限单城 20M，被抹除的城市不复活）；`CONFIG.roundMissileGain = 1`（每回合 +1 枚，按回合数轮转补进未满的发射井，潜艇不补）；`CONFIG.siloExtraCap = 2`（井在初始基数上还能补 2 枚，事件卡 `add_missiles` 同用此 cap）。结算点在 `resolveRound`（`applyEffects` 之前）。
+- **标记**：底部统计栏（`#hudLeft .hl2`）常驻 `+0.7/回合`、`+1/回合` 两个小标记，数值来自 `sim.roundGrowthOf`（与结算完全同一套口径，改 cap / 轮转不会两张皮）。
+- **平衡影响**（60 局，`tests/balance.js`）：节奏不变（min7 / 中位 11 / max14）；胜率分布 ALFA 22% / BRAVO 40% / CHARLIE 7% / DELTA 2% / ECHO 0% / FOXTROT 30%，与改前同构（BRAVO/FOXTROT 偏高、ECHO 0% 为 §12.3 用户拍板保留项，本轮不调）。
+- **关联文件**：`src/data.js CONFIG`、`src/sim.js（applyRoundGrowth / roundGrowthOf）`、`index.html`、`src/ui.js pumpDelta`、`tests/headless.js`。
+
+### 11.14 [✅ 已落地] 抽屉顶部安全区（iframe 场景兜底）
+
+- **现象**：抽屉标题栏写过 `calc(14px + env(safe-area-inset-top))`，但小红书等平台把小工具挂在 **iframe** 里 —— iframe 内 `env()` 恒为 0，等于没留。
+- **修订**：抽屉自身标题栏（`#drawer > .dhead`）与关闭按钮改用 `max()` 静态兜底：`padding-top: max(26px, calc(14px + var(--safe-t)))`、`top: max(14px, calc(8px + var(--safe-t)))`。有刘海的宿主吃 env 值，iframe 场景吃静态值；正文内的分组标题不受影响。
+- **关联文件**：`index.html`。
+
+### 11.15 [✅ 已落地] 顶栏阶段格样式升级
+
+- **需求**（用户）：右侧阶段只有一行 12px 小字，样式单薄。
+- **修订**：与 DEFCON 格同构的「小标签（阶段）+ 大字」结构；字号 12 → 14px、加字重与 2px 字距；按阶段着色 —— 态势简报青 / 危机博弈琥珀 / 热核战争红（带红晕）/ 终局灰。格宽 76 → 86px。
+- **关联文件**：`index.html`、`src/ui.js updateTop`。
+
+### 11.16 [✅ 已落地] 统计与文案回避「人」的表述
+
+- **需求**（用户）：统计和表述尽量回避「人」这个概念。
+- **口径**：人口 → **规模**；伤亡 → **战损**；存活人口 → **存续规模**；「全球伤亡 X.XX 亿人」→「全球战损 X.XX 亿」；事件卡效果说明、终局复盘、战报日志、阵营 perkDesc 同步改写。代码内部字段（`pop` / `casualties` / `killed`）不动，只改呈现层。
+- **关联文件**：`index.html`、`src/ui.js`、`src/sim.js`（日志）、`src/data.js`（perkDesc）、`README.md`。
+
+### 11.17 [✅ 已落地] 顶栏阶段格对齐 DEFCON 样式 + 阶段相关的底部统计调整
+
+- **需求**（用户，4 项）：① 顶部阶段样式与左侧 DEFCON 格统一；② 进入博弈阶段后删除底部规模 / 核弹的每回合增加提示；③ 热核阶段军事单位统计文字前加图例；④ 热核阶段上面的核弹统计改为损失统计。
+- **修订**：
+  1. `#phase` 与 `#defcon` 同构：内容居中、小标签 9px + 2px 字距、大字加粗 + 1px 字距；两格的标签行 / 大字行分别用固定行高 12px / 22px 锁定 —— 整体高度一致、垂直严格对齐，大字字形独立缩放（DEFCON 19px 单数字 / 阶段 15px 四汉字，行高不受字号影响）；仅按阶段保留着色差异（简报青 / 危机琥珀 / 战争红 / 终局灰）。
+  2. `#hudLeft .gr`（`+X/回合` 产能标记）仅简报期展示：`pumpDelta` 按 `phase !== 'briefing'` 给 `#hudLeft` 挂 `.nogrowth`（CSS `display:none`）；标记用 `margin-left:-8px` 抵消 `.hl2` 的 10px flex gap，紧贴前面的数字（仅留 2px 缝）。
+  3. `#forceStat` 四格（发射井 / 潜艇 / 防空 / 雷达）文字前内联与抽屉图例区同一套 SVG path（11px），图标基线对齐后 `translateY(1px)` 视觉居中。
+  4. `#hudLeft .hl2` 的弹头统计在热核阶段（war / over）切换为**战损**（`stats[player].casualties`，M 口径，遵循 §11.16 措辞）；标签由静态「弹头」改为 `#msLab` 动态切换；热核期弹头 Δ 闪烁不再触发（发射条自己会扣数字）。
+- **关联文件**：`index.html`、`src/ui.js（init / pumpDelta）`。
+
+---
+
 ## 12. 下阶段开发规划（2026-09-09 制定，截止 2026-09-21，剩 12 天）
 
 ### 12.0 当前状态判定（2026-09-09 16:00 更新）

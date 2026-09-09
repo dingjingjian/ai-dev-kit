@@ -19,6 +19,7 @@
 
   var TICK = 0.1;                 // 10 Hz 固定步长（秒）
   var RAD2DEG = 180 / Math.PI;
+  var CITY_POP_CAP = 20;          // 单城规模上限（百万）—— 与 boost_pop 的上限同口径
 
   /* ───────────────────────── 1. 确定性随机 ─────────────────────────
    * mulberry32：32 位状态、无外部依赖、周期足够一局使用。
@@ -122,52 +123,211 @@
    * 布阵必须跟着城市走才能成立（D2 实测发现）。
    * 同一城市多单位时用黄金角错开方位，保证确定性且不重叠。
    */
+  /* 海陆掩膜（§11.11，src/landmask.js）：布阵必须有真实的海陆概念。
+   * 旧版用「离最近城市 ≥ 9°」当深海判据 —— 城市只是陆地的稀疏采样点，
+   * 撒哈拉 / 澳洲内陆 / 中亚离城市都很远但分明是陆地，实测 12 艘潜艇 7 艘爬上了岸，
+   * 发射井也有一批修进了海里。掩膜由 Natural Earth 110m 海岸线光栅化而来。
+   * 掩膜缺失时（旧调用方未加载 landmask.js）回退到旧的最近城市判据，保证可运行。 */
+  var LAND = DC.land || null;
+  var SEA_MIN_DEG = 9;          // 回退判据：离最近城市 ≥ 9°（约 1000 km）
+  var GOLDEN = 137.507765;      // 黄金角：同一城市的多个单位错开方位用
+
+  function minDeg(p, list) {
+    var m = Infinity;
+    for (var i = 0; i < list.length; i++) {
+      var d = G.angular(p, list[i]) * RAD2DEG;
+      if (d < m) m = d;
+    }
+    return m;
+  }
+  function isWaterPt(p) {
+    return LAND ? LAND.isWater(p.lat, p.lon)
+                : minDeg(p, DC.CITIES) >= SEA_MIN_DEG;
+  }
+  /* 深海判据：点位本身是水，且四邻（±2°）也都是水 —— 不贴海岸线。
+   * 贴岸蹲着既不符合"藏在深海里"的叙事，也会被玩家一眼看穿是布点错位。 */
+  function isDeepWaterPt(p) {
+    return LAND ? LAND.isDeepWater(p.lat, p.lon, 2)
+                : minDeg(p, DC.CITIES) >= SEA_MIN_DEG + 2;
+  }
+  function isLandPt(p) {
+    return LAND ? LAND.isLand(p.lat, p.lon)
+                : minDeg(p, DC.CITIES) < SEA_MIN_DEG;
+  }
+
+  /* 大洋候选点（§11.10b → §11.11 重制）：潜艇要待在深海里，不是"离城市远一点"就算。
+   * 用真实掩膜过 isDeepWater 筛出深海格点；全局只算一次，六方共用。
+   * 范围裁到 -60°~70° 纬度：南大洋与北冰洋不适合作为巡逻海区（冰缘 / 过远）。 */
+  function oceanCandidates() {
+    var cands = [];
+    for (var lat = -60; lat <= 70; lat += 4) {
+      for (var lon = -180; lon < 180; lon += 4) {
+        var p = { lat: lat, lon: lon };
+        if (isDeepWaterPt(p)) cands.push({ lat: lat, lon: lon });
+      }
+    }
+    return cands;
+  }
+
+  /* 在城市周围 spreadDeg 的环上采样 36 个方位，选评分最高的落点。
+   * 这是布阵的通用选点器：发射井用它找「离敌国尽量远」的内陆纵深，
+   * 防空 / 雷达用它避免贴进海里，潜艇不用它（走全大洋选点）。
+   * filterFn 可选：硬性筛掉不合格落点（如落水）；筛完为空则放弃过滤兜底 ——
+   * 岛城（檀香山 / 苏瓦）周边实在没有陆地时，宁可落水也不至于无点可用。
+   * 采样方位含 salt 偏移，保证确定性且不同单位不重叠。 */
+  function pickAround(city, spreadDeg, idx, salt, scoreFn, filterFn) {
+    var base = (GOLDEN * idx + salt) % 360;
+    var cands = [];
+    for (var i = 0; i < 36; i++) {
+      var brg = (base + i * 10) % 360;
+      var p = G.destination(city, brg, spreadDeg);
+      if (!filterFn || filterFn(p)) cands.push(p);
+    }
+    if (!cands.length) {   // 全被筛掉 → 放弃硬性条件，回退全采样（岛城场景）
+      for (var j = 0; j < 36; j++) {
+        cands.push(G.destination(city, (base + j * 10) % 360, spreadDeg));
+      }
+    }
+    var best = null, bestS = -Infinity;
+    for (var k = 0; k < cands.length; k++) {
+      var s = scoreFn(cands[k]);
+      if (s > bestS) { bestS = s; best = cands[k]; }
+    }
+    return best;
+  }
+
   function deployUnits() {
     var units = [];
-    var GOLDEN = 137.507765;
+    var ocean = oceanCandidates();
+    /* 已占用的巡逻海域（跨阵营共享）：六方都在挑「远离本土的那片深海」，
+     * 不加全局排重就会出现两方潜艇蹲在同一个坐标上（实测 0 km 重合）。 */
+    var usedSubs = [];
 
     DC.FACTIONS.forEach(function (f) {
       var perk = DC.perkOf(f.code);
       var cities = DC.CITIES_BY_FACTION[f.code].slice();
-      // 确定性排序：人口降序，同人口按 id，保证同种子布阵一致
+      // 确定性排序：规模降序，同规模按 id，保证同种子布阵一致
       cities.sort(function (a, b) { return (b.pop - a.pop) || (a.id < b.id ? -1 : 1); });
       var salt = f.code.charCodeAt(0) * 13 + f.code.length * 7;   // 阵营间错开起始方位
+      // 敌方全部城市：发射井选点的「离敌国尽量远」评分基准
+      var foes = [];
+      DC.FACTIONS.forEach(function (o) {
+        if (o.code !== f.code) foes = foes.concat(DC.CITIES_BY_FACTION[o.code]);
+      });
 
-      function place(city, spreadDeg, idx) {
-        var brg = (GOLDEN * idx + salt) % 360;
-        return G.destination(city, brg, spreadDeg);
+      /* 就近绑定（2026-09-09）：单位落在哪，就归属离它最近的那座城 —— 连线必须就近，
+       * 否则球面上会出现一条横穿大陆的长线，把两张图（单位、城市）的关系画乱。 */
+      function nearestCityId(p) {
+        var best = cities[0], bd = Infinity;
+        cities.forEach(function (c) {
+          var d = G.angular(p, c);
+          if (d < bd) { bd = d; best = c; }
+        });
+        return best.id;
+      }
+      /* 均匀分摊城市：第 i 个同类单位取第 ⌊i·len/n⌋ 座城。
+       * 旧版用 (i*2)%len 之类的步长取样，同类单位会挤在同一批城市上（另一批城市一个都没有），
+       * 球面上看着就是"防御全堆在一角"。 */
+      function cityFor(i, n) {
+        return cities[Math.floor(i * cities.length / Math.max(1, n)) % cities.length];
+      }
+      /* 陆地优先评分：内陆纵深 2.5 分 > 沿海陆地 0.5 分 > 落水 -3 分。
+       * 岛城（檀香山 / 苏瓦）周边实在没有陆地时评分全为负，取最大值即"最靠陆地的一点"。 */
+      function landScore(p) {
+        if (!LAND) return 0;
+        if (LAND.isInland(p.lat, p.lon, 1)) return 2.5;
+        return LAND.isLand(p.lat, p.lon) ? 0.5 : -3;
       }
 
-      // SAM：守人口最高的若干城，贴城布防（数量由 perk 决定）
+      // SAM：守规模最高的若干城，贴城布防（数量由 perk 决定），方位挑陆地一侧
       for (var s = 0; s < perk.sam; s++) {
         var cs = cities[s % cities.length];
-        var ps = place(cs, 1.5, s);
+        var ps = pickAround(cs, 1.5, s, salt, landScore);
         units.push({
           id: f.code + '-SAM-' + s, faction: f.code, type: 'sam',
-          lat: ps.lat, lon: ps.lon, cityId: cs.id, disabled: false,
+          lat: ps.lat, lon: ps.lon, cityId: nearestCityId(ps), disabled: false,
           ammo: CONFIG.samCapacity, maxAmmo: CONFIG.samCapacity, cooldown: 0
         });
       }
-      // 雷达：间隔取样，分散覆盖（数量与半径由 perk 决定）
+      // 雷达：均匀分摊到不同城市，分散覆盖（数量与半径由 perk 决定），同样偏陆地侧
       for (var r = 0; r < perk.radar; r++) {
-        var cr = cities[(r * 3 + 4) % cities.length];
-        var pr = place(cr, 3, r + 10);
+        var cr = cityFor(r, perk.radar);
+        var pr = pickAround(cr, 3, r + 10, salt, landScore);
         units.push({
           id: f.code + '-RAD-' + r, faction: f.code, type: 'radar',
-          lat: pr.lat, lon: pr.lon, cityId: cr.id, disabled: false,
+          lat: pr.lat, lon: pr.lon, cityId: nearestCityId(pr), disabled: false,
           radiusDeg: perk.radarRadiusDeg, down: 0
         });
       }
-      // 发射井：偏移更大（置于城市后方），数量由 perk 决定
+      /* 发射井（§11.11 重制）：修在本土纵深处。
+       * 旧版方位用黄金角随机撒，实测 ALFA 有发射井落在距敌国城市 1° 的地方（铁京旁边），
+       * 还有一批掉进海里 —— 都不合"战略武器藏在本土纵深"的叙事。
+       * 新逻辑：保持与绑定城市的距离不变（5–10°），在该环上采样 36 个方位，
+       * 取「离敌国最近城市尽量远 + 内陆加分」最高的落点。 */
       for (var k = 0; k < perk.silos; k++) {
-        var ck = cities[(k * 2) % cities.length];
-        var pk = place(ck, 5 + (k % 3) * 2.5, k + 20);
+        var ck = cityFor(k, perk.silos);
+        var spread = 5 + (k % 3) * 2.5;
+        /* 半径递减重试：窄长国土（新西兰 / 日本）在 10° 半径上可能整环是海，
+         * 与其把井修进海里，不如收拢到本土更近的陆地上（3.5° 是保底纵深）。 */
+        var tries = [spread, Math.max(3.5, spread * 0.6), 3.5];
+        var pk = null;
+        for (var t = 0; t < tries.length; t++) {
+          pk = pickAround(ck, tries[t], k + 20, salt, function (p) {
+            return minDeg(p, foes) + landScore(p);
+          }, isLandPt);   // 井必须落在陆上（岛城无陆地才回退落水）
+          if (!LAND || LAND.isLand(pk.lat, pk.lon)) break;
+        }
         units.push({
           id: f.code + '-SILO-' + k, faction: f.code, type: 'silo',
-          lat: pk.lat, lon: pk.lon, cityId: ck.id, disabled: false,
-          missiles: perk.missilesPerSilo, exposed: false
+          lat: pk.lat, lon: pk.lon, cityId: nearestCityId(pk), disabled: false,
+          missiles: perk.missilesPerSilo,
+          cap: perk.missilesPerSilo + (CONFIG.siloExtraCap || 0),   // 回合补弹的上限（§11.13）
+          exposed: false
         });
       }
+      /* 潜艇（§11.10b / §11.11 重制）：**不绑定城市**（cityId = null）—— 它在大洋深处巡逻，
+       * 画一条线连回本国城市既不符合叙事，也会在球面上拉出一条跨越半个地球的长线。
+       * 选点三条原则（用户定稿口径）：
+       *   ① 尽量远离本土 —— 评分主项是「离本国最近城市的距离」；
+       *   ② 覆盖远离本土的目标区 —— 离敌国城市不能太远（太远就是漂在无用海域）；
+       *   ③ 潜艇之间不要太近 —— 全局共享的间距约束（≥28°，约 3100 km）。
+       * 三档放松间距：实在凑不齐（掩膜深海点不足）时降到 18° / 0° 兜底。 */
+      (function () {
+        var want = perk.subs || 0;
+        var scored = ocean.map(function (p) {
+          var od = minDeg(p, cities);
+          var fd = minDeg(p, foes);
+          /* 主项：远离本土；修正：敌城太远的海域价值低（−0.3/°），
+           * 超出 22° 后额外惩罚（−0.8/°）—— 保证选出的点既能藏、也够得着对手。 */
+          var sc = od - 0.3 * fd - 0.8 * Math.max(0, fd - 22);
+          return { lat: p.lat, lon: p.lon, sc: sc };
+        }).sort(function (a, b) {
+          return (b.sc - a.sc) || (a.lat - b.lat) || (a.lon - b.lon);
+        });
+        var picked = [];
+        [28, 18, 0].some(function (sep) {
+          for (var i = 0; i < scored.length && picked.length < want; i++) {
+            var p = scored[i], ok = true, j;
+            for (j = 0; j < usedSubs.length; j++) {
+              if (G.angular(p, usedSubs[j]) * RAD2DEG < sep) { ok = false; break; }
+            }
+            if (ok) for (j = 0; j < picked.length; j++) {
+              if (G.angular(p, picked[j]) * RAD2DEG < sep) { ok = false; break; }
+            }
+            if (ok) { picked.push(p); usedSubs.push(p); }
+          }
+          return picked.length >= want;
+        });
+        picked.forEach(function (p, b) {
+          units.push({
+            id: f.code + '-SUB-' + b, faction: f.code, type: 'sub',
+            lat: p.lat, lon: p.lon, cityId: null, disabled: false,
+            missiles: perk.missilesPerSub,
+            cap: perk.missilesPerSub + (CONFIG.siloExtraCap || 0),
+            exposed: false
+          });
+        });
+      })();
     });
     return units;
   }
@@ -204,8 +364,14 @@
       return c.faction !== faction && c.alive && c.pop > 0;
     }).sort(function (a, b) { return (b.pop - a.pop) || (a.id < b.id ? -1 : 1); });
   }
+  // 全部可发射单位（发射井 + 潜艇）—— 潜艇是机动发射平台，与井同权（§11.10）
+  function launchersOf(state, faction) {
+    return state.units.filter(function (u) {
+      return u.faction === faction && (u.type === 'silo' || u.type === 'sub') && !u.disabled;
+    });
+  }
   function totalMissiles(state, faction) {
-    return unitsOf(state, faction, 'silo').reduce(function (s, u) { return s + u.missiles; }, 0);
+    return launchersOf(state, faction).reduce(function (s, u) { return s + u.missiles; }, 0);
   }
   function defconOf(crisis) {
     var lv = 5;
@@ -315,7 +481,7 @@
        * 给"正面"选项挂奖励，让危机博弈不只是"加还是减"的危机值选择：
        *   add_radar / add_sam   —— 己方增建雷达/防空（和平红利、科研突破）
        *   add_missiles          —— 己方发射井补充核弹
-       *   boost_pop             —— 己方城市人口回升（战后重建、难民安置）
+       *   boost_pop             —— 己方城市规模回升（战后重建）
        *   intel_city            —— 获取敌方城市情报，暴露其关联设施 */
       } else if (e.type === 'add_radar') {
         var cr = citiesOf(state, f.code).filter(function (c) { return c.alive; })
@@ -344,9 +510,12 @@
         }
 
       } else if (e.type === 'add_missiles') {
-        unitsOf(state, f.code, 'silo').forEach(function (u) {
+        launchersOf(state, f.code).forEach(function (u) {
           if (u.disabled) return;
-          u.missiles += (e.amount || 1); n++;
+          // 与回合补弹共用同一 cap（§11.13）：井库容就那么大，超发会把弹凭空变出来
+          var add = e.amount || 1;
+          var real = Math.min(launcherCap(u), u.missiles + add) - u.missiles;
+          if (real > 0) { u.missiles += real; n++; }
         });
         if (n) log(state, f.code + ' 为 ' + n + ' 座发射井各补充 ' + (e.amount || 1) + ' 枚核弹');
 
@@ -361,7 +530,7 @@
             var np = Math.min(20, c.pop * (1 + r));
             if (np > c.pop) { c.pop = np; c.pop0 = Math.max(c.pop0, c.pop); n++; }
           });
-          if (n) log(state, f.code + ' 全境人口回升 +' + (r * 100).toFixed(0) + '%（共 ' + n + ' 城）');
+          if (n) log(state, f.code + ' 全境规模回升 +' + (r * 100).toFixed(0) + '%（共 ' + n + ' 城）');
         } else {
           var cb = citiesOf(state, f.code).filter(function (c) { return c.alive; })
             .sort(function (a, b) { return b.pop - a.pop; })[0];
@@ -444,6 +613,54 @@
     return true;
   }
 
+  /* ── 回合基础产能（§11.13）──
+   * 每回合结算时六方都拿到：① 每座存活城市规模 ×(1+roundPopGrowth)（上限 CITY_POP_CAP，
+   * 被抹除的城市不复活）；② +roundMissileGain 枚弹头，从回合数起轮转补进未满的发射井
+   * （补到 cap 为止，潜艇不补——产能算本土工业的）。
+   * 轮转起点按回合数推进，避免每回合都补同一口井。 */
+  function launcherCap(u) {
+    return u.cap || (CONFIG.missilesPerSilo + (CONFIG.siloExtraCap || 0));
+  }
+  function applyRoundGrowth(state) {
+    state.factions.forEach(function (f) {
+      citiesOf(state, f.code).forEach(function (c) {
+        if (!c.alive || c.pop <= 0) return;
+        c.pop = Math.min(CITY_POP_CAP, c.pop * (1 + (CONFIG.roundPopGrowth || 0)));
+      });
+      var gain = CONFIG.roundMissileGain || 0;
+      if (gain <= 0) return;
+      var launchers = launchersOf(state, f.code);
+      if (!launchers.length) return;
+      var start = (state.round || 0) % launchers.length;
+      for (var i = 0; i < launchers.length && gain > 0; i++) {
+        var u = launchers[(start + i) % launchers.length];
+        if (u.disabled) continue;
+        if (u.missiles < launcherCap(u)) { u.missiles++; gain--; }
+      }
+    });
+  }
+
+  /* 下一回合结算将带来的基础产能（不改状态）—— 供 UI 在统计栏常驻标记「+X/回合」。
+   * 与 applyRoundGrowth 同一套口径（同一个轮转起点、同一个 cap），两边数字必须一致。 */
+  function roundGrowthOf(state, code) {
+    var pop = 0;
+    citiesOf(state, code).forEach(function (c) {
+      if (!c.alive || c.pop <= 0) return;
+      pop += Math.min(CITY_POP_CAP, c.pop * (1 + (CONFIG.roundPopGrowth || 0))) - c.pop;
+    });
+    var launchers = launchersOf(state, code);
+    var gain = CONFIG.roundMissileGain || 0, ms = 0;
+    if (launchers.length) {
+      var start = (state.round || 0) % launchers.length;
+      for (var i = 0; i < launchers.length && gain > 0; i++) {
+        var u = launchers[(start + i) % launchers.length];
+        if (u.disabled) continue;
+        if (u.missiles < launcherCap(u)) { ms++; gain--; }
+      }
+    }
+    return { pop: pop, missiles: ms };
+  }
+
   // 危机值由六方共同选择推出（DESIGN §4.1）：取六方 crisis 修正的均值 + 基础漂移。
   // 取均值而非求和，使危机值的量纲与单张卡的修正一致，漂移 +4 才有可预期的权重。
   function resolveRound(state) {
@@ -480,6 +697,7 @@
     state.defcon = defconOf(state.crisis);
     log(state, '第 ' + state.round + ' 回合结算：平均 ' + avg.toFixed(1) + ' → 危机值 ' + state.crisis.toFixed(1) + '（DEFCON ' + state.defcon + '）');
 
+    applyRoundGrowth(state);   // 基础产能先落账，再结算选项附加效果（§11.13）
     applyEffects(state);       // 先按选择结算附加效果，再翻下一张卡
     if (state.defcon <= 1) { enterPhase(state, 'war'); return; }
     // 兜底：超过设计上限仍未开战，则强制推向战争（世界终究滑向战争）
@@ -494,9 +712,12 @@
 
   /* ───────────────────────── 6. 发射与飞行 ───────────────────────── */
 
+  /* 发射：siloId 实为「发射单位 id」，发射井与潜艇共用同一条路径（§11.10）。
+   * 潜艇发射同样暴露自身 —— 机动平台不是免死金牌，先手倾泻照样会被溯源。 */
   function launch(state, faction, siloId, targetCityId) {
     var silo = findUnit(state, siloId);
-    if (!silo || silo.type !== 'silo' || silo.missiles <= 0 || silo.faction !== faction || silo.disabled) return null;
+    if (!silo || (silo.type !== 'silo' && silo.type !== 'sub')) return null;
+    if (silo.missiles <= 0 || silo.faction !== faction || silo.disabled) return null;
     var city = findCity(state, targetCityId);
     if (!city || !city.alive || city.pop <= 0) return null;
 
@@ -576,10 +797,10 @@
       var off = G.offsetLL(est, sigma, state.rng(), state.rng());
       m.traced = true;
       m.estFrom = off;
-      // 标记估算区（2σ）内的敌方发射井暴露
+      // 标记估算区（2σ）内的敌方发射井/潜艇暴露
       var n = 0, radiusKm = sigma * 2 * 111;
       state.units.forEach(function (u) {
-        if (u.type !== 'silo' || u.faction !== m.faction || u.exposed) return;
+        if ((u.type !== 'silo' && u.type !== 'sub') || u.faction !== m.faction || u.exposed) return;
         if (G.distKm(u, off) < radiusKm) { u.exposed = true; n++; }
       });
       if (n) log(state, '我方雷达捕获来袭弹，溯源暴露 ' + n + ' 处 ' + m.faction + ' 发射井');
@@ -618,7 +839,7 @@
         round: state.round, t: state.t
       };
     }
-    log(state, m.faction + ' 命中 ' + city.faction + '/' + city.name + '，损失 ' + lost.toFixed(1) + 'M');
+    log(state, m.faction + ' 命中 ' + city.faction + '/' + city.name + '，损失 ' + lost.toFixed(1) + 'M 规模');
     /* 核弹落地 = 没有回头路（§4.4）：只要有一枚弹真正砸到城市，全局危机值立刻拉满。
      * 在 war 阶段它在数值上只是把顶栏推到 100，但语义上必须落在结算里 ——
      * 这样「先落地的那一方」在日志与后续任何读 crisis 的逻辑里都被钉死为「已全面开战」。 */
@@ -756,6 +977,15 @@
    * 原「得分 = 敌方伤亡 − 己方伤亡」等价但不完全相同（剩余 = 初始人口 − 己方伤亡，
    * 初始人口各阵营不同），玩家直觉更关心「谁活下来的人多」。
    * score 字段保留（= killed − casualties）供审计与历史对比，排序键改为 popLeft。 */
+  /* §11.8b 全球伤亡：六方己方伤亡之和（百万）。
+   * 终局要把它作为最刺眼的那个数字 —— 排名称赞的是"活下来最多的那个"，
+   * 而这一栏说的是"这一局一共死了多少人"，两者放在一起才是完整的反战表达。 */
+  function globalCasualties(state) {
+    return state.factions.reduce(function (s, f) {
+      return s + ((state.stats[f.code] || {}).casualties || 0);
+    }, 0);
+  }
+
   function ranking(state) {
     return state.factions.map(function (f) {
       var s = state.stats[f.code] || { killed: 0, casualties: 0 };
@@ -791,13 +1021,14 @@
     return true;
   }
 
-  // 选出发射距离最近、且仍有弹的己方发射井。
+  // 选出发射距离最近、且仍有弹的己方发射单位（发射井或潜艇，§11.10）。
   // 放在 sim 而非 ui/game：这是纯状态查询，无头测试要能直接断言（玩家点击发射与 AI 开火共用同一条选井规则）。
   function nearestSilo(state, faction, target) {
     var best = null, bestD = Infinity;
     for (var i = 0; i < state.units.length; i++) {
       var u = state.units[i];
-      if (u.type !== 'silo' || u.faction !== faction || u.missiles <= 0 || u.disabled) continue;
+      if ((u.type !== 'silo' && u.type !== 'sub') || u.faction !== faction ||
+          u.missiles <= 0 || u.disabled) continue;
       var d = G.distKm(u, target);
       if (d < bestD) { bestD = d; best = u; }
     }
@@ -831,15 +1062,18 @@
     nearestSilo: nearestSilo,
     playerFire: playerFire,
     ranking: ranking,
+    globalCasualties: globalCasualties,
     defconOf: defconOf,
     findCity: findCity,
     findUnit: findUnit,
     findFaction: findFaction,
     unitsOf: unitsOf,
+    launchersOf: launchersOf,
     citiesOf: citiesOf,
     unitsOfCity: unitsOfCity,
     enemyCities: enemyCities,
-    totalMissiles: totalMissiles
+    totalMissiles: totalMissiles,
+    roundGrowthOf: roundGrowthOf
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);

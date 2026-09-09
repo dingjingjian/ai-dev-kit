@@ -40,9 +40,9 @@
     { code: 'ALFA',    name: '北方联邦',   color: '#378ADD', region: '北亚 · 北欧 · 北极圈', trait: '倚核自重·先手威慑',  perk: 'missiles',   perkDesc: '核弹基数最多' },
     { code: 'BRAVO',   name: '美洲同盟',   color: '#639922', region: '北美 · 中美', trait: '全域打击·精算得失',  perk: 'airDefense', perkDesc: '防空拦截加成' },
     { code: 'CHARLIE', name: '欧亚公约',   color: '#1D9E75', region: '欧洲 · 地中海 · 中东', trait: '外交优先·稳健克制',  perk: 'radar',      perkDesc: '雷达探测加成' },
-    { code: 'DELTA',   name: '东亚联盟',   color: '#E24B4A', region: '东亚 · 西太平洋', trait: '不首先用·极度审慎',  perk: 'population', perkDesc: '人口基数最多' },
+    { code: 'DELTA',   name: '东亚联盟',   color: '#E24B4A', region: '东亚 · 西太平洋', trait: '不首先用·极度审慎',  perk: 'population', perkDesc: '城市规模最大' },
     { code: 'ECHO',    name: '赤道共同体', color: '#EF9F27', region: '拉美 · 非洲 · 东南亚', trait: '无核地带·左右逢源',  perk: 'diplomacy',  perkDesc: '外交降温加成' },
-    { code: 'FOXTROT', name: '南洋联邦',   color: '#7F77DD', region: '大洋洲 · 太平洋群岛', trait: '无核·避战自保',  perk: 'spread',      perkDesc: '人口稀疏·城市多' }
+    { code: 'FOXTROT', name: '南洋联邦',   color: '#7F77DD', region: '大洋洲 · 太平洋群岛', trait: '无核·避战自保',  perk: 'spread',      perkDesc: '城市多而分散' }
   ];
 
   /* ───────────────────────── 2. 城市（60，每阵营 10）─────────────────────────
@@ -430,6 +430,29 @@
     // 单位系统（§3）
     silosPerFaction: 6,        // 发射井
     missilesPerSilo: 3,        // 每井 ICBM
+    /* 潜艇（2026-09-09 新增，§11.10）：机动发射平台，功能与发射井一致 —— 带弹、可发射、
+     * 发射后同样被弹道溯源暴露。区别只在它是「海上机动」的叙事与图上符号。
+     * 每阵营 2 艘 × 2 枚 = +4 枚，六方合计 +24 枚（101 → 125）。
+     * 为什么不给它更多弹：核威慑的叙事重点是「二次反击」，潜艇存在的意义是
+     * 让先手倾泻打不干净对手的还手之力，而不是单纯把弹数堆高。
+     *
+     * ⚠ 平衡代价（2026-09-09 实测，tests/balance.js 60 局，该脚本为固定种子、结果可复现）：
+     *   潜艇把总发射量抬上去后，防空强势阵营（美洲同盟 6 座 SAM + 拦截加成）白捡优势 ——
+     *   胜率 40% → 48%，越过「无阵营独大」判定线。削减潜艇弹数无用（2/艇→1/艇→1 艇×1 弹
+     *   实测仍在 47~48%），因为它吃的是「多出来的发射量」，不是潜艇自己的那几枚弹。
+     *   故改为同步回调 perkSamProbBonus（0.08 → 0.03）抵消，见该项注释。 */
+    subsPerFaction: 2,         // 战略核潜艇（机动发射平台）
+    missilesPerSub: 2,         // 每艇 SLBM
+    /* 每回合基础产能（§11.13）：危机博弈每回合结算时，六方都拿到一份「基础增长」，
+     * 让统计栏的数字每回合都活着，也让「拖回合」有可感知的收益与代价。
+     *   roundPopGrowth  每座存活城市规模 ×(1+0.008)，上限 CITY_POP_CAP（20M）——
+     *                   全阵营约 +0.7M/回合，玩家在统计栏看得见；
+     *   roundMissileGain 每回合 +1 枚弹头，轮流补进未满的发射井（潜艇不补，产能算本土的）；
+     *   siloExtraCap    每口井在初始基数之上还能再补几枚（ALFA 3+2=5）。
+     * ⚠ 改这三个值必须重跑 tests/balance.js：它们抬高全局发射量，直接影响阵营胜率。 */
+    roundPopGrowth: 0.008,
+    roundMissileGain: 1,
+    siloExtraCap: 2,
     samPerFaction: 4,          // 防空导弹 SAM
     radarPerFaction: 3,        // 雷达
     // 战斗参数（§3.1）
@@ -516,8 +539,14 @@
      * 火力才会真正摊到大洋洲头上。
      * ⚠ D5 实现弹道溯源后须再扫：远射将新增「不易被定位」的收益，会改变最优解。
      */
-    aiDistWeight: 0.10,
-    aiTargetTopK: 30,
+    /* ⚠ 2026-09-09 四扫 + 五扫（潜艇入列、布点重做后）：
+     *   潜艇把总发射量抬了约 20%，"挨打少的阵营"优势被放大 —— BRAVO（6 座 SAM + 拦截加成）
+     *   一度到 48%，削其拦截加成后换成 FOXTROT（太偏远）47% 冒头。
+     *   两端轮流冒头 ⇒ 候选池还不够"远"、距离权重还太强，火力打不到大洋洲与美洲头上。
+     *   五扫定值：distWeight 0.10 → 0.05、topK 30 → 34，配合 perkSamProbBonus 0.08 → 0.03：
+     *   胜率区间 0~37%（基线 0~40%），伤亡极差 2.5x（基线 3.4x）—— 比改动前更均衡。 */
+    aiDistWeight: 0.05,
+    aiTargetTopK: 34,          // 见 aiDistWeight 的四扫注释（30 → 34）
 
     /* 事件卡 city_defense 的防御层折算系数（实现补充）。
      * DESIGN §4.2 只写了「amount: 1 座城市获得防御」，没给数值：
@@ -531,17 +560,25 @@
      * ⚠ 2026-09-09 核武梯度（DESIGN §11.1）：原设定除 ALFA 外五方都是 18 枚，
      *   阵营差异只剩颜色与几个 perk，核武体量没有策略区分度。
      *   改为按 §2.1 鹰鸽系数拉开梯度：鹰派多弹、鸽派少弹、南洋多井少弹。
-     *   梯度（枚）：ALFA 24 / BRAVO 18 / CHARLIE 18 / DELTA 15 / ECHO 12 / FOXTROT 14。
+     *   ⚠ 2026-09-09 二调：东亚 15 → 18、欧亚 18 → 15（井数对调，总量不变）。
+     *     口径与核姿态对齐 —— 东亚承诺不首先使用，但体量决定它必须有足够还手之力；
+     *     欧亚外交优先、内部多元，存量居中偏保守。
+     *   梯度（井弹，不含潜艇）：ALFA 24 / BRAVO 18 / CHARLIE 15 / DELTA 18 / ECHO 12 / FOXTROT 14。
      *   - ALFA  8 井 × 3 弹 = 24（倚核自重，核弹基数最多，沿用 perkMissileSilos）
      *   - BRAVO 6 井 × 3 弹 = 18（默认，全域打击但精算得失）
-     *   - CHARLIE 6 井 × 3 弹 = 18（默认，外交优先但保有常规核武）
-     *   - DELTA 5 井 × 3 弹 = 15（不首先使用 + 经济依存，少井少弹，与人口 perk 形成取舍）
+     *   - CHARLIE 5 井 × 3 弹 = 15（外交优先，核武存量居中偏保守）
+     *   - DELTA 6 井 × 3 弹 = 18（不首先使用，但保有足够二次反击能力）
      *   - ECHO  6 井 × 2 弹 = 12（法定无核地带，核武存量最少）
      *   - FOXTROT 7 井 × 2 弹 = 14（无核但分散部署，多井少弹，与 spread perk 对齐）
-     *   合计 101 枚（原 108），梯度更明显，与 §2.1 perk 体系对齐。 */
+     *   井弹合计 101 枚（原 108）；每阵营另加 2 艘潜艇 × 2 枚 = 4 枚，全局合计 125 枚。 */
     perkMissileSilos: 8,        // ALFA 发射井数（其他阵营按 perkSilosByFaction 取）
     perkSamCount: 6,            // BRAVO SAM 数（其他 samPerFaction=4）
-    perkSamProbBonus: 0.08,     // BRAVO 拦截概率加成（§11.8 后从 0.15 降到 0.08：剩余人口计分下防空优势放大，需回调）
+    /* BRAVO 拦截概率加成。两次下调都是同一条理由：只要有「防空更强」的阵营，
+     * 全局发射量一涨，它的优势就被放大（少挨的每一发都是白赚的存活人口）。
+     *   §11.8  0.15 → 0.08（剩余人口计分下防空优势放大）
+     *   §11.10 0.08 → 0.03（潜艇抬高总发射量后，BRAVO 胜率 40% → 48%，越线）
+     * ⚠ 改这个值必须重跑 tests/balance.js：它同时决定拦截率与阵营胜率极差。 */
+    perkSamProbBonus: 0.03,
     perkRadarCount: 5,          // CHARLIE 雷达数（其他 radarPerFaction=3）
     perkRadarRadiusBonus: 15,   // CHARLIE 雷达覆盖半径加成（度）
     perkPopMultiplier: 1.3,     // DELTA 城市人口倍率
@@ -550,7 +587,7 @@
     /* 各阵营发射井数（按 §11.1 拉开梯度）。不带 perk 的阵营回退到 silosPerFaction。
      * ALFA 走 perkMissileSilos 兼容旧调用，其余按此表取。 */
     perkSilosByFaction: {
-      ALFA: 8, BRAVO: 6, CHARLIE: 6, DELTA: 5, ECHO: 6, FOXTROT: 7
+      ALFA: 8, BRAVO: 6, CHARLIE: 5, DELTA: 6, ECHO: 6, FOXTROT: 7
     },
     /* 各阵营每井 ICBM 数（按 §11.1 拉开梯度）。鸽派阵营每井弹数下调，
      * 与发射井数配合形成「核武存量」维度的阵营差异化。 */
@@ -613,17 +650,19 @@
     if (p === 'diplomacy')  dipDrift = C.perkDiplomacyDrift;
     return {
       silos: silos, sam: sam, radar: radar,
+      subs: C.subsPerFaction,               // 潜艇数（六方一致，机动平台不参与阵营梯度）
       missilesPerSilo: mps,
+      missilesPerSub: C.missilesPerSub,
       samProb: samProb, radarRadiusDeg: radarR,
       popMul: popMul, dipDrift: dipDrift,
       perk: p, perkDesc: f.perkDesc || ''
     };
   };
 
-  // 阵营核弹总数（选择阵营界面展示用）
+  // 阵营核弹总数（选择阵营界面展示用）：发射井 + 潜艇
   DC.factionMissiles = function (code) {
     var k = DC.perkOf(code);
-    return k.silos * k.missilesPerSilo;
+    return k.silos * k.missilesPerSilo + k.subs * k.missilesPerSub;
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);
