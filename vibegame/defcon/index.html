@@ -14,6 +14,11 @@
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+    /* 顶部强制留白：小红书 iframe 里 env(safe-area-inset-top) 恒为 0，
+       顶栏会直接顶在屏幕最上沿（被宿主 UI 压住/显得憋）。
+       改成一条显式的常量留白，顶栏整体下移 —— 上方露出星球，不再是一整块面板。
+       改这一个值就能调，#alert 与抽屉头都跟着它走。 */
+    --top-gap:50px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;overflow:hidden;background:#02040a;color:var(--text);
@@ -40,8 +45,10 @@
      两行结构：第一行 DEFCON 格 + 阶段格左右分布；危机值条换行独占第二行 ——
      390px 手机上左右各 80px 留白后内容区只剩 230px，DEFCON(70) + 阶段(86) 占掉大半，
      危机值条被挤到 ~70px 宽、数字与条形图都挤成一团，独占一行才有完整的进度条可读性。 */
-  #top{top:0;left:0;right:0;display:flex;flex-wrap:wrap;align-items:stretch;gap:1px;
-    padding:var(--safe-t) 48px 0;
+  /* top 用 --top-gap + 安全区之和，padding 不再承担避让 —— 背景与内容一起下移，
+     上方 50px 是真的空出来（露出星球），不是栏内留白。 */
+  #top{top:calc(var(--top-gap) + var(--safe-t));left:0;right:0;display:flex;flex-wrap:wrap;align-items:stretch;gap:1px;
+    padding:0 48px 0;
     border-bottom:1px solid var(--line);background:var(--panel)}
   #defcon{padding:5px 10px;display:flex;flex-direction:column;align-items:center;justify-content:center;
     min-width:70px;flex:none;order:0;border-right:1px solid var(--line)}
@@ -126,12 +133,15 @@
    * 底色换成面板色加 backdrop 模糊：直接浮在球面上，原来的半透明淡青底不够读。 */
   #hudBtns{position:absolute;right:10px;bottom:100%;margin-bottom:8px;
     display:flex;gap:8px;z-index:2}
-  #hudBtns button{width:46px;height:34px;background:rgba(10,18,26,.78);
+  /* 底部指令条三键 + 抽屉关闭键共用一套皮 —— 写在同一条规则里，
+     不是各写一份再靠人工保持同步：尺寸/描边/底色/按下态从此不可能跑偏。
+     #drawerClose 只额外带定位（见抽屉段），外观一律继承这里。 */
+  #hudBtns button,#drawerClose{width:46px;height:34px;background:rgba(10,18,26,.78);
     border:1px solid var(--line);color:var(--cyan);
     font-family:var(--mono);font-size:17px;line-height:1;cursor:pointer;
     display:flex;align-items:center;justify-content:center;padding:0;
     backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
-  #hudBtns button:active{background:rgba(127,212,232,.25)}
+  #hudBtns button:active,#drawerClose:active{background:rgba(127,212,232,.25)}
   /* 音效：开态两道声波弧，静音态一个叉（✕）—— 叉比斜杠更像"关闭"，识别度高。 */
   #sndBtn{color:var(--cyan-dim)}
   #sndBtn .wave{display:block}
@@ -211,9 +221,14 @@
   @keyframes deny{0%,100%{border-top-color:var(--line)}45%{border-top-color:var(--red)}}
 
   /* ── 抽屉：阵营 / 图例 / 城市 ── */
+  /* padding-top 是关闭按钮的避让区（按钮本身绝对定位，不占流）：
+     原来这里放的是「阵营 · 存续规模」标题，固定在滚动区之外 —— 内容一滚，
+     底下的图例和城市列表已经滚过去了，标题还钉在那儿，对不上。
+     现在标题移进 dbody 与其它分组标题同级（见 .dbody 首行），这里只留按钮的空间。 */
   #drawer{position:absolute;top:0;right:0;bottom:0;width:84%;max-width:340px;z-index:30;
     background:rgba(6,12,18,.98);border-left:1px solid var(--line);
     transform:translateX(100%);transition:transform .24s ease;
+    padding-top:calc(26px + var(--top-gap) + var(--safe-t));
     display:flex;flex-direction:column;overflow:hidden}
   #drawer.open{transform:translateX(0)}
   /* 顶部安全区（§11.14）：抽屉在小红书等平台是挂在 iframe 里的，
@@ -224,12 +239,15 @@
   #drawer .dhead{display:flex;align-items:center;padding:calc(14px + var(--safe-t)) 12px 9px 14px;
     font-size:9.5px;color:var(--cyan-dim);letter-spacing:3px;
     border-bottom:1px solid rgba(127,212,232,.14)}
-  #drawer > .dhead{padding-top:max(26px, calc(14px + var(--safe-t)))}
-  #drawerClose{position:absolute;top:max(14px, calc(8px + var(--safe-t)));right:8px;width:36px;height:36px;
-    background:transparent;border:none;color:var(--cyan);font-size:16px;cursor:pointer}
+  /* 关闭按钮只带定位 —— 外观（46×34 / 描边 / 底色 / 毛玻璃 / 按下态）全部继承上面
+     `#hudBtns button,#drawerClose` 那条共用规则，与静音、倍速、菜单三键同款。
+     z-index:2 是必需的：标题移进 dbody 后内容会滚到它底下，没有底衬的行文字会穿过图标。 */
+  #drawerClose{position:absolute;top:calc(12px + var(--top-gap) + var(--safe-t));right:10px;z-index:2}
   #drawer .dbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:6px 14px 24px}
-  /* 分组标题（图例 / 城市）：缩进后另起一段，与 dhead 形成两级层次 */
+  /* 分组标题（阵营 / 图例 / 城市）：缩进后另起一段，与 dhead 形成两级层次 */
   #drawer .dbody .dhead{padding-left:0;margin-top:14px;letter-spacing:2px}
+  /* 第一个分组标题不再加 14px 上边距 —— 它上面已经是抽屉的按钮避让区了 */
+  #drawer .dbody > .dhead:first-child{margin-top:0}
   .frow{display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:12px;
     border-bottom:1px solid rgba(127,212,232,.06)}
   .frow .sw{width:9px;height:9px;flex:none;border-radius:1px}
@@ -315,7 +333,8 @@
 
   /* ── DEFCON 1 提醒：跌到 1 是一次性事件，必须有明确的"核打击权限已解锁"告知 ──
      放在地球上方偏上，3 秒自动淡出；只在跨越到 1 的那一刻弹一次。 */
-  #alert{position:absolute;left:0;right:0;top:calc(96px + var(--safe-t));z-index:28;
+  /* 紧跟顶栏下沿（顶栏高 81px + 15px 间距），顶栏下移多少它就跟多少 */
+  #alert{position:absolute;left:0;right:0;top:calc(96px + var(--top-gap) + var(--safe-t));z-index:28;
     display:flex;justify-content:center;pointer-events:none;opacity:0}
   #alert .box{background:rgba(226,75,74,.14);border:1px solid rgba(226,75,74,.55);
     padding:7px 16px;font-family:var(--mono);font-size:12px;letter-spacing:2px;
@@ -439,9 +458,9 @@
 </div>
 
 <div id="drawer" data-page-node-id="Pzql6NdPXBo6JLsHnFtN0A">
-  <button type="button" id="drawerClose" aria-label="关闭" data-page-node-id="t5Oj6G2Zu1jxLrRj1QVMkJ">✕</button>
-  <div class="dhead" data-page-node-id="YpDtklGUS0NC7vPrbMj67g">阵营 · 存续规模</div>
+  <button type="button" id="drawerClose" aria-label="关闭" data-page-node-id="t5Oj6G2Zu1jxLrRj1QVMkJ"><svg viewBox="0 0 14 14" width="15" height="15" aria-hidden="true" data-page-node-id="drwrsClsSvg"><line x1="4" y1="4" x2="10" y2="10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" data-page-node-id="drwrsClsL1"></line><line x1="10" y1="4" x2="4" y2="10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" data-page-node-id="drwrsClsL2"></line></svg></button>
   <div class="dbody" data-page-node-id="l6N1RXA4m4YjJNQUtNl9FD">
+    <div class="dhead" data-page-node-id="YpDtklGUS0NC7vPrbMj67g">阵营 · 存续规模</div>
     <div id="fList" data-page-node-id="FGPKF5Oj3nktRqeuMe2FND"></div>
     <div class="dhead" style="padding-left:0" data-page-node-id="2kfTJqdCbEehQIWKUePuvc">图例 · 军事单位</div>
     <div id="legend" data-page-node-id="oDugszKjdWrkF1Vl8rrOrb">

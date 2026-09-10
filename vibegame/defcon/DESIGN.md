@@ -651,6 +651,7 @@ earth-3d 只有一张贴图，没有矢量国界、城市数据、单位系统�
 
 - **现象**：抽屉标题栏写过 `calc(14px + env(safe-area-inset-top))`，但小红书等平台把小工具挂在 **iframe** 里 —— iframe 内 `env()` 恒为 0，等于没留。
 - **修订**：抽屉自身标题栏（`#drawer > .dhead`）与关闭按钮改用 `max()` 静态兜底：`padding-top: max(26px, calc(14px + var(--safe-t)))`、`top: max(14px, calc(8px + var(--safe-t)))`。有刘海的宿主吃 env 值，iframe 场景吃静态值；正文内的分组标题不受影响。
+- **后续**（§11.18 / §11.19）：`#drawer > .dhead` 这条规则已在 §11.19 被 `#drawer` 的 `padding-top` 取代（标题移入滚动区），避让量的构成不变：静态兜底 26px + `--top-gap` + `--safe-t`。`#drawerClose` 的 `top` 仍按原式。
 - **关联文件**：`index.html`。
 
 ### 11.15 [✅ 已落地] 顶栏阶段格样式升级
@@ -674,6 +675,27 @@ earth-3d 只有一张贴图，没有矢量国界、城市数据、单位系统�
   3. `#forceStat` 四格（发射井 / 潜艇 / 防空 / 雷达）文字前内联与抽屉图例区同一套 SVG path（11px），图标基线对齐后 `translateY(1px)` 视觉居中。
   4. `#hudLeft .hl2` 的弹头统计在热核阶段（war / over）切换为**战损**（`stats[player].casualties`，M 口径，遵循 §11.16 措辞）；标签由静态「弹头」改为 `#msLab` 动态切换；热核期弹头 Δ 闪烁不再触发（发射条自己会扣数字）。
 - **关联文件**：`index.html`、`src/ui.js（init / pumpDelta）`。
+
+### 11.18 [✅ 已落地] 顶部统一留白 `--top-gap`（顶栏整体下移）
+
+- **需求**（用户）：顶部界面留空 50px。
+- **修订**：新增 `:root` 常量 `--top-gap: 50px` 作为唯一真源，三处引用它：
+  1. `#top` —— `top: calc(var(--top-gap) + var(--safe-t))`，`padding` 里不再承担避让（改为 `0 48px 0`）。**背景与内容一起下移**，上方 50px 是真的空出来露出星球，不是栏内留白。
+  2. `#alert` —— `top: calc(96px + var(--top-gap) + var(--safe-t))`。它锚在顶栏下沿 15px 处（顶栏高 81px），顶栏下移多少就得跟多少，否则会被顶栏盖住。
+  3. `#drawer > .dhead` / `#drawerClose` —— 在 §11.14 的静态兜底之上再叠加 `--top-gap`，抽屉头与顶栏同一下移量。
+- **口径**：这是 §11.14 的延伸 —— iframe 内 `env()` 恒为 0，所以顶部避让不能只靠安全区，需要一条显式常量。改这一个值，三处一起动。
+- **关联文件**：`index.html`（`:root` / `#top` / `#alert` / `#drawer`）。
+
+### 11.19 [✅ 已落地] 抽屉「阵营 · 存续规模」不再固定在顶部
+
+- **现象**（用户）：标题固定在抽屉顶部，内容一滚就和下面的东西对不上。
+- **病因**：`#drawer > .dhead` 是 `#drawer` 的**直接子级**，落在滚动容器 `#drawer .dbody` **之外** —— `.dbody` 的 `scrollHeight` 是视高的 3 倍，滚过阵营列表后底下已是图例与城市列表，标题却还钉在原处。加上 §11.18 的 `--top-gap`，这个固定头还从 48px 长到了 98px，问题被放大。
+- **修订**：
+  1. 把 `阵营 · 存续规模` 移进 `#drawer .dbody`，成为第一个分组标题 —— 与「图例 · 军事单位」「城市 · 点选可定位」**同级同款**（同为 `.dhead`、同左缩进 77px、同样随内容滚动）。
+  2. 原 `#drawer > .dhead{padding-top: …}` 规则删除，避让量改挂到 `#drawer` 的 `padding-top`（构成不变：26px 静态兜底 + `--top-gap` + `--safe-t`）—— 标题走了，这块空间只剩关闭按钮。
+  3. 新增 `#drawer .dbody > .dhead:first-child{margin-top:0}`：分组标题的 14px 上边距对第一个元素是多余的。
+  4. `#drawerClose` 加 `border-radius:50%` + `rgba(6,12,18,.92)` 底衬 + `z-index:2`。**标题移入滚动区后内容会滚到按钮底下**，没有底衬的话行文字会穿过 ✕ 变得读不出来。
+- **关联文件**：`index.html`（`#drawer` / `#drawerClose` / `.dbody .dhead` / 抽屉 DOM）。
 
 ---
 
