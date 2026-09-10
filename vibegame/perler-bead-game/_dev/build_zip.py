@@ -35,6 +35,9 @@ GUARDS = [
     ("无 eval / new Function", not re.search(r"\beval\s*\(|new\s+Function\b", js)),
     ("禁用能力：无 WebSocket/Worker/geolocation/clipboard", not re.search(
         r"WebSocket|new\s+Worker|geolocation|clipboard|getUserMedia|window\.open", js)),
+    # 小红书容器 §4.2 禁用 a[download]/blob 下载，导出必须走端能力 saveImageToPhotosAlbum
+    ("导出走容器端能力 saveImageToPhotosAlbum", "saveImageToPhotosAlbum" in js),
+    ("导出保留无 SDK 降级路径 a[download]", ".download=" in js),
 ]
 print("—— 打包前置校验 ——")
 failed = [name for name, ok in GUARDS if not ok]

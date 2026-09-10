@@ -1214,9 +1214,9 @@ function spawnPetals(){
 }
 
 let toastTimer=null;
-function showToast(msg){
+function showToast(msg,ms){
   toastEl.textContent=msg;toastEl.classList.add('show');
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1800);
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),ms||1800);
 }
 
 let hintCells=[],hintTimer=null,hintRAF=null;
@@ -1505,6 +1505,9 @@ function renderLibrary(){
       '<div class="lib-meta">'+p.cat+' · '+p.n+'×'+p.n+' · '+beads+' 豆 · '+colCount+' 色'+timeStr+progTxt+'</div>'+
       '<div class="lib-lore">'+p.lore+'</div>';
     card.appendChild(tw);card.appendChild(info);
+    const ex=document.createElement('button');ex.className='lib-export';ex.textContent='导图纸';
+    ex.addEventListener('click',function(e){e.stopPropagation();SFX.click();openExport(idx);});
+    card.appendChild(ex);
     card.addEventListener('click',()=>{SFX.click();openPattern(idx);});
     grid.appendChild(card);
   });
@@ -1554,6 +1557,211 @@ function renderGallerySheet(){
     grid.appendChild(item);
   });
   if(grid.children.length===0)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:20px 0;">暂无完成作品，快去拼一幅吧</div>';
+}
+
+// ==================== 导出图纸（线下制作拼豆用）====================
+// 生成一张可直接打印 / 保存的图纸：编号网格 + 每 5 行列坐标 + 色号图例与用料清单。
+// 单一真源是 exportCanvas 画布：保存 PNG 与打印（存 PDF）共用同一张图。
+let exportIdx=-1;
+
+function beadTextColor(hex){
+  // 深色豆上写浅字、浅色豆上写深字
+  const c=hexToRgb(hex);
+  return (0.299*c.r+0.587*c.g+0.114*c.b)>150?'#3A3128':'#F2EBDD';
+}
+
+function openExport(idx){
+  if(typeof idx==='number') exportIdx=idx;
+  if(exportIdx<0||exportIdx>=PATTERNS.length) exportIdx=curPattern;
+  renderExportSheet();
+  document.getElementById('sheetExport').classList.add('show');
+}
+
+function renderExportSheet(){
+  const p=PATTERNS[exportIdx];
+  const cv=document.getElementById('exportCanvas');
+  const g=cv.getContext('2d');
+  // 统计
+  let beads=0;const used={};
+  for(let j=0;j<p.n;j++)for(let i=0;i<p.n;i++){
+    const ch=p.grid[j][i];
+    if(ch!=='.'){beads++;used[ch]=(used[ch]||0)+1;}
+  }
+  const codes=Object.keys(used);
+  const PALNAME={};PALETTE.forEach(function(x){PALNAME[x.code]=x.name;});
+  // 布局（逻辑坐标，2x 输出保证打印清晰）
+  const cell=26,pad=26,numW=32,headH=82,legendRowH=40,footH=46;
+  const legendRows=Math.ceil(codes.length/2)||1;
+  const W=pad*2+numW+cell*p.n;
+  const H=headH+cell*p.n+26+legendRows*legendRowH+footH;
+  const X0=pad+numW,Y0=headH,GW=cell*p.n;
+  const SC=2;
+  cv.width=W*SC;cv.height=H*SC;
+  g.setTransform(SC,0,0,SC,0,0);
+  // 底色
+  g.fillStyle='#F7F2E7';g.fillRect(0,0,W,H);
+  // 标题区
+  g.fillStyle='#2B241A';g.textAlign='left';g.textBaseline='alphabetic';
+  g.font='bold 27px "KaiTi","STKaiti","Kaiti SC",serif';
+  g.fillText('中秋拼豆坊 · '+p.name,X0,36);
+  g.fillStyle='#7A6A50';g.font='15px "KaiTi","STKaiti","Kaiti SC",serif';
+  g.fillText(p.cat+' · '+p.n+'×'+p.n+' · 共 '+beads+' 豆 · '+codes.length+' 色 · 线下拼豆图纸',X0,62);
+  // 右上角小印
+  g.strokeStyle='rgba(200,54,42,0.75)';g.lineWidth=2;
+  g.strokeRect(W-pad-60,14,50,50);
+  g.fillStyle='rgba(200,54,42,0.85)';g.font='bold 29px "KaiTi","STKaiti",serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillText(p.name.slice(0,1),W-pad-35,40);
+  g.textAlign='left';g.textBaseline='alphabetic';
+  // 网格底
+  g.fillStyle='#FFFFFF';g.fillRect(X0,Y0,GW,GW);
+  // 淡格线
+  g.strokeStyle='rgba(70,58,44,0.16)';g.lineWidth=1;
+  for(let i=0;i<=p.n;i++){
+    g.beginPath();g.moveTo(X0+i*cell+0.5,Y0);g.lineTo(X0+i*cell+0.5,Y0+GW);g.stroke();
+    g.beginPath();g.moveTo(X0,Y0+i*cell+0.5);g.lineTo(X0+GW,Y0+i*cell+0.5);g.stroke();
+  }
+  // 每 5 行列粗线
+  g.strokeStyle='rgba(70,58,44,0.5)';g.lineWidth=1.6;
+  for(let i=5;i<p.n;i+=5){
+    g.beginPath();g.moveTo(X0+i*cell,Y0);g.lineTo(X0+i*cell,Y0+GW);g.stroke();
+    g.beginPath();g.moveTo(X0,Y0+i*cell);g.lineTo(X0+GW,Y0+i*cell);g.stroke();
+  }
+  // 网格外框
+  g.strokeStyle='#4A3E30';g.lineWidth=2;g.strokeRect(X0,Y0,GW,GW);
+  // 豆：色圆 + 色号字母
+  g.textAlign='center';g.textBaseline='middle';
+  for(let j=0;j<p.n;j++)for(let i=0;i<p.n;i++){
+    const ch=p.grid[j][i];
+    if(ch==='.') continue;
+    const cx=X0+i*cell+cell/2,cy=Y0+j*cell+cell/2;
+    g.fillStyle=PAL[ch];
+    g.beginPath();g.arc(cx,cy,cell*0.42,0,Math.PI*2);g.fill();
+    g.fillStyle=beadTextColor(PAL[ch]);
+    g.font='bold '+Math.round(cell*0.42)+'px Consolas,monospace';
+    g.fillText(ch.toUpperCase(),cx,cy+0.5);
+  }
+  // 行列号（每 5，从 5 起算）
+  g.fillStyle='#7A6A50';g.font='12px Consolas,monospace';g.textAlign='center';g.textBaseline='middle';
+  for(let i=5;i<=p.n;i+=5){
+    g.fillText(String(i),X0+i*cell-cell/2,Y0-14);
+    g.fillText(String(i),X0-numW/2,Y0+i*cell-cell/2);
+  }
+  g.fillText('列 →',X0+GW-18,Y0-14);
+  // 图例（两列：色样 + 色号/色名/数量）
+  const ly=Y0+GW+22,lx0=X0,cw=GW/2;
+  g.textAlign='left';
+  codes.forEach(function(code,i){
+    const col=i%2,row=(i/2)|0;
+    const x=lx0+col*cw,y=ly+row*legendRowH;
+    g.fillStyle=PAL[code];
+    g.beginPath();g.arc(x+13,y+14,12,0,Math.PI*2);g.fill();
+    g.strokeStyle='rgba(70,58,44,0.55)';g.lineWidth=1;g.stroke();
+    g.fillStyle='#2B241A';g.font='bold 16px "KaiTi","STKaiti",serif';
+    g.fillText(code.toUpperCase()+' '+PALNAME[code],x+32,y+9);
+    g.fillStyle='#7A6A50';g.font='14px Consolas,monospace';
+    g.fillText('× '+used[code],x+32,y+28);
+  });
+  // 页脚
+  g.fillStyle='#7A6A50';g.font='13px "KaiTi","STKaiti",serif';
+  g.fillText('照色号逐格放豆 · 拼完对照复核再熨烫 · 中秋拼豆坊',X0,H-18);
+  document.getElementById('expTitle').textContent='拼豆图纸 · '+p.name;
+  // 换图默认回到全景视图
+  cv.classList.remove('zoomed');
+  const tip=document.getElementById('expTip');
+  if(tip) tip.textContent='整张图纸已完整显示 · 点图纸可放大看色号';
+}
+
+// 容器能力探测：小红书小工具注入 window.xhs.miniTool（见容器能力清单 §3）
+function miniTool(){ return (window.xhs&&window.xhs.miniTool)||null; }
+function inXhsContainer(){ return !!miniTool(); }
+
+// 导出按钮状态反馈（保存是异步的，进度与结果必须看得见）
+let expBtnTimer=null;
+function expIdleLabel(){
+  const b=document.getElementById('expPng');
+  return (b&&b.dataset.idle)||'保存图片';
+}
+function expBtn(text,busy){
+  const b=document.getElementById('expPng');
+  if(!b) return;
+  b.textContent=text;
+  b.disabled=!!busy;
+  b.style.opacity=busy?'0.6':'1';
+  b.style.pointerEvents=busy?'none':'auto';
+}
+function expBtnFlash(text,ms){
+  expBtn(text,false);
+  clearTimeout(expBtnTimer);
+  expBtnTimer=setTimeout(function(){expBtn(expIdleLabel(),false);},ms||2400);
+}
+function expBeep(ok){
+  try{ if(ok){SFX.select&&SFX.select();}else{SFX.click&&SFX.click();} }catch(e){}
+}
+
+// 降级路径：普通浏览器（无容器 SDK）仍走 a[download]
+function saveByDownload(cv,name){
+  try{
+    if(!cv.toBlob){ showToast('当前环境不支持导出图片',2600); return; }
+    cv.toBlob(function(b){
+      if(!b){showToast('当前环境不支持导出图片',2600);return;}
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);a.download=name;
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+      expBeep(true);expBtnFlash('已保存 ✓');
+      showToast('图纸已保存：'+name,2600);
+    },'image/png');
+  }catch(e){ expBeep(false);showToast('导出失败，可改用打印存 PDF',2600); }
+}
+
+function saveExportPng(){
+  const p=PATTERNS[exportIdx];
+  const cv=document.getElementById('exportCanvas');
+  const sdk=miniTool();
+  const idleName='拼豆图纸_'+p.name+'.png';
+  // 小红书容器禁用 a[download] / blob 下载，必须走端能力 saveImageToPhotosAlbum
+  if(sdk&&sdk.saveImageToPhotosAlbum){
+    SFX.click&&SFX.click();
+    expBtn('生成中…',true);
+    showToast('正在生成图纸…',1200);
+    let dataUrl='';
+    try{ dataUrl=cv.toDataURL('image/png'); }catch(e){}
+    if(!dataUrl||dataUrl.length<100){ expBtn(expIdleLabel(),false); saveByDownload(cv,idleName); return; }
+    // 兜底：容器回调若不上行，按钮不能一直卡在「生成中…」
+    let settled=false;
+    const guard=setTimeout(function(){
+      if(settled)return;settled=true;
+      expBtn(expIdleLabel(),false);
+      showToast('已提交保存，请到相册查看',2600);
+    },8000);
+    const ok=function(){
+      if(settled)return;settled=true;clearTimeout(guard);
+      expBeep(true);expBtnFlash('已保存到相册 ✓');
+      showToast('图纸已保存到相册 ✦',2600);
+    };
+    const bad=function(err){
+      if(settled)return;settled=true;clearTimeout(guard);
+      expBeep(false);expBtn(expIdleLabel(),false);
+      console.log('export fail',err&&err.errMsg);
+      showToast('保存失败，可截图留档或重试',2800);
+    };
+    const doSave=function(path){
+      sdk.saveImageToPhotosAlbum({ filePath:path, success:ok, fail:bad });
+    };
+    // 大图先 writeTempFile 换 filePath，避免超长 base64 上行
+    if(sdk.writeTempFile){
+      sdk.writeTempFile({
+        data:dataUrl,
+        success:function(res){ doSave((res&&res.filePath)||dataUrl); },
+        fail:function(){ doSave(dataUrl); }
+      });
+    }else{
+      doSave(dataUrl);
+    }
+    return;
+  }
+  saveByDownload(cv,idleName);
 }
 
 // 背景粒子：星尘缓浮 + 明暗闪烁（夜空）
@@ -1608,6 +1816,7 @@ function bindTools(){
       if(a==='riddle'){openRiddle();}
       else if(a==='mode'){const keys=Object.keys(MODES),i=keys.indexOf(mode);setMode(keys[(i+1)%keys.length]);}
       else if(a==='gallery'){renderGallerySheet();document.getElementById('sheetGallery').classList.add('show');}
+      else if(a==='export') openExport();
       else if(a==='info') showToast('选色珠点棋盘填豆；进度自动保存，拼满 100% 即点亮一盏灯谜。');
     });
   });
@@ -1617,6 +1826,24 @@ function bindTools(){
   document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('.sheet').classList.remove('show')));
   document.getElementById('winReplay').addEventListener('click',()=>{closeWin();clearBoard();startTime=Date.now();elapsed=0;startTimer();});
   document.getElementById('winNext').addEventListener('click',nextPattern);
+  document.getElementById('winExport').addEventListener('click',()=>{closeWin();openExport();});
+  document.getElementById('expPng').addEventListener('click',saveExportPng);
+  document.getElementById('expPrint').addEventListener('click',()=>{SFX.click();window.print();});
+  // 点图纸在「全景 / 放大看色号」间切换（默认全景，一屏看全不滚动）
+  const expCanvas=document.getElementById('exportCanvas'),expScroll=document.querySelector('.exp-scroll');
+  expCanvas.addEventListener('click',function(){
+    SFX.click();
+    const z=expCanvas.classList.toggle('zoomed');
+    document.getElementById('expTip').textContent=z?'已放大 · 拖动查看 · 再点一下回到全景':'整张图纸已完整显示 · 点图纸可放大看色号';
+    if(!z){expScroll.scrollTop=0;expScroll.scrollLeft=0;}
+  });
+  // 小红书容器内：无打印能力，隐藏「打印 / 存 PDF」，主按钮改文案为「存到相册」
+  var sb=document.getElementById('expPng');
+  if(sb) sb.dataset.idle=sb.textContent;                  // 记下默认文案，供按钮态复位
+  if(inXhsContainer()){
+    var pb=document.getElementById('expPrint'); if(pb) pb.style.display='none';
+    if(sb){ sb.dataset.idle='存到相册'; sb.textContent='存到相册'; }
+  }
   document.getElementById('riddleBanner').addEventListener('click',()=>{SFX.click();openRiddle();});
   document.getElementById('riddleBanner').addEventListener('click',()=>{SFX.click();openRiddle();});
   winModal.addEventListener('click',e=>{if(e.target===winModal)closeWin();});

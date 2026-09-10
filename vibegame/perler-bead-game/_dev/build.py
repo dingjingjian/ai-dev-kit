@@ -226,7 +226,7 @@ canvas{display:block;}
   padding:10px 20px;border-radius:22px;font-size:13px;letter-spacing:1px;
   border:1px solid rgba(212,175,55,0.35);
   opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;
-  z-index:40;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,0.45);
+  z-index:200;white-space:nowrap;box-shadow:0 6px 20px rgba(0,0,0,0.45);
 }
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .stamp{
@@ -349,7 +349,45 @@ canvas{display:block;}
 .lib-lore{font-size:10px;color:var(--gold-soft);opacity:.9;line-height:1.45;margin-top:3px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .lib-empty{grid-column:1/-1;text-align:center;color:var(--text-dim);padding:34px 0;font-size:13px;}
-</style>
+
+/* 首页卡片「导图纸」按钮（左上角，不与右上角星级徽章冲突） */
+.lib-card{position:relative;}
+.lib-export{
+  position:absolute;top:6px;left:6px;height:24px;padding:0 10px;border-radius:12px;
+  font-size:10px;letter-spacing:1px;color:var(--gold-soft);
+  background:rgba(20,14,8,0.72);border:1px solid var(--border-gold);
+  transition:all .18s var(--ease);
+}
+.lib-export:active{background:rgba(212,175,55,0.4);color:#1a120a;}
+
+/* 导出图纸面板（首页卡片也能直接打开，层级须压过 #homeView 的 90）
+   图纸区占满剩余高度，画布等比 contain 缩放 —— 整张图纸一眼看全，无需上下滚动。 */
+#sheetExport{z-index:95;}
+.exp-panel{height:90vh;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;}
+.exp-scroll{
+  flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:10px;background:#F7F2E7;padding:8px;
+}
+#exportCanvas{display:block;margin:auto;max-width:100%;max-height:100%;width:auto;height:auto;cursor:zoom-in;transition:opacity .2s var(--ease);}
+#exportCanvas.zoomed{max-width:none;max-height:none;height:100%;width:auto;cursor:zoom-out;}
+.exp-tip{font-size:11px;color:var(--text-dim);letter-spacing:1px;margin-top:8px;text-align:center;}
+.exp-btns{display:flex;margin-top:10px;}
+.exp-btns button{flex:1;height:44px;border-radius:10px;font-weight:bold;font-size:14px;letter-spacing:1px;
+  background:linear-gradient(145deg,var(--gold-soft),var(--gold));color:#1a120a;}
+.exp-btns button.secondary{background:rgba(255,255,255,0.08);color:var(--text);border:1px solid var(--border-gold);}
+.exp-btns button+button{margin-left:10px;}
+
+/* 打印：只输出图纸画布本身（导出 PNG / 打印存 PDF 皆可用） */
+@media print{
+  html,body{height:auto!important;overflow:visible!important;background:#fff!important;padding-top:0!important;}
+  #bgCanvas,.bg-noise,.corner-decor,#playView,#homeView,.toast,.stamp,#petals,
+  .modal,#sheetGallery,#sheetExport .sheet-head,.exp-btns,.exp-tip{display:none!important;}
+  #sheetExport{position:static!important;display:block!important;opacity:1!important;pointer-events:auto!important;background:#fff!important;}
+  #sheetExport .sheet-panel{transform:none!important;height:auto!important;max-height:none!important;display:block!important;overflow:visible!important;background:#fff!important;border:none!important;box-shadow:none!important;padding:0!important;}
+  .exp-scroll{display:block!important;overflow:visible!important;flex:none!important;height:auto!important;max-height:none!important;padding:0!important;border-radius:0!important;background:#fff!important;}
+  #exportCanvas{width:100%!important;height:auto!important;max-height:none!important;max-width:100%!important;}
+}</style>
 </head>
 <body>
   <canvas id="bgCanvas"></canvas>
@@ -389,6 +427,7 @@ canvas{display:block;}
     <button class="tool" data-tool="more"><svg viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg><span>更多</span></button>
     <div class="menu" id="moreMenu">
       <button class="menu-item" data-act="mode"><span>模式</span><b id="modeLabel">临摹</b></button>
+      <button class="menu-item" data-act="export"><span>导出图纸</span><b>线下拼 ›</b></button>
       <button class="menu-item" data-act="gallery"><span>我的画廊</span><b id="galCount">0 幅</b></button>
       <button class="menu-item" data-act="sfx"><span>音效</span><b id="sfxLabel">开</b></button>
       <button class="menu-item" data-act="bgm"><span>背景音乐</span><b id="bgmLabel">开</b></button>
@@ -421,6 +460,18 @@ canvas{display:block;}
     </div>
   </div>
 
+  <div class="sheet" id="sheetExport">
+    <div class="sheet-panel exp-panel">
+      <div class="sheet-head"><div class="sheet-title" id="expTitle">拼豆图纸</div><button class="sheet-close" data-close>✕</button></div>
+      <div class="exp-scroll"><canvas id="exportCanvas"></canvas></div>
+      <div class="exp-tip" id="expTip">整张图纸已完整显示 · 点图纸可放大看色号</div>
+      <div class="exp-btns">
+        <button id="expPng">保存图片</button>
+        <button class="secondary" id="expPrint">打印 / 存 PDF</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="winModal">
     <div class="modal-card">
       <h2>拼成啦！</h2>
@@ -429,7 +480,8 @@ canvas{display:block;}
       <div class="modal-stats"><div>用时<br><b id="winTime">00:00</b></div><div>步数<br><b id="winMoves">0</b></div><div>失误<br><b id="winMistakes">0</b></div></div>
       <div class="modal-btns">
         <button id="winReplay">重玩</button>
-        <button class="secondary" id="winNext">下一幅</button>
+        <button class="secondary" id="winExport">存图纸</button>
+        <button id="winNext">下一幅</button>
       </div>
     </div>
   </div>
@@ -1152,9 +1204,9 @@ function spawnPetals(){
 }
 
 let toastTimer=null;
-function showToast(msg){
+function showToast(msg,ms){
   toastEl.textContent=msg;toastEl.classList.add('show');
-  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),1800);
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>toastEl.classList.remove('show'),ms||1800);
 }
 
 let hintCells=[],hintTimer=null,hintRAF=null;
@@ -1369,6 +1421,9 @@ function renderLibrary(){
       '<div class="lib-meta">'+p.cat+' · '+p.n+'×'+p.n+' · '+beads+' 豆 · '+colCount+' 色'+timeStr+progTxt+'</div>'+
       '<div class="lib-lore">'+p.lore+'</div>';
     card.appendChild(tw);card.appendChild(info);
+    const ex=document.createElement('button');ex.className='lib-export';ex.textContent='导图纸';
+    ex.addEventListener('click',function(e){e.stopPropagation();SFX.click();openExport(idx);});
+    card.appendChild(ex);
     card.addEventListener('click',()=>{SFX.click();openPattern(idx);});
     grid.appendChild(card);
   });
@@ -1420,6 +1475,211 @@ function renderGallerySheet(){
   if(grid.children.length===0)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text-dim);padding:20px 0;">暂无完成作品，快去拼一幅吧</div>';
 }
 
+// ==================== 导出图纸（线下制作拼豆用）====================
+// 生成一张可直接打印 / 保存的图纸：编号网格 + 每 5 行列坐标 + 色号图例与用料清单。
+// 单一真源是 exportCanvas 画布：保存 PNG 与打印（存 PDF）共用同一张图。
+let exportIdx=-1;
+
+function beadTextColor(hex){
+  // 深色豆上写浅字、浅色豆上写深字
+  const c=hexToRgb(hex);
+  return (0.299*c.r+0.587*c.g+0.114*c.b)>150?'#3A3128':'#F2EBDD';
+}
+
+function openExport(idx){
+  if(typeof idx==='number') exportIdx=idx;
+  if(exportIdx<0||exportIdx>=PATTERNS.length) exportIdx=curPattern;
+  renderExportSheet();
+  document.getElementById('sheetExport').classList.add('show');
+}
+
+function renderExportSheet(){
+  const p=PATTERNS[exportIdx];
+  const cv=document.getElementById('exportCanvas');
+  const g=cv.getContext('2d');
+  // 统计
+  let beads=0;const used={};
+  for(let j=0;j<p.n;j++)for(let i=0;i<p.n;i++){
+    const ch=p.grid[j][i];
+    if(ch!=='.'){beads++;used[ch]=(used[ch]||0)+1;}
+  }
+  const codes=Object.keys(used);
+  const PALNAME={};PALETTE.forEach(function(x){PALNAME[x.code]=x.name;});
+  // 布局（逻辑坐标，2x 输出保证打印清晰）
+  const cell=26,pad=26,numW=32,headH=82,legendRowH=40,footH=46;
+  const legendRows=Math.ceil(codes.length/2)||1;
+  const W=pad*2+numW+cell*p.n;
+  const H=headH+cell*p.n+26+legendRows*legendRowH+footH;
+  const X0=pad+numW,Y0=headH,GW=cell*p.n;
+  const SC=2;
+  cv.width=W*SC;cv.height=H*SC;
+  g.setTransform(SC,0,0,SC,0,0);
+  // 底色
+  g.fillStyle='#F7F2E7';g.fillRect(0,0,W,H);
+  // 标题区
+  g.fillStyle='#2B241A';g.textAlign='left';g.textBaseline='alphabetic';
+  g.font='bold 27px "KaiTi","STKaiti","Kaiti SC",serif';
+  g.fillText('国风拼豆坊 · '+p.name,X0,36);
+  g.fillStyle='#7A6A50';g.font='15px "KaiTi","STKaiti","Kaiti SC",serif';
+  g.fillText(p.cat+' · '+p.n+'×'+p.n+' · 共 '+beads+' 豆 · '+codes.length+' 色 · 线下拼豆图纸',X0,62);
+  // 右上角小印
+  g.strokeStyle='rgba(200,54,42,0.75)';g.lineWidth=2;
+  g.strokeRect(W-pad-60,14,50,50);
+  g.fillStyle='rgba(200,54,42,0.85)';g.font='bold 29px "KaiTi","STKaiti",serif';
+  g.textAlign='center';g.textBaseline='middle';
+  g.fillText(p.name.slice(0,1),W-pad-35,40);
+  g.textAlign='left';g.textBaseline='alphabetic';
+  // 网格底
+  g.fillStyle='#FFFFFF';g.fillRect(X0,Y0,GW,GW);
+  // 淡格线
+  g.strokeStyle='rgba(70,58,44,0.16)';g.lineWidth=1;
+  for(let i=0;i<=p.n;i++){
+    g.beginPath();g.moveTo(X0+i*cell+0.5,Y0);g.lineTo(X0+i*cell+0.5,Y0+GW);g.stroke();
+    g.beginPath();g.moveTo(X0,Y0+i*cell+0.5);g.lineTo(X0+GW,Y0+i*cell+0.5);g.stroke();
+  }
+  // 每 5 行列粗线
+  g.strokeStyle='rgba(70,58,44,0.5)';g.lineWidth=1.6;
+  for(let i=5;i<p.n;i+=5){
+    g.beginPath();g.moveTo(X0+i*cell,Y0);g.lineTo(X0+i*cell,Y0+GW);g.stroke();
+    g.beginPath();g.moveTo(X0,Y0+i*cell);g.lineTo(X0+GW,Y0+i*cell);g.stroke();
+  }
+  // 网格外框
+  g.strokeStyle='#4A3E30';g.lineWidth=2;g.strokeRect(X0,Y0,GW,GW);
+  // 豆：色圆 + 色号字母
+  g.textAlign='center';g.textBaseline='middle';
+  for(let j=0;j<p.n;j++)for(let i=0;i<p.n;i++){
+    const ch=p.grid[j][i];
+    if(ch==='.') continue;
+    const cx=X0+i*cell+cell/2,cy=Y0+j*cell+cell/2;
+    g.fillStyle=PAL[ch];
+    g.beginPath();g.arc(cx,cy,cell*0.42,0,Math.PI*2);g.fill();
+    g.fillStyle=beadTextColor(PAL[ch]);
+    g.font='bold '+Math.round(cell*0.42)+'px Consolas,monospace';
+    g.fillText(ch.toUpperCase(),cx,cy+0.5);
+  }
+  // 行列号（每 5，从 5 起算）
+  g.fillStyle='#7A6A50';g.font='12px Consolas,monospace';g.textAlign='center';g.textBaseline='middle';
+  for(let i=5;i<=p.n;i+=5){
+    g.fillText(String(i),X0+i*cell-cell/2,Y0-14);
+    g.fillText(String(i),X0-numW/2,Y0+i*cell-cell/2);
+  }
+  g.fillText('列 →',X0+GW-18,Y0-14);
+  // 图例（两列：色样 + 色号/色名/数量）
+  const ly=Y0+GW+22,lx0=X0,cw=GW/2;
+  g.textAlign='left';
+  codes.forEach(function(code,i){
+    const col=i%2,row=(i/2)|0;
+    const x=lx0+col*cw,y=ly+row*legendRowH;
+    g.fillStyle=PAL[code];
+    g.beginPath();g.arc(x+13,y+14,12,0,Math.PI*2);g.fill();
+    g.strokeStyle='rgba(70,58,44,0.55)';g.lineWidth=1;g.stroke();
+    g.fillStyle='#2B241A';g.font='bold 16px "KaiTi","STKaiti",serif';
+    g.fillText(code.toUpperCase()+' '+PALNAME[code],x+32,y+9);
+    g.fillStyle='#7A6A50';g.font='14px Consolas,monospace';
+    g.fillText('× '+used[code],x+32,y+28);
+  });
+  // 页脚
+  g.fillStyle='#7A6A50';g.font='13px "KaiTi","STKaiti",serif';
+  g.fillText('照色号逐格放豆 · 拼完对照复核再熨烫 · 国风拼豆坊',X0,H-18);
+  document.getElementById('expTitle').textContent='拼豆图纸 · '+p.name;
+  // 换图默认回到全景视图
+  cv.classList.remove('zoomed');
+  const tip=document.getElementById('expTip');
+  if(tip) tip.textContent='整张图纸已完整显示 · 点图纸可放大看色号';
+}
+
+// 容器能力探测：小红书小工具注入 window.xhs.miniTool（见容器能力清单 §3）
+function miniTool(){ return (window.xhs&&window.xhs.miniTool)||null; }
+function inXhsContainer(){ return !!miniTool(); }
+
+// 导出按钮状态反馈（保存是异步的，进度与结果必须看得见）
+let expBtnTimer=null;
+function expIdleLabel(){
+  const b=document.getElementById('expPng');
+  return (b&&b.dataset.idle)||'保存图片';
+}
+function expBtn(text,busy){
+  const b=document.getElementById('expPng');
+  if(!b) return;
+  b.textContent=text;
+  b.disabled=!!busy;
+  b.style.opacity=busy?'0.6':'1';
+  b.style.pointerEvents=busy?'none':'auto';
+}
+function expBtnFlash(text,ms){
+  expBtn(text,false);
+  clearTimeout(expBtnTimer);
+  expBtnTimer=setTimeout(function(){expBtn(expIdleLabel(),false);},ms||2400);
+}
+function expBeep(ok){
+  try{ if(ok){SFX.select&&SFX.select();}else{SFX.click&&SFX.click();} }catch(e){}
+}
+
+// 降级路径：普通浏览器（无容器 SDK）仍走 a[download]
+function saveByDownload(cv,name){
+  try{
+    if(!cv.toBlob){ showToast('当前环境不支持导出图片',2600); return; }
+    cv.toBlob(function(b){
+      if(!b){showToast('当前环境不支持导出图片',2600);return;}
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(b);a.download=name;
+      document.body.appendChild(a);a.click();document.body.removeChild(a);
+      setTimeout(function(){URL.revokeObjectURL(a.href);},2000);
+      expBeep(true);expBtnFlash('已保存 ✓');
+      showToast('图纸已保存：'+name,2600);
+    },'image/png');
+  }catch(e){ expBeep(false);showToast('导出失败，可改用打印存 PDF',2600); }
+}
+
+function saveExportPng(){
+  const p=PATTERNS[exportIdx];
+  const cv=document.getElementById('exportCanvas');
+  const sdk=miniTool();
+  const idleName='拼豆图纸_'+p.name+'.png';
+  // 小红书容器禁用 a[download] / blob 下载，必须走端能力 saveImageToPhotosAlbum
+  if(sdk&&sdk.saveImageToPhotosAlbum){
+    SFX.click&&SFX.click();
+    expBtn('生成中…',true);
+    showToast('正在生成图纸…',1200);
+    let dataUrl='';
+    try{ dataUrl=cv.toDataURL('image/png'); }catch(e){}
+    if(!dataUrl||dataUrl.length<100){ expBtn(expIdleLabel(),false); saveByDownload(cv,idleName); return; }
+    // 兜底：容器回调若不上行，按钮不能一直卡在「生成中…」
+    let settled=false;
+    const guard=setTimeout(function(){
+      if(settled)return;settled=true;
+      expBtn(expIdleLabel(),false);
+      showToast('已提交保存，请到相册查看',2600);
+    },8000);
+    const ok=function(){
+      if(settled)return;settled=true;clearTimeout(guard);
+      expBeep(true);expBtnFlash('已保存到相册 ✓');
+      showToast('图纸已保存到相册 ✦',2600);
+    };
+    const bad=function(err){
+      if(settled)return;settled=true;clearTimeout(guard);
+      expBeep(false);expBtn(expIdleLabel(),false);
+      console.log('export fail',err&&err.errMsg);
+      showToast('保存失败，可截图留档或重试',2800);
+    };
+    const doSave=function(path){
+      sdk.saveImageToPhotosAlbum({ filePath:path, success:ok, fail:bad });
+    };
+    // 大图先 writeTempFile 换 filePath，避免超长 base64 上行
+    if(sdk.writeTempFile){
+      sdk.writeTempFile({
+        data:dataUrl,
+        success:function(res){ doSave((res&&res.filePath)||dataUrl); },
+        fail:function(){ doSave(dataUrl); }
+      });
+    }else{
+      doSave(dataUrl);
+    }
+    return;
+  }
+  saveByDownload(cv,idleName);
+}
+
 // 背景粒子
 function initBg(){
   const c=document.getElementById('bgCanvas'),g=c.getContext('2d');
@@ -1468,6 +1728,7 @@ function bindTools(){
       else SFX.click();
       if(a==='mode'){const keys=Object.keys(MODES),i=keys.indexOf(mode);setMode(keys[(i+1)%keys.length]);}
       else if(a==='gallery'){renderGallerySheet();document.getElementById('sheetGallery').classList.add('show');}
+      else if(a==='export') openExport();
       else if(a==='info') showToast('选色珠点棋盘填豆；每幅图进度会自动保存，拼满 100% 即完成。');
     });
   });
@@ -1477,6 +1738,24 @@ function bindTools(){
   document.querySelectorAll('[data-close]').forEach(b=>b.addEventListener('click',()=>b.closest('.sheet').classList.remove('show')));
   document.getElementById('winReplay').addEventListener('click',()=>{closeWin();clearBoard();startTime=Date.now();elapsed=0;startTimer();});
   document.getElementById('winNext').addEventListener('click',nextPattern);
+  document.getElementById('winExport').addEventListener('click',()=>{closeWin();openExport();});
+  document.getElementById('expPng').addEventListener('click',saveExportPng);
+  document.getElementById('expPrint').addEventListener('click',()=>{SFX.click();window.print();});
+  // 点图纸在「全景 / 放大看色号」间切换（默认全景，一屏看全不滚动）
+  const expCanvas=document.getElementById('exportCanvas'),expScroll=document.querySelector('.exp-scroll');
+  expCanvas.addEventListener('click',function(){
+    SFX.click();
+    const z=expCanvas.classList.toggle('zoomed');
+    document.getElementById('expTip').textContent=z?'已放大 · 拖动查看 · 再点一下回到全景':'整张图纸已完整显示 · 点图纸可放大看色号';
+    if(!z){expScroll.scrollTop=0;expScroll.scrollLeft=0;}
+  });
+  // 小红书容器内：无打印能力，隐藏「打印 / 存 PDF」，主按钮改文案为「存到相册」
+  var sb=document.getElementById('expPng');
+  if(sb) sb.dataset.idle=sb.textContent;                  // 记下默认文案，供按钮态复位
+  if(inXhsContainer()){
+    var pb=document.getElementById('expPrint'); if(pb) pb.style.display='none';
+    if(sb){ sb.dataset.idle='存到相册'; sb.textContent='存到相册'; }
+  }
   winModal.addEventListener('click',e=>{if(e.target===winModal)closeWin();});
 }
 

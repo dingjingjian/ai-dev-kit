@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<html lang="zh-CN" data-page-node-id="nXk4UFYqC3pJSLrTWjNyR7">
+<head data-page-node-id="BF4343CBOdMLazcp6l2jgL">
+<meta charset="UTF-8" data-page-node-id="IxTVjCvqVFeBl7Wk69LEmL">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" data-page-node-id="NFwy3CCAYD8ZXYnStJzRAt">
 <title>十二生肖拼豆坊 · 掌上拼豆</title>
 <style>
 :root{
@@ -383,99 +383,99 @@ canvas{display:block;}
 }
 </style>
 </head>
-<body>
-  <canvas id="bgCanvas"></canvas>
-  <div class="bg-noise"></div>
-  <div class="corner-decor"></div>
+<body data-page-node-id="DLr9Xd2rRoaZqG6Qk8rRWp">
+  <canvas id="bgCanvas" data-page-node-id="sG0vwdqx47IXgBZQXGCh8c"></canvas>
+  <div class="bg-noise" data-page-node-id="wRiB031QQIMCokPc4Q8Hm6"></div>
+  <div class="corner-decor" data-page-node-id="i8F6IhbSXZofDAjuvYpFwk"></div>
 
-  <div id="playView">
-  <div class="topbar">
-    <canvas id="refThumb" width="72" height="72"></canvas>
-    <div class="title">
-      <div class="main" id="patName">子鼠</div>
-      <div class="sub" id="patMeta">入门 · 17×17 · 150 豆</div>
+  <div id="playView" data-page-node-id="NFEc6fPB5ND76HKTDqr3RB">
+  <div class="topbar" data-page-node-id="ddo8IfETJxN58p7eXylCyu">
+    <canvas id="refThumb" width="72" height="72" data-page-node-id="B5G1v0ROViVL33IitfZmDa"></canvas>
+    <div class="title" data-page-node-id="Z4PACtMXGyPekMhNy9ICag">
+      <div class="main" id="patName" data-page-node-id="hbqtARBc3xyKb331XWraEk">子鼠</div>
+      <div class="sub" id="patMeta" data-page-node-id="GcBEZ7OWcZslUhpLYUCAtx">入门 · 17×17 · 150 豆</div>
     </div>
-    <div class="rec">
-      <svg class="progress-ring" viewBox="0 0 42 42"><circle class="bg" cx="21" cy="21" r="17"/><circle class="fg" id="pctRing" cx="21" cy="21" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8"/></svg>
-      <div class="col">
-        <div class="t" id="timer">00:00</div>
-        <div class="s" id="stars">☆☆☆</div>
+    <div class="rec" data-page-node-id="BJoSRdlrGoDI8HLAwhfwsE">
+      <svg class="progress-ring" viewBox="0 0 42 42" data-page-node-id="9DHt0GbzNOLRfIysMgslaL"><circle class="bg" cx="21" cy="21" r="17" data-page-node-id="68wgHPBOD8nVvSQY6ZXYxu"/><circle class="fg" id="pctRing" cx="21" cy="21" r="17" stroke-dasharray="106.8" stroke-dashoffset="106.8" data-page-node-id="hLnyIeEaMQgHDqvPAaVbsY"/></svg>
+      <div class="col" data-page-node-id="kZJrNvYfAegcOcaxGjPsHZ">
+        <div class="t" id="timer" data-page-node-id="55Hf1EKSoOiFBWYcT2Lsip">00:00</div>
+        <div class="s" id="stars" data-page-node-id="VgTkKbS4kPofK4Kxlt2Iii">☆☆☆</div>
       </div>
     </div>
   </div>
 
-  <div class="stage">
-    <canvas id="board"></canvas>
+  <div class="stage" data-page-node-id="LiMCqqnRyOx5ktJlHkNpST">
+    <canvas id="board" data-page-node-id="jHjyEeuSENkReAF5QEQdz1"></canvas>
   </div>
 
-  <div class="palette-wrap">
-    <div class="palette" id="palette"></div>
+  <div class="palette-wrap" data-page-node-id="gSype41wVWcAUuQBBi830Y">
+    <div class="palette" id="palette" data-page-node-id="hcSKkfIQHn099mGwU9qRh1"></div>
   </div>
 
-  <div class="toolbar" id="toolbar">
-    <button class="tool" data-tool="home"><svg viewBox="0 0 24 24"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/></svg><span>图纸</span></button>
-    <button class="tool on" data-tool="pen"><svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg><span>画笔</span></button>
-    <button class="tool" data-tool="erase"><svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-6 14.5c-1.5 0-2.9-.6-3.9-1.6L5.5 13c-.5-.5-.5-1.3 0-1.8l6.8-6.8c.5-.5 1.3-.5 1.8 0l4.6 4.6c.5.5.5 1.3 0 1.8l-6.8 6.8c-1 1-2.4 1.6-3.9 1.6z"/></svg><span>橡皮</span></button>
-    <button class="tool" data-tool="hint"><svg viewBox="0 0 24 24"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z"/></svg><span>提示</span></button>
-    <button class="tool" data-tool="clear"><svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg><span>清空</span></button>
-    <button class="tool" data-tool="more"><svg viewBox="0 0 24 24"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg><span>更多</span></button>
-    <div class="menu" id="moreMenu">
-      <button class="menu-item" data-act="mode"><span>模式</span><b id="modeLabel">临摹</b></button>
-      <button class="menu-item" data-act="gallery"><span>我的画廊</span><b id="galCount">0 幅</b></button>
-      <button class="menu-item" data-act="export"><span>导出图纸</span><b>线下拼 ›</b></button>
-      <button class="menu-item" data-act="sfx"><span>音效</span><b id="sfxLabel">开</b></button>
-      <button class="menu-item" data-act="bgm"><span>背景音乐</span><b id="bgmLabel">开</b></button>
-      <button class="menu-item" data-act="info"><span>玩法说明</span><b>›</b></button>
+  <div class="toolbar" id="toolbar" data-page-node-id="UptvvTfNiJg1Bk6C1rroy2">
+    <button class="tool" data-tool="home" data-page-node-id="uVIB0bVZR1vLM2oBxCHX8v"><svg viewBox="0 0 24 24" data-page-node-id="0xkSGoOLDLXQTPaANGUj6S"><path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z" data-page-node-id="nDhu0fQXwkoKE1ovnHOaTM"/></svg><span data-page-node-id="8r2fDxrDo32848dc28H6TF">图纸</span></button>
+    <button class="tool on" data-tool="pen" data-page-node-id="WfDYOtxXBbo034L1ocC0GU"><svg viewBox="0 0 24 24" data-page-node-id="XBFHKGJ84gQZvufA6Od7sd"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a.996.996 0 0 0 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" data-page-node-id="HmBW5VOcyKe5Uy8y2EgHSc"/></svg><span data-page-node-id="IdoZlsvvxLj9SheqyvddLn">画笔</span></button>
+    <button class="tool" data-tool="erase" data-page-node-id="IuF4fwWnaKZ8yHqsoqYud3"><svg viewBox="0 0 24 24" data-page-node-id="hKZxdWU7sSdwDCJL1XsnX9"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-6 14.5c-1.5 0-2.9-.6-3.9-1.6L5.5 13c-.5-.5-.5-1.3 0-1.8l6.8-6.8c.5-.5 1.3-.5 1.8 0l4.6 4.6c.5.5.5 1.3 0 1.8l-6.8 6.8c-1 1-2.4 1.6-3.9 1.6z" data-page-node-id="fn1gvFI52LxPYumvt3hAsA"/></svg><span data-page-node-id="FgaAFgFnGqNLoeejS36lZ8">橡皮</span></button>
+    <button class="tool" data-tool="hint" data-page-node-id="Td2wBP1ZgzpvZv0Fg48DP1"><svg viewBox="0 0 24 24" data-page-node-id="lojXVYsS2BabzlJExAZNMU"><path d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7zm2.85 11.1l-.85.6V16h-4v-2.3l-.85-.6A4.997 4.997 0 0 1 7 9c0-2.76 2.24-5 5-5s5 2.24 5 5c0 1.63-.8 3.16-2.15 4.1z" data-page-node-id="sjhpGHg9DWFFFOec77Dx6S"/></svg><span data-page-node-id="RxClxbjRmBkzDlZPjQxysf">提示</span></button>
+    <button class="tool" data-tool="clear" data-page-node-id="qOZEJwL8wgaxQvghnATW6z"><svg viewBox="0 0 24 24" data-page-node-id="sj1ksyVCkfJWmROG2DwBAe"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" data-page-node-id="6lvtKYNH8V2HGD9QwGxNzi"/></svg><span data-page-node-id="520emUJVCT6G8b3ZWDxtez">清空</span></button>
+    <button class="tool" data-tool="more" data-page-node-id="w39QQIvB0T3NtHVbsBpode"><svg viewBox="0 0 24 24" data-page-node-id="aDubnHPAGZ6GAt5NeB4FS7"><path d="M6 10c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm12 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm-6 0c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" data-page-node-id="hIvgIKvERbVXjrsg4Q3HXI"/></svg><span data-page-node-id="9b99wb4Kna53DoRgvu73lm">更多</span></button>
+    <div class="menu" id="moreMenu" data-page-node-id="897I7sbDLgGwJSQO50sjNO">
+      <button class="menu-item" data-act="mode" data-page-node-id="rcj7aJpV7HAnx97Ptq53Cn"><span data-page-node-id="IycEl51KZtFjq7G3Q8ST1S">模式</span><b id="modeLabel" data-page-node-id="LHeMdTcdUptitpg2utVXWs">临摹</b></button>
+      <button class="menu-item" data-act="gallery" data-page-node-id="0C6qDmXXeIpMQ2Dy5zd75H"><span data-page-node-id="wd6Zp1C2ltVGd7v5BhIKUf">我的画廊</span><b id="galCount" data-page-node-id="BPIZsgyrC773K5zJ4TSaMI">0 幅</b></button>
+      <button class="menu-item" data-act="export" data-page-node-id="RcfpAWvPMM9A2awJWzrXX5"><span data-page-node-id="sYMUqAMApxkHQboAuExj9D">导出图纸</span><b data-page-node-id="DtwGK48aFhezGm80W7olCp">线下拼 ›</b></button>
+      <button class="menu-item" data-act="sfx" data-page-node-id="4ibFF8VSn4p2Kg18Hl5k3O"><span data-page-node-id="OXbMQAtUHT8VoQitC45JsG">音效</span><b id="sfxLabel" data-page-node-id="sLxVKQdiY53qzjyxKvtlBV">开</b></button>
+      <button class="menu-item" data-act="bgm" data-page-node-id="NWWHKgxJvGhFNuZTwwY9kI"><span data-page-node-id="35HdFPojTo55GwbWGkdulJ">背景音乐</span><b id="bgmLabel" data-page-node-id="KOzoEw7Lc4Z1aUrotK9m1Y">开</b></button>
+      <button class="menu-item" data-act="info" data-page-node-id="W0gET1ywIGUKNMlGDdym4C"><span data-page-node-id="JuPt7YFQ7ICGEOzLcJGIfc">玩法说明</span><b data-page-node-id="0KNFTkHftYsOTFwWaIl1rz">›</b></button>
     </div>
   </div>
   </div><!-- /playView -->
 
-  <div id="homeView">
-    <div class="home-head">
-      <div class="home-seal">肖</div>
-      <div class="home-title">
-        <div class="m">十二生肖拼豆坊</div>
-        <div class="s">十二生肖 · 对图填豆 · 导图线下拼</div>
+  <div id="homeView" data-page-node-id="BI8OmiMPMiSOL8IMK9mih0">
+    <div class="home-head" data-page-node-id="JLApR5Zp20MlRdANSKKMFl">
+      <div class="home-seal" data-page-node-id="HBM440TSg2QAANPn6DRNzp">肖</div>
+      <div class="home-title" data-page-node-id="SYmaV3Z4qL8BSoCiIHv4HR">
+        <div class="m" data-page-node-id="trlQkeXYpD0ytGBHV9qKTw">十二生肖拼豆坊</div>
+        <div class="s" data-page-node-id="yCX8QlrHruBMq3EtViFbCY">十二生肖 · 对图填豆 · 导图线下拼</div>
       </div>
-      <div class="home-stat">已完成<b id="homeDone">0</b><span id="homeTotal">共 12 幅</span></div>
+      <div class="home-stat" data-page-node-id="XSCO5Hp1FVzg8fAEO9WgJw">已完成<b id="homeDone" data-page-node-id="uPAtJGbJ7DjNpxcEjpA21r">0</b><span id="homeTotal" data-page-node-id="gkpqzXvLJJHsDB4vLpCsop">共 12 幅</span></div>
     </div>
-    <div class="lib-tabs" id="libTabs"></div>
-    <div class="lib-body"><div class="lib-grid" id="libGrid"></div></div>
+    <div class="lib-tabs" id="libTabs" data-page-node-id="M6bx08uRcAy8fHWeEJ6GAB"></div>
+    <div class="lib-body" data-page-node-id="qf4v7o2srAunpTL6xWYjnd"><div class="lib-grid" id="libGrid" data-page-node-id="KlpFBnqWnAxZZ6z2OkZ08n"></div></div>
   </div>
 
-  <div class="toast" id="toast"></div>
-  <div class="stamp" id="stamp">成</div>
-  <canvas id="petals"></canvas>
+  <div class="toast" id="toast" data-page-node-id="B1fZwrqiSwhdIAjoWLBd3y"></div>
+  <div class="stamp" id="stamp" data-page-node-id="XCmHlz8VGFPXKj40QUSqjC">成</div>
+  <canvas id="petals" data-page-node-id="Wi2okt3dWSFCSpm76NS8A8"></canvas>
 
-  <div class="sheet" id="sheetGallery">
-    <div class="sheet-panel">
-      <div class="sheet-head"><div class="sheet-title">我的画廊</div><button class="sheet-close" data-close>✕</button></div>
-      <div class="gallery-grid" id="galleryGrid"></div>
+  <div class="sheet" id="sheetGallery" data-page-node-id="7EjMbF5mpWou0WLEiiJ36w">
+    <div class="sheet-panel" data-page-node-id="zOYdLO4o2YRQxbr48I9sS7">
+      <div class="sheet-head" data-page-node-id="SIyBzCTHtCBWv5QjIfZlZ9"><div class="sheet-title" data-page-node-id="UfTybDcFU0lED6CGw5JD08">我的画廊</div><button class="sheet-close" data-close data-page-node-id="gI5obIgJR3mnrCv2EhAR1D">✕</button></div>
+      <div class="gallery-grid" id="galleryGrid" data-page-node-id="yZ27anbTbQD1r6DiH1bFtl"></div>
     </div>
   </div>
 
-  <div class="sheet" id="sheetExport">
-    <div class="sheet-panel exp-panel">
-      <div class="sheet-head"><div class="sheet-title" id="expTitle">拼豆图纸</div><button class="sheet-close" data-close>✕</button></div>
-      <div class="exp-scroll"><canvas id="exportCanvas"></canvas></div>
-      <div class="exp-tip" id="expTip">整张图纸已完整显示 · 点图纸可放大看色号</div>
-      <div class="exp-btns">
-        <button id="expPng">保存图片</button>
-        <button class="secondary" id="expPrint">打印 / 存 PDF</button>
+  <div class="sheet" id="sheetExport" data-page-node-id="XwzSD1ktfVSyKM69s85SNA">
+    <div class="sheet-panel exp-panel" data-page-node-id="HLeJat0OM3jGUuDsfrIVUc">
+      <div class="sheet-head" data-page-node-id="ZG6zB7xpxd0Bc8LKiM19Aw"><div class="sheet-title" id="expTitle" data-page-node-id="q5MdBxrVxPHW1P1A1M5liZ">拼豆图纸</div><button class="sheet-close" data-close data-page-node-id="D0kSNhYUI7R89zQ5OePWs7">✕</button></div>
+      <div class="exp-scroll" data-page-node-id="SmAMpy6XniHFcmIRKq1W2d"><canvas id="exportCanvas" data-page-node-id="MrYK2K3ZBNKRhB6XPEb2Go"></canvas></div>
+      <div class="exp-tip" id="expTip" data-page-node-id="h6jj9dLqPsx35324o1E9Fg">整张图纸已完整显示 · 点图纸可放大看色号</div>
+      <div class="exp-btns" data-page-node-id="GsXSuV6DI6myeKc3rnqtPk">
+        <button id="expPng" data-page-node-id="5HEFGREQaEltkJZBHdvq6R">保存图片</button>
+        <button class="secondary" id="expPrint" data-page-node-id="64p1HLTjuKRTiaTzL752uT">打印 / 存 PDF</button>
       </div>
     </div>
   </div>
 
-  <div class="modal" id="winModal">
-    <div class="modal-card">
-      <h2>拼成啦！</h2>
-      <div class="modal-stars" id="winStars">★★★</div>
-      <p id="winLore">生肖拼成，收入画廊。</p>
-      <div class="modal-stats"><div>用时<br><b id="winTime">00:00</b></div><div>步数<br><b id="winMoves">0</b></div><div>失误<br><b id="winMistakes">0</b></div></div>
-      <div class="modal-btns">
-        <button id="winReplay">重玩</button>
-        <button class="secondary" id="winExport">存图纸</button>
-        <button id="winNext">下一幅</button>
+  <div class="modal" id="winModal" data-page-node-id="jvxE6OPJJX4sDn5wY5xAKS">
+    <div class="modal-card" data-page-node-id="7uLuBAhnXgA95UgHoIhV68">
+      <h2 data-page-node-id="Y39vA5AbygUX4Wn7975XcA">拼成啦！</h2>
+      <div class="modal-stars" id="winStars" data-page-node-id="fgQpcNmjqvShIYxdLnOTxt">★★★</div>
+      <p id="winLore" data-page-node-id="cmsz5Nsoq4DQR72tDjs1fl">生肖拼成，收入画廊。</p>
+      <div class="modal-stats" data-page-node-id="kHdBlfySU0PETCYI0G8xCr"><div data-page-node-id="8D7IQN4ESwSEqKlvACKTLa">用时<br data-page-node-id="s9xz9wE8AG57SlOF3FTsZI"><b id="winTime" data-page-node-id="GwIqj8UKOO7AV9OOzhHO8E">00:00</b></div><div data-page-node-id="KwWB94HroJMk0DDWGbLkEB">步数<br data-page-node-id="yKTxIaI7Yn4rl0KtzmcQcZ"><b id="winMoves" data-page-node-id="UCFjMUGG8KN4w75CVw4WIN">0</b></div><div data-page-node-id="jCTEByCdpkEwDIJ81JdLuH">失误<br data-page-node-id="6qZ5i8SXqYcEoQfussW2eH"><b id="winMistakes" data-page-node-id="io7LutJw74ddk3niP0xuWc">0</b></div></div>
+      <div class="modal-btns" data-page-node-id="6ot8CmoG8Aia0kEIwE9lpA">
+        <button id="winReplay" data-page-node-id="DFJaZsMDfGZM7VdRX1JW8I">重玩</button>
+        <button class="secondary" id="winExport" data-page-node-id="WFu2QHBW0cNUzyB7ZyXIn5">存图纸</button>
+        <button id="winNext" data-page-node-id="RQlUzHPqqpV7U4aadrFGSE">下一幅</button>
       </div>
     </div>
   </div>

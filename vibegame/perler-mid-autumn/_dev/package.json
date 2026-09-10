@@ -7,6 +7,6 @@
     "smoke": "node smoke_test.js"
   },
   "devDependencies": {
-    "jsdom": "^24.0.0"
+    "jsdom": "^24.1.3"
   }
 }

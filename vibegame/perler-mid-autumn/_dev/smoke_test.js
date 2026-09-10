@@ -203,6 +203,23 @@ const patches = `
   console.log('\n更多菜单已展开     :', /show/.test((doc.getElementById('moreMenu') || { className: '' }).className || ''));
   console.log('菜单含猜灯谜入口   :', !!doc.querySelector('.menu-item[data-act=riddle]'));
 
+
+  // —— 导出图纸闭环：菜单打开 → 图纸面板渲染 → 关闭 ——
+  click(doc.querySelector('[data-act=export]'));
+  await new Promise((r) => setTimeout(r, 300));
+  const expSheet = doc.getElementById('sheetExport');
+  const expShown = /show/.test((expSheet || { className: '' }).className || '');
+  const expCanvas = doc.getElementById('exportCanvas');
+  const expReady = !!expCanvas && expCanvas.width > 0 && expCanvas.height > 0;
+  const expBtnOnCard = doc.querySelectorAll('.lib-export').length;
+  console.log('\n—— 导出图纸 ——');
+  console.log('菜单可打开图纸面板 :', expShown, expShown ? '✅' : '⚠');
+  console.log('图纸画布已渲染     :', expReady, expReady ? `(${expCanvas.width}x${expCanvas.height}) ✅` : '⚠');
+  console.log('首页卡片导出按钮   :', expBtnOnCard, expBtnOnCard === 16 ? '✅ 16 张卡全配齐' : '⚠');
+  click(expSheet.querySelector('[data-close]'));
+  await new Promise((r) => setTimeout(r, 200));
+  console.log('关闭图纸面板       :', !/show/.test(expSheet.className) ? '✅' : '⚠');
+
   const real2 = errors.filter((e) => e.kind === 'error');
   console.log('\n业务级运行时错误   :', real2.length);
   real2.slice(0, 8).forEach((e) => console.log('   ✗', e.msg.split('\n')[0]));
