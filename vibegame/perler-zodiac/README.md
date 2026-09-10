@@ -49,12 +49,22 @@ cd _dev && npm i && node smoke_test.js   # 运行时冒烟
 
 > Python 需带 Pillow（预览图渲染）。本机可用 `C:\Users\ASUS\.workbuddy\binaries\python\envs\default\Scripts\python.exe`（已装 Pillow + Playwright）。
 
+## 应用上架信息
+
+| 项 | 内容 |
+|----|------|
+| 应用名称 | 十二生肖拼豆坊（7 字，≤14） |
+| 应用介绍 | 拼十二生肖，导出图纸（10 字，≤14） |
+| 应用图标 | `icon.png`（1:1，2048×2048） |
+
 ## 物料状态
 
 | 项 | 状态 |
 |----|------|
-| zip | `perler-zodiac.zip`（约 26 KB） |
+| zip | `perler-zodiac.zip`（28.0 KB，远小于 2MB 建议值） |
+| 图标 | `icon.png`（1:1，2048×2048） |
 | 图案预览 | `_dev/preview.png`（12 生肖总览） |
+| 小红书笔记 | `xiaohongshu/小红书笔记-十二生肖拼豆坊.md` + 配图 `p1`~`p5`（3:4） |
 
 ## 分类判定
 
