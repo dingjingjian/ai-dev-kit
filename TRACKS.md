@@ -45,13 +45,14 @@ ai-dev-kit/
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
 | 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） | 自用 · 不投稿 |
 
-## #vibegame　互动游戏（7）
+## #vibegame　互动游戏（8）
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
 | 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政 | 完整（zip + 海报） |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风纹样逐格填豆，拼成即过关 | 完整（zip + 图） |
 | 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜 | 完整（zip）· 缺笔记 |
+| 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF） | 完整（zip + 导出闭环冒烟过） |
 | AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
 | 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM | 开发完成 · 待投稿物料 |
 | 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟，React 构建，含旧版安卓 WebView 适配层 | 构建产物 · 未打包 |

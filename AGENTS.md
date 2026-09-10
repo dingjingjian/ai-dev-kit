@@ -29,6 +29,7 @@
 | 核战危机 DEFCON | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON、弹道溯源、核弹有限不可逆；竖屏移动端单手 UI + 手写 bloom；`tests/` 下 headless / balance / audit / smoke-mobile 四件套，设定唯一真源为 `DESIGN.md` |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风拼豆填色网页小游戏，逐格填豆拼图过关；`_dev/build.py` 为唯一真源，产出 `index.html` + `main.js`；`_dev/build_zip.py` 校验并打包为小红书小工具 zip |
 | 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 基于 perler-bead-game 引擎的中秋活动版：16 幅月夜纹样 + 猜灯谜（拼成点亮）；同构工程约定，存档前缀 `pma_` |
+| 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 基于 perler-bead-game 引擎的生肖版：12 生肖按地支顺序分三档难度；独有「导出图纸」（编号网格 + 色号图例 + 用料清单，PNG 下载 / 打印存 PDF）；同构工程约定，存档前缀 `pzd_` |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分、连对加成，锻炼心算验算能力 |
 
 ### #vibeart　数字艺术
