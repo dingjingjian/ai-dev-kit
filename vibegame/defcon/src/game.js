@@ -159,6 +159,11 @@
       var guard = 0;
       while (acc >= S.TICK && guard < 40) { S.tick(state, S.TICK); acc -= S.TICK; guard++; }
 
+      /* BGM 随阶段换段：briefing / crisis → tension，war → 防空警报，over → 终局曲。
+       * 每帧调用，audio.js 内部做 diff（阶段、DEFCON、名次都没变就不动作）。
+       * 名次只在终局取，且 sim.myRank 只读缓存 —— 不会在主循环里重排全城。 */
+      if (DC.audio) DC.audio.setScene(state.phase, state.defcon, S.myRank(state));
+
       DC.render.frame(state, dt);
       DC.ui.update(state);
       global.requestAnimationFrame(loop);

@@ -693,12 +693,9 @@
     sig.over = true;
     var rk = S.ranking(state);
     /* 终局此前是完全静默的 —— 排名面板弹出那一秒一点声音都没有，情绪在最该落地处断了。
-     * 把名次传给 audio.js：夺冠与落败用不同和弦色彩。 */
-    var myRank = 0;
-    for (var ri = 0; ri < rk.length; ri++) {
-      if (rk[ri].code === state.playerFaction) { myRank = ri + 1; break; }
-    }
-    sfx('end', myRank);
+     * 名次决定两件事：end 音效的和弦色彩、终局 BGM 用哪一版（夺冠 / 落败）。
+     * 两处都走 sim.myRank（读 enterPhase 缓存的名次），避免各算一套。 */
+    sfx('end', S.myRank(state));
     el.ovBody.textContent = '';
     /* 全球战损总数：整局最该被看见的数字（§11.8b）。
      * 单位是百万，写成「X.XX 亿」比「XXX.XM」更像一条新闻标题 —— 反战表达要的是体感。 */
