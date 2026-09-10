@@ -43,17 +43,41 @@ HOOK = """
 MEASURE = """
 async (args) => {
   const { name, arg, ms } = args;
-  const an = window.__probe.an;
+  const an = window.__probe.an, ctx = window.__probe.ctx;
   const buf = new Float32Array(an.fftSize);
-  let peak = 0;
+  const freq = new Float32Array(an.frequencyBinCount);
+  const binHz = ctx.sampleRate / an.fftSize;
+  let peak = 0, best = null, bestRms = -1;
   const t0 = performance.now();
   window.DC.audio.play(name, arg);
   while (performance.now() - t0 < ms) {
     an.getFloatTimeDomainData(buf);
-    for (let i = 0; i < buf.length; i++) { const v = Math.abs(buf[i]); if (v > peak) peak = v; }
+    let sq = 0;
+    for (let i = 0; i < buf.length; i++) { const v = buf[i]; sq += v * v; if (Math.abs(v) > peak) peak = Math.abs(v); }
+    const rms = Math.sqrt(sq / buf.length);
+    if (rms > bestRms) {                    // 取能量最大的那一帧做频谱，才有代表性
+      bestRms = rms;
+      an.getFloatFrequencyData(freq);
+      best = Array.from(freq);
+    }
     await new Promise(r => setTimeout(r, 8));
   }
-  return peak;
+  // 分频段能量占比 + 谱心：低频轰鸣与高频鞭炮的客观分界
+  const bands = { lo: [20, 200], mid: [200, 2000], hi: [2000, 8000] };
+  const sum = {}, cent = { num: 0, den: 0 };
+  for (const k in bands) sum[k] = 0;
+  if (best) {
+    for (let i = 1; i < best.length; i++) {
+      const f = i * binHz;
+      if (f > 12000) break;
+      const p = Math.pow(10, best[i] / 10);
+      for (const k in bands) if (f >= bands[k][0] && f < bands[k][1]) sum[k] += p;
+      cent.num += f * p; cent.den += p;
+    }
+  }
+  const tot = sum.lo + sum.mid + sum.hi || 1;
+  return { peak: peak, lo: sum.lo / tot, mid: sum.mid / tot, hi: sum.hi / tot,
+           cent: cent.den ? cent.num / cent.den : 0 };
 }
 """
 
@@ -83,11 +107,13 @@ async def main():
             ("defcon", 5, 700), ("defcon", 1, 700), ("launch", None, 900),
             ("intercept", None, 500), ("nuke", None, 1800), ("deny", None, 500),
             ("select", None, 400), ("cityLost", None, 900), ("end", 1, 2200), ("end", 3, 2200),
+            ("tap", None, 400), ("pick", None, 500),
         ]
-        print("\n%-12s %-6s %s" % ("音效", "参数", "实测峰值"))
+        print("\n%-12s %-6s %-9s %-19s %s" % ("音效", "参数", "实测峰值", "低/中/高频能量", "谱心"))
         for name, arg, ms in cases:
-            p = await page.evaluate(MEASURE, {"name": name, "arg": arg, "ms": ms})
-            print("%-12s %-6s %.3f" % (name, str(arg), p))
+            r = await page.evaluate(MEASURE, {"name": name, "arg": arg, "ms": ms})
+            print("%-12s %-6s %-9.3f %2.0f%% /%2.0f%% /%2.0f%%      %5.0f Hz"
+                  % (name, str(arg), r["peak"], r["lo"] * 100, r["mid"] * 100, r["hi"] * 100, r["cent"]))
             await page.wait_for_timeout(2200)
 
         # 密集触发：验证去抖不再是丢弃（连打 6 次拦截，间隔小于 MIN_GAP）

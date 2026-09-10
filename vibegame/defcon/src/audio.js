@@ -25,9 +25,9 @@
  *
  *   (2) 频谱错位 —— 核爆（nuke）原本的能量全压在 26~58 Hz，而手机扬声器的频响下限
  *       普遍在 500~800 Hz，这个频段物理上就放不出来：音量开到最大只会破音，不会更震撼。
- *       现改为四层叠加：低频下潜（保留体感）+ 中频噪声体（小喇叭能重放的主体）+
- *       高频爆裂瞬态（定位感）+ 长尾。这是「缺失基频」效应的实用做法，
- *       不是把低频调大，而是补出低频在小喇叭上缺失的那部分谐波。
+ *       补一层中低频噪声体能解决，但补过头会毁音色（见 nuke 注释里的二改记录）：
+ *       第一版补到 2600 Hz 又加了高频瞬态，实测把核爆做成了鞭炮，已回退。
+ *       正确做法是补 200~800 Hz 这一段，亮度一律不加。
  *
  *   (3) 去抖吞音 —— 旧版在最小间隔内直接 return false 丢弃。战争期一秒内十几次拦截，
  *       绝大部分被丢掉，结果是「越热闹越安静」。现改为叠加升调：密集触发时不再丢弃，
@@ -52,12 +52,12 @@
   // 同一音的最小间隔：战争期一秒内可能有十几次拦截，不去抖就是一片噪音
   var MIN_GAP = {
     defcon: 0.30, launch: 0.10, intercept: 0.12, nuke: 0.35, deny: 0.20,
-    select: 0.07, cityLost: 0.45, end: 2.00
+    select: 0.07, cityLost: 0.45, end: 2.00, tap: 0.05, pick: 0.08
   };
   // 最小间隔内允许叠加几层（0 = 只响第一声）。终局音不叠，拦截可以叠成一小串上行 ping。
   var MAX_STACK = {
     defcon: 1, launch: 2, intercept: 3, nuke: 2, deny: 1,
-    select: 2, cityLost: 1, end: 0
+    select: 2, cityLost: 1, end: 0, tap: 1, pick: 1
   };
   var lastAt = {}, stack = {};
 
@@ -147,10 +147,22 @@
       tone(t, base, 0.11, 0.50 * G(o), 'triangle');
       tone(t + 0.15, base * 1.5, 0.13, 0.44 * G(o), 'triangle');
     },
-    /* 发射：低频推力 + 上扫的气流噪声，模拟导弹离井的那一下 */
+    /* 发射：点火爆燃 + 上升的推力轰鸣 + 离场尾音。
+     * 旧版是「锯齿波 140→62 Hz 下滑」，实测像放屁 —— 三个毛病叠在一起：
+     *   ① 下滑音高 = 泄气，推力该是「起来」；
+     *   ② 锯齿波在 60~140 Hz 的密集谐波正好落在人耳判定「噪声/屁声」的频段；
+     *   ③ 火箭是宽带噪声，不该用乐音当主体。
+     * 改法：音高改上升（62→150），锯齿换正弦，主体交给噪声。 */
     launch: function (t, _a, o) {
-      tone(t, 140 * M(o), 0.42, 0.46 * G(o), 'sawtooth', 62 * M(o));
-      filteredNoise(t, 0.45, 0.30 * G(o), 'bandpass', 320 * M(o), 1900 * M(o), 1.2);
+      var g = G(o), m = M(o);
+      // A 点火：短促的爆燃，给出「起点」这一下
+      filteredNoise(t, 0.09, 0.32 * g, 'highpass', 1100, 1100, 0.8);
+      // B 推力主体：带通由低扫高 = 加速离场。宽带噪声而不是乐音
+      filteredNoise(t, 0.60, 0.42 * g, 'bandpass', 260 * m, 1250 * m, 0.8);
+      // C 低频托底：正弦上升，给重量但不带毛刺。压得比 B 低，让噪声主导而不是乐音主导
+      tone(t, 62 * m, 0.40, 0.28 * g, 'sine', 150 * m);
+      // D 离场尾音：0.3 s 后逐渐远去，低通收窄
+      filteredNoise(t + 0.30, 0.50, 0.20 * g, 'lowpass', 900, 220, 0.7);
     },
     /* 拦截：两声金属质感的高频 ping，与发射的暖低频形成听觉上的区分 */
     intercept: function (t, _a, o) {
@@ -158,37 +170,54 @@
       tone(t + 0.05, 2150 * M(o), 0.08, 0.22 * G(o), 'sine');
     },
 
-    /* 核爆：四层叠加，是全曲最响的一个音。
-     *   A 低频下潜 58→26 Hz —— 耳机/外放音箱上的体感，手机喇叭上基本不出声，但保留；
-     *   B 中频噪声体 2600→320 Hz —— 小喇叭真正能重放的主体，听感上的「轰」来自这一层；
-     *   C 高频爆裂瞬态 90 ms —— 起音的定位感，缺了它就只有闷响；
-     *   D 长尾噪声 1.2 s —— 余波。
-     * 没有 B、C 两层，光把 A 调大只会让小喇叭破音，不会更震撼。 */
+    /* 核爆：三层叠加，是全曲最响的一个音。
+     *   A 低频核心 60→24 Hz —— 占七成能量，听感上的「轰」来自这一层，旧版的好也在这里；
+     *   B 冲击体 1400→200 Hz —— 只补手机喇叭放不出的那截中低段；
+     *   C 滚动长尾 1.7 s —— 核爆的余波，比旧版更长更沉。
+     *
+     * 2026-09-10 二改：上一版为了照顾手机喇叭，把 B 抬到 2600→320 Hz 又加了 90 ms
+     * 高频爆裂瞬态 —— 亮度是够了，但核爆变成了鞭炮，「远处深沉的滚动轰鸣」被高频切碎。
+     * 教训：补中频可以，补成「亮度」就毁了音色。这一版把 B 压回 200~1400 Hz、
+     * 去掉高频瞬态，让 A 重新主导。手机端靠 B 的 200~800 Hz 段承接，不用高频。 */
     nuke: function (t, _a, o) {
       var g = G(o), m = M(o);
-      // A 低频下潜
+      // A 低频核心：保留旧版的深沉下潜，只抬电平、延长一点衰减
       var o1 = ctx.createOscillator();
       o1.type = 'sawtooth';
-      o1.frequency.setValueAtTime(58 * m, t);
-      o1.frequency.exponentialRampToValueAtTime(26 * m, t + 0.9);
+      o1.frequency.setValueAtTime(60 * m, t);
+      o1.frequency.exponentialRampToValueAtTime(24 * m, t + 1.05);
       var lp = ctx.createBiquadFilter();
       lp.type = 'lowpass';
-      lp.frequency.setValueAtTime(260, t);
-      lp.frequency.exponentialRampToValueAtTime(70, t + 0.9);
-      var g1 = envelope(t, 0.012, 0.95, 0.78 * g);
+      lp.frequency.setValueAtTime(300, t);
+      lp.frequency.exponentialRampToValueAtTime(58, t + 1.05);
+      var g1 = envelope(t, 0.014, 1.15, 0.86 * g);
       o1.connect(lp); lp.connect(g1); g1.connect(sfxBus);
-      o1.start(t); o1.stop(t + 1.0);
-      // B 中频噪声体
-      filteredNoise(t, 0.65, 0.42 * g, 'lowpass', 2600, 320, 0.7);
-      // C 高频爆裂瞬态
-      filteredNoise(t, 0.09, 0.40 * g, 'highpass', 1500, 1500, 0.8);
-      // D 长尾
-      filteredNoise(t + 0.03, 1.2, 0.34 * g, 'lowpass', 900, 120, 0.7);
+      o1.start(t); o1.stop(t + 1.25);
+      // B 冲击体：频带压在中低段（200~1400），不做亮度。手机端靠这一层的 200~800 段承接
+      filteredNoise(t, 0.5, 0.30 * g, 'lowpass', 1400, 200, 0.7);
+      // C 滚动长尾
+      filteredNoise(t + 0.10, 1.7, 0.30 * g, 'lowpass', 700, 90, 0.7);
     },
 
     // 指令被拒：短促低闷的一声，配合发射条的红色抖动
     deny: function (t, _a, o) {
       tone(t, 190 * M(o), 0.13, 0.38 * G(o), 'square', 120 * M(o));
+    },
+
+    /* 通用界面点击：抽屉开合、倍速/齐射切换、城市列表跳转等一切「按下了」的确认。
+     * 刻意做得极轻极短（35 ms、峰值 0.16）—— 它一局里会被按几十次，
+     * 任何一点厚度都会在第十次之后变成噪音。中频木质感，不与任何事件音撞色。 */
+    tap: function (t, _a, o) {
+      tone(t, 640 * M(o), 0.035, 0.16 * G(o), 'sine', 480 * M(o));
+      filteredNoise(t, 0.03, 0.10 * G(o), 'bandpass', 2400, 1200, 1.5);
+    },
+
+    /* 决策确认：事件卡选项、阵营选择。比 tap 有分量（两声上行、峰值 0.26），
+     * 但比 select 更暖更低 —— select 是「锁定目标」的雷达 ping，pick 是「我决定了」。
+     * 三种确认音分在三档音高上，闭着眼也分得出是点了什么。 */
+    pick: function (t, _a, o) {
+      tone(t, 720 * M(o), 0.05, 0.26 * G(o), 'triangle');
+      tone(t + 0.055, 1080 * M(o), 0.09, 0.22 * G(o), 'triangle');
     },
 
     /* 选中目标：雷达锁定的一声短促上行 ping。
@@ -225,7 +254,12 @@
     var fn = VOICES[name];
     if (!fn) return false;
     var c = ensure();
-    if (!c || c.state !== 'running') return false;
+    if (!c) return false;
+    if (c.state === 'closed') return false;
+    /* suspended 时不再直接放弃：开局「选定阵营」是整局第一次用户手势，
+     * AudioContext 可能还停在 suspended（resume 是异步的，等它 resolve 就错过了这一声）。
+     * suspended 下 currentTime 冻结，此刻排进去的音会在 resume 后照常播出，所以照排不误。 */
+    if (c.state === 'suspended') { try { c.resume(); } catch (e) {} }
     var now = c.currentTime;
     var gap = MIN_GAP[name] || 0;
     var maxSt = (MAX_STACK[name] != null) ? MAX_STACK[name] : 1;
