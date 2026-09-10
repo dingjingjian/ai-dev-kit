@@ -1,32 +1,65 @@
 /*
  * defcon — src/audio.js
- * 程序化音效：4 个音全部用 WebAudio 现场合成，不引入任何音频文件。
+ * 程序化音频：8 个音效，全部用 WebAudio 现场合成，不引入任何音频文件。
  *
  * 为什么不用 mp3/wav：
  *   1) 小工具红线禁止外部资源，音频文件要随包走；
- *   2) 本作只需要 5 个一秒以内的短音，采样文件换来的是几百 KB 包体与一次额外解码；
+ *   2) 本作只需要十来个一秒以内的短音，采样文件换来的是几百 KB 包体与一次额外解码；
  *   3) 合成音可以按参数变化（DEFCON 越低音越急），这是采样文件做不到的。
  *
  * 为什么默认开启（2026-09-09 改）：
  *   早期默认静音是怕手机外放惊吓，但实测发现玩家根本注意不到顶栏那个小喇叭，
  *   绝大多数人全程无声地打完一局 —— 合成音效是本作演出的一半，等于白做。
- *   现改为默认开启：峰值早已压低（最响的核爆也只到 0.42），惊吓风险可控；
- *   且 AudioContext 必须等用户手势才能出声（自动播放策略），本作的第一声
+ *   现改为默认开启；且 AudioContext 必须等用户手势才能出声（自动播放策略），本作的第一声
  *   天然在「选定阵营」的那次点击之后 —— 不存在网页一打开就轰炸外放的情况。
  *   底部指令条的开关仍然一指可达，想静音随时可以关。
  *
  * 自动播放策略：AudioContext 在用户手势之外创建时会停在 suspended，
  * 因此 unlock() 必须从真实点击事件里调用（音效开关按钮 / 开局的阵营选择）。
+ *
+ * ── 2026-09-10 响度重做 ────────────────────────────────────────────────
+ * 旧版实测「偏弱」，三个原因叠加，只调音量治不好：
+ *
+ *   (1) 电平保守 —— 各音峰值 0.09~0.42 再乘 master 0.5，实际出声只有 0.065~0.21，
+ *       比常规游戏音效（0.5~0.8）低约 12~14 dB。现改为 master 0.8 + 峰值上调。
+ *
+ *   (2) 频谱错位 —— 核爆（nuke）原本的能量全压在 26~58 Hz，而手机扬声器的频响下限
+ *       普遍在 500~800 Hz，这个频段物理上就放不出来：音量开到最大只会破音，不会更震撼。
+ *       现改为四层叠加：低频下潜（保留体感）+ 中频噪声体（小喇叭能重放的主体）+
+ *       高频爆裂瞬态（定位感）+ 长尾。这是「缺失基频」效应的实用做法，
+ *       不是把低频调大，而是补出低频在小喇叭上缺失的那部分谐波。
+ *
+ *   (3) 去抖吞音 —— 旧版在最小间隔内直接 return false 丢弃。战争期一秒内十几次拦截，
+ *       绝大部分被丢掉，结果是「越热闹越安静」。现改为叠加升调：密集触发时不再丢弃，
+ *       而是升高音高、略降音量，最多叠 MAX_STACK 层 —— 越密越急，符合直觉。
+ *
+ * 另加总线压缩器（DynamicsCompressor）：齐射落地时四五个音同时响，
+ * 没有压缩器就只能靠压低单音避免削波（这正是旧版保守的根因），
+ * 有了压缩器才敢把单音峰值提上来。
+ *
+ * 不做 BGM / 持续底噪（2026-09-10 试过一版「DEFCON 联动 drone」后移除）：
+ *   程序化合成做不出编曲层次，无旋律的 drone 虽然在技术上成立，但实测下来
+ *   它挤占的是音效的听觉空间，而本作的紧张感已经由 DEFCON 跃迁告警与核爆承担。
+ *   氛围表达一律用离散音效，不用持续声。
  */
 (function (global) {
   'use strict';
   var DC = global.DC = global.DC || {};
 
-  var ctx = null, master = null, failed = false;
+  var ctx = null, master = null, comp = null, sfxBus = null, failed = false;
   var enabled = true;   // 默认开启；真正出声仍要等首次手势 unlock()（见文件头自动播放策略）
+
   // 同一音的最小间隔：战争期一秒内可能有十几次拦截，不去抖就是一片噪音
-  var MIN_GAP = { defcon: 0.30, launch: 0.10, intercept: 0.14, nuke: 0.35, deny: 0.20 };
-  var lastAt = {};
+  var MIN_GAP = {
+    defcon: 0.30, launch: 0.10, intercept: 0.12, nuke: 0.35, deny: 0.20,
+    select: 0.07, cityLost: 0.45, end: 2.00
+  };
+  // 最小间隔内允许叠加几层（0 = 只响第一声）。终局音不叠，拦截可以叠成一小串上行 ping。
+  var MAX_STACK = {
+    defcon: 1, launch: 2, intercept: 3, nuke: 2, deny: 1,
+    select: 2, cityLost: 1, end: 0
+  };
+  var lastAt = {}, stack = {};
 
   function ensure() {
     if (ctx || failed) return ctx;
@@ -34,8 +67,22 @@
     if (!AC) { failed = true; return null; }
     try {
       ctx = new AC();
+      /* 总线：sfxBus → comp → master → destination */
+      comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -10;    // dB：只削齐射叠加时的尖峰，单音基本不过阈
+      comp.knee.value = 10;
+      comp.ratio.value = 8;
+      comp.attack.value = 0.004;
+      comp.release.value = 0.22;
+
       master = ctx.createGain();
-      master.gain.value = 0.5;
+      master.gain.value = 0.8;
+
+      sfxBus = ctx.createGain();
+      sfxBus.gain.value = 1;
+
+      sfxBus.connect(comp);
+      comp.connect(master);
       master.connect(ctx.destination);
     } catch (e) { failed = true; ctx = null; }
     return ctx;
@@ -61,7 +108,7 @@
     o.frequency.setValueAtTime(freq, t0);
     if (freqTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, freqTo), t0 + dur);
     var g = envelope(t0, 0.008, dur, peak);
-    o.connect(g); g.connect(master);
+    o.connect(g); g.connect(sfxBus);
     o.start(t0); o.stop(t0 + dur + 0.05);
     return o;
   }
@@ -81,49 +128,95 @@
     var f = ctx.createBiquadFilter();
     f.type = filterType; f.Q.value = q || 1;
     f.frequency.setValueAtTime(f0, t0);
-    f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
+    if (f1 && f1 !== f0) f.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t0 + dur);
     var g = envelope(t0, 0.01, dur, peak);
-    s.connect(f); f.connect(g); g.connect(master);
+    s.connect(f); f.connect(g); g.connect(sfxBus);
     s.start(t0); s.stop(t0 + dur);
   }
+
+  // 叠加层的音高/音量系数
+  function M(o) { return (o && o.mul) || 1; }
+  function G(o) { return (o && o.gain) || 1; }
 
   var VOICES = {
     /* DEFCON 跃迁：两声短促告警，等级越低音越高越急 —— 用同一段代码靠参数表达紧张度，
      * 这是采样文件做不到的地方。 */
-    defcon: function (t, level) {
+    defcon: function (t, level, o) {
       var lv = Math.max(1, Math.min(5, level || 5));
-      var base = 380 + (5 - lv) * 95;
-      tone(t, base, 0.11, 0.22, 'triangle');
-      tone(t + 0.15, base * 1.5, 0.13, 0.20, 'triangle');
+      var base = (380 + (5 - lv) * 95) * M(o);
+      tone(t, base, 0.11, 0.50 * G(o), 'triangle');
+      tone(t + 0.15, base * 1.5, 0.13, 0.44 * G(o), 'triangle');
     },
     /* 发射：低频推力 + 上扫的气流噪声，模拟导弹离井的那一下 */
-    launch: function (t) {
-      tone(t, 140, 0.42, 0.20, 'sawtooth', 62);
-      filteredNoise(t, 0.45, 0.13, 'bandpass', 320, 1900, 1.2);
+    launch: function (t, _a, o) {
+      tone(t, 140 * M(o), 0.42, 0.46 * G(o), 'sawtooth', 62 * M(o));
+      filteredNoise(t, 0.45, 0.30 * G(o), 'bandpass', 320 * M(o), 1900 * M(o), 1.2);
     },
     /* 拦截：两声金属质感的高频 ping，与发射的暖低频形成听觉上的区分 */
-    intercept: function (t) {
-      tone(t, 1450, 0.09, 0.13, 'sine');
-      tone(t + 0.05, 2150, 0.08, 0.09, 'sine');
+    intercept: function (t, _a, o) {
+      tone(t, 1450 * M(o), 0.09, 0.30 * G(o), 'sine');
+      tone(t + 0.05, 2150 * M(o), 0.08, 0.22 * G(o), 'sine');
     },
-    /* 核爆：55Hz 下潜到 28Hz 的低频轰鸣 + 长尾噪声，是全曲最响的一个音，
-     * 峰值刻意压到 0.42 —— 它总是紧跟着一次白闪，听觉上不该抢过视觉。 */
-    nuke: function (t) {
-      var o = ctx.createOscillator();
-      o.type = 'sawtooth';
-      o.frequency.setValueAtTime(58, t);
-      o.frequency.exponentialRampToValueAtTime(26, t + 0.9);
+
+    /* 核爆：四层叠加，是全曲最响的一个音。
+     *   A 低频下潜 58→26 Hz —— 耳机/外放音箱上的体感，手机喇叭上基本不出声，但保留；
+     *   B 中频噪声体 2600→320 Hz —— 小喇叭真正能重放的主体，听感上的「轰」来自这一层；
+     *   C 高频爆裂瞬态 90 ms —— 起音的定位感，缺了它就只有闷响；
+     *   D 长尾噪声 1.2 s —— 余波。
+     * 没有 B、C 两层，光把 A 调大只会让小喇叭破音，不会更震撼。 */
+    nuke: function (t, _a, o) {
+      var g = G(o), m = M(o);
+      // A 低频下潜
+      var o1 = ctx.createOscillator();
+      o1.type = 'sawtooth';
+      o1.frequency.setValueAtTime(58 * m, t);
+      o1.frequency.exponentialRampToValueAtTime(26 * m, t + 0.9);
       var lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.setValueAtTime(260, t);
+      lp.type = 'lowpass';
+      lp.frequency.setValueAtTime(260, t);
       lp.frequency.exponentialRampToValueAtTime(70, t + 0.9);
-      var g = envelope(t, 0.012, 0.95, 0.42);
-      o.connect(lp); lp.connect(g); g.connect(master);
-      o.start(t); o.stop(t + 1.0);
-      filteredNoise(t, 1.1, 0.16, 'lowpass', 900, 120, 0.7);
+      var g1 = envelope(t, 0.012, 0.95, 0.78 * g);
+      o1.connect(lp); lp.connect(g1); g1.connect(sfxBus);
+      o1.start(t); o1.stop(t + 1.0);
+      // B 中频噪声体
+      filteredNoise(t, 0.65, 0.42 * g, 'lowpass', 2600, 320, 0.7);
+      // C 高频爆裂瞬态
+      filteredNoise(t, 0.09, 0.40 * g, 'highpass', 1500, 1500, 0.8);
+      // D 长尾
+      filteredNoise(t + 0.03, 1.2, 0.34 * g, 'lowpass', 900, 120, 0.7);
     },
+
     // 指令被拒：短促低闷的一声，配合发射条的红色抖动
-    deny: function (t) {
-      tone(t, 190, 0.13, 0.16, 'square', 120);
+    deny: function (t, _a, o) {
+      tone(t, 190 * M(o), 0.13, 0.38 * G(o), 'square', 120 * M(o));
+    },
+
+    /* 选中目标：雷达锁定的一声短促上行 ping。
+     * 两段式发射的第一段此前是完全无声的 —— 点下去没有任何听觉确认，
+     * 在手机上很容易以为没点上而反复戳。 */
+    select: function (t, _a, o) {
+      tone(t, 1180 * M(o), 0.045, 0.30 * G(o), 'sine');
+      tone(t + 0.045, 1760 * M(o), 0.06, 0.24 * G(o), 'sine');
+    },
+
+    /* 己方城市被毁：与 nuke 同时响，但走中频的双声下行警报 ——
+     * nuke 是「某处爆炸了」（通用、低频、钝），cityLost 是「死的是我的城」（私人、中频、尖）。
+     * 只对自己的城市响：每颗核弹都叠一遍只会糊成一团，稀有才有意义。 */
+    cityLost: function (t, _a, o) {
+      tone(t, 520 * M(o), 0.20, 0.34 * G(o), 'square', 390 * M(o));
+      tone(t + 0.22, 390 * M(o), 0.26, 0.30 * G(o), 'square', 260 * M(o));
+      filteredNoise(t, 0.50, 0.28 * G(o), 'lowpass', 1400, 260, 0.8);
+    },
+
+    /* 终局：一局里唯一一次长音。此前终局是完全静默的 —— 排名面板弹出来时一点声音都没有，
+     * 情绪在最该落地的那一秒断掉了。夺冠用 G3 大三度，其余用 D3 小调色彩更暗。 */
+    end: function (t, rank) {
+      var win = (rank === 1);
+      var f = win ? 196.0 : 146.8;
+      tone(t, f, 1.6, 0.34, 'triangle');
+      tone(t, f * 1.5, 1.5, 0.20, 'sine');
+      tone(t + 0.35, win ? f * 2 : f * 1.2, 1.2, 0.16, 'triangle');
+      filteredNoise(t, 1.8, 0.14, 'lowpass', 700, 120, 0.6);
     }
   };
 
@@ -135,15 +228,29 @@
     if (!c || c.state !== 'running') return false;
     var now = c.currentTime;
     var gap = MIN_GAP[name] || 0;
-    if (lastAt[name] != null && now - lastAt[name] < gap) return false;
-    lastAt[name] = now;
-    try { fn(now + 0.01, arg); } catch (e) { return false; }
+    var maxSt = (MAX_STACK[name] != null) ? MAX_STACK[name] : 1;
+    var st = 0, opt = { mul: 1, gain: 1 };
+
+    if (lastAt[name] != null && now - lastAt[name] < gap) {
+      /* 密集触发：不再丢弃，改为升高音高 + 略降音量（越密越急）。
+       * 超过该音的叠加上限才真的放弃 —— 否则齐射会糊成噪音墙。 */
+      st = (stack[name] || 0) + 1;
+      if (st > maxSt) return false;
+      stack[name] = st;
+      opt.mul = Math.pow(2, st * 2 / 12);      // 每层 +2 个半音
+      opt.gain = Math.pow(0.78, st);
+    } else {
+      stack[name] = 0;
+      lastAt[name] = now;
+    }
+
+    try { fn(now + 0.01, arg, opt); } catch (e) { return false; }
     return true;
   }
 
   function setEnabled(on) {
     enabled = !!on;
-    if (enabled) unlock();
+    if (enabled) { unlock(); }
     return enabled;
   }
 

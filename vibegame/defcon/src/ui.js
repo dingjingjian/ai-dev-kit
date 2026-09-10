@@ -356,6 +356,21 @@
    * 两次白闪之间至少隔 FLASH_GAP —— 被跳过的命中依然有音效、震屏和球面焦痕，演出不缺席，只是不闪眼。 */
   var FLASH_GAP = 1100;              // ms，与 CSS 动画时长一致：上一次退光结束前不重播
   var lastFlashAt = -1e9;
+
+  /* 己方城市被毁：nuke 表达的是「某处爆炸了」，这一声表达的是「死的是我的城」。
+   * 只在己方存活城市数下降时响；初值 -1 用来跳过首帧，否则一进战争期就误报一次。
+   * 简报期重置，避免重开一局时沿用上一局的计数。 */
+  var lastMyAlive = -1;
+  function pumpCityLoss(state) {
+    var n = 0;
+    for (var i = 0; i < state.cities.length; i++) {
+      var c = state.cities[i];
+      if (c.alive && c.faction === state.playerFaction) n++;
+    }
+    if (state.phase === 'briefing') { lastMyAlive = n; return; }
+    if (lastMyAlive >= 0 && n < lastMyAlive) sfx('cityLost');
+    lastMyAlive = n;
+  }
   function pumpImpacts(state) {
     if (state.impacts === sig.impacts) return;
     sig.impacts = state.impacts;
@@ -485,6 +500,7 @@
     if (!c) return false;
     pending = cityId;
     renderTarget(cur);
+    sfx('select');   // 第一段此前无声，手机上容易以为没点上而反复戳
     // 选目标的同时把地球转过去，并在球面上打一圈锁定环（§12）：
     // flyTo 只解决「看不看得见」，锁定环解决「62 个环里哪一个是它」。
     if (DC.render && DC.render.flyTo) DC.render.flyTo(c.lat, c.lon);
@@ -660,6 +676,13 @@
     if (sig.over) return;
     sig.over = true;
     var rk = S.ranking(state);
+    /* 终局此前是完全静默的 —— 排名面板弹出那一秒一点声音都没有，情绪在最该落地处断了。
+     * 把名次传给 audio.js：夺冠与落败用不同和弦色彩。 */
+    var myRank = 0;
+    for (var ri = 0; ri < rk.length; ri++) {
+      if (rk[ri].code === state.playerFaction) { myRank = ri + 1; break; }
+    }
+    sfx('end', myRank);
     el.ovBody.textContent = '';
     /* 全球战损总数：整局最该被看见的数字（§11.8b）。
      * 单位是百万，写成「X.XX 亿」比「XXX.XM」更像一条新闻标题 —— 反战表达要的是体感。 */
@@ -756,6 +779,7 @@
     updateWarBar(state);
     pumpImpacts(state);
     pumpAudio(state);
+    pumpCityLoss(state);
     if (state.phase === 'over') showOver(state);
 
     // 情境面板在简报期是空的（既没有卡也没有战争条），不该占掉屏幕底部一条
