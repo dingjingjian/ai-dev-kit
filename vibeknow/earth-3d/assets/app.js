@@ -135,7 +135,14 @@
   var c40=Math.cos(PHI0),s40=Math.sin(PHI0);
   layersGroup.add(cutFace(-c40,s40));
   layersGroup.add(cutFace(-c40,-s40));
-  function layerAnchor(r){var o=new THREE.Object3D();o.position.set(-r*0.9781,r*0.2079,0);layersGroup.add(o);return o;}
+  // 标签锚点落在面向相机的剖切面上，按角度扇形展开（原始实现把四层锚点放在同一条射线上，
+  // 该射线几乎正对默认相机，投影后四个标签会挤到同一像素上）
+  var CUT_D=new THREE.Vector3(-c40,0,-s40),CUT_U=new THREE.Vector3(0,1,0);
+  function layerAnchor(r,angDeg){
+    var a=angDeg*Math.PI/180,o=new THREE.Object3D();
+    o.position.copy(CUT_D).multiplyScalar(r*Math.cos(a)).addScaledVector(CUT_U,r*Math.sin(a));
+    layersGroup.add(o);return o;
+  }
 
   // ===== 四季（太阳 + 公转地球）=====
   var seasonsGroup=new THREE.Group();seasonsGroup.visible=false;scene.add(seasonsGroup);
@@ -256,11 +263,14 @@
     defs.forEach(function(d){var o=new THREE.Object3D();o.position.copy(ll2v(d[1],d[2],R*1.03));gridGroup.add(o);addTag(o,d[0],'grid','self');});
   })();
   (function(){
-    var n=new THREE.Vector3(-1,0,0);
-    addTag(layerAnchor(R*0.19),'内核 · 5150–6371 km','layers',n);
-    addTag(layerAnchor(R*0.55),'外核 · 2900–5150 km','layers',n);
-    addTag(layerAnchor(R*0.97),'地幔 · 17–2900 km','layers',n);
-    addTag(layerAnchor(R*1.17),'地壳 · 0–17 km','layers',n);
+    // 四个锚点都落在面向相机的剖切面上，且各自位于对应层内。
+    // 按「由外到内」的顺序定义，屏幕上下顺序与之保持一致；剖切面是平面，
+    // 可见性用面法线判断（径向方向在平面边缘会误判）。
+    var faceN=new THREE.Vector3(-s40,0,c40);
+    addTag(layerAnchor(R*1.00,95),'地壳 · 0–17 km','layers',faceN);
+    addTag(layerAnchor(R*0.78,55),'地幔 · 17–2900 km','layers',faceN);
+    addTag(layerAnchor(R*0.38,10),'外核 · 2900–5150 km','layers',faceN);
+    addTag(layerAnchor(R*0.19,-35),'内核 · 5150–6371 km','layers',faceN);
   })();
   addTag(seasonAnchor(0,-ORBIT),'春分 · 3月21日前后','seasons');
   addTag(seasonAnchor(ORBIT,0),'夏至 · 6月21日前后','seasons');
@@ -316,7 +326,20 @@
 
   // ===== 标签投影 =====
   var _v=new THREE.Vector3(),_c=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
-  function updateTags(){
+  // 引线层：标签被推开后，从锚点连一条细线指向标签
+  var SVGNS='http://www.w3.org/2000/svg';
+  var leaders=document.createElementNS(SVGNS,'svg');
+  leaders.setAttribute('class','leaders');
+  document.body.appendChild(leaders);
+  var _lines=[];
+  function leaderLine(i){
+    var l=_lines[i];
+    if(!l){l=document.createElementNS(SVGNS,'line');l.setAttribute('stroke','rgba(150,185,235,.55)');l.setAttribute('stroke-width','1');l.setAttribute('stroke-dasharray','3 3');leaders.appendChild(l);_lines[i]=l;}
+    return l;
+  }
+  var _items=[];
+  function collectTags(){
+    _items.length=0;
     for(var i=0;i<tags.length;i++){
       var tg=tags[i],el=tg.el;
       if(tg.mode!==cur||!showLabel){el.style.opacity='0';continue;}
@@ -332,10 +355,69 @@
         else{_d.copy(camera.position).normalize();}
         if(_n.dot(_d)<0.12){el.style.opacity='0';continue;}
       }
-      var x=(_v.x*0.5+0.5)*W,y=(-_v.y*0.5+0.5)*H;
-      el.style.left=x+'px';el.style.top=y+'px';el.style.opacity='1';
+      if(!tg.w){var ww=el.offsetWidth,hh=el.offsetHeight;if(ww>0){tg.w=ww;tg.h=hh;}}
+      _items.push({el:el,ax:(_v.x*0.5+0.5)*W,ay:(-_v.y*0.5+0.5)*H,w:tg.w||90,h:tg.h||18});
     }
   }
+  function layoutTags(){
+    var n=_items.length,i,j,it;
+    var PAD=6,M=8; // 标签最小间距 / 视口边距
+    // 初始位置即锚点投影；标签盒中心比锚点高 0.9 个字高（对应 .tag 的 translate(-50%,-140%)）
+    for(i=0;i<n;i++){it=_items[i];it.cx=it.ax;it.cy=it.ay-it.h*0.9;}
+    var cardEl=document.getElementById('card');
+    var cr=cardEl.classList.contains('show')?cardEl.getBoundingClientRect():null;
+    var ccx=0,ccy=0,cw=0,ch=0;
+    if(cr){ccx=(cr.left+cr.right)*0.5;ccy=(cr.top+cr.bottom)*0.5;cw=cr.right-cr.left;ch=cr.bottom-cr.top;}
+    // 只对「确实撞上」的标签做最小位移修正，不做整组平移：
+    // 整组平移会让一个越界标签把同一模式下所有标签一起拖走（四季模式就是这么变形的）
+    for(var pass=0;pass<4;pass++){
+      // 标签互相重叠 → 沿重叠更小的方向对半推开
+      for(i=0;i<n;i++)for(j=i+1;j<n;j++){
+        var a=_items[i],b=_items[j];
+        var ox=(a.w+b.w)*0.5+PAD-Math.abs(b.cx-a.cx);
+        var oy=(a.h+b.h)*0.5+PAD-Math.abs(b.cy-a.cy);
+        if(ox>0&&oy>0){
+          if(ox<oy){var sx=(b.cx<a.cx?-1:1)*ox*0.5;a.cx-=sx;b.cx+=sx;}
+          else{var sy=(b.cy<a.cy?-1:1)*oy*0.5;a.cy-=sy;b.cy+=sy;}
+        }
+      }
+      // 被底部知识卡片遮住 → 往更近的一侧让开
+      for(i=0;i<n;i++){
+        it=_items[i];
+        if(cr){
+          var ox2=(it.w+cw)*0.5+10-Math.abs(ccx-it.cx);
+          var oy2=(it.h+ch)*0.5+10-Math.abs(ccy-it.cy);
+          if(ox2>0&&oy2>0){
+            if(ox2<oy2)it.cx+=(it.cx<ccx?-1:1)*(ox2+2);
+            else it.cy-=(oy2+2);
+          }
+        }
+        // 视口边界（只收该标签自己）
+        it.cx=Math.max(M+it.w*0.5,Math.min(W-M-it.w*0.5,it.cx));
+        it.cy=Math.max(M+it.h*0.5,Math.min(H-M-it.h*0.5,it.cy));
+      }
+    }
+    // 落位 + 引线（只在标签被挪开时画）
+    var used=0;
+    for(i=0;i<n;i++){
+      it=_items[i];
+      it.tx=it.cx;it.ty=it.cy+it.h*0.9;
+      it.el.style.left=it.tx.toFixed(1)+'px';it.el.style.top=it.ty.toFixed(1)+'px';it.el.style.opacity='1';
+      if(Math.abs(it.tx-it.ax)<3&&Math.abs(it.ty-it.ay)<3)continue;
+      var rx0=it.cx-it.w*0.5,rx1=it.cx+it.w*0.5,ry0=it.cy-it.h*0.5,ry1=it.cy+it.h*0.5;
+      var px=Math.max(rx0,Math.min(it.ax,rx1)),py=Math.max(ry0,Math.min(it.ay,ry1));
+      if(px===it.ax&&py===it.ay){
+        var dl=it.ax-rx0,dr=rx1-it.ax,dt=it.ay-ry0,db=ry1-it.ay,m=Math.min(dl,dr,dt,db);
+        if(m===dl)px=rx0;else if(m===dr)px=rx1;else if(m===dt)py=ry0;else py=ry1;
+      }
+      var l=leaderLine(used++);
+      l.setAttribute('x1',it.ax.toFixed(1));l.setAttribute('y1',it.ay.toFixed(1));
+      l.setAttribute('x2',px.toFixed(1));l.setAttribute('y2',py.toFixed(1));
+      l.style.display='';
+    }
+    for(i=used;i<_lines.length;i++)_lines[i].style.display='none';
+  }
+  function updateTags(){collectTags();layoutTags();}
 
   // ===== 动画 =====
   var clock=new THREE.Clock();
