@@ -68,13 +68,14 @@ ai-dev-kit/
 
 后续若要补，两条路：新开一个以"观看 / 聆听 / 互动"为主价值的作品；或给 `pixel-art-editor` 加生成式艺术层，让它从"画画的软件"变成"艺术作品本身"。
 
-## #vibeknow　人文知识（7）
+## #vibeknow　人文知识（8）
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
 | 3D 地球科普 | `vibeknow/earth-3d/` | 昼夜交替、四季成因、地球内部结构 | 完整（zip + 物料） |
 | 太阳系 3D | `vibeknow/solar-system-3d/` | 行星轨道、土星环、点击追踪天体 | 完整（zip + 物料） |
 | 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 发射/拆解双模式，实时遥测 | 完整（zip + 物料） |
+| 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号发射→奔月→环月→揽月着陆器落月全流程 | 均未 |
 | 3D 月球科普 | `vibeknow/moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
 | 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
 | 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已打包 · 缺笔记 |
