@@ -255,7 +255,7 @@ function verdict(r) {
   if (p.fallbackShown) bad.push('兜底界面误触发');
   if (p.factionRows !== 6) bad.push('阵营行数 ' + p.factionRows);
   if (p.cityRows !== p.cityTotal) bad.push('城市行数 ' + p.cityRows + '（数据层 ' + p.cityTotal + '）');
-  if (p.legendRows !== 4) bad.push('图例行数 ' + p.legendRows);
+  if (p.legendRows !== 5) bad.push('图例行数 ' + p.legendRows);
   if (!p.maxBtn) bad.push('缺少常驻拉满按钮');
   if (c.phase !== 'crisis' || !c.cardShown) bad.push('事件卡未显示');
   if (c.optCount < 2 || c.optCount > 3) bad.push('选项数 ' + c.optCount);

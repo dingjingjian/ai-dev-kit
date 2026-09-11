@@ -135,7 +135,14 @@
   var c40=Math.cos(PHI0),s40=Math.sin(PHI0);
   layersGroup.add(cutFace(-c40,s40));
   layersGroup.add(cutFace(-c40,-s40));
-  function layerAnchor(r){var o=new THREE.Object3D();o.position.set(-r*0.9781,r*0.2079,0);layersGroup.add(o);return o;}
+  // 标签锚点落在面向相机的剖切面上，按角度扇形展开（原始实现把四层锚点放在同一条射线上，
+  // 该射线几乎正对默认相机，投影后四个标签会挤到同一像素上）
+  var CUT_D=new THREE.Vector3(-c40,0,-s40),CUT_U=new THREE.Vector3(0,1,0);
+  function layerAnchor(r,angDeg){
+    var a=angDeg*Math.PI/180,o=new THREE.Object3D();
+    o.position.copy(CUT_D).multiplyScalar(r*Math.cos(a)).addScaledVector(CUT_U,r*Math.sin(a));
+    layersGroup.add(o);return o;
+  }
 
   // ===== 四季（太阳 + 公转地球）=====
   var seasonsGroup=new THREE.Group();seasonsGroup.visible=false;scene.add(seasonsGroup);
@@ -149,7 +156,7 @@
     var pts=[];for(var i=0;i<=160;i++){var a=i/160*6.2832;pts.push(new THREE.Vector3(Math.cos(a)*r,0,Math.sin(a)*r));}
     return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:col,transparent:true,opacity:.28}));
   }
-  seasonsGroup.add(orbitLine(ORBIT,0x4a7fb5));
+  var seasonOrbitLine=orbitLine(ORBIT,0x4a7fb5);seasonsGroup.add(seasonOrbitLine);
   // 公转组只平移不旋转 → 地轴指向在空间中保持不变
   var orbitGroup=new THREE.Group();seasonsGroup.add(orbitGroup);
   var tiltG=new THREE.Group();tiltG.rotation.z=23.5*Math.PI/180;orbitGroup.add(tiltG);
@@ -169,6 +176,39 @@
   function seasonAnchor(x,z){var o=new THREE.Object3D();o.position.set(x,0,z);seasonsGroup.add(o);return o;}
 
   // （昼夜晨昏线锚点已移除）
+
+  // ===== 地月系统（月相）=====
+  // 月球自己不发光，我们看到的月光是它反射的太阳光。月球绕地球公转时，
+  // 被照亮的一面相对地球不断改变朝向我们，于是有了月相。
+  var MOON_R=0.6,MOON_ORBIT=4.0,SYNODIC=29.53;
+  // 轨道角 a → 空间位置；a=π 时月球落在地球与太阳之间
+  function moonPosOn(a,r){return new THREE.Vector3(Math.cos(a)*r,0,-Math.sin(a)*r);}
+  var moonGroup=new THREE.Group();moonGroup.visible=false;scene.add(moonGroup);
+  // 平行阳光：用方向光，晨昏线才是准确的大圆（这正是月相形状的关键）
+  var moonLight=new THREE.DirectionalLight(0xfff2d0,2.9);
+  moonLight.position.set(-42,0,0);moonGroup.add(moonLight);moonGroup.add(moonLight.target);
+  // 地球（与主场景共用贴图与材质）
+  var mTilt=new THREE.Group();mTilt.rotation.z=23.5*Math.PI/180;moonGroup.add(mTilt);
+  var mSpin=new THREE.Group();mTilt.add(mSpin);
+  mSpin.add(new THREE.Mesh(new THREE.SphereGeometry(R,40,32),earthMat));
+  var mClouds=new THREE.Mesh(new THREE.SphereGeometry(R*1.012,40,32),cloudMat);mTilt.add(mClouds);
+  mTilt.add(new THREE.Mesh(new THREE.SphereGeometry(R*1.06,40,32),atmo.material));
+  // 月球
+  var moonOrbit=new THREE.Group();moonGroup.add(moonOrbit);
+  var moonMat=new THREE.MeshStandardMaterial({map:plainTex('#c6c6c6'),roughness:.95,metalness:0});
+  var moon=new THREE.Mesh(new THREE.SphereGeometry(MOON_R,32,32),moonMat);moonOrbit.add(moon);
+  var moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:radialTex('rgba(216,224,240,.16)','rgba(160,175,205,.05)','rgba(160,175,205,0)'),blending:THREE.AdditiveBlending,transparent:true,depthWrite:false}));
+  moonGlow.scale.set(MOON_R*5.6,MOON_R*5.6,1);moon.add(moonGlow);
+  // 月球轨道
+  var moonOrbitLine=orbitLine(MOON_ORBIT,0x6f8096);moonGroup.add(moonOrbitLine);
+  // 八个相位定位点：a=π 时月球位于地球与太阳之间 → 新月
+  var phaseDotMat=new THREE.MeshBasicMaterial({color:0x9fb6d6,transparent:true,opacity:.85});
+  for(var pi8=0;pi8<8;pi8++){
+    var pa=Math.PI+pi8*Math.PI/4,pp=moonPosOn(pa,MOON_ORBIT);
+    var dot=new THREE.Mesh(new THREE.SphereGeometry(0.07,10,10),phaseDotMat);
+    dot.position.copy(pp);moonGroup.add(dot);
+  }
+  var earthAnchor=new THREE.Object3D();earthAnchor.position.set(0,R*1.3,0);moonGroup.add(earthAnchor);
 
   // ===== 星空点 =====
   var stars=(function(){
@@ -192,14 +232,27 @@
   load('./assets/earth.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;earthMat.map=t;earthMat.needsUpdate=true;
     var t2=t.clone();t2.needsUpdate=true;crustMat.map=t2;crustMat.needsUpdate=true;});
   load('./assets/clouds.png',function(t){t.anisotropy=maxA;cloudMat.map=t;cloudMat.alphaMap=t;cloudMat.needsUpdate=true;});
+  load('./assets/moon.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;moonMat.map=t;moonMat.needsUpdate=true;});
 
   // ===== 相机 =====
   function fitR(minD){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(minD,4.2*R/Math.tan(hFov/2));}
   function seasonR(){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(56,(ORBIT+7)/Math.tan(hFov/2));}
+  // 横竖两个方向都要容得下 extent（宽屏下竖向视野更窄，只按横向算会把轨道切掉）
+  function fitBox(extent,minD){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);
+    return Math.max(minD,extent/Math.tan(hFov/2),extent/Math.tan(vFov/2));}
+  // 内部视图取景：剖切面上挤着四层标签，按通用间距地球缩得太小、标签会糊成一团。
+  // 让地球直径约占视口较短边的 60%，横竖两个方向同时收敛（宽屏下竖向才是瓶颈）。
+  function layerR(){
+    var vFov=camera.fov*Math.PI/180,tanV=Math.tan(vFov/2),tanH=tanV*camera.aspect;
+    return Math.max(4.6,R/(0.60*Math.min(tanH,tanV)));
+  }
   var PRESETS={
     overview:function(){return[0.9,1.22,fitR(6)];},
     seasons:function(){return[0.9,0.62,seasonR()];},
-    layers:function(){return[-1.5708,1.22,fitR(6)];},
+    // 俯视地月系统：镜头垂直于地日连线，阳光自屏幕左侧平行射入、轨道面近似正圆，
+    // 正对教科书上那张月相图
+    moon:function(){return[0,0.46,fitBox(5.6,12)];},
+    layers:function(){return[-1.5708,1.22,layerR()];},
     grid:function(){return[0.6,1.15,fitR(6)];}
   };
   var theta=0.9,phi=1.22,radius=fitR(6);
@@ -234,8 +287,11 @@
       desc:'地球是目前已知唯一存在生命的行星。表面约 71% 被海洋覆盖，大气层与适宜的温度让液态水得以留存，也孕育了丰富的生命。',
       meta:['半径 6371 km','年龄 ≈46 亿年','海洋覆盖 71%','日地距离 1.5 亿 km']},
     seasons:{name:'四季成因',color:'#7ec850',
-      desc:'地轴倾斜约 23.5°，且公转过程中地轴指向保持不变，使太阳直射点在南北回归线之间周年移动，于是有了四季更替。注意黄色直射点的位置变化。',
+      desc:'地轴倾斜约 23.5°，且公转过程中地轴指向保持不变，使太阳直射点在南北回归线之间周年移动，于是有了四季更替。',
       meta:['地轴倾角 23.5°','公转周期 365.25 天','夏至 直射北回归线','冬至 直射南回归线']},
+    moon:{name:'地月系统',color:'#cfd8e6',
+      desc:'月球自己不发光，月光是它反射的太阳光。月球绕地球公转时，被太阳照亮的一半相对地球不断改变朝向，我们便看到月面由缺变圆、又由圆变缺——这就是月相。',
+      meta:['朔望月 29.53 天','公转 27.3 天','地月距离 38.4 万 km','月球直径 3476 km']},
     layers:{name:'地球内部',color:'#ff7a3c',
       desc:'把地球切开看一看：薄薄的地壳之下是近 2900 km 厚的地幔，再往下是液态的外核与固态的内核。越往深处，温度和压力越高。',
       meta:['地壳 平均约 17 km','地幔 至 2900 km','外核 液态铁镍','内核 ≈5500°C 固态']},
@@ -256,33 +312,47 @@
     defs.forEach(function(d){var o=new THREE.Object3D();o.position.copy(ll2v(d[1],d[2],R*1.03));gridGroup.add(o);addTag(o,d[0],'grid','self');});
   })();
   (function(){
-    var n=new THREE.Vector3(-1,0,0);
-    addTag(layerAnchor(R*0.19),'内核 · 5150–6371 km','layers',n);
-    addTag(layerAnchor(R*0.55),'外核 · 2900–5150 km','layers',n);
-    addTag(layerAnchor(R*0.97),'地幔 · 17–2900 km','layers',n);
-    addTag(layerAnchor(R*1.17),'地壳 · 0–17 km','layers',n);
+    // 四个锚点都落在面向相机的剖切面上，且各自位于对应层内。
+    // 按「由外到内」的顺序定义，屏幕上下顺序与之保持一致；剖切面是平面，
+    // 可见性用面法线判断（径向方向在平面边缘会误判）。
+    var faceN=new THREE.Vector3(-s40,0,c40);
+    addTag(layerAnchor(R*1.00,95),'地壳 · 0–17 km','layers',faceN);
+    addTag(layerAnchor(R*0.78,55),'地幔 · 17–2900 km','layers',faceN);
+    addTag(layerAnchor(R*0.38,10),'外核 · 2900–5150 km','layers',faceN);
+    addTag(layerAnchor(R*0.19,-35),'内核 · 5150–6371 km','layers',faceN);
   })();
   addTag(seasonAnchor(0,-ORBIT),'春分 · 3月21日前后','seasons');
   addTag(seasonAnchor(ORBIT,0),'夏至 · 6月21日前后','seasons');
   addTag(seasonAnchor(0,ORBIT),'秋分 · 9月23日前后','seasons');
   addTag(seasonAnchor(-ORBIT,0),'冬至 · 12月22日前后','seasons');
   addTag(zhi,'太阳直射点','seasons','self',orbitGroup);
+  (function(){
+    addTag(earthAnchor,'地球','moon');
+  })();
 
   // ===== 模式切换 =====
   var cur='overview';
-  var playing=true,showLabel=true,showStars=true,showClouds=true,speedMul=1;
+  var playing=true,showLabel=true,showStars=true,showClouds=true,showOrbit=true,speedMul=1;
   function setMode(m){
     cur=m;userZoomed=false;
     var p=PRESETS[m]();thetaG=p[0];phiG=p[1];radiusG=p[2];
     mainTilt.visible=(m==='overview'||m==='grid');
     layersGroup.visible=(m==='layers');
     seasonsGroup.visible=(m==='seasons');
+    moonGroup.visible=(m==='moon');
     gridGroup.visible=(m==='grid');
     clouds.visible=showClouds&&(m==='overview');
+    mClouds.visible=showClouds&&(m==='moon');
+    seasonOrbitLine.visible=showOrbit;moonOrbitLine.visible=showOrbit;
     mainTilt.rotation.z=23.5*Math.PI/180;
+    sunLight.visible=(m!=='moon');
     if(m==='seasons'){ambient.intensity=0.35;sunLight.intensity=2.6;sunLight.position.set(0,0,0);}
+    // 地月模式压暗环境光 → 月球未被照亮的一半黑下来，月相形状才立得住
+    else if(m==='moon'){ambient.intensity=0.26;}
     else if(m==='layers'){ambient.intensity=0.75;sunLight.intensity=2.0;sunLight.position.set(-26,14,6);}
     else{ambient.intensity=0.5;sunLight.intensity=2.4;sunLight.position.set(38,12,22);}
+    document.getElementById('phase').classList.toggle('show',m==='moon');
+    if(m==='moon')updatePhase();
     var d=MODES[m],card=document.getElementById('card');
     card.classList.add('show');
     document.getElementById('cName').textContent=d.name;
@@ -295,13 +365,20 @@
   document.querySelectorAll('#dock button').forEach(function(b){
     b.addEventListener('click',function(){setMode(b.getAttribute('data-m'));});
   });
+  // 窄屏放不下时两端渐隐，提示这里可以横向滑动
+  var dockEl=document.getElementById('dock');
+  function dockFade(){dockEl.classList.toggle('scrollable',dockEl.scrollWidth>dockEl.clientWidth+1);}
+  dockEl.addEventListener('scroll',dockFade);
+  addEventListener('resize',dockFade);
+  dockFade();setTimeout(dockFade,400);
 
   // ===== 设置 =====
   function bind(id,fn){var el=document.getElementById(id);el.addEventListener('click',function(){el.classList.toggle('on');fn(el.classList.contains('on'));});}
   bind('swPlay',function(v){playing=v;});
   bind('swLabel',function(v){showLabel=v;});
   bind('swStars',function(v){showStars=v;stars.visible=v;sky.visible=v;});
-  bind('swClouds',function(v){showClouds=v;clouds.visible=v&&(cur==='overview');});
+  bind('swClouds',function(v){showClouds=v;clouds.visible=v&&(cur==='overview');mClouds.visible=v&&(cur==='moon');});
+  bind('swOrbit',function(v){showOrbit=v;seasonOrbitLine.visible=v;moonOrbitLine.visible=v;});
   var spEl=document.getElementById('speed'),vSp=document.getElementById('vSpeed');
   spEl.addEventListener('input',function(){speedMul=spEl.value/100;vSp.textContent=speedMul.toFixed(1)+'×';});
   document.getElementById('bReset').addEventListener('click',function(){var p=PRESETS[cur]();thetaG=p[0];phiG=p[1];radiusG=p[2];userZoomed=false;});
@@ -316,7 +393,20 @@
 
   // ===== 标签投影 =====
   var _v=new THREE.Vector3(),_c=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
-  function updateTags(){
+  // 引线层：标签被推开后，从锚点连一条细线指向标签
+  var SVGNS='http://www.w3.org/2000/svg';
+  var leaders=document.createElementNS(SVGNS,'svg');
+  leaders.setAttribute('class','leaders');
+  document.body.appendChild(leaders);
+  var _lines=[];
+  function leaderLine(i){
+    var l=_lines[i];
+    if(!l){l=document.createElementNS(SVGNS,'line');l.setAttribute('stroke','rgba(150,185,235,.55)');l.setAttribute('stroke-width','1');l.setAttribute('stroke-dasharray','3 3');leaders.appendChild(l);_lines[i]=l;}
+    return l;
+  }
+  var _items=[];
+  function collectTags(){
+    _items.length=0;
     for(var i=0;i<tags.length;i++){
       var tg=tags[i],el=tg.el;
       if(tg.mode!==cur||!showLabel){el.style.opacity='0';continue;}
@@ -332,9 +422,111 @@
         else{_d.copy(camera.position).normalize();}
         if(_n.dot(_d)<0.12){el.style.opacity='0';continue;}
       }
-      var x=(_v.x*0.5+0.5)*W,y=(-_v.y*0.5+0.5)*H;
-      el.style.left=x+'px';el.style.top=y+'px';el.style.opacity='1';
+      if(!tg.w){var ww=el.offsetWidth,hh=el.offsetHeight;if(ww>0){tg.w=ww;tg.h=hh;}}
+      _items.push({el:el,ax:(_v.x*0.5+0.5)*W,ay:(-_v.y*0.5+0.5)*H,w:tg.w||90,h:tg.h||18});
     }
+  }
+  function layoutTags(){
+    var n=_items.length,i,j,it;
+    var PAD=6,M=8; // 标签最小间距 / 视口边距
+    // 初始位置即锚点投影；标签盒中心比锚点高 0.9 个字高（对应 .tag 的 translate(-50%,-140%)）
+    for(i=0;i<n;i++){it=_items[i];it.cx=it.ax;it.cy=it.ay-it.h*0.9;}
+    var cardEl=document.getElementById('card');
+    var cr=cardEl.classList.contains('show')?cardEl.getBoundingClientRect():null;
+    var ccx=0,ccy=0,cw=0,ch=0;
+    if(cr){ccx=(cr.left+cr.right)*0.5;ccy=(cr.top+cr.bottom)*0.5;cw=cr.right-cr.left;ch=cr.bottom-cr.top;}
+    // 只对「确实撞上」的标签做最小位移修正，不做整组平移：
+    // 整组平移会让一个越界标签把同一模式下所有标签一起拖走（四季模式就是这么变形的）
+    for(var pass=0;pass<4;pass++){
+      // 标签互相重叠 → 沿重叠更小的方向对半推开
+      for(i=0;i<n;i++)for(j=i+1;j<n;j++){
+        var a=_items[i],b=_items[j];
+        var ox=(a.w+b.w)*0.5+PAD-Math.abs(b.cx-a.cx);
+        var oy=(a.h+b.h)*0.5+PAD-Math.abs(b.cy-a.cy);
+        if(ox>0&&oy>0){
+          if(ox<oy){var sx=(b.cx<a.cx?-1:1)*ox*0.5;a.cx-=sx;b.cx+=sx;}
+          else{var sy=(b.cy<a.cy?-1:1)*oy*0.5;a.cy-=sy;b.cy+=sy;}
+        }
+      }
+      // 被底部知识卡片遮住 → 往更近的一侧让开
+      for(i=0;i<n;i++){
+        it=_items[i];
+        if(cr){
+          var ox2=(it.w+cw)*0.5+10-Math.abs(ccx-it.cx);
+          var oy2=(it.h+ch)*0.5+10-Math.abs(ccy-it.cy);
+          if(ox2>0&&oy2>0){
+            if(ox2<oy2)it.cx+=(it.cx<ccx?-1:1)*(ox2+2);
+            else it.cy-=(oy2+2);
+          }
+        }
+        // 视口边界（只收该标签自己）
+        it.cx=Math.max(M+it.w*0.5,Math.min(W-M-it.w*0.5,it.cx));
+        it.cy=Math.max(M+it.h*0.5,Math.min(H-M-it.h*0.5,it.cy));
+      }
+    }
+    // 落位 + 引线（只在标签被挪开时画）
+    var used=0;
+    for(i=0;i<n;i++){
+      it=_items[i];
+      it.tx=it.cx;it.ty=it.cy+it.h*0.9;
+      it.el.style.left=it.tx.toFixed(1)+'px';it.el.style.top=it.ty.toFixed(1)+'px';it.el.style.opacity='1';
+      if(Math.abs(it.tx-it.ax)<3&&Math.abs(it.ty-it.ay)<3)continue;
+      var rx0=it.cx-it.w*0.5,rx1=it.cx+it.w*0.5,ry0=it.cy-it.h*0.5,ry1=it.cy+it.h*0.5;
+      var px=Math.max(rx0,Math.min(it.ax,rx1)),py=Math.max(ry0,Math.min(it.ay,ry1));
+      if(px===it.ax&&py===it.ay){
+        var dl=it.ax-rx0,dr=rx1-it.ax,dt=it.ay-ry0,db=ry1-it.ay,m=Math.min(dl,dr,dt,db);
+        if(m===dl)px=rx0;else if(m===dr)px=rx1;else if(m===dt)py=ry0;else py=ry1;
+      }
+      var l=leaderLine(used++);
+      l.setAttribute('x1',it.ax.toFixed(1));l.setAttribute('y1',it.ay.toFixed(1));
+      l.setAttribute('x2',px.toFixed(1));l.setAttribute('y2',py.toFixed(1));
+      l.style.display='';
+    }
+    for(i=used;i<_lines.length;i++)_lines[i].style.display='none';
+  }
+  function updateTags(){collectTags();layoutTags();}
+
+  // ===== 月相指示器（站在地球上看到的月亮）=====
+  // 亮面比例 k=(1+cos a)/2；晨昏线在视圆面上的投影是半轴为 r·|cos a| 的椭圆，
+  // 半轴符号决定它是"缺"（凸向亮侧）还是"凸"（凹向亮侧）。
+  var TAU=Math.PI*2;
+  var pcv=document.getElementById('phaseCv'),pctx=pcv?pcv.getContext('2d'):null;
+  var pNameEl=document.getElementById('phaseName'),pAgeEl=document.getElementById('phaseAge');
+  var lastPName='';
+  // 相位判定与 moon-3d 保持一致：四个关键相位收窄，过渡段给凸/眉月
+  function phaseName(deg){
+    var d=(deg%360+360)%360;
+    if(d<8||d>352)return '新月';
+    if(d<82)return '蛾眉月';
+    if(d<98)return '上弦月';
+    if(d<172)return '盈凸月';
+    if(d<188)return '满月';
+    if(d<262)return '亏凸月';
+    if(d<278)return '下弦月';
+    return '残月';
+  }
+  function updatePhase(){
+    var a=((mAng%TAU)+TAU)%TAU;
+    var k=(1+Math.cos(a))/2,waxing=a>Math.PI,t=-Math.cos(a);
+    var age=((a-Math.PI)%TAU+TAU)%TAU/TAU*SYNODIC;
+    var name=phaseName(age/SYNODIC*360);
+    if(name!==lastPName){pNameEl.textContent=name;lastPName=name;}
+    pAgeEl.textContent='月龄 '+age.toFixed(1)+' 天';
+    if(!pctx)return;
+    var S=pcv.width,cx=S/2,r=S*0.37;
+    pctx.clearRect(0,0,S,S);
+    pctx.beginPath();pctx.arc(cx,cx,r,0,TAU);
+    pctx.fillStyle='rgba(206,222,246,.07)';pctx.fill();
+    pctx.lineWidth=1.2;pctx.strokeStyle='rgba(150,180,220,.32)';pctx.stroke();
+    if(k<0.005)return; // 新月：整面都是暗的
+    pctx.save();pctx.translate(cx,cx);if(!waxing)pctx.scale(-1,1); // 北半球：盈月亮面在右
+    pctx.beginPath();
+    pctx.arc(0,0,r,-Math.PI/2,Math.PI/2,false);
+    pctx.ellipse(0,0,r*Math.abs(t),r,0,Math.PI/2,-Math.PI/2,t>0);
+    pctx.closePath();
+    pctx.fillStyle='#eef1f7';pctx.shadowColor='rgba(190,214,255,.8)';pctx.shadowBlur=S*0.08;
+    pctx.fill();
+    pctx.restore();
   }
 
   // ===== 动画 =====
@@ -343,26 +535,35 @@
   var eSpin=2.68; // 初始让北京朝向默认相机
   var now=new Date(),doy=Math.floor((now-new Date(now.getFullYear(),0,0))/864e5);
   var seasonAng=((doy-172)/365.25)*Math.PI*2; // 按今天日期定位公转位置
-  var EARTH_SPIN=0.7,SEASON_REV=0.07;
+  var EARTH_SPIN=0.7,SEASON_REV=0.07,MOON_REV=0.26,MOON_SPIN=0.35;
+  var mAng=Math.PI*1.25,mSpinAng=0; // 初始停在新月之后的娥眉月位置
   function animate(){
     if(!running)return;
     requestAnimationFrame(animate);
     var dt=clock.getDelta(),t=performance.now()*0.001;
     if(playing){
       var s=dt*speedMul;
-      eSpin+=s*EARTH_SPIN;seasonAng+=s*SEASON_REV;
+      eSpin+=s*EARTH_SPIN;seasonAng+=s*SEASON_REV;mAng+=s*MOON_REV;mSpinAng+=s*MOON_SPIN;
       mainSpin.rotation.y=eSpin;clouds.rotation.y=eSpin*1.12;
       seasonSpin.rotation.y=eSpin*2.2;
       orbitGroup.position.set(Math.cos(seasonAng)*ORBIT,0,Math.sin(seasonAng)*ORBIT);
       sun.rotation.y+=s*0.05;
       stars.rotation.y+=s*0.003;sky.rotation.y+=s*0.001;
     }
+    // 地月系统：月球公转 + 潮汐锁定（始终以同一面朝向地球）+ 地球自转。
+    // 潮汐锁定 = 自转角速度与公转相同；但 SphereGeometry 把贴图 u=0 贴在局部 -X、
+    // u=0.5 贴在局部 +X，而 moon.jpg 是"正面（近地面）居中"的全月图，
+    // 所以要让 +X 朝向地球，得在公转相位上再加 π —— 否则锁给地球的是背面。
+    moonOrbit.position.copy(moonPosOn(mAng,MOON_ORBIT));
+    moon.rotation.y=mAng+Math.PI;
+    mSpin.rotation.y=mSpinAng;mClouds.rotation.y=mSpinAng*1.12;
     zhi.position.set(-Math.cos(seasonAng)*R*1.03,0,-Math.sin(seasonAng)*R*1.03);
     zhiDot.scale.setScalar(1+0.25*Math.sin(t*3.2));
     theta+=(thetaG-theta)*0.12;phi+=(phiG-phi)*0.12;radius+=(radiusG-radius)*0.1;
     camPos();
     renderer.render(scene,camera);
     updateTags();
+    if(cur==='moon'&&(perfCount&1)===0)updatePhase();
     perfAccum+=dt;perfCount++;
     if(perfCount>=30){var avg=perfAccum/perfCount;perfAccum=0;perfCount=0;if(avg>0.04&&dprStep>1){dprStep=Math.max(1,dprStep-0.25);renderer.setPixelRatio(dprStep);renderer.setSize(W,H,false);}}
   }

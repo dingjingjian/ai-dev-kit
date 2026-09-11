@@ -120,23 +120,25 @@
 
   function bindStatic() {
     // 常驻「拉满」按钮：危机博弈期间玩家随时可以主动引爆，不必等抽到带 MAX 选项的卡
+    // 拉满危机值是一次不可逆的重大决策，用 pick（决策确认档）而不是 tap
     if (el.cMax) el.cMax.addEventListener('click', function () {
+      sfx('pick');
       if (cmd.onCrisisMax) cmd.onCrisisMax();
     });
 
-    if (el.drawerBtn) el.drawerBtn.addEventListener('click', function () { openDrawer(); });
-    if (el.drawerClose) el.drawerClose.addEventListener('click', function () { closeDrawer(); });
+    if (el.drawerBtn) el.drawerBtn.addEventListener('click', function () { sfx('tap'); openDrawer(); });
+    if (el.drawerClose) el.drawerClose.addEventListener('click', function () { sfx('tap'); closeDrawer(); });
     // 点「未选定目标」那一行 = 直接去抽屉里挑城市（小屏上比回地球找光点快得多）
     if (el.tgtPick) el.tgtPick.addEventListener('click', function () {
-      if (!pending) openDrawer();
+      if (!pending) { sfx('tap'); openDrawer(); }
     });
 
     if (el.fireBtn) el.fireBtn.addEventListener('click', function () { fire(); });
-    if (el.salvoBtn) el.salvoBtn.addEventListener('click', function () { toggleSalvo(); });
+    if (el.salvoBtn) el.salvoBtn.addEventListener('click', function () { sfx('tap'); toggleSalvo(); });
 
     /* 倍速：危机博弈每回合 20 秒、战争 3 分钟，看熟了会想快进。
      * 只加速时间推进（game.js 的 acc 累积），逻辑仍是 10 Hz 固定步长 —— 战局结果与倍速无关。 */
-    if (el.speedBtn) el.speedBtn.addEventListener('click', function () { toggleSpeed(); });
+    if (el.speedBtn) el.speedBtn.addEventListener('click', function () { sfx('tap'); toggleSpeed(); });
 
     /* 音效默认开启（audio.js）：init 时把按钮初始态与 DC.audio.enabled 对齐，
      * 开态画声波线、关态画静音斜杠，不靠 HTML 里的写死初始值。 */
@@ -151,7 +153,9 @@
       var on = DC.audio ? DC.audio.toggle() : false;
       el.sndBtn.classList.toggle('on', on);
       el.sndBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-      if (on) DC.audio.play('defcon', 5);      // 开声即给一声提示，否则玩家不知道有没有生效
+      // 开声即给一声提示，否则玩家不知道有没有生效。用 pick 而不是 defcon 告警：
+      // 那是一声警告音，拿来做「声音已开」的确认会把人吓一跳
+      if (on) DC.audio.play('pick');
     });
   }
 
@@ -184,7 +188,13 @@
       var ms = document.createElement('span');
       ms.className = 'ms'; ms.textContent = DC.factionMissiles(f.code) + ' 枚';
       b.appendChild(sw); b.appendChild(nm); b.appendChild(rg); b.appendChild(pk); b.appendChild(ms);
-      b.addEventListener('click', function () { if (onPick) onPick(f.code); });
+      b.addEventListener('click', function () {
+        /* 先出声再开局：这一下点击是整局第一次用户手势，AudioContext 必须在手势里创建
+         * 才会直接进 running（audio.js 的 play 也 tolerant suspended）。
+         * 顺序不能反 —— 等 onPick 跑完再响，就有可能已经出界了。 */
+        sfx('pick');
+        if (onPick) onPick(f.code);
+      });
       list.appendChild(b);
     });
     box.classList.add('show');
@@ -356,6 +366,21 @@
    * 两次白闪之间至少隔 FLASH_GAP —— 被跳过的命中依然有音效、震屏和球面焦痕，演出不缺席，只是不闪眼。 */
   var FLASH_GAP = 1100;              // ms，与 CSS 动画时长一致：上一次退光结束前不重播
   var lastFlashAt = -1e9;
+
+  /* 己方城市被毁：nuke 表达的是「某处爆炸了」，这一声表达的是「死的是我的城」。
+   * 只在己方存活城市数下降时响；初值 -1 用来跳过首帧，否则一进战争期就误报一次。
+   * 简报期重置，避免重开一局时沿用上一局的计数。 */
+  var lastMyAlive = -1;
+  function pumpCityLoss(state) {
+    var n = 0;
+    for (var i = 0; i < state.cities.length; i++) {
+      var c = state.cities[i];
+      if (c.alive && c.faction === state.playerFaction) n++;
+    }
+    if (state.phase === 'briefing') { lastMyAlive = n; return; }
+    if (lastMyAlive >= 0 && n < lastMyAlive) sfx('cityLost');
+    lastMyAlive = n;
+  }
   function pumpImpacts(state) {
     if (state.impacts === sig.impacts) return;
     sig.impacts = state.impacts;
@@ -427,6 +452,8 @@
           else { selectTarget(c.id); closeDrawer(); }
           return;
         }
+        // 非战争期点城市 = 相机飞过去，此前完全无声，点了不知道有没有生效
+        sfx('tap');
         if (DC.render && DC.render.flyTo) DC.render.flyTo(c.lat, c.lon);
         closeDrawer();
       });
@@ -485,6 +512,7 @@
     if (!c) return false;
     pending = cityId;
     renderTarget(cur);
+    sfx('select');   // 第一段此前无声，手机上容易以为没点上而反复戳
     // 选目标的同时把地球转过去，并在球面上打一圈锁定环（§12）：
     // flyTo 只解决「看不看得见」，锁定环解决「62 个环里哪一个是它」。
     if (DC.render && DC.render.flyTo) DC.render.flyTo(c.lat, c.lon);
@@ -613,11 +641,15 @@
     // 已选项高亮（回合内可改主意；超时未选由 sim 兜底为最保守项）
     var pick = state.choices[state.playerFaction];
     if (pick !== sig.choice) {
+      var had = sig.choice;
       sig.choice = (pick == null) ? -1 : pick;
       var bs = el.cOpts.children;
       for (var i = 0; i < bs.length; i++) {
         if (i === pick) bs[i].classList.add('sel'); else bs[i].classList.remove('sel');
       }
+      /* 发声放在这里而不是选项按钮的回调里：键盘 1..n 走的是 game.js 的 chooseOption，
+       * 根本不经过按钮回调。had === -2 表示这是新卡刚建好的首次对齐，不是玩家操作。 */
+      if (had !== -2 && pick != null) sfx('pick');
     }
     // 倒计时条：回合内剩余时间
     var left = Math.max(0, 1 - state.t / CONFIG.roundSeconds);
@@ -660,6 +692,10 @@
     if (sig.over) return;
     sig.over = true;
     var rk = S.ranking(state);
+    /* 终局此前是完全静默的 —— 排名面板弹出那一秒一点声音都没有，情绪在最该落地处断了。
+     * 名次决定两件事：end 音效的和弦色彩、终局 BGM 用哪一版（夺冠 / 落败）。
+     * 两处都走 sim.myRank（读 enterPhase 缓存的名次），避免各算一套。 */
+    sfx('end', S.myRank(state));
     el.ovBody.textContent = '';
     /* 全球战损总数：整局最该被看见的数字（§11.8b）。
      * 单位是百万，写成「X.XX 亿」比「XXX.XM」更像一条新闻标题 —— 反战表达要的是体感。 */
@@ -756,6 +792,7 @@
     updateWarBar(state);
     pumpImpacts(state);
     pumpAudio(state);
+    pumpCityLoss(state);
     if (state.phase === 'over') showOver(state);
 
     // 情境面板在简报期是空的（既没有卡也没有战争条），不该占掉屏幕底部一条

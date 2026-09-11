@@ -1012,6 +1012,20 @@
     });
   }
 
+  /* 玩家名次（1 = 存续规模最大，0 = 还没结算）。
+   * 终局那一下 end 音效与终局 BGM 都要用，两边都从这里派生 ——
+   * 各算一套的话，一旦排序口径改了就可能出现「音效说夺冠、BGM 放落败」。
+   * 只认 enterPhase 缓存下来的 state.ranking，不在这里重算：
+   * 这个方法会被主循环每帧调用，重排一次全城遍历太贵。 */
+  function myRank(state) {
+    var rk = state && state.ranking;
+    if (!rk) return 0;
+    for (var i = 0; i < rk.length; i++) {
+      if (rk[i].code === state.playerFaction) return i + 1;
+    }
+    return 0;
+  }
+
   /* ───────────────────────── 9. 指令 ───────────────────────── */
 
   function choose(state, faction, optionIndex) {
@@ -1062,6 +1076,7 @@
     nearestSilo: nearestSilo,
     playerFire: playerFire,
     ranking: ranking,
+    myRank: myRank,
     globalCasualties: globalCasualties,
     defconOf: defconOf,
     findCity: findCity,
