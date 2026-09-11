@@ -57,10 +57,21 @@
   //    逃逸塔 → 梦舟返回舱 / 服务舱（外露，带太阳翼）
   //    → 整流罩（内装 揽月着陆器：上升段 + 下降段 + 四腿）
   //    → 二级（氢氧上面级） → 芯一级 + 两枚 5 m 助推芯
-  //  真实登月为「双箭发射 + 环月对接」，此处按用户选择简化为单箭连续叙事。
+  //  真实登月为「双箭发射 + 环月对接」：第一枚长征十号发射揽月着陆器并驻留环月轨道，
+  //  数日后第二枚发射梦舟载人飞船，二者环月交会对接后，航天员转入着陆器落月。
+  //  本应用按该真实双箭架构呈现（详见 mission.js 的两段式任务时序）。
   // ============================================================
   var LANDER_CENTER_Y = 9.28;    // 着陆器组合体质心（箭体系），分离后作为活动体原点
   var SHIP_CENTER_Y = 10.78;     // 梦舟飞船组合体质心（箭体系）
+
+  // ---- 真实「双箭发射」构型偏移与单体质心 ----
+  //  第一次发射（着陆器）：二级 → 整流罩（内含揽月着陆器），无飞船 / 逃逸塔。
+  //  第二次发射（载人飞船）：二级 → 梦舟飞船（含逃逸塔、太阳翼），无整流罩 / 着陆器。
+  //  因此第二次发射时，飞船 / 逃逸塔 / 太阳翼需整体下移 SHIP_OFFSET，
+  //  使飞船直接坐在二级顶端（原构型中它们位于整流罩 + 着陆器之上）。
+  var SHIP_OFFSET = 2.02;        // 第二次发射时 ship/tower/panel 部件的下移量
+  var LANDER_SOLO_CENTER = 9.5;  // 仅着陆器部件（箭体系）的再归零中心（第一次发射船箭分离后）
+  var SHIP_SOLO_CENTER = 9.0;    // 下移后仅飞船部件的再归零中心 = (8.40 + 9.59) / 2（第二次发射船箭分离后）
 
   function buildCZ10(renderer) {
     var parts = [];
@@ -77,6 +88,7 @@
         explodeOff: def.explodeOff || [0, 0, 0],
         detached: false, detachT: 0, detachBaseY: 0, detachX: 0, detachPitch: 0, detachScale: 1,
         detachV: [0, 0, 0], detachSpin: [0, 0, 0], detachOff: [0, 0, 0], detachRot: [0, 0, 0],
+        parked: false,
         tmp: mat4.create()
       };
       parts.push(p);
@@ -234,7 +246,8 @@
     return {
       parts: parts, height: ROCKET_HEIGHT, center: ROCKET_CENTER,
       coreR: CORE_R, boosterDist: BOOSTER_DIST, boosterR: BOOSTER_R,
-      landerCenterY: LANDER_CENTER_Y, shipCenterY: SHIP_CENTER_Y
+      landerCenterY: LANDER_CENTER_Y, shipCenterY: SHIP_CENTER_Y,
+      shipOffset: SHIP_OFFSET, landerSoloCenter: LANDER_SOLO_CENTER, shipSoloCenter: SHIP_SOLO_CENTER
     };
   }
 
@@ -423,6 +436,8 @@
     var tilt = env.tilt || 0, launchX = env.launchX || 0;
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
+      // 已「驻留」的部件（第一次发射后就位环月轨道的着陆器）由 mission 每帧直接写矩阵，此处跳过
+      if (p.parked) continue;
       var detached = p.detached;
       // 分离体冻结在分离时刻的显示倍数，避免主体后续放大/缩小时分离体跟着形变
       var s = detached ? (p.detachScale || 1) : (env.scale || 1);
@@ -461,7 +476,7 @@
   function updateDetached(parts, dt, mu, cx, cy, cz, aVehX, aVehY, aVehZ) {
     for (var i = 0; i < parts.length; i++) {
       var p = parts[i];
-      if (!p.detached) continue;
+      if (!p.detached || p.parked) continue;
       var m = p.mesh.modelMatrix;
       var dx = cx - m[12], dy = cy - m[13], dz = cz - m[14];
       var d2 = dx * dx + dy * dy + dz * dz;
@@ -492,5 +507,8 @@
   M3D.setArmSwing = setArmSwing;
   M3D.updatePartTransforms = updatePartTransforms;
   M3D.updateDetached = updateDetached;
+  M3D.SHIP_OFFSET = SHIP_OFFSET;
+  M3D.LANDER_SOLO_CENTER = LANDER_SOLO_CENTER;
+  M3D.SHIP_SOLO_CENTER = SHIP_SOLO_CENTER;
   M3D.COLORS = COLORS;
 })(typeof window !== 'undefined' ? window : this);

@@ -22,6 +22,7 @@
   var countdownEl = document.getElementById('countdown');
   var telemetryEl = document.getElementById('telemetry');
   var missionTagEl = document.getElementById('mission-tag');
+  var segFadeEl = document.getElementById('seg-fade');
 
   var renderer = M3D.createRenderer(canvas);
   if (!renderer) {
@@ -63,7 +64,8 @@
       else if (key === 'stage2Ignition' || key === 'tli') audio.clank(0.5);
       else if (key === 'fairingSep') audio.clank(0.9);
       else if (key === 'stage2Sep' || key === 'landerSep') audio.clank(0.7);
-      else if (key === 'parkOrbit' || key === 'loi' || key === 'lunarOrbit') audio.chime();
+      else if (key === 'docking') audio.clank(0.6);
+      else if (key === 'parkOrbit' || key === 'loi' || key === 'lunarOrbit' || key === 'rendezvous' || key === 'landerPark') audio.chime();
     },
     onTouchdown: function () { if (audio) audio.thud(); }
   });
@@ -303,7 +305,8 @@
     if (!telemetryEl) return;
     if (mode !== 'launch' || !S.ignited) { telemetryEl.style.display = 'none'; return; }
     telemetryEl.style.display = 'block';
-    var t = 'T+' + fmtMet(S.met);
+    var launchTag = S.segment === 2 ? '第二次发射' : '第一次发射';
+    var t = launchTag + ' T+' + fmtMet(S.met);
     var ph = S.phase;
     if (S.regime === 'ascent' && !S.inserted) {
       var altKm = Math.max(0, S.alt * mission.KM_PER_UNIT);
@@ -313,7 +316,7 @@
       t += ' · 轨道高度 ' + (S.alt * mission.KM_PER_UNIT).toFixed(0) + ' km · 速度 ' + Math.round(S.speed) + ' m/s';
     } else if (ph === 'transit') {
       t += ' · 距地 ' + (S.distEarth / 10000).toFixed(2) + ' 万km · 距月 ' + (S.distMoon / 10000).toFixed(2) + ' 万km';
-    } else if (ph === 'loi' || ph === 'lunarOrbit') {
+    } else if (ph === 'loi' || ph === 'lunarOrbit' || ph === 'transition' || ph === 'rendezvous' || ph === 'docked') {
       t += ' · 环月高度 ' + S.moonAlt.toFixed(0) + ' km · 速度 ' + Math.round(S.speed) + ' m/s';
     } else if (ph === 'descent' || ph === 'approach' || ph === 'landing') {
       var a = S.moonAlt;
@@ -330,12 +333,20 @@
     var show = mode === 'launch' && S.ignited;
     missionTagEl.style.display = show ? 'block' : 'none';
     if (!show) return;
-    var seg = '上升段';
-    if (S.phase === 'parkOrbit' || S.phase === 'tli') seg = '停泊轨道 · 地月转移';
-    else if (S.phase === 'transit') seg = '地月转移轨道';
-    else if (S.phase === 'loi' || S.phase === 'lunarOrbit') seg = '环月阶段';
-    else if (S.phase === 'landerSep' || S.phase === 'descent' || S.phase === 'approach' || S.phase === 'landing' || S.phase === 'landed') seg = '着陆下降';
+    var ph = S.phase, seg;
+    if (ph === 'rendezvous' || ph === 'docking' || ph === 'docked') seg = '交会对接';
+    else if (ph === 'landerSep' || ph === 'descent' || ph === 'approach' || ph === 'landing' || ph === 'landed') seg = '着陆下降';
+    else if (S.segment === 2) seg = '第二次发射 · 梦舟飞船';
+    else seg = '第一次发射 · 揽月着陆器';
     missionTagEl.textContent = seg;
+  }
+
+  // 段间过渡黑场：不透明度由 mission.state.segFade 驱动（第一次发射 → 第二次发射）
+  function updateSegFade() {
+    if (!segFadeEl) return;
+    var f = (mode === 'launch' && S.ignited) ? (S.segFade || 0) : 0;
+    if (f > 0.001) { segFadeEl.style.display = 'block'; segFadeEl.style.opacity = String(f); }
+    else { segFadeEl.style.opacity = '0'; segFadeEl.style.display = 'none'; }
   }
 
   function updateAudio() {
@@ -451,6 +462,7 @@
     updateLabels();
     updateTelemetry();
     updateMissionTag();
+    updateSegFade();
     renderer.render(dt);
     hideLoader();
 
@@ -471,13 +483,17 @@
 
   function resetMission() {
     mission.reset();
+    // 登月模式：把箭体配置为「第一次发射（揽月着陆器）」构型（隐藏飞船 / 逃逸塔 / 太阳翼）
+    if (mode === 'launch' && mission.prepareLaunch) mission.prepareLaunch();
     if (audio) audio.silence();
     if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
     spinGate = 0; surfCamBlend = 0; spaceLightK = 0;
     countdown = 0; lastCount = -1; igniteFlash = 0; cam.shake = 0;
     cam.targetX = 0; cam.targetY = rocketModel.center; cam.targetZ = 0;
     if (mode === 'launch') { cam.targetY = 4.0; cam.distance = 22; cam.pitch = 0.05; cam.yaw = 0.42; }
-    if (phaseText) phaseText.textContent = '准备就绪 · 点击点火，开启登月之旅';
+    if (phaseText) phaseText.textContent = (mode === 'launch')
+      ? '准备就绪 · 双箭发射：先送揽月着陆器，再送梦舟飞船'
+      : '准备就绪 · 点击点火，开启登月之旅';
     phaseQueue.length = 0; phaseTimer = 0;
     if (progressFill) progressFill.style.width = '0%';
     if (btnIgnite) { btnIgnite.disabled = false; btnIgnite.textContent = '点火发射'; btnIgnite.style.display = (mode === 'launch') ? 'flex' : 'none'; }
@@ -485,6 +501,7 @@
     if (countdownEl) { countdownEl.style.display = 'none'; countdownEl.style.opacity = '1'; countdownEl.classList.remove('cd-ignite'); }
     if (telemetryEl) telemetryEl.style.display = 'none';
     if (missionTagEl) missionTagEl.style.display = 'none';
+    if (segFadeEl) { segFadeEl.style.opacity = '0'; segFadeEl.style.display = 'none'; }
   }
 
   function setMode(m) {

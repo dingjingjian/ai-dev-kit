@@ -60,10 +60,19 @@
   var LAND_RM = MR + 1.7;                 // 触地时着陆器原点半径（留出让着陆腿恰好触面的余量）
 
   // ---- 真实任务时间锚点（秒）----
-  var MET_INSERT = 540, MET_TLI = 5400, MET_LOI = 360000, MET_LORB = 361200,
-      MET_LSEP = 366000, MET_LAND = 368000;
-  var DUR = { park: 6, tli: 7, transit: 42, loi: 12, lorb: 9, descent: 30 };
+  //  两段式：第一次发射（揽月着陆器）MET 0 → 5 天，着陆器就位环月轨道；
+  //  第二次发射（梦舟飞船）MET 5 天 → 10 天，环月交会对接；随后船器分离、动力下降、软着陆。
+  var SEG2_BASE = 432000;              // 第二次发射的绝对时间基准（第一次发射后约 5 天）
+  var MET_INSERT = 540, MET_TLI = 5400;         // 上升段锚点（相对本段发射时刻，两段共用）
+  var MET_LOI = 360000, MET_LORB = 361200;      // 近月制动 / 入环月（相对本段发射时刻）
+  var MET1_PARK = 432000;                        // 第一次发射：着陆器就位（相对，= 5 天）
+  var MET2_RENDEZ = 428000, MET2_DOCK = 432000;  // 第二次发射：交会 / 对接（相对，= 9.9 / 10 天）
+  var MET_LSEP = 866000, MET_LAND = 870000;      // 对接后：船器分离 / 月面软着陆（绝对时间）
+  var DUR = { park: 6, tli: 7, transit: 42, loi: 12, lorb: 9, transition: 3, rendezvous: 11, dock: 7, descent: 30 };
   var LORB_RATE = 0.028;
+  var PARK_RATE = 0.028;              // 驻留着陆器在第二次发射期间的环月角速度
+  var DOCK_GAP = 1.55;                // 对接后着陆器质心位于飞船质心下方的间距（组合体系）
+  var DOCK_PSI_TOL = 0.012;           // 交会对接触发阈值（飞船与着陆器环月角差，弧度）
   var ORB_VIS = 8;                  // 停泊轨道可视自转倍率：真实轨道角速度太慢，放大后一圈可见
 
   var PHASES = {
@@ -75,13 +84,19 @@
     boosterSep: '助推芯分离 · 两枚 5 米助推芯脱落',
     stage1Sep: '芯一级分离 · 中心芯级脱落',
     stage2Ignition: '二级点火 · 氢氧上面级继续加速',
-    fairingSep: '整流罩分离 · 露出梦舟飞船与揽月着陆器',
+    fairingSep: '整流罩分离 · 露出揽月着陆器',
     parkOrbit: '入轨 · 进入近地停泊轨道',
+    parkOrbitLander: '入轨 · 揽月着陆器进入近地停泊轨道',
+    parkOrbitShip: '入轨 · 梦舟飞船进入近地停泊轨道',
     tli: '地月转移点火 · 上面级二次点火奔月',
     stage2Sep: '船箭分离 · 上面级关机分离',
     transit: '地月转移轨道 · 飞向月球',
     loi: '近月制动 · 减速被月球引力捕获',
     lunarOrbit: '环月飞行 · 环绕月球运行',
+    landerPark: '着陆器就位 · 揽月着陆器驻留环月轨道，静候飞船',
+    transition: '数日后 · 第二次发射 · 梦舟载人飞船',
+    rendezvous: '交会 · 梦舟飞船靠近环月轨道上的着陆器',
+    docking: '对接 · 环月轨道交会对接，航天员转入着陆器',
     landerSep: '船器分离 · 揽月着陆器与梦舟飞船分离',
     descent: '动力下降 · 下降发动机反推制动',
     approach: '着陆末段 · 展开着陆腿，悬停避障',
@@ -96,9 +111,14 @@
   function createMissionSystem(renderer, rocketModel, pad, hooks) {
     hooks = hooks || {};
     var parts = rocketModel.parts;
-    var C1 = 8.95;                 // 入轨时活动栈（二级+着陆器+飞船）质心（箭体系）
-    var C2 = rocketModel.shipCenterY * 0.5 + rocketModel.landerCenterY * 0.5;  // 船箭分离后（飞船+着陆器）质心
-    var C3 = rocketModel.landerCenterY;   // 着陆器质心
+    var SHIP_OFFSET = M3D.SHIP_OFFSET;
+    var LANDER_SOLO_CENTER = M3D.LANDER_SOLO_CENTER;   // 第一次发射船箭分离后，着陆器单体再归零中心
+    var SHIP_SOLO_CENTER = M3D.SHIP_SOLO_CENTER;       // 第二次发射船箭分离后，飞船单体再归零中心
+    // 入轨时活动栈质心（箭体系）：
+    var C1_L = 8.75;               // 第一次发射：二级 + 着陆器
+    var C1_S = 8.15;               // 第二次发射：二级 + 下移后的飞船 + 太阳翼
+    var C2_L = LANDER_SOLO_CENTER; // 第一次发射船箭分离后：着陆器单体
+    var C2_S = SHIP_SOLO_CENTER;   // 第二次发射船箭分离后：飞船单体
 
     var baseY0 = parts.map(function (p) { return p.baseY; });
     var legRot0 = parts.map(function (p) { return p.localRotX; });
@@ -110,31 +130,53 @@
       x: 0, y: 0, alt: 0, altVis: 0, speed: 0, vCirc: V_ORB,
       mass: 1.02, accel: 0, gForce: 1, met: 0,
       fuel1: S1F0, fuel2: S2F0, fuelBoost: BF0,
-      boostersAttached: true, stage1Attached: true, towerAttached: true, fairingAttached: true, stage2Attached: true,
+      boostersAttached: true, stage1Attached: true, towerAttached: false, fairingAttached: true, stage2Attached: true,
       ignited: false, inserted: false, landed: false, warp: 1, scale: 1, hold: false,
       shipAttached: true, focus: rocketModel.center, progress: 0, sepT: 0, _altMax: 0, camDist: 20,
       engLocalY: 0.18, engSize: 1, burning: false, legsDeploy: 0,
       distEarth: 0, distMoon: MO.dist * KM_PER_UNIT, moonAlt: 0,
       psi: PSI_EARTH, rm: R_AP, rm0: MLORB, psi0: PSI_EARTH, psiSep: PSI_EARTH,
       transitTheta0: 0, transitRho0: R_E, parkAng: null,
-      moonBlend: 0, surfCamBlend: 0, rezero1: false, rezero2: false
+      moonBlend: 0, surfCamBlend: 0, rezero1: false, rezero2: false,
+      // ---- 两段式（双箭发射）状态 ----
+      segment: 1, metBase: 0, landerParked: false, parkPsi: PSI_EARTH, docked: false,
+      rendezOffset: 0, psiSepDock: PSI_EARTH, camSnap: false, segFade: 0, segFadeT: 0
     };
     var fired = {}, acc = {};
-    var panels = [], landerParts = [], legParts = [], shipParts = [], stack2Parts = [], stack1Parts = [];
+    var panels = [], landerParts = [], legParts = [], shipParts = [];
+    var stack2Parts = [], stack1Parts = [];       // 第一次发射：入轨活动栈 / 船箭分离后活动栈
+    var stackS1Parts = [], stackS2Parts = [];     // 第二次发射：入轨活动栈 / 船箭分离后活动栈
     for (var pi = 0; pi < parts.length; pi++) {
       var g = parts[pi].detachGroup, nm = parts[pi].name;
       if (g === 'panel') panels.push(parts[pi]);
       if (g === 'lander') landerParts.push(parts[pi]);
       if (nm.indexOf('leg') === 0) legParts.push(parts[pi]);
       if (g === 'ship') shipParts.push(parts[pi]);
-      if (g === 'ship' || g === 'lander' || g === 'panel') stack2Parts.push(parts[pi]);
-      if (g === 'ship' || g === 'lander' || g === 'panel' || g === 'stage2') stack1Parts.push(parts[pi]);
+      // 第一次发射：入轨活动栈 = 二级 + 着陆器；船箭分离后 = 着陆器
+      if (g === 'lander' || g === 'stage2') stack1Parts.push(parts[pi]);
+      if (g === 'lander') stack2Parts.push(parts[pi]);
+      // 第二次发射：入轨活动栈 = 二级 + 飞船 + 太阳翼；船箭分离后 = 飞船 + 太阳翼
+      if (g === 'ship' || g === 'panel' || g === 'stage2') stackS1Parts.push(parts[pi]);
+      if (g === 'ship' || g === 'panel') stackS2Parts.push(parts[pi]);
     }
 
+    // 部件在箭体系中的当前质心（baseY + centerY 的均值）
+    function centroidOf(list) {
+      if (!list.length) return 0;
+      var s = 0;
+      for (var i = 0; i < list.length; i++) s += list[i].baseY + list[i].centerY;
+      return s / list.length;
+    }
+
+    function captionFor(key) {
+      if (key === 'parkOrbit') return state.segment === 2 ? PHASES.parkOrbitShip : PHASES.parkOrbitLander;
+      return PHASES[key];
+    }
     function firePhase(key) {
       if (fired[key]) return;
       fired[key] = true;
-      if (PHASES[key] && hooks.onPhase) hooks.onPhase(key, PHASES[key]);
+      var text = captionFor(key);
+      if (text && hooks.onPhase) hooks.onPhase(key, text);
     }
     function rezero(list, delta) { for (var i = 0; i < list.length; i++) list[i].baseY -= delta; }
 
@@ -155,16 +197,17 @@
       var mm = renderer.createMesh(machRingG, [0.72, 0.84, 1.0], { group: 'fx', blend: 'add', depthWrite: false });
       mm.glow = 1; mm.visible = false; mm.alpha = 0; machRings.push(mm);
     }
-    var nozParts = { s1: [], boost: [], s2: [], lander: [] };
+    var nozParts = { s1: [], boost: [], s2: [], lander: [], ship: [] };
     for (var np = 0; np < parts.length; np++) {
       var pn = parts[np].name;
       if (pn === 'nozMain' || pn.indexOf('vernier') === 0) nozParts.s1.push(parts[np]);
       else if (pn.indexOf('boostNoz') === 0) nozParts.boost.push(parts[np]);
       else if (pn === 'nozS2') nozParts.s2.push(parts[np]);
       else if (pn === 'landerNozzle') nozParts.lander.push(parts[np]);
+      else if (pn === 'svcModule') nozParts.ship.push(parts[np]);   // 梦舟服务舱主发动机（第二次发射深空段）
     }
     function engY(which) {
-      var l = which === 's1' ? nozParts.s1 : (which === 's2' ? nozParts.s2 : nozParts.lander);
+      var l = which === 's1' ? nozParts.s1 : (which === 's2' ? nozParts.s2 : (which === 'ship' ? nozParts.ship : nozParts.lander));
       return l.length ? l[0].baseY : 0;
     }
 
@@ -218,10 +261,11 @@
       state.tiltVis = state.tilt * g8;
       state.alt = state.r - R_E;
       state.speed = Math.sqrt(state.vr * state.vr + state.vt * state.vt);
-      state.met = state.t * TIME_SCALE;
+      state.met = state.metBase + state.t * TIME_SCALE;
       state.distEarth = state.r * KM_PER_UNIT;
       state.distMoon = Math.hypot(state.x - MC[0], state.y - MC[1]) * KM_PER_UNIT;
-      state.progress = Math.min(0.30, (state.t / 95) * 0.30);
+      if (state.segment === 2) state.progress = 0.50 + Math.min(0.20, (state.t / 95) * 0.20);
+      else state.progress = Math.min(0.30, (state.t / 95) * 0.30);
     }
 
     function currentMass() {
@@ -279,7 +323,8 @@
           flashAt(w[0], w[1], w[2], 16);
         }
       } else {
-        var ly = group === 'tower' ? 11.8 : (group === 'stage1' ? 6.2 : (group === 'fairing' ? 9.4 : (group === 'stage2' ? engY('s2') : 1.6)));
+        var ly = group === 'tower' ? (11.8 - (state.segment === 2 ? SHIP_OFFSET : 0))
+          : (group === 'stage1' ? 6.2 : (group === 'fairing' ? 9.4 : (group === 'stage2' ? engY('s2') : 1.6)));
         bodyToWorld(0, ly, 0, w);
         flashAt(w[0], w[1], w[2], n, 1);
       }
@@ -287,7 +332,9 @@
 
     function separateLander() {
       var w = [0, 0, 0];
-      var landerLocal = C3 - C2;                 // 着陆器质心相对当前原点（船器组合体质心）
+      // 着陆器质心相对当前原点（对接后的组合体，focus=0 位于飞船质心附近）；
+      // 用实时质心而非固定常量，兼容「双箭对接」后着陆器位于飞船下方的构型。
+      var landerLocal = centroidOf(landerParts);
       bodyToWorld(0, landerLocal, 0, w);
       var lx = w[0], ly = w[1];
       // 飞船 + 太阳翼分离漂离（沿飞行方向）
@@ -316,6 +363,115 @@
       state.psi0 = Math.atan2(lx - MC[0], ly - MC[1]);
       state.psiSep = state.psi0;
       for (var k = 0; k < legParts.length; k++) legParts[k].mesh.visible = true;
+    }
+
+    // ---- 第一次发射结束：着陆器「驻留」环月轨道 ----
+    //  着陆器转为独立渲染体（parked），第二次发射期间持续绕月，等待飞船交会。
+    function parkLander() {
+      state.parkPsi = state.psi;
+      state.landerParked = true;
+      for (var i = 0; i < landerParts.length; i++) {
+        var p = landerParts[i];
+        p.parked = true; p.detached = true; p.detachT = state.t;
+        p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
+        p.detachRot = [0, 0, 0]; p.detachSpin = [0, 0, 0]; p.detachScale = state.scale;
+      }
+    }
+
+    // ---- 每帧直接写入驻留着陆器的模型矩阵（复刻 updatePartTransforms 数学）----
+    function positionParkedLander() {
+      if (!state.landerParked) return;
+      var psi = state.parkPsi;
+      var ox = MC[0] + MLORB * Math.sin(psi);
+      var oy = MC[1] + MLORB * Math.cos(psi);
+      var tilt = progradeTilt(psi);
+      var s = state.scale;
+      var alpha = state.moonBlend;             // 随月球一同淡入淡出
+      var vis = alpha > 0.01;
+      for (var i = 0; i < landerParts.length; i++) {
+        var p = landerParts[i];
+        var m = p.tmp;
+        mat4.identity(m);
+        mat4.translate(m, m, [ox, oy, 0]);
+        if (s !== 1) mat4.scale(m, m, [s, s, s]);
+        mat4.rotateZ(m, m, -tilt);
+        mat4.translate(m, m, [p.ox, p.baseY + p.centerY, p.oz]);
+        if (p.localRotY) mat4.rotateY(m, m, p.localRotY);
+        if (p.localRotX) mat4.rotateX(m, m, p.localRotX);
+        mat4.translate(m, m, [0, -p.centerY, 0]);
+        var mm = p.mesh.modelMatrix;
+        for (var k = 0; k < 16; k++) mm[k] = m[k];
+        // 着陆腿驻留轨道时收起隐藏（与飞行段一致），其余部件随月球淡入
+        var isLeg = p.name.indexOf('leg') === 0;
+        p.mesh.alpha = isLeg ? 0 : alpha;
+        p.mesh.visible = isLeg ? false : vis;
+      }
+    }
+
+    // ---- 段间过渡：把箭体复原为「第二次发射（载人飞船）」构型 ----
+    function resetForSegment2() {
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i], g = p.detachGroup;
+        if (g === 'lander') continue;              // 着陆器保持驻留，独立渲染，不复位
+        p.detached = false; p.parked = false;
+        p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
+        p.detachRot = [0, 0, 0]; p.detachSpin = [0, 0, 0];
+        p.detachScale = 1; p.mesh.alpha = 1;
+        if (g === 'booster' || g === 'stage1' || g === 'stage2') {
+          p.baseY = baseY0[i]; p.mesh.visible = true;         // 共用箭体复原到发射前
+        } else if (g === 'ship' || g === 'tower') {
+          p.baseY = baseY0[i] - SHIP_OFFSET; p.mesh.visible = true;  // 载人构型：整体下移
+        } else if (g === 'panel') {
+          p.baseY = baseY0[i] - SHIP_OFFSET; p.mesh.visible = false;  // 太阳翼入轨后展开
+        } else if (g === 'fairing') {
+          p.baseY = baseY0[i]; p.mesh.visible = false;        // 整流罩已在第一次发射用毕
+        }
+      }
+      // 上升段物理状态复位（同一枚长征十号，物理参数不变）
+      state.segment = 2; state.metBase = SEG2_BASE;
+      state.regime = 'ascent'; state.phase = 'ignition'; state.phaseT = 0; state.t = 0;
+      state.r = R_E; state.theta = 0; state.vr = 0; state.vt = 0;
+      state.alpha = 0; state.gamma = Math.PI / 2; state.tilt = Math.PI / 2; state.tiltVis = 0;
+      state.x = 0; state.y = 0; state.alt = 0; state.altVis = 0; state._altMax = 0;
+      state.fuel1 = S1F0; state.fuel2 = S2F0; state.fuelBoost = BF0;
+      state.boostersAttached = true; state.stage1Attached = true; state.stage2Attached = true;
+      state.towerAttached = true; state.fairingAttached = false;
+      state.inserted = false; state.scale = 1; state.focus = rocketModel.center;
+      state.rezero1 = false; state.rezero2 = false;
+      state.shipAttached = true; state.docked = false; state.sepT = 0;
+      state.engLocalY = 0.18; state.engSize = 1; state.burning = false; state.legsDeploy = 0;
+      state.parkAng = null; state.moonBlend = 0; state.surfBlend = 0; state.surfCamBlend = 0;
+      state.rm = R_AP; state.psi = PSI_EARTH;
+      state.distEarth = 0; state.distMoon = MO.dist * KM_PER_UNIT; state.moonAlt = 0;
+      state.met = SEG2_BASE; state.progress = 0.50; state.camSnap = true;
+      state.segFade = 1; state.segFadeT = 1.0;      // 黑场保持，随后淡入到第二次发射的箭体
+      // 发射台 / 地球复位
+      pad.armSwing = 0; M3D.setArmSwing(pad, 0);
+      pad.earthSpin = 0; M3D.spinEarth(pad, 0, 0);
+      if (pad.ember) pad.ember.glow = 0;
+      for (var li = 0; li < legParts.length; li++) legParts[li].localRotX = legRot0[parts.indexOf(legParts[li])];
+      // 清除已触发标记，第二次发射重新播报；驻留着陆器仍绕月
+      fired = {};
+      firePhase('ignition');
+    }
+
+    // ---- 交会对接：解除着陆器驻留，接合到飞船下方构成环月组合体 ----
+    function dockLander() {
+      var w = [0, 0, 0];
+      var curC = centroidOf(landerParts);      // 驻留时着陆器质心（≈ 0）
+      var targetC = -DOCK_GAP;                 // 置于飞船（focus≈0）下方
+      rezero(landerParts, curC - targetC);
+      for (var i = 0; i < landerParts.length; i++) {
+        var p = landerParts[i];
+        p.parked = false; p.detached = false; p.detachT = state.t;
+        p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
+        p.detachRot = [0, 0, 0]; p.detachSpin = [0, 0, 0];
+        p.detachScale = 1; p.mesh.alpha = 1;
+      }
+      state.landerParked = false; state.docked = true; state.shipAttached = true; state.focus = 0;
+      state.psiSepDock = state.psi;      // 对接后组合体环月起始角
+      bodyToWorld(0, targetC, 0, w);
+      flashAt(w[0], w[1], 0, 24, 1.0);
     }
 
     function flashAt(x, y, z, n, szK) {
@@ -505,6 +661,7 @@
     // ============ 上升段物理 ============
     function stepAscent(dt) {
       state.t += dt;
+      var metL = state.t * TIME_SCALE;      // 本段发射的任务时刻（用于上升段事件触发，两段共用同一套阈值）
       var m = state.mass = currentMass();
       var F = currentThrust();
       var A = F / m;
@@ -514,8 +671,8 @@
       var gamma = Math.atan2(state.vr, state.vt);
 
       var aCmd = 0;
-      if (state.phase !== 'ignition' && state.met >= MET_PITCH) {
-        aCmd = openLoopAlpha(state.met);
+      if (state.phase !== 'ignition' && metL >= MET_PITCH) {
+        aCmd = openLoopAlpha(metL);
         var vCircNow = Math.sqrt(MU / state.r);
         var w = Math.max(0, Math.min(1, (v / vCircNow - W_TERM) / (1 - W_TERM)));
         var vrWant = Math.max(-VR_CAP, Math.min(VR_CAP, KH * (H_ORB - h)));
@@ -558,18 +715,23 @@
         if (state.fuel2 > GHOST_LIMIT) state.fuel2 = Math.max(GHOST_LIMIT, state.fuel2 - F2 / VE2 * dt);
       }
 
-      if (!fired.pitch && state.met >= MET_PITCH) firePhase('pitch');
-      if (!fired.maxQ && state.met >= MET_MAXQ && h > ALT_DENSE) firePhase('maxQ');
-      if (state.towerAttached && state.met >= MET_TOWER) { state.towerAttached = false; detach('tower'); firePhase('towerSep'); }
-      if (state.fairingAttached && state.met >= MET_FAIRING) { state.fairingAttached = false; detach('fairing'); firePhase('fairingSep'); }
+      if (!fired.pitch && metL >= MET_PITCH) firePhase('pitch');
+      if (!fired.maxQ && metL >= MET_MAXQ && h > ALT_DENSE) firePhase('maxQ');
+      if (state.towerAttached && metL >= MET_TOWER) { state.towerAttached = false; detach('tower'); firePhase('towerSep'); }
+      if (state.fairingAttached && metL >= MET_FAIRING) { state.fairingAttached = false; detach('fairing'); firePhase('fairingSep'); }
 
       if (state.phase === 'burn2') {
         var vCirc = Math.sqrt(MU / state.r);
         if (state.vt >= vCirc * 0.999 && Math.abs(state.vr) < 0.15) {
           state.inserted = true;
-          for (var k = 0; k < panels.length; k++) panels[k].mesh.visible = true;
-          // 重心归零 #1：把活动栈（二级+飞船+着陆器）质心移到原点，此后 focus=0
-          rezero(stack1Parts, C1);
+          if (state.segment === 2) {
+            // 第二次发射：展开太阳翼，重心归零到「二级 + 飞船 + 太阳翼」活动栈质心
+            for (var k = 0; k < panels.length; k++) panels[k].mesh.visible = true;
+            rezero(stackS1Parts, C1_S);
+          } else {
+            // 第一次发射：重心归零到「二级 + 着陆器」活动栈质心（无飞船 / 太阳翼）
+            rezero(stack1Parts, C1_L);
+          }
           state.rezero1 = true;
           state.focus = 0;
           state.regime = 'space'; state.phase = 'parkOrbit'; state.phaseT = 0;
@@ -590,7 +752,14 @@
 
     function stepScripted(dt) {
       var ph = state.phase, u, pos, psi, rm, tiltT;
+      var seg2 = state.segment === 2;
       state.phaseT += dt * state.warp;
+
+      // 第二次发射期间，驻留着陆器持续绕月（与飞船同向），供交会段收敛
+      if (seg2 && state.landerParked &&
+          (ph === 'transit' || ph === 'loi' || ph === 'lunarOrbit' || ph === 'rendezvous')) {
+        state.parkPsi += PARK_RATE * dt * state.warp;
+      }
 
       if (ph === 'parkOrbit') {
         var wOrb = Math.sqrt(MU / (R_ORB * R_ORB * R_ORB));
@@ -601,12 +770,13 @@
         state.theta = state.parkAng;
         state.alt = R_ORB - R_E; state.altVis = rhoP - R_E;
         state.speed = V_ORB * MS_PER_UNIT;
-        state.met = lerp(MET_INSERT, MET_TLI, Math.min(1, state.phaseT / DUR.park));
+        state.met = state.metBase + lerp(MET_INSERT, MET_TLI, Math.min(1, state.phaseT / DUR.park));
         state.distEarth = R_ORB * KM_PER_UNIT;
         state.distMoon = Math.hypot(pos[0] - MC[0], pos[1] - MC[1]) * KM_PER_UNIT;
         state.scale += (20 - state.scale) * Math.min(1, dt * 0.8);
         state.engLocalY = engY('s2'); state.engSize = 0.6; state.burning = false;
-        state.progress = lerp(0.30, 0.36, Math.min(1, state.phaseT / DUR.park));
+        state.progress = seg2 ? lerp(0.70, 0.72, Math.min(1, state.phaseT / DUR.park))
+                              : lerp(0.30, 0.34, Math.min(1, state.phaseT / DUR.park));
         if (state.phaseT >= DUR.park) { state.phase = 'tli'; state.phaseT = 0; state.burning = true; firePhase('tli'); }
         return;
       }
@@ -620,24 +790,25 @@
         setPose(pos[0], pos[1], progradeTilt(state.parkAng), dt * 3);
         state.theta = state.parkAng;
         state.speed = V_ORB * MS_PER_UNIT * (1 + u * 0.16);
-        state.met = lerp(MET_TLI, MET_TLI + 900, u);
+        state.met = state.metBase + lerp(MET_TLI, MET_TLI + 900, u);
         state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
         state.distMoon = Math.hypot(pos[0] - MC[0], pos[1] - MC[1]) * KM_PER_UNIT;
         state.scale += (20 - state.scale) * Math.min(1, dt * 0.8);
         state.engLocalY = engY('s2'); state.engSize = 0.75; state.burning = true;
-        state.progress = lerp(0.36, 0.42, u);
+        state.progress = seg2 ? lerp(0.72, 0.74, u) : lerp(0.34, 0.38, u);
         if (u >= 1) {
-          // 上面级关机分离，重心归零 #2（移到飞船+着陆器质心），捕获转移起点
+          // 上面级关机分离，重心归零到本段单独飞行的活动体（第一次=着陆器，第二次=飞船），捕获转移起点
           detach('stage2');
           state.stage2Attached = false;
-          var d2 = C2 - C1, w2 = [0, 0, 0];
+          var activeStack2 = seg2 ? stackS2Parts : stack2Parts;
+          var d2 = seg2 ? (C2_S - C1_S) : (C2_L - C1_L), w2 = [0, 0, 0];
           bodyToWorld(0, d2, 0, w2);
-          rezero(stack2Parts, d2);
+          rezero(activeStack2, d2);
           state.x = w2[0]; state.y = w2[1];
           state.transitTheta0 = Math.atan2(state.x - EC[0], state.y - EC[1]);
           state.transitRho0 = Math.hypot(state.x - EC[0], state.y - EC[1]);
           state.phase = 'transit'; state.phaseT = 0; state.burning = false;
-          firePhase('stage2Sep');
+          firePhase('stage2Sep'); firePhase('transit');
         }
         return;
       }
@@ -657,10 +828,10 @@
         state.distEarth = Math.hypot(px - EC[0], py - EC[1]) * KM_PER_UNIT;
         state.distMoon = Math.hypot(px - MC[0], py - MC[1]) * KM_PER_UNIT;
         state.speed = lerp(10200, 950, e);
-        state.met = lerp(MET_TLI + 900, MET_LOI, u);
-        state.engLocalY = engY('lander'); state.engSize = 0.75; state.burning = false;
+        state.met = state.metBase + lerp(MET_TLI + 900, MET_LOI, u);
+        state.engLocalY = seg2 ? engY('ship') : engY('lander'); state.engSize = 0.75; state.burning = false;
         state.moonBlend = Math.max(state.moonBlend, smoothstep((u - 0.02) / 0.4));
-        state.progress = lerp(0.42, 0.62, u);
+        state.progress = seg2 ? lerp(0.74, 0.80, u) : lerp(0.38, 0.46, u);
         if (u >= 1) { state.phase = 'loi'; state.phaseT = 0; state.rm = R_AP; state.psi = PSI_EARTH; state.burning = true; firePhase('loi'); }
         return;
       }
@@ -674,14 +845,14 @@
         pos = [MC[0] + rm * Math.sin(psi), MC[1] + rm * Math.cos(psi)];
         setPose(pos[0], pos[1], shortAngle(progradeTilt(psi) + Math.PI), dt * 2);
         state.scale += (11 - state.scale) * Math.min(1, dt * 0.7);
-        state.engLocalY = engY('lander'); state.engSize = 0.85; state.burning = true;
+        state.engLocalY = seg2 ? engY('ship') : engY('lander'); state.engSize = 0.85; state.burning = true;
         state.moonAlt = (rm - MR) * KM_PER_UNIT;
         state.distMoon = rm * KM_PER_UNIT;
         state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
         state.speed = lerp(950, 1630, eL);
-        state.met = lerp(MET_LOI, MET_LORB, u);
+        state.met = state.metBase + lerp(MET_LOI, MET_LORB, u);
         state.moonBlend = 1;
-        state.progress = lerp(0.62, 0.70, u);
+        state.progress = seg2 ? lerp(0.80, 0.83, u) : lerp(0.46, 0.49, u);
         if (u >= 1) { state.phase = 'lunarOrbit'; state.phaseT = 0; state.burning = false; firePhase('lunarOrbit'); }
         return;
       }
@@ -693,13 +864,91 @@
         pos = [MC[0] + MLORB * Math.sin(psi), MC[1] + MLORB * Math.cos(psi)];
         setPose(pos[0], pos[1], progradeTilt(psi), dt * 2);
         state.scale += (10 - state.scale) * Math.min(1, dt * 0.7);
-        state.engLocalY = engY('lander'); state.engSize = 0.85; state.burning = false;
+        state.engLocalY = seg2 ? engY('ship') : engY('lander'); state.engSize = 0.85; state.burning = false;
         state.moonAlt = (MLORB - MR) * KM_PER_UNIT;
         state.distMoon = MLORB * KM_PER_UNIT;
         state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
         state.speed = 1630;
-        state.met = lerp(MET_LORB, MET_LSEP, u);
-        state.progress = lerp(0.70, 0.76, u);
+        state.moonBlend = 1;
+        state.progress = seg2 ? lerp(0.83, 0.86, u) : lerp(0.49, 0.50, u);
+        if (u >= 1) {
+          if (seg2) {
+            // 第二次发射：进入交会段，飞船向驻留着陆器靠拢
+            state.rendezOffset = shortAngle(state.psi - state.parkPsi);
+            state.phase = 'rendezvous'; state.phaseT = 0;
+            state.met = state.metBase + MET2_RENDEZ;
+            firePhase('rendezvous');
+          } else {
+            // 第一次发射：着陆器就位环月轨道，转入段间过渡
+            state.met = SEG2_BASE;
+            parkLander();
+            state.phase = 'transition'; state.phaseT = 0; state.burning = false;
+            firePhase('landerPark'); firePhase('transition');
+          }
+        }
+        return;
+      }
+
+      if (ph === 'transition') {
+        // 段间过渡：镜头停留在月球，展示驻留着陆器；画面渐隐至黑场，末段切到第二次发射
+        u = Math.min(1, state.phaseT / DUR.transition);
+        state.segFade = u < 0.4 ? smoothstep(u / 0.4) : 1;
+        state.parkPsi += PARK_RATE * dt * state.warp * 0.4;
+        psi = state.parkPsi;
+        state.psi = psi; state.rm = MLORB;
+        pos = [MC[0] + MLORB * Math.sin(psi), MC[1] + MLORB * Math.cos(psi)];
+        setPose(pos[0], pos[1], progradeTilt(psi), dt * 2);
+        state.moonAlt = (MLORB - MR) * KM_PER_UNIT;
+        state.distMoon = MLORB * KM_PER_UNIT;
+        state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
+        state.met = SEG2_BASE;
+        state.moonBlend = 1; state.burning = false; state.speed = 1630;
+        state.progress = 0.50;
+        if (u >= 1) { resetForSegment2(); }
+        return;
+      }
+
+      if (ph === 'rendezvous') {
+        u = Math.min(1, state.phaseT / DUR.rendezvous);
+        var eR = smoothstep(u);
+        // 飞船环月角向驻留着陆器收敛：角差从 rendezOffset 平滑归零
+        psi = state.parkPsi + state.rendezOffset * (1 - eR);
+        state.psi = psi; state.rm = MLORB;
+        pos = [MC[0] + MLORB * Math.sin(psi), MC[1] + MLORB * Math.cos(psi)];
+        setPose(pos[0], pos[1], progradeTilt(psi), dt * 2);
+        state.scale += (10 - state.scale) * Math.min(1, dt * 0.7);
+        state.engLocalY = engY('ship'); state.engSize = 0.5; state.burning = u < 0.92;
+        state.moonAlt = (MLORB - MR) * KM_PER_UNIT;
+        state.distMoon = MLORB * KM_PER_UNIT;
+        state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
+        state.speed = lerp(1630, 1580, eR);
+        state.met = state.metBase + lerp(MET2_RENDEZ, MET2_DOCK, u);
+        state.moonBlend = 1;
+        state.progress = lerp(0.86, 0.89, u);
+        if (u >= 1 || Math.abs(shortAngle(psi - state.parkPsi)) < DOCK_PSI_TOL) {
+          dockLander();
+          state.phase = 'docked'; state.phaseT = 0; state.burning = false;
+          firePhase('docking');
+        }
+        return;
+      }
+
+      if (ph === 'docked') {
+        // 对接后组合体短暂环月飞行，随后船器分离、动力下降
+        u = Math.min(1, state.phaseT / DUR.dock);
+        psi = state.psiSepDock + LORB_RATE * state.phaseT;
+        state.psi = psi; state.rm = MLORB;
+        pos = [MC[0] + MLORB * Math.sin(psi), MC[1] + MLORB * Math.cos(psi)];
+        setPose(pos[0], pos[1], progradeTilt(psi), dt * 2);
+        state.scale += (10 - state.scale) * Math.min(1, dt * 0.7);
+        state.engLocalY = engY('lander'); state.engSize = 0.6; state.burning = false;
+        state.moonAlt = (MLORB - MR) * KM_PER_UNIT;
+        state.distMoon = MLORB * KM_PER_UNIT;
+        state.distEarth = Math.hypot(pos[0] - EC[0], pos[1] - EC[1]) * KM_PER_UNIT;
+        state.speed = 1630;
+        state.met = lerp(SEG2_BASE + MET2_DOCK, MET_LSEP, u);
+        state.moonBlend = 1;
+        state.progress = lerp(0.89, 0.91, u);
         if (u >= 1) {
           separateLander();
           state.phase = 'descent'; state.phaseT = 0; state.burning = true;
@@ -732,7 +981,7 @@
         for (var li = 0; li < legParts.length; li++) legParts[li].localRotX = lerp(2.9, 0.72, state.legsDeploy);
         if (!fired.approach && u > 0.6) firePhase('approach');
         state.burning = u < 0.995;
-        state.progress = lerp(0.76, 0.995, u);
+        state.progress = lerp(0.91, 0.995, u);
         if (u > 0.85) spawnLunarDust(dt, (u - 0.85) / 0.15);
         if (u >= 1) {
           state.phase = 'landed'; state.landed = true; state.burning = false; state.phaseT = 0;
@@ -776,9 +1025,17 @@
       }
 
       state.camDist = cam ? cam.distance : 20;
+      // 段间黑场淡入（第二次发射）：按真实时间平滑揭开，避免受加速倍率影响观感
+      if (state.segFadeT > 0) {
+        state.segFadeT = Math.max(0, state.segFadeT - dt);
+        state.segFade = state.segFadeT / 1.0;
+      }
       spawnFlames(dt);
       if (state.regime === 'ascent' && (state.t < 7.5 || state.altVis < 6)) spawnPadSmoke(dt);
-      if (state.phase === 'transit' || state.phase === 'lunarOrbit') spawnTrail(dt);
+      if (state.phase === 'transit' || state.phase === 'lunarOrbit' || state.phase === 'rendezvous') spawnTrail(dt);
+
+      // 驻留着陆器（第一次发射就位后）每帧独立定位，第二次发射全程可见其绕月等待
+      if (state.landerParked) positionParkedLander();
 
       // 着陆腿可见性：未点火（展示/拆解）与下降段之后可见，上升段隐藏（收于整流罩内）
       var legsOn = !state.ignited || state.phase === 'descent' || state.phase === 'approach' || state.phase === 'landing' || state.phase === 'landed';
@@ -786,7 +1043,7 @@
 
       orbitRing.visible = (state.phase === 'parkOrbit' || state.phase === 'tli');
       orbitRing.alpha = orbitRing.visible ? 0.4 : 0;
-      moonRing.visible = (state.phase === 'lunarOrbit' || state.phase === 'loi');
+      moonRing.visible = (state.phase === 'lunarOrbit' || state.phase === 'loi' || state.phase === 'rendezvous' || state.phase === 'docked');
       moonRing.alpha = moonRing.visible ? 0.5 : 0;
 
       if (pad.ember && state.regime === 'ascent') {
@@ -820,7 +1077,8 @@
         gYaw = cam.yaw + (0 - cam.yaw) * Math.min(1, dt * 0.6);
         gPitch = cam.pitch + (0.02 - cam.pitch) * Math.min(1, dt * 0.6);
         cam.shake = 0; state.surfCamBlend = 0;
-      } else if (state.phase === 'loi' || state.phase === 'lunarOrbit') {
+      } else if (state.phase === 'loi' || state.phase === 'lunarOrbit' ||
+                 state.phase === 'transition' || state.phase === 'rendezvous' || state.phase === 'docked') {
         gTX = MC[0]; gTY = MC[1];
         gDist = (cam.fitMoon || MR * 2.9) * 1.15;
         gYaw = cam.yaw + (0.18 - cam.yaw) * Math.min(1, dt * 0.6);
@@ -839,6 +1097,13 @@
         state.surfCamBlend = close;
       }
 
+      if (state.camSnap) {
+        // 段间切换：直接把镜头瞬移到新箭体（配合 app 层黑场过渡，避免可见的横扫）
+        cam.targetX = gTX; cam.targetY = gTY; cam.targetZ = 0;
+        cam.distance = gDist; cam.yaw = gYaw; cam.pitch = gPitch;
+        state.camSnap = false;
+        return;
+      }
       var lk = Math.min(1, dt * (state.regime === 'ascent' ? 5 : 1.7));
       cam.targetX += (gTX - cam.targetX) * lk;
       cam.targetY += (gTY - cam.targetY) * lk;
@@ -850,6 +1115,17 @@
 
     function restoreAll() {
       for (var i = 0; i < parts.length; i++) { parts[i].baseY = baseY0[i]; parts[i].localRotX = legRot0[i]; }
+    }
+
+    // 第一次发射（着陆器）构型：隐藏飞船 / 逃逸塔 / 太阳翼，仅显示 助推 + 芯一级 + 二级 + 整流罩 + 着陆器
+    function setupSegment1Launch() {
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i], g = p.detachGroup;
+        p.mesh.visible = !(g === 'ship' || g === 'tower' || g === 'panel');
+      }
+      state.segment = 1; state.metBase = 0;
+      state.towerAttached = false;      // 第一次发射无逃逸塔
+      state.fairingAttached = true;     // 第一次发射有整流罩（护着陆器）
     }
 
     function reset() {
@@ -868,6 +1144,10 @@
       state.rezero1 = false; state.rezero2 = false;
       state.rm = R_AP; state.psi = PSI_EARTH; state.rm0 = MLORB; state.psi0 = PSI_EARTH; state.psiSep = PSI_EARTH;
       state.distEarth = 0; state.distMoon = MO.dist * KM_PER_UNIT; state.moonAlt = 0;
+      // 两段式状态复位
+      state.segment = 1; state.metBase = 0; state.landerParked = false; state.parkPsi = PSI_EARTH;
+      state.docked = false; state.rendezOffset = 0; state.psiSepDock = PSI_EARTH; state.camSnap = false;
+      state.segFade = 0; state.segFadeT = 0;
       pad.armSwing = 0; M3D.setArmSwing(pad, 0);
       pad.earthSpin = 0; M3D.spinEarth(pad, 0, 0);
       fired = {}; acc = {};
@@ -875,7 +1155,7 @@
       restoreAll();
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i];
-        p.detached = false; p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
+        p.detached = false; p.parked = false; p.detachOff = [0, 0, 0]; p.detachV = [0, 0, 0];
         p.detachRot = [0, 0, 0]; p.detachSpin = [0, 0, 0]; p.detachScale = 1;
         p.mesh.alpha = 1;
         p.mesh.visible = p.detachGroup !== 'panel';
@@ -890,7 +1170,11 @@
 
     return {
       state: state, V_ORB: V_ORB, KM_PER_UNIT: KM_PER_UNIT, MS_PER_UNIT: MS_PER_UNIT, TIME_SCALE: TIME_SCALE,
-      ignite: function () { state.ignited = true; state.phase = 'ignition'; state.regime = 'ascent'; firePhase('ignition'); },
+      ignite: function () {
+        setupSegment1Launch();
+        state.ignited = true; state.phase = 'ignition'; state.regime = 'ascent'; firePhase('ignition');
+      },
+      prepareLaunch: setupSegment1Launch,
       setHoldWarp: function (on) { state.hold = !!on; },
       update: update, directCamera: directCamera, syncFlames: syncFlames, reset: reset,
       updateDetachedParts: function (dt) {
