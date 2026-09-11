@@ -23,6 +23,41 @@
   var telemetryEl = document.getElementById('telemetry');
   var missionTagEl = document.getElementById('mission-tag');
   var segFadeEl = document.getElementById('seg-fade');
+  var variantBar = document.getElementById('variant-bar');
+  var btnVar1 = document.getElementById('btn-var1');
+  var btnVar2 = document.getElementById('btn-var2');
+
+  // ---- 展示 / 拆解：两枚长征十号构型切换 ----
+  //  1 = 第一次发射（助推×2 + 芯一级 + 二级 + 整流罩内含揽月着陆器）
+  //  2 = 第二次发射（助推×2 + 芯一级 + 二级 + 梦舟飞船 + 逃逸塔，无整流罩）
+  //  构型真源在 mission.js 的 applyConfig()，这里只负责 UI 与镜头
+  var variant = 1;
+  function variantLabel() {
+    return variant === 2 ? '第二次发射 · 梦舟载人飞船' : '第一次发射 · 揽月着陆器';
+  }
+  // 两枚箭高度不同：展示镜头中心随构型微调，避免长箭被裁切 / 短箭偏下
+  function displayTargetY(explode) {
+    if (variant === 2) return explode ? 6.0 : 5.15;
+    return explode ? 6.6 : rocketModel.center;
+  }
+  function applyVariantUI() {
+    if (btnVar1) btnVar1.classList.toggle('active', variant === 1);
+    if (btnVar2) btnVar2.classList.toggle('active', variant === 2);
+  }
+  function setVariant(v) {
+    if (mode === 'launch') return;          // 登月模式下构型由任务流程决定
+    variant = v === 2 ? 2 : 1;
+    mission.setVariant(variant);
+    applyVariantUI();
+    if (descBox) descBox.style.display = 'none';
+    // 立刻把镜头中心移到新构型中心，避免切换瞬间箭体偏出画面
+    cam.targetY = displayTargetY(mode === 'explode');
+    if (phaseText) {
+      phaseText.textContent = (mode === 'explode')
+        ? '结构拆解 · ' + variantLabel() + ' · 点击标签查看部件说明'
+        : '长征十号 · ' + variantLabel() + ' · 拖动旋转视角';
+    }
+  }
 
   var renderer = M3D.createRenderer(canvas);
   if (!renderer) {
@@ -47,7 +82,7 @@
 
   var mode = 'show', explodeAmount = 0, explodeTarget = 0, groupRotY = 0;
   var countdown = 0, lastCount = -1, igniteFlash = 0;
-  var padAlpha = 1, spinGate = 0, spaceLightK = 0, surfCamBlend = 0;
+  var padAlpha = 1, spinGate = 0, spaceLightK = 0, surfCamBlend = 0, landedHandled = false;
   var cam = {
     yaw: 0.42, pitch: 0.06, distance: 22, fitDist: 5200,
     fitEarth: 5200, fitSystem: 60000, fitMoon: 2400,
@@ -232,8 +267,16 @@
     pad.moon.alpha = moonK;
   }
 
+  var lastSegForSpin = 1;
   function updateEarthSpin(dt) {
-    var target = (S.regime === 'ascent') ? 0 : 1;
+    // 段间过渡后是同一枚箭再次从地面起飞：自转门与地球自转角必须立即归零，
+    // 否则第一次发射在轨阶段累积的自转会让第二次发射的"地面"继续转动（发射台不跟着转）。
+    if (S.segment !== lastSegForSpin) {
+      lastSegForSpin = S.segment;
+      spinGate = 0;
+      M3D.spinEarth(pad, 0, 0);
+    }
+    var target = (S.regime === 'ascent' && !S.inserted) ? 0 : 1;
     spinGate += (target - spinGate) * Math.min(1, dt * 0.4);
     if (Math.abs(target - spinGate) < 0.004) spinGate = target;
     M3D.spinEarth(pad, dt, spinGate * (mode === 'launch' ? 1 : 0));
@@ -315,10 +358,10 @@
     } else if (ph === 'parkOrbit' || ph === 'tli') {
       t += ' · 轨道高度 ' + (S.alt * mission.KM_PER_UNIT).toFixed(0) + ' km · 速度 ' + Math.round(S.speed) + ' m/s';
     } else if (ph === 'transit') {
-      t += ' · 距地 ' + (S.distEarth / 10000).toFixed(2) + ' 万km · 距月 ' + (S.distMoon / 10000).toFixed(2) + ' 万km';
+      t += ' · 距地球 ' + (S.distEarth / 10000).toFixed(2) + ' 万公里 · 距月球 ' + (S.distMoon / 10000).toFixed(2) + ' 万公里';
     } else if (ph === 'loi' || ph === 'lunarOrbit' || ph === 'transition' || ph === 'rendezvous' || ph === 'docked') {
       t += ' · 环月高度 ' + S.moonAlt.toFixed(0) + ' km · 速度 ' + Math.round(S.speed) + ' m/s';
-    } else if (ph === 'descent' || ph === 'approach' || ph === 'landing') {
+    } else if (ph === 'descent' || ph === 'approach') {
       var a = S.moonAlt;
       t += ' · 月面高度 ' + (a < 1 ? (a * 1000).toFixed(0) + ' m' : a.toFixed(1) + ' km') + ' · 下降速度 ' + Math.round(S.speed) + ' m/s';
     } else if (ph === 'landed') {
@@ -334,8 +377,10 @@
     missionTagEl.style.display = show ? 'block' : 'none';
     if (!show) return;
     var ph = S.phase, seg;
-    if (ph === 'rendezvous' || ph === 'docking' || ph === 'docked') seg = '交会对接';
-    else if (ph === 'landerSep' || ph === 'descent' || ph === 'approach' || ph === 'landing' || ph === 'landed') seg = '着陆下降';
+    // docking / landerSep / landing 只是「事件字幕」（见 mission.js 的 PHASES），不会成为 state.phase；
+    // 对应阶段由 docked / descent(含 approach) / landed 表示。
+    if (ph === 'rendezvous' || ph === 'docked') seg = '交会对接';
+    else if (ph === 'descent' || ph === 'approach' || ph === 'landed') seg = '着陆下降';
     else if (S.segment === 2) seg = '第二次发射 · 梦舟飞船';
     else seg = '第一次发射 · 揽月着陆器';
     missionTagEl.textContent = seg;
@@ -435,6 +480,14 @@
     if (phaseQueue.length && phaseTimer <= 0) { showPhaseText(phaseQueue.shift()); phaseTimer = PHASE_MIN_SHOW; }
 
     if (mode === 'launch') {
+      // 着陆成功：给出明确的结束态与重播入口（否则画面停在「即将出舱」会让人干等）
+      if (S.landed && !landedHandled) {
+        landedHandled = true;
+        if (btnIgnite) { btnIgnite.textContent = '重新观看'; btnIgnite.style.display = 'flex'; }
+        if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
+        if (phaseText) phaseText.textContent = '任务完成 · 揽月着陆器已安全落月 · 点击「重新观看」再看一次';
+        phaseQueue.length = 0;
+      }
       if (pad.armSwing < 1 && (S.ignited || (countdown > 0 && countdown < 2.4))) {
         M3D.setArmSwing(pad, Math.min(1, pad.armSwing + dt * 0.8));
       }
@@ -482,14 +535,19 @@
   }
 
   function resetMission() {
-    mission.reset();
+    // 展示 / 拆解沿用上一枚火箭：登月流程结束时停在第二次发射构型，回到展示就应显示梦舟箭
+    var keep = (mode !== 'launch' && S.variant === 2) ? 2 : 1;
+    mission.reset();                     // 复位为发射前初始状态（构型①）
+    variant = keep;
+    mission.setVariant(variant);         // 再套用目标构型
+    applyVariantUI();
     // 登月模式：把箭体配置为「第一次发射（揽月着陆器）」构型（隐藏飞船 / 逃逸塔 / 太阳翼）
     if (mode === 'launch' && mission.prepareLaunch) mission.prepareLaunch();
     if (audio) audio.silence();
     if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
-    spinGate = 0; surfCamBlend = 0; spaceLightK = 0;
+    spinGate = 0; surfCamBlend = 0; spaceLightK = 0; landedHandled = false;
     countdown = 0; lastCount = -1; igniteFlash = 0; cam.shake = 0;
-    cam.targetX = 0; cam.targetY = rocketModel.center; cam.targetZ = 0;
+    cam.targetX = 0; cam.targetY = displayTargetY(mode === 'explode'); cam.targetZ = 0;
     if (mode === 'launch') { cam.targetY = 4.0; cam.distance = 22; cam.pitch = 0.05; cam.yaw = 0.42; }
     if (phaseText) phaseText.textContent = (mode === 'launch')
       ? '准备就绪 · 双箭发射：先送揽月着陆器，再送梦舟飞船'
@@ -510,20 +568,21 @@
     if (btnExplode) btnExplode.classList.toggle('active', m === 'explode');
     if (btnLaunch) btnLaunch.classList.toggle('active', m === 'launch');
     if (btnIgnite) btnIgnite.style.display = (m === 'launch') ? 'flex' : 'none';
+    if (variantBar) variantBar.style.display = (m === 'launch') ? 'none' : 'flex';  // 登月构型由流程决定
     if (descBox) descBox.style.display = 'none';
     if (labelLayer) labelLayer.style.display = 'none';
     if (countdownEl) countdownEl.style.display = 'none';
     resetMission();
     if (m === 'show') {
       explodeTarget = 0;
-      cam.targetX = 0; cam.targetY = rocketModel.center; cam.targetZ = 0;
+      cam.targetX = 0; cam.targetY = displayTargetY(false); cam.targetZ = 0;
       cam.distance = 22; cam.pitch = 0.06; cam.yaw = 0.42;
-      if (phaseText) phaseText.textContent = '长征十号 · 静态展示 · 拖动旋转视角';
+      if (phaseText) phaseText.textContent = '长征十号 · ' + variantLabel() + ' · 拖动旋转视角';
     } else if (m === 'explode') {
       explodeTarget = 1;
-      cam.targetX = 0; cam.targetY = 6.6; cam.targetZ = 0;
+      cam.targetX = 0; cam.targetY = displayTargetY(true); cam.targetZ = 0;
       cam.distance = 34; cam.pitch = 0.12; cam.yaw = 0.42;
-      if (phaseText) phaseText.textContent = '结构拆解 · 点击标签查看各舱段说明';
+      if (phaseText) phaseText.textContent = '结构拆解 · ' + variantLabel() + ' · 点击标签查看部件说明';
     } else if (m === 'launch') {
       explodeTarget = 0;
       if (phaseText) phaseText.textContent = '准备就绪 · 点击点火，开启登月之旅';
@@ -531,6 +590,8 @@
   }
 
   function ignite() {
+    // 演示结束后的同一按钮＝「重新观看」：直接复位，不留一个让人干等的定格画面
+    if (S.landed) { resetMission(); return; }
     if (S.ignited || countdown > 0) return;
     if (audio) audio.arm();
     countdown = 3;
@@ -540,6 +601,8 @@
   if (btnShow) btnShow.addEventListener('click', function () { if (audio) audio.click(); setMode('show'); });
   if (btnExplode) btnExplode.addEventListener('click', function () { if (audio) audio.click(); setMode('explode'); });
   if (btnLaunch) btnLaunch.addEventListener('click', function () { if (audio) audio.click(); setMode('launch'); });
+  if (btnVar1) btnVar1.addEventListener('click', function () { if (audio) audio.click(); setVariant(1); });
+  if (btnVar2) btnVar2.addEventListener('click', function () { if (audio) audio.click(); setVariant(2); });
   if (btnIgnite) btnIgnite.addEventListener('click', ignite);
 
   var btnSound = document.getElementById('btn-sound');

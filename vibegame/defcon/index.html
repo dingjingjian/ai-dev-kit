@@ -13,31 +13,53 @@
     --text:#c6d8e2; --text-dim:#6d8899;
     --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
     --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-    --safe-t:env(safe-area-inset-top,0px); --safe-b:env(safe-area-inset-bottom,0px);
+    /* 安全区（Chrome 61 基线）：先落 0px，再由下一条覆盖。
+       只引用容器注入的 --safe-area-inset-*（var 自带静态兜底，Chrome 61 也合法）；
+       env() 不写在这里 —— Chrome 61 不认 env()，会让 calc(var(--top-gap) + var(--safe-t))
+       在计算期整体失效，顶栏直接掉位。env() 放到下面 @supports 增强块里。 */
+    --safe-t:0px; --safe-b:0px;
+    --safe-t:var(--safe-area-inset-top,0px); --safe-b:var(--safe-area-inset-bottom,0px);
     /* 顶部强制留白：小红书 iframe 里 env(safe-area-inset-top) 恒为 0，
        顶栏会直接顶在屏幕最上沿（被宿主 UI 压住/显得憋）。
        改成一条显式的常量留白，顶栏整体下移 —— 上方露出星球，不再是一整块面板。
        改这一个值就能调，#alert 与抽屉头都跟着它走。 */
     --top-gap:50px;
   }
+  /* 安全区增强层：识别 env() 的内核（iOS 真机 / PC 模拟器 / 新版 Android WebView）。
+     容器注入的 --safe-area-inset-* 优先，没有注入时退回 env()。
+     Chrome 61 不识别 env()，@supports 判为 false，整块跳过 ——
+     --safe-t/--safe-b 保持上面的注入值或 0px，不会出现「计算期失效」。 */
+  @supports (padding-top:env(safe-area-inset-top,0px)){
+    :root{
+      --safe-t:var(--safe-area-inset-top,env(safe-area-inset-top,0px));
+      --safe-b:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+    }
+  }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%;overflow:hidden;background:#02040a;color:var(--text);
     font-family:var(--sans);-webkit-font-smoothing:antialiased;
-    -webkit-tap-highlight-color:transparent;user-select:none;overscroll-behavior:none}
+    -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;
+    overscroll-behavior:none}
 
   /* 竖屏手机容器：桌面端居中成一条 480 宽的竖屏，移动端铺满。
      只维护一套竖屏布局，不再为桌面做第二套 —— 本作定位就是移动端游戏。 */
   body{display:flex;justify-content:center}
   #app{position:relative;width:100%;max-width:480px;height:100%;overflow:hidden;background:var(--bg)}
 
-  #stage{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
-  #scan{position:absolute;inset:0;pointer-events:none;z-index:5;
-    background:repeating-linear-gradient(180deg,rgba(127,212,232,.035) 0 1px,transparent 1px 3px)}
-  #vig{position:absolute;inset:0;pointer-events:none;z-index:5;
+  /* inset 简写 Chrome 87 才有，基线一律写 top/right/bottom/left 四个物理属性 */
+  #stage{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  /* 扫描线用「单色停点」两段写法：CSS Images 4 的双位置停点（rgba() 0 1px）Chrome 61 不保证解析 */
+  #scan{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:5;
+    background:repeating-linear-gradient(180deg,rgba(127,212,232,.035) 0,rgba(127,212,232,.035) 1px,transparent 1px,transparent 3px)}
+  #vig{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:5;
     background:radial-gradient(ellipse at center,transparent 45%,rgba(0,0,0,.55) 100%)}
 
   .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
-  .panel{background:var(--panel);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  /* 毛玻璃仅作增强：基线就是 --panel 的半透明实底，Chrome 61 忽略模糊也不影响可读性 */
+  .panel{background:var(--panel)}
+  @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+    .panel{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  }
 
   /* ── 顶栏：背景通栏拉满，内容左右各留 48px 空白 ──
      背景（--panel + 底边细线）是满宽的，只有内容区缩进 —— 顶部有整条横向衬底，
@@ -139,8 +161,10 @@
   #hudBtns button,#drawerClose{width:46px;height:34px;background:rgba(10,18,26,.78);
     border:1px solid var(--line);color:var(--cyan);
     font-family:var(--mono);font-size:17px;line-height:1;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;padding:0;
-    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+    display:flex;align-items:center;justify-content:center;padding:0}
+  @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+    #hudBtns button,#drawerClose{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  }
   #hudBtns button:active,#drawerClose:active{background:rgba(127,212,232,.25)}
   /* 音效：开态两道声波弧，静音态一个叉（✕）—— 叉比斜杠更像"关闭"，识别度高。 */
   #sndBtn{color:var(--cyan-dim)}
@@ -221,25 +245,36 @@
   @keyframes deny{0%,100%{border-top-color:var(--line)}45%{border-top-color:var(--red)}}
 
   /* ── 抽屉：阵营 / 图例 / 城市 ── */
-  /* 顶部不再留「固定」空白带（2026-09-11 修订）：避让量整体搬进滚动容器 #drawer .dbody
-     的 padding-top（构成不变：26px 静态兜底 + --top-gap + --safe-t），与顶栏同一下移量，
-     首屏留白照旧、不再顶到头；但它现在是**内容的一部分**，一滚就跟着走，不再钉死。
-     抽屉里只有关闭按钮绝对定位（其余全部随内容滚动）。 */
+  /* 关闭按钮不再悬浮固定（2026-09-11 二次修订）：回到它在 DOM 里的位置 ——
+     #drawer 的第一个子项，与 .dbody 同处一个纵向 flex，成为抽屉自己的首行；
+     内容不再从 ✕ 底下滚过，因此不再需要底衬与 z-index。
+     避让量随之从滚动区（.dbody 的 padding-top）上移到 #drawer 的 padding-top：
+     构成仍是 --top-gap + --safe-t，与顶栏同一下移量、避开宿主 UI / 刘海；
+     滚动区顶部留白改为常规的 2px（原先那 ~100px 是为了躲悬浮按钮，现已不需要）。
+
+     末尾的 17px 是三次修订：把关闭按钮整体再下移一点，让正文首行
+     「阵营 · 存续规模」的下边框与顶栏下边线（危机值那条线）落在同一水平线上。
+     顶栏高按 81px 计（与 #alert 的 `96px = 81 + 15` 同一口径）；
+     抽屉顶边到该下边框的固定占位 = 34(按钮) + 8(按钮下边距) + 2(滚动区上内边距)
+     + 20(标题行块：line-height 12 + padding-bottom 7 + 下边框 1) = 64px，
+     故顶部留白 = --top-gap + (81 - 64) = --top-gap + 17px。 */
   #drawer{position:absolute;top:0;right:0;bottom:0;width:84%;max-width:340px;z-index:30;
     background:rgba(6,12,18,.98);border-left:1px solid var(--line);
     transform:translateX(100%);transition:transform .24s ease;
-    display:flex;flex-direction:column;overflow:hidden}
+    display:flex;flex-direction:column;overflow:hidden;
+    padding-top:calc(var(--top-gap) + var(--safe-t) + 17px)}
   #drawer.open{transform:translateX(0)}
-  /* 关闭按钮是抽屉里唯一「固定」的元素：只带定位 —— 外观（46×34 / 描边 / 底色 /
-     毛玻璃 / 按下态）全部继承上面 `#hudBtns button,#drawerClose` 那条共用规则，
-     与静音、倍速、菜单三键同款。top 仍叠 --top-gap + --safe-t，与顶栏同一下移量，
-     避开宿主 UI / 刘海；z-index:2 是必需的：内容会滚到它底下，没有底衬的行文字会穿过 ✕。 */
-  #drawerClose{position:absolute;top:calc(12px + var(--top-gap) + var(--safe-t));right:10px;z-index:2}
+  /* 关闭按钮：随内容排布的首行，只做 flex 对齐（align-self 靠右），不再是绝对定位。
+     外观（46×34 / 描边 / 底色 / 毛玻璃 / 按下态）仍继承上面
+     `#hudBtns button,#drawerClose` 那条共用规则，与静音、倍速、菜单三键同款。 */
+  #drawerClose{align-self:flex-end;margin:0 10px 8px}
   #drawer .dbody{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
-    padding:calc(26px + var(--top-gap) + var(--safe-t)) 14px 24px}
-  /* 分组标题（阵营 / 图例 / 城市）：随内容滚动，用正常上边距分隔，首行不再额外留白 */
-  #drawer .dbody .dhead{margin-top:14px;padding:0 0 7px;font-size:9.5px;color:var(--cyan-dim);
-    letter-spacing:2px;border-bottom:1px solid rgba(127,212,232,.14)}
+    padding:2px 14px 24px}
+  /* 分组标题（阵营 / 图例 / 城市）：随内容滚动，用正常上边距分隔，首行不再额外留白。
+     line-height 锁死 12px（不用 normal）：上面 17px 的对齐量按「标题行块恒为 20px」推导，
+     不锁的话换一套系统字体会让行高漂移，两条线就又错开了 —— 与 #defcon 锁行高同一手法。 */
+  #drawer .dbody .dhead{margin-top:14px;padding:0 0 7px;font-size:9.5px;line-height:12px;
+    color:var(--cyan-dim);letter-spacing:2px;border-bottom:1px solid rgba(127,212,232,.14)}
   #drawer .dbody > .dhead:first-child{margin-top:0}
   .frow{display:flex;align-items:center;gap:8px;padding:6px 2px;font-size:12px;
     border-bottom:1px solid rgba(127,212,232,.06)}
@@ -269,7 +304,7 @@
   #legend .note{font-size:10.5px;color:var(--text-dim);line-height:1.7;padding:6px 2px 0}
 
   /* ── 开局：阵营选择 ── */
-  #setup{position:absolute;inset:0;z-index:45;display:none;flex-direction:column;
+  #setup{position:absolute;top:0;right:0;bottom:0;left:0;z-index:45;display:none;flex-direction:column;
     background:rgba(5,8,13,.94);padding:calc(80px + var(--safe-t)) 16px calc(16px + var(--safe-b))}
   #setup.show{display:flex}
   #setup h1{font-size:22px;color:var(--cyan);letter-spacing:6px;font-weight:400;font-family:var(--mono)}
@@ -289,7 +324,7 @@
     line-height:1.8;margin-top:12px;border-top:1px solid rgba(127,212,232,.14);padding-top:11px}
 
   /* ── 终局 ── */
-  #over{left:50%;top:50%;transform:translate(-50%,-50%);width:min(92%,400px);
+  #over{left:50%;top:50%;transform:translate(-50%,-50%);width:92%;max-width:400px;
     z-index:35;padding:18px;border:1px solid var(--line);display:none}
   #over.show{display:block}
   #over h2{font-family:var(--sans);font-size:16px;color:#fff;font-weight:600;margin-bottom:3px}
@@ -344,10 +379,10 @@
   /* 核爆白闪：纯白 + 0.9 峰值 + 0.55s 急灭在手机上等于闪光弹，密集轰炸时反复触发就是频闪。
    * 柔化三件套：① 峰值 0.9 → 0.5；② 曲线改为 10% 快速起亮 + 约 1s 缓慢退光（眼有适应时间）；
    * ③ 纯白 → 核爆暖白（#fff8ea），去掉刺眼的冷白感。连续命中的节流见 ui.js pumpImpacts。 */
-  #flash{position:absolute;inset:0;z-index:40;background:#fff8ea;opacity:0;pointer-events:none}
+  #flash{position:absolute;top:0;right:0;bottom:0;left:0;z-index:40;background:#fff8ea;opacity:0;pointer-events:none}
   #flash.on{animation:flashOut 1.15s ease-out}
   @keyframes flashOut{0%{opacity:0}10%{opacity:.5}100%{opacity:0}}
-  #alarm{position:absolute;inset:0;z-index:6;pointer-events:none;opacity:0;
+  #alarm{position:absolute;top:0;right:0;bottom:0;left:0;z-index:6;pointer-events:none;opacity:0;
     box-shadow:inset 0 0 80px rgba(226,75,74,.6)}
   /* 两档红脉冲：warn = 危机值临界（≥85）的心跳预警，柔和慢；on = DEFCON 1 的全力警报。
      .on 写在 .warn 后面，两级同时满足时后者胜出。 */
@@ -357,11 +392,11 @@
   @keyframes alarmPulse{0%,100%{opacity:.22}50%{opacity:.8}}
 
   /* ── 载入 / 兜底 ── */
-  #loader{position:absolute;inset:0;z-index:50;display:flex;align-items:center;
+  #loader{position:absolute;top:0;right:0;bottom:0;left:0;z-index:50;display:flex;align-items:center;
     justify-content:center;flex-direction:column;gap:12px;background:var(--bg);
     font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:2px}
   #loader.hide{display:none}
-  #fallback{position:absolute;inset:0;z-index:60;display:none;align-items:center;
+  #fallback{position:absolute;top:0;right:0;bottom:0;left:0;z-index:60;display:none;align-items:center;
     justify-content:center;flex-direction:column;gap:10px;background:var(--bg);
     padding:24px;text-align:center;font-family:var(--mono);font-size:12px;color:var(--text-dim)}
   #fallback.show{display:flex}
@@ -373,6 +408,41 @@
     .opt{min-height:42px}
     #cMax{min-height:34px}
   }
+
+  /* ══ Chrome 61 降级基线：Flexbox gap ══════════════════════════════════
+     Flex 的 gap / row-gap / column-gap 到 Chrome 84 才支持，WebView 61 会整条忽略，
+     上面那些 gap 规则在旧内核里等于没写（按钮、选项、列表全挤在一起）。
+     现代内核由 src/compat.js 做「布局行为检测」后给 <html> 加 .supports-flex-gap，
+     仍走上面的 gap；不支持的落到这里，用子项 margin 把间距补回来。
+     只在 :not(.supports-flex-gap) 下命中 —— 现代端一行都不生效，不会与 gap 叠加。
+     注意：子项 margin 会覆盖自身的 margin-left:auto（右对齐）与负边距，命中处显式还原；
+     纯文本节点不是元素，选择器选不到，个别「图标紧贴文字」处改用图标侧 margin 补。 */
+  html:not(.supports-flex-gap) #crisis > * + *{margin-top:4px}
+  html:not(.supports-flex-gap) #facTag > * + *{margin-left:7px}
+  html:not(.supports-flex-gap) #card .ct .cr{margin-right:8px}
+  html:not(.supports-flex-gap) #hudLeft .hl2 > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) #hudLeft .hl2 > .gr{margin-left:-10px}
+  html:not(.supports-flex-gap) #hudLeft .hl2 > .rd{margin-left:auto}
+  html:not(.supports-flex-gap) #hudBtns > * + *{margin-left:8px}
+  html:not(.supports-flex-gap) #forceStat > *{margin-right:12px;margin-bottom:4px}
+  html:not(.supports-flex-gap) #forceStat svg{margin-right:3px}
+  html:not(.supports-flex-gap) #forceStat b{margin-left:3px}
+  html:not(.supports-flex-gap) .opts > * + *{margin-top:6px}
+  html:not(.supports-flex-gap) .opt > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) #warbar > * + *{margin-top:8px}
+  html:not(.supports-flex-gap) #tgtPick > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) #tgtPick > .tp{margin-left:auto}
+  html:not(.supports-flex-gap) .fireRow > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) .fireBtnWrap > * + *{margin-left:8px}
+  html:not(.supports-flex-gap) .frow > * + *{margin-left:8px}
+  html:not(.supports-flex-gap) .crow > * + *{margin-left:8px}
+  html:not(.supports-flex-gap) #legend .lrow > * + *{margin-left:8px}
+  html:not(.supports-flex-gap) #legend .lrow > .ld{margin-left:auto}
+  html:not(.supports-flex-gap) #pickList > * + *{margin-top:6px}
+  html:not(.supports-flex-gap) .pick > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) #ovRecap > * + *{margin-top:7px}
+  html:not(.supports-flex-gap) #ovRecap .rc > * + *{margin-left:9px}
+  html:not(.supports-flex-gap) #fallback > * + *{margin-top:10px}
 </style>
 </head>
 <body data-page-node-id="0fZgEo1HUAFcjl7zCoNht8">
@@ -518,6 +588,8 @@
 <script src="assets/three.min.js"></script>
 <!-- 地球贴图内联版（file:// 下外链 jpg 会被 CORS 拒绝，见 tools/gen-earth-tex.js） -->
 <script src="assets/earth-tex.js"></script>
+<!-- 能力检测最先行：给 <html> 挂 Chrome 61 降级 class，必须在首帧渲染前完成 -->
+<script src="src/compat.js"></script>
 <script src="src/data.js"></script>
 <script src="src/geo.js"></script>
 <!-- 海陆掩膜（§11.11）：布阵地理判定用，Natural Earth 光栅化，离线内联 -->

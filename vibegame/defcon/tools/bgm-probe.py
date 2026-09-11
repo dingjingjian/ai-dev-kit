@@ -91,13 +91,19 @@ async (ms) => {
   /* 400~600 Hz 占比：警报旋回（A4 440 ↔ D5 587）就在这一段，
    * 单列出来是为了在 war 段能直接判「警报在场」而不是靠人耳。 */
   let sirenBand = 0;
+  /* 800~1400 Hz 占比：八改加的**升八度警报层**（880 ↔ 1174 Hz）就在这一段。
+   * 这一层是手机端唯一抓得住的警报，所以它才是「手机上听不听得见警报」的直接指标 ——
+   * 只看 400~600 会漏判（那一层在手机低截止边缘，占比再高外放也辐射不出来）。 */
+  let sirenHpBand = 0;
   for (let i = 1; i < acc.length; i++) {
     const f = i * binHz;
     if (f >= 400 && f < 600) sirenBand += acc[i] / (accFrames || 1);
+    if (f >= 800 && f < 1400) sirenHpBand += acc[i] / (accFrames || 1);
   }
   return {
     peak, rms: frames ? sqSum / frames : 0, peakHp, rmsHp: frames ? rmsHpSum / frames : 0,
-    bands: pct, domHz, sirenShare: tot ? sirenBand / tot : 0
+    bands: pct, domHz, sirenShare: tot ? sirenBand / tot : 0,
+    sirenHpShare: tot ? sirenHpBand / tot : 0
   };
 }
 """
@@ -161,9 +167,10 @@ async def main():
         info = await page.evaluate(STATE)
         r = await page.evaluate(MEASURE, 11000)     # 覆盖一轮「鸣 12 拍 + 停 4 拍」
         report("③ 热核战争 · 防空警报", info, r)
-        print("  → cue %s  警报频段(400~600Hz)占比 %.1f%%  %s"
-              % (info["cue"], r["sirenShare"] * 100,
+        print("  → cue %s  警报基频(400~600Hz)占比 %.1f%%  警报升八度(800~1400Hz)占比 %.1f%%  %s"
+              % (info["cue"], r["sirenShare"] * 100, r["sirenHpShare"] * 100,
                  "OK 警报在场" if info["cue"] == "siren" and r["sirenShare"] > 0.06 else "!! 警报偏弱"))
+        print("    手机可听度：手机(>500Hz) 平均RMS %.4f（这一路才是外放真正能辐射出来的部分）" % r["rmsHp"])
 
         # ④ 终局：把战局推完，再看终局曲
         fin = await page.evaluate("""() => {

@@ -15,6 +15,12 @@
       <div id="telemetry"></div>
       <div id="mission-tag"></div>
       <div id="labels"></div>
+      <!-- 展示 / 拆解：两枚长征十号构型切换（悬浮在画布上，不占底部面板高度；
+           登月模式下由 app.js 置为 display:none，构型由任务流程决定） -->
+      <div id="variant-bar" class="variants" role="group" aria-label="长征十号构型">
+        <button id="btn-var1" class="mode-btn variant-btn active" type="button">① 揽月着陆器</button>
+        <button id="btn-var2" class="mode-btn variant-btn" type="button">② 梦舟飞船</button>
+      </div>
       <button id="btn-ignite" class="ignite-btn" type="button">点火发射</button>
       <button id="btn-warp" class="warp-btn" type="button" aria-label="长按加速">
         <span class="w-arrows">▶▶</span>

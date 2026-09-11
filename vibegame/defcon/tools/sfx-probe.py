@@ -137,9 +137,9 @@ async (args) => {
 CASES = [
     ("defcon", 5, 700, (200, 2000)),
     ("defcon", 1, 700, (200, 2000)),
-    ("launch", None, 900, (500, 2000)),
-    ("intercept", None, 500, (1000, 3000)),
-    ("nuke", None, 1800, (200, 2000)),
+    ("launch", None, 2200, (500, 2000)),
+    ("intercept", None, 600, (1000, 3000)),
+    ("nuke", None, 3200, (200, 2000)),
     ("deny", None, 500, (200, 2000)),
     ("pick", None, 500, (500, 2000)),
     ("select", None, 400, (800, 2500)),
@@ -231,7 +231,10 @@ async def main():
             };
             let before = 0, nb = 0, during = 0, nd = 0, dmin = 1, tBack = null;
             let t = performance.now();
-            while (performance.now() - t < 600) { before += frame(); nb++; await new Promise(r => setTimeout(r, 8)); }
+            /* before 窗口取 3000 ms：警报每 16 拍「鸣 12 拍 + 停 4 拍」（约 10.4 s 一个周期），
+             * 600 ms 的窗口会随机落进那 4 拍空白期，得到的底噪偏低，
+             * 让路读数会假性变成「+11 dB」这种不可能的值。拉长到 3000 ms 取到稳定的平均值。 */
+            while (performance.now() - t < 3000) { before += frame(); nb++; await new Promise(r => setTimeout(r, 8)); }
             before /= Math.max(1, nb);
             window.DC.audio.play('nuke');
             const t0 = performance.now();

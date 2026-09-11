@@ -6,6 +6,11 @@
   --mut:#8da2c0;
   --acc:#5cc8ff;
   --warm:#ffb84d;
+  /* HUD 定位：画面全屏铺满、四周不留白。
+     --hud-top    ：顶部提示条（toast）的行高；
+     --hud-bottom ：底部 HUD 行高，音效按钮与构型切换按钮共用，两者同一条水平线（左 / 右对称）。 */
+  --hud-top: 82px;
+  --hud-bottom: 16px;
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; }
@@ -24,6 +29,7 @@ body {
   display: flex; flex-direction: column;
   height: 100vh; height: var(--app-height, 100vh);
   width: 100%;
+  /* 画面全屏铺满，顶部不预留空白；仅操作按钮避让安全区（见 .variants） */
   background: radial-gradient(130% 70% at 50% 0%, #0c1430 0%, #06070d 60%, #04050a 100%);
 }
 
@@ -82,10 +88,10 @@ body {
   100% { transform: translate(-50%, -50%) scale(0.94); opacity: 0.9; }
 }
 
-/* 遥测提示条 */
+/* 遥测提示条（toast）：画布顶部居中，行高由 --hud-top 统一定义 */
 #telemetry {
   display: none; position: absolute;
-  top: 82px; left: 12px; right: 12px; margin: 0 auto; width: fit-content; max-width: calc(100% - 24px);
+  top: var(--hud-top, 82px); left: 12px; right: 12px; margin: 0 auto; width: fit-content; max-width: calc(100% - 24px);
   font-size: 12px; font-weight: 500; letter-spacing: 0.5px;
   font-variant-numeric: tabular-nums; text-align: center; line-height: 1.45;
   color: var(--mut); background: var(--panel);
@@ -114,10 +120,11 @@ body {
   box-shadow: 0 0 8px rgba(195, 166, 255, 0.9);
 }
 
-/* 音效开关：画布右下角，胶囊造型与底部玻璃质感面板同族 */
+/* 音效开关：画布右下角，胶囊造型与底部玻璃质感面板同族；
+   与左下角的构型切换按钮共用 --hud-bottom，两者保持同一条水平线 */
 .sound-btn {
   position: absolute;
-  bottom: 16px; right: 14px;
+  bottom: var(--hud-bottom, 16px); right: 14px;
   display: flex; align-items: center; justify-content: center; gap: 6px;
   height: 38px;
   padding: 0 14px 0 11px;
@@ -219,7 +226,13 @@ body {
   background: linear-gradient(0deg, rgba(6, 9, 20, 0.96), rgba(6, 9, 20, 0.4));
   z-index: 5;
 }
-.phase-text { font-size: 12px; color: var(--mut); margin-bottom: 7px; text-align: center; min-height: 16px; }
+/* 单行 + 溢出省略：长文案（如「任务完成…点击重新观看」）在窄屏换行会把底部面板顶高，
+   导致画布高度跳变，故锁定为一行 */
+.phase-text {
+  font-size: 12px; color: var(--mut); margin-bottom: 7px; text-align: center;
+  height: 16px; line-height: 16px;                 /* 固定行高：跨平台/字号下高度都恒定 */
+  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .phase-text.phase-in { animation: phaseIn 0.35s ease-out; }
 @keyframes phaseIn {
   from { opacity: 0; transform: translateY(5px); }
@@ -250,6 +263,25 @@ body {
   color: #fff;
   background: linear-gradient(135deg, rgba(92, 200, 255, 0.9), rgba(74, 144, 226, 0.9));
   box-shadow: 0 2px 10px rgba(92, 200, 255, 0.35);
+}
+
+/* 构型切换：与模式 dock 同族（一个玻璃容器 + 透明选项），尺寸更小以区分主次。
+   悬浮在画布左下角，与右下角的音效按钮同在 --hud-bottom 这条水平线上（左右对称）：
+   既不放顶部（会压住拆解视图的部件标签），也不放底部居中（会与说明卡片 #desc-box 重叠）；
+   不参与底部面板布局 —— 因此展示 / 拆解 / 登月之间切换时底部面板高度恒定；
+   仅展示 / 拆解可见，登月模式下由 app.js 置为 display:none */
+.variants {
+  display: none; align-items: center;
+  position: absolute; bottom: var(--hud-bottom, 16px); left: 14px;
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; padding: 3px;
+  max-width: calc(100vw - 16px); z-index: 6;
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.variants .variant-btn { padding: 5px 13px; min-height: 30px; font-size: 12px; }
+.variants .mode-btn.active {
+  background: linear-gradient(135deg, rgba(92, 200, 255, 0.72), rgba(74, 144, 226, 0.66));
+  box-shadow: 0 1px 8px rgba(92, 200, 255, 0.22);
 }
 
 /* 点火发射按钮：脱离文档流，悬浮于画布底部、底部面板上方 */
@@ -404,12 +436,15 @@ body {
 @media (max-width: 599px) {
   #countdown { font-size: 64px; }
   #countdown.cd-ignite { font-size: 34px; }
+  .variants .variant-btn { font-size: 11px; padding: 4px 10px; min-height: 28px; }
   #telemetry { font-size: 11px; padding: 5px 12px; max-width: calc(100% - 16px); }
   .warp-btn { bottom: 40px; width: 62px; height: 62px; }
   .warp-btn .w-arrows { font-size: 13px; }
   .warp-btn .w-label { font-size: 9px; }
   .warp-btn::before { inset: -11px; }
-  .sound-btn { bottom: 12px; right: 10px; height: 34px; padding: 0 11px 0 9px; font-size: 11px; }
+  :root { --hud-bottom: 12px; }               /* 底部 HUD 行随移动端下移，音效 / 构型切换仍保持同级 */
+  .variants { left: 10px; }
+  .sound-btn { right: 10px; height: 34px; padding: 0 11px 0 9px; font-size: 11px; }
 }
 
 @media (min-width: 600px) {
