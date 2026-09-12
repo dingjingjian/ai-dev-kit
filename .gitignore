@@ -4,9 +4,22 @@ Thumbs.db
 
 # Temp files
 *.tmp
+*.log
 
 # Dependencies
 node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build output & distribution packages
+dist/
+release/
+*.zip
+
+# Runtime / lock files
+*.port
 
 # AI Agent memory & config
 .mimocode/
@@ -16,13 +29,21 @@ node_modules/
 .aider/
 .workbuddy/
 .codeartsdoer/
+.codebuddy/
 
 # IDE/Tool config
 .trae/
+.playwright-cli/
 
-# Build output
-dist/
-release/
+# Generated media / export working dirs
+**/xhs-video/
+**/_probe/
+**/clips/
+**/docs/video/
+
+# Project-specific generated promo (moon-landing-3d)
+vibeknow/moon-landing-3d/xiaohongshu/*.mp4
+vibeknow/moon-landing-3d/xiaohongshu/screenshots/
 
 # Password manager sensitive files
 data.enc

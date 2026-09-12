@@ -302,6 +302,19 @@
     scene.add(stars);
   }
 
+  /* 大气辉光的强度是一个可呼吸的标量（详见 §12.6）：
+   * 录制宣传视频时 screencast 只推「合成结果有变化」的帧，而静止画面
+   * 当前与前一帧逐像素相同 —— 于是「静置撑时长」录不到素材。
+   * 呼吸幅度压到极点（±0.6%），视觉上看不出明暗变化，
+   * 但 GPU 每帧输出的像素确实不同，合成器连续推帧。
+   * 这与「让地球上下抖 1px」有本质区别：抖位移是**伪造的运动**，观众会看到抖动；
+   * 呼吸是**真实的光学变化**，只是小到不经提示看不出来。 */
+  var atmoMat = null;
+  var atmoBreath = 0.006;           // 呼吸幅度：±0.6%（默认值，可用 setAtmoBreath 调）
+  var ATMO_PERIOD = 22;             // 一轮 22s（约 1.7 个宣传片时长，不会看出周期感）
+  var atmoPhase = 0;
+  var orbitNudge = 0;               // 相机极缓环绕速率（rad/s），默认关（§12.6）
+
   function buildAtmosphere() {
     var m = new THREE.ShaderMaterial({
       uniforms: { uColor: { value: new THREE.Color(0x54b4e8) }, uInt: { value: 1.0 } },
@@ -327,6 +340,17 @@
       transparent: true, depthWrite: false
     });
     scene.add(new THREE.Mesh(new THREE.SphereGeometry(R * 1.06, 48, 32), m));
+    atmoMat = m;
+  }
+
+  /* 大气呼吸（§12.6）：把 uInt 在 1±ATMO_BREATH 之间做极慢正弦。
+   * 由 DC.render.frame 每帧调用 —— 游戏主循环本来就在跑，
+   * 这里只是让它「每帧确实改了点什么」，不额外引入定时器。 */
+  function pumpAtmosphere(dt) {
+    if (!atmoMat) return;
+    atmoPhase += dt / ATMO_PERIOD * Math.PI * 2;
+    if (atmoPhase > Math.PI * 2) atmoPhase -= Math.PI * 2;
+    atmoMat.uniforms.uInt.value = 1 + atmoBreath * Math.sin(atmoPhase);
   }
 
   /* ───────────────────────── 城市光点（Points，60 座）─────────────────────────
@@ -1390,6 +1414,7 @@
     buildStars();
     buildGlobe();
     buildAtmosphere();
+    atmoPhase = 0;             // 呼吸相位从 0 起，保证「开局长什么样」可复现（§12.6）
     buildCities(state);
     syncPointScale();          // 必须在 setSize 之后：uScale 依赖画布实际像素高
     buildUnits(state);
@@ -1454,10 +1479,15 @@
     pumpTrails(dt);
     pumpScorch(dt);
     pumpTargetRing(dt);
+    pumpAtmosphere(dt);              // §12.6 极缓呼吸：保证静止画面也逐帧产出新像素
 
     cam.theta += (cam.tTheta - cam.theta) * 0.12;
     cam.phi += (cam.tPhi - cam.phi) * 0.12;
     cam.radius += (cam.tRadius - cam.radius) * 0.10;
+    /* §12.6 极缓环绕：直接推进 theta 与 tTheta，不经过缓动。
+     * 缓动会让「恒定速率」被 12% 的阻尼吃掉 —— theta 追不上 tTheta，
+     * 两者差值稳定后画面就静止了。同时推两者才是真的匀速转。 */
+    if (orbitNudge) { cam.theta += orbitNudge * dt; cam.tTheta += orbitNudge * dt; }
     if (shakeAmt > 0) { shakeAmt -= dt * 2.2; if (shakeAmt < 0) shakeAmt = 0; }
     if (bloomPulse > 0) { bloomPulse -= dt * 1.7; if (bloomPulse < 0) bloomPulse = 0; }
     applyCam();
@@ -1502,7 +1532,24 @@
      * 顺序与 DC.sim.unitsOf(state, playerFaction, 'radar') 一致。 */
     get radarRingsVisible() {
       return radarRings.map(function (r) { return !!r.visible; });
-    }
+    },
+    /* §12.6 大气呼吸幅度（±比例）。默认 0.006 —— 肉眼不可见。
+     * 录屏工具（tools/xhs-video/record_clips3.py）在录制前调大，
+     * 让 screencast 在静止画面上也拿到连续帧；录完调回默认。
+     * 传 0 即彻底关闭呼吸。 */
+    setAtmoBreath: function (v) {
+      atmoBreath = Math.max(0, Math.min(0.5, +v || 0));
+    },
+    get atmoBreath() { return atmoBreath; },
+    /* §12.6 相机极缓环绕（弧度）。
+     * 与「位移抖动」的根本区别：它改的是**相机姿态**，
+     * 星球在屏幕上的位置真的在连续移动（一圈约 40 分钟），
+     * 而不是整块画面来回跳 1px。录屏时给一个恒定小值即可
+     * 让 screencast 在静止片段上连续推帧。传 0 关闭。 */
+    setOrbitNudge: function (v) {
+      orbitNudge = +v || 0;
+    },
+    get orbitNudge() { return orbitNudge; }
   };
   api = DC.render;
 

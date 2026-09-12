@@ -40,6 +40,8 @@
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
+| 郑和宝船 | `vibeknow/zhenghe-treasure-ship/` | Blender 建模 + 离线 H5 展示的明代宝船科普：九桅十二帆、水密隔舱、七下西洋航线；三种模式（展示/拆解/航行），史料口径见 `docs/史料考证.md`，尺寸真源为 `assets/ship-params.js` |
+| 055 型驱逐舰 | `vibeknow/type-055-destroyer/` | 照四视图线图做的 055 三维模型：舰体线型、隐身上层建筑、集成桅四面 AESA、前 64 + 后 64 垂发；Blender 参数化建模（`assets/ship-params.js` 为唯一真源），含 9 项几何审计与四机位预览 |
 | 3D 地球科普 | `vibeknow/earth-3d/` | 3D 地球科普工具，WebGL 展示蓝色星球、昼夜交替、四季成因、月相（地月系统）、地球内部结构与经纬网格 |
 | 太阳系 3D | `vibeknow/solar-system-3d/` | 太阳系 3D 可视化，WebGL 渲染行星、轨道与土星环，支持点击追踪天体 |
 | 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 3D 火箭发射模拟，WebGL 渲染，支持展示/拆解等模式，含遥测与倒计时 |

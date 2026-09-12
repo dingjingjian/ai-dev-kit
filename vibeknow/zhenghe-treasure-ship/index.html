@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>郑和宝船</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+      background: #0d1a24;
+      color: #e8e2d4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(32px + env(safe-area-inset-top)) 24px calc(32px + env(safe-area-inset-bottom));
+      min-height: 100%;
+    }
+    .wrap { width: 100%; max-width: 420px; }
+    h1 { font-size: 26px; font-weight: 600; letter-spacing: 0.3em; margin-bottom: 10px; }
+    .sub { font-size: 13px; color: #7f97a6; letter-spacing: 0.22em; margin-bottom: 34px; }
+    dl { display: block; }
+    .row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 11px 0;
+      border-bottom: 1px solid rgba(232, 226, 212, 0.1);
+      font-size: 14px;
+    }
+    .row:first-child { border-top: 1px solid rgba(232, 226, 212, 0.1); }
+    .row dt { color: #8ea6b5; letter-spacing: 0.08em; }
+    .row dd { font-variant-numeric: tabular-nums; color: #e8e2d4; letter-spacing: 0.04em; }
+    .note { margin-top: 26px; font-size: 12px; line-height: 1.9; color: #6d8493; }
+    .note b { color: #c9a961; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <h1>郑和宝船</h1>
+    <p class="sub">MING TREASURE SHIP</p>
+    <dl id="stats"></dl>
+    <p class="note" id="note"></p>
+  </div>
+  <script src="./assets/ship-params.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>

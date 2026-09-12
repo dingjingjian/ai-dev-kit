@@ -1,0 +1,84 @@
+/* 郑和宝船 — 页面框架样式
+   Chrome 61 基线：只用 flex / 基础属性，不用 grid-gap 之外的现代特性。 */
+
+html { -webkit-text-size-adjust: 100%; }
+
+body { margin: 0; }
+
+#viewport {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#viewport canvas { display: block; width: 100%; height: 100%; }
+
+/* 顶部标题条 */
+.hud-top {
+  position: fixed;
+  left: 0; right: 0;
+  top: 0;
+  padding: calc(12px + env(safe-area-inset-top)) 16px 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  pointer-events: none;
+  z-index: 10;
+}
+.hud-top .title { font-size: 15px; font-weight: 600; letter-spacing: 0.28em; }
+.hud-top .sub { font-size: 11px; letter-spacing: 0.18em; opacity: 0.5; }
+
+/* 底部模式切换 */
+.modes {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 0;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  z-index: 10;
+}
+.modes button {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+  padding: 9px 20px;
+  color: inherit;
+  opacity: 0.42;
+  transition: opacity 0.18s;
+}
+.modes button[aria-pressed="true"] { opacity: 1; }
+
+/* 部件说明卡（拆解模式） */
+.part-card {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  padding: 16px 18px;
+  z-index: 12;
+  display: none;
+}
+.part-card.is-open { display: block; }
+.part-card h2 { font-size: 15px; font-weight: 600; letter-spacing: 0.12em; margin: 0 0 7px; }
+.part-card p { font-size: 13px; line-height: 1.85; margin: 0; opacity: 0.78; }
+.part-card .close {
+  position: absolute; top: 10px; right: 12px;
+  border: 0; background: transparent; color: inherit;
+  font-size: 18px; line-height: 1; padding: 4px 6px; opacity: 0.5;
+}
+
+/* 非 WebGL 兜底 */
+.fallback {
+  position: fixed; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+  font-size: 14px; line-height: 1.9;
+}
+.fallback.is-open { display: flex; }

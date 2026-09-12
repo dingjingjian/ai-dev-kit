@@ -93,6 +93,38 @@
     targetX: 0, targetY: rocketModel.center, targetZ: 0, shake: 0
   };
 
+  // ---- 宣传片录制用的极缓环绕（默认关闭，不影响正常游玩）----
+  // ## 为什么需要它
+  // 逐帧录屏走的是 CDP Page.startScreencast，它是**重绘驱动**的：
+  // 画面没变化就不推帧。而「展示 / 拆解 / 落月后」这几段镜头本身近乎静止，
+  // 于是录到的素材里三到五成是重复帧，成片看起来就是卡顿。
+  // 早先的解法是给 #stage 做 ±0.5px 位移来回抖动 —— 那确实能逼出重绘，
+  // 但整块画面每秒抖 60 次，会被永久烧进素材（实测位移指纹在 (0,-1)↔(0,1)
+  // 之间翻转 12/10 次），用户一眼就看出「画面在抖」。
+  //
+  // 正解是**真实且不回头**的极缓运动：相机绕目标竖直轴匀速环绕。
+  // 每秒只转 nudgeOmega 弧度（约 0.1°/s 量级），肉眼读作静止，
+  // 但每一帧的像素都与上一帧不同，screencast 自然会持续推帧。
+  // 关键差别：位移抖动是**来回翻转**（高频、可辨），环绕是**单向漂移**。
+  var nudgeOmega = 0, nudgePhase = 0;
+  M3D.setOrbitNudge = function (omega) { nudgeOmega = +omega || 0; };
+  M3D.getOrbitNudge = function () { return { omega: nudgeOmega, phase: nudgePhase }; };
+
+  // 录制用帧率上限（默认 0 = 不限制）。宣传片成片是 30fps，
+  // 若采集帧率远高于 30，取帧时就要按非整数步长跳帧（实测步长 1.4 会
+  // 形成 1,2,1,2 的节奏，读作顿挫）；把渲染节流到 30fps 后步长恒为 1，
+  // 画面最匀。只对录制有影响，普通游玩不启用。
+  var frameCapMs = 0, capSkipped = 0, capRendered = 0, capSince = 0;
+  M3D.setFrameCap = function (fps) {
+    frameCapMs = fps > 0 ? 1000 / fps : 0;
+    capSkipped = 0; capRendered = 0; capSince = 0;
+  };
+  // 读数出口：录制探针用它确认节流真的生效（只看采集帧率会被合成器误导）
+  M3D.getFrameCap = function () {
+    return { cap: frameCapMs ? 1000 / frameCapMs : 0, skipped: capSkipped,
+             rendered: capRendered, wallSec: capSince };
+  };
+
   var mission = M3D.createMissionSystem(renderer, rocketModel, pad, {
     onPhase: function (key, text) {
       queuePhase(text);
@@ -187,6 +219,29 @@
       exS += (exL - exS) * sb; eyS += (eyL - eyS) * sb; ezS += (ezL - ezS) * sb;
       ux += (urx - ux) * sb; uy += (ury - uy) * sb; uz += (0 - uz) * sb;
       var ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1; ux /= ul; uy /= ul; uz /= ul;
+    }
+
+    // ---- 录制用极缓环绕：把机位绕「相机的 up 轴」转过一个极小角度 ----
+    // ## 为什么要用 up 轴而不是世界 +Y
+    // 世界 +Y 只对「标准轨道镜头」成立。月面着陆镜头（surfCamBlend 分支）
+    // 的 up 是月面法线，绕世界 +Y 转会变成歪着转、构图会漂。
+    // 绕相机自己的 up 转才是真正的偏航，任何机位下观感一致。
+    //
+    // ## 为什么用 Rodrigues 而不是只改 yaw
+    // 机位偏移向量相对 up 有一个竖直分量（= d·sin(pitch)），
+    // 只改 yaw 会连同这个分量一起算错；绕轴旋转公式能自动把
+    // 「沿着 up 的分量保持不变、垂直于 up 的分量旋转」，正是要的效果。
+    if (nudgePhase !== 0) {
+      var vx = exS - tx, vy = eyS - ty, vz = ezS - tz;
+      var cN = Math.cos(nudgePhase), sN = Math.sin(nudgePhase);
+      var kd = vx * ux + vy * uy + vz * uz;                 // (k·v)
+      var cx = uy * vz - uz * vy;                           // k × v
+      var cy = uz * vx - ux * vz;
+      var cz = ux * vy - uy * vx;
+      var om = 1 - cN;
+      exS = tx + vx * cN + cx * sN + ux * kd * om;
+      eyS = ty + vy * cN + cy * sN + uy * kd * om;
+      ezS = tz + vz * cN + cz * sN + uz * kd * om;
     }
 
     eye[0] = exS + (sh ? (Math.random() - 0.5) * sh : 0);
@@ -478,8 +533,24 @@
     if (!running) return;
     rafId = requestAnimationFrame(frame);
     if (renderer.isLost()) return;
+
+    // 录制用帧率上限：把渲染节流到固定帧率，让采集节奏与成片一致。
+    // 注意 `return` 之后要靠上面那行 rAF 续上，否则循环断掉、画面冻住。
+    if (frameCapMs > 0) {
+      if (lastTime && (now - lastTime) < frameCapMs - 0.5) { capSkipped++; return; }
+      capRendered++;
+      if (!capSince) capSince = now;
+      else capSince = (now - capSince) / 1000;      // 累计墙钟秒数
+    }
+
     var dt = lastTime ? (now - lastTime) / 1000 : 0.016; lastTime = now;
     if (dt > 0.05) dt = 0.05;
+
+    // 极缓环绕的相位推进：单向累加，绕满一圈就归零（避免长期累积精度损失）
+    if (nudgeOmega) {
+      nudgePhase += nudgeOmega * dt;
+      if (nudgePhase > 6.283185307179586) nudgePhase -= 6.283185307179586;
+    }
 
     if (mode === 'show') groupRotY = 0;
 

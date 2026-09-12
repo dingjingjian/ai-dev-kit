@@ -1,0 +1,12 @@
+# 构建产物
+dist/
+*.zip
+
+# Blender 中间产物（渲染帧、日志）
+blender/out/
+__pycache__/
+*.pyc
+
+# 系统垃圾
+.DS_Store
+Thumbs.db
