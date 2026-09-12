@@ -31,6 +31,7 @@
 | 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 基于 perler-bead-game 引擎的中秋活动版：16 幅月夜纹样 + 猜灯谜（拼成点亮）；同构工程约定，存档前缀 `pma_`。已含「导出图纸」，规格与国风版一致 |
 | 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 基于 perler-bead-game 引擎的生肖版：12 生肖按地支顺序分三档难度；「导出图纸」首发于此（编号网格 + 色号图例 + 用料清单，全景预览 + 点图放大）；同构工程约定，存档前缀 `pzd_` |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分、连对加成，锻炼心算验算能力 |
+| 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球穿越太阳系：太阳引力 + 五颗行星引力实时作用，被行星引力捕获或撞毁即失败、飞出太阳系即胜利；行星发动机燃料有限，掠过行星时"相对速度"决定被吸走还是引力弹弓；复用手写 WebGL 引擎与 solar-system-3d 行星贴图，`tests/headless_wandering.js` 无头自检（16 项） |
 
 ### #vibeart　数字艺术
 

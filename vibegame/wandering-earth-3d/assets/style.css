@@ -174,7 +174,7 @@ body {
 /* 科普说明卡片 */
 #desc-box {
   display: none; position: absolute;
-  left: 50%; bottom: 60px; transform: translateX(-50%);
+  left: 50%; bottom: 16px; transform: translateX(-50%);
   width: 86%; max-width: 380px;
   background: var(--panel); border: 1px solid var(--line);
   border-radius: 16px; padding: 12px 16px; z-index: 6;
@@ -290,7 +290,7 @@ body {
 .ignite-btn {
   position: absolute;
   left: 50%;
-  bottom: 76px;
+  bottom: 40px;
   transform: translateX(-50%);
   display: none;
   align-items: center;
@@ -336,7 +336,7 @@ body {
 .warp-btn {
   position: absolute;
   left: 50%;
-  bottom: 76px;
+  bottom: 40px;
   transform: translateX(-50%);
   display: none;
   flex-direction: column;
@@ -437,6 +437,147 @@ body {
   }
 }
 
+/* ============================================================
+   流浪地球 · 逃出太阳系：游戏 HUD
+   ============================================================ */
+#hud {
+  position: absolute;
+  top: calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  left: calc(12px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+  z-index: 5;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(6, 12, 24, 0.55);
+  border: 1px solid rgba(120, 170, 255, 0.16);
+  backdrop-filter: blur(6px);
+  pointer-events: none;
+}
+.hud-row { display: flex; align-items: baseline; }
+.hud-row + .hud-row { margin-top: 3px; }
+.hud-k { font-size: 11px; color: var(--mut); min-width: 56px; }
+.hud-v { font-size: 13px; font-weight: 600; color: var(--txt); font-variant-numeric: tabular-nums; }
+
+#warn {
+  position: absolute;
+  left: 50%;
+  top: calc(58px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 92%;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffd27a;
+  background: rgba(60, 26, 6, 0.72);
+  border: 1px solid rgba(255, 184, 77, 0.35);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#hint {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(200, 226, 255, 0.92);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+#hint.show { animation: hintBreath 2.4s ease-in-out infinite; }
+@keyframes hintBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+#overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 14, 0.62);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease;
+}
+#overlay.show { opacity: 1; pointer-events: auto; }
+.ov-card {
+  width: min(86%, 340px);
+  padding: 22px 20px 18px;
+  border-radius: 14px;
+  text-align: center;
+  background: rgba(10, 18, 34, 0.94);
+  border: 1px solid rgba(120, 170, 255, 0.22);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
+}
+.ov-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
+.ov-title.bad { color: #ff7a5c; }
+.ov-title.good { color: #6ee7a8; }
+.ov-text { margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--mut); }
+.ov-btn {
+  margin-top: 18px;
+  width: 100%;
+  min-height: 42px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #04223a;
+  background: linear-gradient(135deg, #7fd1ff, #5cc8ff);
+  cursor: pointer;
+}
+.ov-btn:active { transform: scale(0.97); }
+
+.fuel-wrap { width: 100%; max-width: 260px; }
+.fuel-label { font-size: 11px; color: var(--mut); letter-spacing: 0.4px; }
+.fuel-track {
+  height: 7px;
+  margin-top: 5px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.10);
+}
+.fuel-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #5cc8ff, #9ef0ff);
+  transition: width 0.12s linear, background 0.3s ease;
+}
+.fuel-fill.low { background: linear-gradient(90deg, #ff7a3a, #ffb84d); }
+
+.ts-group { display: flex; margin-top: 9px; }
+.ts-group > * + * { margin-left: 6px; }
+.ts-btn {
+  min-width: 44px;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mut);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+}
+.ts-btn.active {
+  color: #04223a;
+  background: linear-gradient(135deg, #7fd1ff, #5cc8ff);
+  border-color: transparent;
+}
+.ts-btn:active { opacity: 0.8; }
+
 .progress { width: 100%; max-width: 360px; margin-top: 8px; }
 .progress-track { height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 3px; overflow: hidden; }
 .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff7a3a, var(--warm)); border-radius: 3px; transition: width 0.12s linear; }
@@ -446,7 +587,7 @@ body {
   #countdown.cd-ignite { font-size: 34px; }
   .variants .variant-btn { font-size: 11px; padding: 4px 10px; min-height: 28px; }
   #telemetry { font-size: 11px; padding: 5px 12px; max-width: calc(100% - 16px); }
-  .warp-btn { bottom: 76px; width: 62px; height: 62px; }
+  .warp-btn { bottom: 40px; width: 62px; height: 62px; }
   .warp-btn .w-arrows { font-size: 13px; }
   .warp-btn .w-label { font-size: 9px; }
   .warp-btn::before { inset: -11px; }
@@ -465,3 +606,53 @@ body {
   .warp-btn .w-arrows { font-size: 18px; }
   .warp-btn .w-label { font-size: 11px; }
 }
+
+/* ============================================================
+   前置剧情（开场过场）：自转暂停 / 行星发动机启动 / 月球剧情
+   ============================================================ */
+/* 过场期间隐藏游戏内 HUD 与底部面板，避免与字幕重叠 */
+body.prologuing #hud,
+body.prologuing #warn,
+body.prologuing #hint,
+body.prologuing .bottombar { display: none !important; }
+
+/* 点火白闪：不透明度由 app.js 每帧驱动衰减 */
+#flash {
+  position: absolute; inset: 0; z-index: 11;
+  background: #d4ecff; opacity: 0; pointer-events: none;
+}
+
+/* 字幕卡：居于画面下方，类似电影字幕，不遮挡地球 */
+#prologue {
+  position: absolute; inset: 0; z-index: 12;
+  display: none; align-items: flex-end; justify-content: center;
+  pointer-events: none;
+  padding-bottom: 13%;
+  background: linear-gradient(0deg, rgba(2, 4, 10, 0.85) 0%, rgba(2, 4, 10, 0) 46%);
+}
+#prologue.show { display: flex; animation: proFade 0.6s ease; }
+@keyframes proFade { from { opacity: 0; } to { opacity: 1; } }
+.pro-card { max-width: 560px; width: 86%; text-align: center; pointer-events: none; }
+.pro-title {
+  font-size: 18px; font-weight: 700; letter-spacing: 2px;
+  color: var(--acc); margin-bottom: 10px;
+  text-shadow: 0 2px 14px rgba(92, 200, 255, 0.4);
+}
+.pro-text {
+  font-size: 14px; line-height: 1.7; color: var(--txt);
+  background: rgba(8, 14, 28, 0.5); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px 16px;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+.pro-text.pop { animation: proPop 0.5s ease-out; }
+@keyframes proPop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.pro-hint { margin-top: 12px; font-size: 11px; color: var(--mut); letter-spacing: 1px; }
+#pro-skip {
+  position: absolute;
+  top: calc(12px + var(--safe-area-inset-top, 0px)); right: 12px;
+  height: 34px; padding: 0 14px; font: inherit; font-size: 12px;
+  color: var(--mut); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer; z-index: 13; pointer-events: auto;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+#pro-skip:active { opacity: 0.8; }

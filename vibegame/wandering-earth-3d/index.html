@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>流浪地球 · 逃出太阳系</title>
+  <link rel="stylesheet" href="./assets/style.css" />
+</head>
+<body>
+  <div id="app">
+    <main id="stage-wrap">
+      <canvas id="stage"></canvas>
+
+      <div id="hud">
+        <div class="hud-row"><span class="hud-k">距日</span><span id="hud-dist" class="hud-v">1.00 AU</span></div>
+        <div class="hud-row"><span class="hud-k">速度</span><span id="hud-speed" class="hud-v">29.8 km/s</span></div>
+        <div class="hud-row"><span class="hud-k">任务时间</span><span id="hud-time" class="hud-v">0.00 年</span></div>
+      </div>
+
+      <div id="warn"></div>
+      <div id="hint">滑动屏幕，点火推动地球</div>
+
+      <div id="overlay">
+        <div class="ov-card">
+          <div id="overlay-title" class="ov-title bad">任务失败</div>
+          <div id="overlay-text" class="ov-text"></div>
+          <button id="btn-restart" class="ov-btn" type="button">重新开始</button>
+        </div>
+      </div>
+
+      <div id="flash"></div>
+
+      <div id="prologue">
+        <button id="pro-skip" type="button">跳过</button>
+        <div class="pro-card">
+          <div id="pro-title" class="pro-title"></div>
+          <div id="pro-text" class="pro-text"></div>
+          <div id="pro-hint" class="pro-hint"></div>
+        </div>
+      </div>
+
+      <div id="loader">
+        <div class="loader-spin"></div>
+        <p>正在加载三维场景…</p>
+      </div>
+      <div id="fallback" class="fallback">
+        <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+          <circle cx="32" cy="32" r="24" fill="#2b6fd6"/>
+          <path d="M14 26c6-4 12 2 18-1s12-5 18-1v6c-6-4-12-1-18 1s-12 4-18 1z" fill="#7fd0a8"/>
+          <path d="M14 40c6-4 12 2 18-1s12-5 18-1v4c-6-4-12-1-18 1s-12 4-18 1z" fill="#7fd0a8"/>
+        </svg>
+        <p class="fb-text">当前环境不支持 WebGL</p>
+        <p class="fb-sub">无法显示 3D 内容，请升级浏览器或更换设备</p>
+      </div>
+    </main>
+
+    <footer class="bottombar">
+      <div class="fuel-wrap">
+        <div class="fuel-label">行星发动机燃料</div>
+        <div class="fuel-track"><div id="fuel-fill" class="fuel-fill"></div></div>
+      </div>
+      <div class="ts-group" role="group" aria-label="时间倍率">
+        <button class="ts-btn active" data-ts="1" type="button">1×</button>
+        <button class="ts-btn" data-ts="2" type="button">2×</button>
+        <button class="ts-btn" data-ts="4" type="button">4×</button>
+      </div>
+    </footer>
+  </div>
+  <script src="./assets/math.js"></script>
+  <script src="./assets/earth-data.js"></script>
+  <script src="./assets/clouds-data.js"></script>
+  <script src="./assets/mercury-data.js"></script>
+  <script src="./assets/venus-data.js"></script>
+  <script src="./assets/mars-data.js"></script>
+  <script src="./assets/jupiter-data.js"></script>
+  <script src="./assets/saturn-data.js"></script>
+  <script src="./assets/engine.js"></script>
+  <script src="./assets/bodies.js"></script>
+  <script src="./assets/game.js"></script>
+  <script src="./assets/audio.js"></script>
+  <script src="./assets/app.js"></script>
+</body>
+</html>
