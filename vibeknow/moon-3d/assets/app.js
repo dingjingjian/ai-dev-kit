@@ -89,22 +89,52 @@
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
     camera.lookAt(0,0,0);}
 
-  var dragging=false,lx=0,ly=0,moved=false,downX=0,downY=0,downT=0,pinch=0;
-  cv.addEventListener('pointerdown',function(e){dragging=true;moved=false;lx=downX=e.clientX;ly=downY=e.clientY;downT=performance.now();cv.setPointerCapture(e.pointerId);});
-  cv.addEventListener('pointerup',function(e){
-    dragging=false;try{cv.releasePointerCapture(e.pointerId)}catch(_){}
-    var dt=performance.now()-downT,dx=e.clientX-downX,dy=e.clientY-downY;
-    if(!moved && dt<350 && Math.hypot(dx,dy)<10){handleClick(e.clientX,e.clientY);}
+  /* 手势：单指旋转 / 双指缩放，两者互斥。
+   * 触屏上 pointer* 与 touch* 是并行发出的两套事件，而旧版只用一个裸 dragging 布尔、
+   * 不区分是哪根手指 —— 双指按下时两根手指各发各的 pointermove、都去改 theta/phi，
+   * 且 lx/ly 被两指轮流覆盖（算出来的是跨手指的巨大位移），画面就在两指之间来回跳。
+   * 现在每根手指单独记坐标与本次按下的起点，只有「屏上仅一根手指」时旋转。 */
+  var pointers={},dragId=null,pinch=0,multi=false;
+  function pCount(){var n=0,k;for(k in pointers)if(pointers[k])n++;return n;}
+  function armDrag(id){dragId=id;lx=pointers[id].x;ly=pointers[id].y;}
+  function stopDrag(){dragId=null;}
+  function tdist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+  cv.addEventListener('pointerdown',function(e){
+    pointers[e.pointerId]={x:e.clientX,y:e.clientY,downX:e.clientX,downY:e.clientY,downT:performance.now(),moved:false};
+    if(pCount()>1){multi=true;stopDrag();return;}      // 第二指落下：旋转让位给缩放
+    armDrag(e.pointerId);
+    cv.setPointerCapture(e.pointerId);
   });
+  function onPointerEnd(e){
+    var p=pointers[e.pointerId];
+    delete pointers[e.pointerId];
+    if(dragId===e.pointerId)stopDrag();
+    try{cv.releasePointerCapture(e.pointerId)}catch(_){}
+    var n=pCount();
+    if(n===0){
+      /* 轻点拾取：只认「单指、短暂、几乎没动」的那一次；双指手势一律不算点击 */
+      if(p&&!multi&&!p.moved&&performance.now()-p.downT<350&&Math.hypot(e.clientX-p.downX,e.clientY-p.downY)<10){handleClick(e.clientX,e.clientY);}
+      multi=false;stopDrag();return;
+    }
+    if(n===1){for(var id in pointers)if(pointers[id]){armDrag(Number(id));break;}}   // 缩放抬起一指：剩下那根接回旋转
+  }
+  cv.addEventListener('pointerup',onPointerEnd);
+  cv.addEventListener('pointercancel',onPointerEnd);
   cv.addEventListener('pointermove',function(e){
-    if(!dragging)return;
+    var p=pointers[e.pointerId];if(!p)return;
+    p.x=e.clientX;p.y=e.clientY;
+    if(Math.hypot(e.clientX-p.downX,e.clientY-p.downY)>6)p.moved=true;
+    if(e.pointerId!==dragId)return;
+    if(pCount()>1){stopDrag();return;}                 // 兜底：漏掉 pointerdown 时也不旋转
     var dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
-    if(Math.hypot(e.clientX-downX,e.clientY-downY)>6)moved=true;
     theta-=dx*0.005;phi-=dy*0.005;phi=Math.max(0.1,Math.min(Math.PI-0.1,phi));
   });
   cv.addEventListener('wheel',function(e){e.preventDefault();radius*=1+Math.sign(e.deltaY)*0.08;radius=Math.max(R_MIN,Math.min(R_MAX,radius));},{passive:false});
-  cv.addEventListener('touchstart',function(e){if(e.touches.length===2){pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}},{passive:true});
-  cv.addEventListener('touchmove',function(e){if(e.touches.length===2){e.preventDefault();var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(pinch){radius*=pinch/d;radius=Math.max(R_MIN,Math.min(R_MAX,radius));}pinch=d;}},{passive:false});
+  cv.addEventListener('touchstart',function(e){if(e.touches.length===2){stopDrag();pinch=tdist(e.touches);}},{passive:true});
+  cv.addEventListener('touchend',function(e){if(e.touches.length<2)pinch=0;},{passive:true});   // 清基线：下次双指重新按下按当下指距起算
+  cv.addEventListener('touchcancel',function(){pinch=0;},{passive:true});
+  /* 两指几乎重合时 d→0，pinch/d 会炸成天文数字把镜头甩飞；12px 以内只更新基线不缩放 */
+  cv.addEventListener('touchmove',function(e){if(e.touches.length!==2)return;e.preventDefault();var d=tdist(e.touches);if(pinch>12&&d>12){radius*=pinch/d;radius=Math.max(R_MIN,Math.min(R_MAX,radius));}pinch=d;},{passive:false});
 
   // 点击拾取
   var ray=new THREE.Raycaster(),ndc=new THREE.Vector2();

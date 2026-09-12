@@ -15,6 +15,8 @@
   var btnLaunch = document.getElementById('btn-launch');
   var btnIgnite = document.getElementById('btn-ignite');
   var btnWarp = document.getElementById('btn-warp');
+  var warpArrowsEl = btnWarp ? btnWarp.querySelector('.w-arrows') : null;   // 挡位箭头：倍率越高箭头越多
+  var warpLabelEl = btnWarp ? btnWarp.querySelector('.w-label') : null;     // 按住期间显示当前倍率
   var progressFill = document.getElementById('progress-fill');
   var descBox = document.getElementById('desc-box');
   var descTitle = document.getElementById('desc-title');
@@ -28,17 +30,19 @@
   var btnVar2 = document.getElementById('btn-var2');
 
   // ---- 展示 / 拆解：两枚长征十号构型切换 ----
-  //  1 = 第一次发射（助推×2 + 芯一级 + 二级 + 整流罩内含揽月着陆器）
-  //  2 = 第二次发射（助推×2 + 芯一级 + 二级 + 梦舟飞船 + 逃逸塔，无整流罩）
+  //  两枚箭都是三级半构型（助推×2 + 芯一级 + 芯二级 + 芯三级 + 整流罩）：
+  //  1 = 第一次发射（罩内含揽月着陆器，无逃逸塔）
+  //  2 = 第二次发射（罩内为梦舟飞船 + 罩顶逃逸塔）
   //  构型真源在 mission.js 的 applyConfig()，这里只负责 UI 与镜头
   var variant = 1;
   function variantLabel() {
     return variant === 2 ? '第二次发射 · 梦舟载人飞船' : '第一次发射 · 揽月着陆器';
   }
-  // 两枚箭高度不同：展示镜头中心随构型微调，避免长箭被裁切 / 短箭偏下
+  // 两枚箭载荷不同、轮廓略有差别：展示镜头中心随构型微调，避免长箭被裁切 / 短箭偏下
+  //  拆解构型① 高度到整流罩（11.05）为止，构型② 顶端还有逃逸塔（12.37），故取景中心分别取下 / 上。
   function displayTargetY(explode) {
-    if (variant === 2) return explode ? 6.0 : 5.15;
-    return explode ? 6.6 : rocketModel.center;
+    if (variant === 2) return explode ? 7.0 : 5.45;
+    return explode ? 5.8 : rocketModel.center;
   }
   function applyVariantUI() {
     if (btnVar1) btnVar1.classList.toggle('active', variant === 1);
@@ -98,7 +102,8 @@
       else if (key === 'stage1Sep') audio.clank(1.2);
       else if (key === 'stage2Ignition' || key === 'tli') audio.clank(0.5);
       else if (key === 'fairingSep') audio.clank(0.9);
-      else if (key === 'stage2Sep' || key === 'landerSep') audio.clank(0.7);
+      else if (key === 'stage2Sep' || key === 'stage3Sep' || key === 'landerSep') audio.clank(0.7);
+      else if (key === 'stage3Ignition') audio.clank(0.45);
       else if (key === 'docking') audio.clank(0.6);
       else if (key === 'parkOrbit' || key === 'loi' || key === 'lunarOrbit' || key === 'rendezvous' || key === 'landerPark') audio.chime();
     },
@@ -170,8 +175,10 @@
       var dproj = tox * urx + toy * ury;
       var hx = tox - urx * dproj, hy = toy - ury * dproj, hl = Math.sqrt(hx * hx + hy * hy) || 1;
       hx /= hl; hy /= hl;                                      // 当地水平朝向地球方向
-      var elev = 0.24, az = 0.48;
-      if (S.phase === 'landed') { az += Math.sin(S.phaseT * 0.2) * 0.42; elev += Math.sin(S.phaseT * 0.13) * 0.05; }
+      // 机位要压低压偏：着陆点经度使地球仰角仅约 1°（贴月平线），而相机在「背地球侧」抬高 = 俯视月面，
+      // 抬得越多、地球越容易被挤出画面上缘（原 elev=0.24 / az=0.48 且 landed 摆动 ±0.42 时，地球一半时间在画面外）。
+      var elev = 0.06, az = 0.12;
+      if (S.phase === 'landed') { az += Math.sin(S.phaseT * 0.16) * 0.10; elev += Math.sin(S.phaseT * 0.11) * 0.02; }
       var e1x = -hx * Math.cos(az), e1y = -hy * Math.cos(az);  // 背地球水平方向
       var horiz = d * Math.cos(elev), vert = d * Math.sin(elev);
       var exL = tx + e1x * horiz + vert * urx;
@@ -248,9 +255,13 @@
     }
     pad.ember.visible = pa > 0.01;
 
-    // 地球 / 云 / 大气：始终随场景可见（着陆时作为天空中的蓝色星球）
+    // 地球 / 大气：始终随场景可见（着陆时作为天空中的蓝色星球）
     pad.earth.alpha = sceneK; pad.earth.visible = sceneK > 0.005;
-    if (pad.clouds) { pad.clouds.alpha = 0.62 * sceneK; pad.clouds.visible = sceneK > 0.005; }
+    // 云层：只在「离开近地空间、回望地球」时显示 —— 云壳只比地表高 1.2%（约 76 km），
+    // 上升段 / 近地时相机贴着地表，它等于一层白纱压在大陆上（近地看云也不真实）；
+    // 飞出大气后再淡入，地月转移 / 环月 / 月面看到的地球才是有云有大陆的真实样子。
+    var cloudK = (S.regime !== 'ascent' || S.inserted) ? 1 : Math.max(0, Math.min(1, (altVis - 60) / 120));
+    if (pad.clouds) { pad.clouds.alpha = 0.62 * sceneK * cloudK; pad.clouds.visible = sceneK * cloudK > 0.005; }
     pad.atmo.visible = sceneK > 0.005;
     pad.atmo.atmoStrength = (pad.atmo.atmoMode ? 0.62 : 1.25) * sceneK;
     var ax = renderer.camera.eye[0] - E.center[0], ay = renderer.camera.eye[1] - E.center[1], az = renderer.camera.eye[2] - E.center[2];
@@ -371,6 +382,32 @@
     telemetryEl.textContent = t;
   }
 
+  // 长按加速按钮：倍率由 mission.state.warp 驱动（按住越久越高，见 mission.js 的 WARP_TIERS）。
+  // 这里把当前倍率反馈到按钮上 —— 箭头数表示挡位、小字显示倍率，并在高挡加 fast 类提亮辉光。
+  var warpShown = 0;
+  function warpTierIndex(w) {
+    var tiers = mission.warpTiers || [3];
+    var i = 0;
+    for (var k = 0; k < tiers.length; k++) if (w >= tiers[k]) i = k;
+    return i;
+  }
+  function repeatArrow(n) {
+    var s = '';
+    for (var i = 0; i < n; i++) s += '▶';
+    return s;
+  }
+  function updateWarpUI() {
+    if (!btnWarp) return;
+    var n = (mode === 'launch' && S.hold) ? Math.round(S.warp) : 0;
+    if (n === warpShown) return;
+    warpShown = n;
+    var tier = n ? warpTierIndex(n) : 0;
+    if (warpLabelEl) warpLabelEl.textContent = n ? '加速 ×' + n : '长按加速';
+    if (warpArrowsEl) warpArrowsEl.textContent = repeatArrow(n ? tier + 2 : 2);
+    if (!n) btnWarp.classList.remove('fast');
+    else btnWarp.classList.toggle('fast', tier >= 2);
+  }
+
   function updateMissionTag() {
     if (!missionTagEl) return;
     var show = mode === 'launch' && S.ignited;
@@ -477,12 +514,18 @@
     }
 
     if (phaseTimer > 0) phaseTimer -= dt;
-    if (phaseQueue.length && phaseTimer <= 0) { showPhaseText(phaseQueue.shift()); phaseTimer = PHASE_MIN_SHOW; }
+    if (phaseQueue.length && phaseTimer <= 0) {
+      showPhaseText(phaseQueue.shift());
+      // 高倍率下阶段事件连发（一帧可能跨越多个阶段），字幕若仍按固定 2.4 s 排队会明显滞后于画面。
+      // 按倍率开方压缩单条字幕的停留时长（1× 不变），并留 0.6 s 下限保证还能看清。
+      phaseTimer = Math.max(0.6, PHASE_MIN_SHOW / Math.sqrt(Math.max(1, S.warp)));
+    }
 
     if (mode === 'launch') {
       // 着陆成功：给出明确的结束态与重播入口（否则画面停在「即将出舱」会让人干等）
       if (S.landed && !landedHandled) {
         landedHandled = true;
+        setHold(false);                       // 收尾时松开加速，避免定格画面仍按顶挡推进
         if (btnIgnite) { btnIgnite.textContent = '重新观看'; btnIgnite.style.display = 'flex'; }
         if (btnWarp) { btnWarp.style.display = 'none'; btnWarp.classList.remove('holding'); }
         if (phaseText) phaseText.textContent = '任务完成 · 揽月着陆器已安全落月 · 点击「重新观看」再看一次';
@@ -495,10 +538,13 @@
       mission.updateDetachedParts(dt);
       mission.directCamera(cam, dt);
       if (progressFill) progressFill.style.width = (S.progress * 100) + '%';
-      // 深空光照 / 月面镜头混合因子平滑
+      // 深空光照 / 月面镜头混合因子平滑：必须与加速倍率同步 ——
+      // 高倍率下相位真实时长被压缩（60× 的动力下降只剩 0.5 s），用原始 dt 会在整段着陆里
+      // 既切不到「头灯」光照、也切不到「以月面法线为 up」的着陆镜头，落地后画面还是环月视角。
+      var wdt = dt * Math.max(1, S.warp);
       var spaceTarget = S.inserted ? 1 : 0;
-      spaceLightK += (spaceTarget - spaceLightK) * Math.min(1, dt * 0.8);
-      surfCamBlend += ((S.surfCamBlend || 0) - surfCamBlend) * Math.min(1, dt * 2.2);
+      spaceLightK += (spaceTarget - spaceLightK) * Math.min(1, wdt * 0.8);
+      surfCamBlend += ((S.surfCamBlend || 0) - surfCamBlend) * Math.min(1, wdt * 2.2);
     } else {
       spaceLightK += (0 - spaceLightK) * Math.min(1, dt * 2);
       surfCamBlend += (0 - surfCamBlend) * Math.min(1, dt * 3);
@@ -514,6 +560,7 @@
     updateCamera();
     updateLabels();
     updateTelemetry();
+    updateWarpUI();
     updateMissionTag();
     updateSegFade();
     renderer.render(dt);

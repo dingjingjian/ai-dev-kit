@@ -113,7 +113,7 @@ async def run(pw, url, label):
                  launched: st.stats[st.playerFaction].launched,
                  warbarShown: document.getElementById('warbar').classList.contains('show'),
                  cardShown: document.getElementById('card').classList.contains('show'),
-                 fireDisabled: document.getElementById('fireBtn').disabled,
+                 fireDisabled: document.getElementById('fireBtn').getAttribute('aria-disabled') === 'true',
                  alarmOn: document.getElementById('alarm').classList.contains('on'),
                  d1: document.getElementById('defcon').classList.contains('d1') };
     }""")
@@ -128,7 +128,7 @@ async def run(pw, url, label):
         const st = window.DC.game.state;
         return { pending: window.DC.ui.getPending(),
                  launched: st.stats[st.playerFaction].launched,
-                 fireDisabled: document.getElementById('fireBtn').disabled,
+                 fireDisabled: document.getElementById('fireBtn').getAttribute('aria-disabled') === 'true',
                  drawerOpen: document.getElementById('drawer').classList.contains('open'),
                  sheetBox: (() => { const b = document.getElementById('sheet').getBoundingClientRect();
                             return [Math.round(b.top), Math.round(b.height)]; })(),
@@ -142,7 +142,7 @@ async def run(pw, url, label):
         return { launched: st.stats[st.playerFaction].launched,
                  ammo: window.DC.sim.totalMissiles(st, st.playerFaction),
                  pending: window.DC.ui.getPending(),
-                 fireDisabled: document.getElementById('fireBtn').disabled };
+                 fireDisabled: document.getElementById('fireBtn').getAttribute('aria-disabled') === 'true' };
     }""")
 
     # 军事设备在线统计（§11.11）：打掉设施后在线数要实时扣除

@@ -47,22 +47,32 @@
   var CORE_R = 0.50;             // 5 m 芯级半径
   var BOOSTER_R = 0.50;          // 侧助推 = 同直径 5 m 模块
   var BOOSTER_DIST = 1.02;       // 两侧芯沿 ±Z 并联（垂直于俯仰平面，转弯时对称）
-  var ROCKET_HEIGHT = 12.30;
-  var ROCKET_CENTER = 6.15;
+  // 真实长征十号为「三级半」构型，自下而上：芯一级 → 级间段① → 芯二级 → 级间段② → 芯三级 → 整流罩 → 逃逸塔。
+  // 三级直径与芯级同为 5 m；下面各级段高按本应用的比例压缩，只做科普示意。
+  var INTER1_Y = 6.28, INTER1_H = 0.22;          // 一二级级间段
+  var S2_Y = INTER1_Y + INTER1_H, S2_H = 1.22;   // 芯二级：液氧煤油，2 台 YF-100M
+  var INTER2_Y = S2_Y + S2_H, INTER2_H = 0.18;   // 二三级级间段
+  var S3_Y = INTER2_Y + INTER2_H, S3_H = 1.10;   // 芯三级：液氢液氧上面级，3 台 YF-75E
+  var FAIRING_R = 0.62, FAIRING_H = 2.05, FAIRING_CYL = 1.02;
+  var FAIRING_Y = S3_Y + S3_H;                   // 整流罩底（直径与芯级同为 5 m）
+  var TOWER_Y = FAIRING_Y + FAIRING_H;           // 逃逸塔坐在整流罩顶端
+  var ROCKET_HEIGHT = 12.90;
+  var ROCKET_CENTER = ROCKET_HEIGHT / 2;
 
   // ============================================================
   //  长征十号（三芯并联）+ 梦舟飞船 + 揽月着陆器
   // ============================================================
   //  科普示意构型（自上而下）：
   //    逃逸塔 → 整流罩（载人构型内装梦舟返回舱 / 服务舱；无人构型内装揽月着陆器：上升段 + 下降段 + 四腿）
-  //    → 芯二级（液氧煤油；真实长征十号另有芯三级承担地月转移，此处合并示意）
+  //    → 芯三级（液氢液氧上面级，3 台 YF-75E，负责入轨与地月转移）
+  //    → 芯二级（液氧煤油，2 台 YF-100M）
   //    → 芯一级 + 两枚 5 m 助推器（均装 7 台 YF-100K，起飞共 21 台）
   //  真实登月为「双箭发射 + 环月对接」：第一枚长征十号发射揽月着陆器并驻留环月轨道，
   //  数日后第二枚发射梦舟载人飞船，二者环月交会对接后，航天员转入着陆器落月。
   //  本应用按该真实双箭架构呈现（详见 mission.js 的两段式任务时序）。
   // ============================================================
   // ---- 真实「双箭发射」构型（两枚箭共用同一套几何基准）----
-  //  两次发射都是「芯二级 → 整流罩」：整流罩直径与芯级同为 5 米。
+  //  两次发射都是「芯一级 + 芯二级 + 芯三级 → 整流罩」：整流罩直径与芯级同为 5 米。
   //    第一次发射：罩内装揽月着陆器，无逃逸塔（不载人）。
   //    第二次发射：罩内装梦舟飞船（返回舱 + 服务舱），罩顶装逃逸塔（载人构型带逃逸系统）。
   //  因此飞船 / 逃逸塔 / 太阳翼的基准位置在两种构型下相同，无需再整体下移。
@@ -92,42 +102,41 @@
     }
 
     // ---- 逃逸塔 ----（真实构型：逃逸塔坐在整流罩顶端，罩内为梦舟飞船）
-    addPart({ name: 'towerTip', geom: geom.cone(0.075, 0.40, 16), color: COLORS.red, y: 11.37, centerY: 0.20,
+    addPart({ name: 'towerTip', geom: geom.cone(0.075, 0.40, 16), color: COLORS.red, y: TOWER_Y + 0.92, centerY: 0.20,
       label: '逃逸塔', desc: '发射段应急逃逸系统：火箭一旦出现致命故障，逃逸发动机点火，把梦舟飞船迅速拽离危险区。长征十号载人构型为「逃逸塔 + 整流罩」，逃逸塔位于整流罩顶端。',
       detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
-    addPart({ name: 'towerNozzle', geom: geom.cylinder(0.10, 0.055, 0.10, 12), color: COLORS.nozzle, y: 11.27, centerY: 0.05, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
-    addPart({ name: 'towerBody', geom: geom.cylinder(0.085, 0.10, 0.66, 16), color: COLORS.white, y: 10.61, centerY: 0.33, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
-    addPart({ name: 'towerSkirt', geom: geom.cylinder(0.135, 0.085, 0.16, 16), color: COLORS.dark, y: 10.45, centerY: 0.08, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
+    addPart({ name: 'towerNozzle', geom: geom.cylinder(0.10, 0.055, 0.10, 12), color: COLORS.nozzle, y: TOWER_Y + 0.82, centerY: 0.05, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
+    addPart({ name: 'towerBody', geom: geom.cylinder(0.085, 0.10, 0.66, 16), color: COLORS.white, y: TOWER_Y + 0.16, centerY: 0.33, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
+    addPart({ name: 'towerSkirt', geom: geom.cylinder(0.135, 0.085, 0.16, 16), color: COLORS.dark, y: TOWER_Y, centerY: 0.08, detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
     var escNozG = geom.cylinder(0.016, 0.040, 0.10, 8);
     var escFinG = geom.box(0.15, 0.10, 0.012);
     for (var te = 0; te < 4; te++) {
       var tea = te * Math.PI / 2 + Math.PI / 4;
       addPart({ name: 'escNoz' + te, geom: escNozG, color: COLORS.nozzle,
-        y: 11.29, x: Math.cos(tea) * 0.062, z: Math.sin(tea) * 0.062, rotY: tea, rotX: 0.42, centerY: 0.05,
+        y: TOWER_Y + 0.84, x: Math.cos(tea) * 0.062, z: Math.sin(tea) * 0.062, rotY: tea, rotX: 0.42, centerY: 0.05,
         detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
       addPart({ name: 'escFin' + te, geom: escFinG, color: COLORS.dark,
-        y: 10.43, x: Math.cos(tea) * 0.125, z: Math.sin(tea) * 0.125, rotY: tea + Math.PI / 2, centerY: 0.05,
+        y: TOWER_Y - 0.02, x: Math.cos(tea) * 0.125, z: Math.sin(tea) * 0.125, rotY: tea + Math.PI / 2, centerY: 0.05,
         detachGroup: 'tower', explodeOff: [0, 5.4, 0] });
     }
 
     // ---- 梦舟飞船（服务舱 + 返回舱），装在整流罩内（载人构型） ----
     var capProfile = [[0.02, 0], [0.30, 0.08], [0.44, 0.24], [0.46, 0.40], [0.30, 0.52], [0.14, 0.58], [0.12, 0.61]];
-    addPart({ name: 'capsule', geom: geom.lathe(capProfile, SEG), color: COLORS.capsule, y: 8.98, centerY: 0.30,
+    addPart({ name: 'capsule', geom: geom.lathe(capProfile, SEG), color: COLORS.capsule, y: FAIRING_Y + 0.58, centerY: 0.30,
       label: '梦舟返回舱', desc: '新一代载人飞船「梦舟」的返回舱（乘员舱）：航天员往返地月的座舱，最终独自再入大气层返回地面。发射时与整船一起包在整流罩内。',
-      detachGroup: 'ship', explodeOff: [0, 4.4, 0] });
-    addPart({ name: 'svcModule', geom: geom.cylinder(0.46, 0.46, 0.58, SEG), color: COLORS.svc, y: 8.40, centerY: 0.29,
+      detachGroup: 'ship', explodeOff: [0, 3.2, 0] });
+    addPart({ name: 'svcModule', geom: geom.cylinder(0.46, 0.46, 0.58, SEG), color: COLORS.svc, y: FAIRING_Y, centerY: 0.29,
       label: '梦舟服务舱', desc: '为飞船提供推进、电源与环控生保支持的舱段：承担地月往返的主推进，与着陆器对接后驻留环月轨道。',
-      detachGroup: 'ship', explodeOff: [0, 3.8, 0] });
-    addPart({ name: 'svcRing', geom: geom.torus(0.465, 0.016, SEG, 8), color: COLORS.gold, y: 8.96, detachGroup: 'ship', explodeOff: [0, 4.1, 0] });
+      detachGroup: 'ship', explodeOff: [0, 2.6, 0] });
+    addPart({ name: 'svcRing', geom: geom.torus(0.465, 0.016, SEG, 8), color: COLORS.gold, y: FAIRING_Y + 0.56, detachGroup: 'ship', explodeOff: [0, 2.9, 0] });
     // 入轨后展开的太阳翼（默认隐藏）
     for (var sp = 0; sp < 2; sp++) {
       var sgn = sp ? 1 : -1;
-      addPart({ name: 'panel' + sp, geom: geom.box(2.4, 0.035, 0.52), color: COLORS.panelBlue, y: 8.64, x: sgn * 1.55, centerY: 0.02,
-        detachGroup: 'panel', explodeOff: [0, 3.6, 0] });
+      addPart({ name: 'panel' + sp, geom: geom.box(2.4, 0.035, 0.52), color: COLORS.panelBlue, y: FAIRING_Y + 0.24, x: sgn * 1.55, centerY: 0.02,
+        detachGroup: 'panel', explodeOff: [0, 2.6, 0] });
     }
 
     // ---- 整流罩 + 揽月着陆器 ----
-    var FAIRING_R = 0.62, FAIRING_H = 2.05, FAIRING_CYL = 1.02;
     var ogH = FAIRING_H - FAIRING_CYL;
     var ogRho = (FAIRING_R * FAIRING_R + ogH * ogH) / (2 * FAIRING_R);
     var ogOff = Math.sqrt(ogRho * ogRho - ogH * ogH);
@@ -138,58 +147,88 @@
       else { var fy2 = fy - FAIRING_CYL; r = Math.sqrt(Math.max(0, ogRho * ogRho - fy2 * fy2)) - ogOff; }
       fairingProfile.push([r, fy]);
     }
-    addPart({ name: 'fairingR', geom: geom.lathe(fairingProfile, SEG, -Math.PI / 2, Math.PI / 2), color: COLORS.white, y: 8.40, centerY: 1.03,
+    addPart({ name: 'fairingR', geom: geom.lathe(fairingProfile, SEG, -Math.PI / 2, Math.PI / 2), color: COLORS.white, y: FAIRING_Y, centerY: 1.03,
       label: '整流罩', desc: '穿越稠密大气层时保护罩内载荷（第一次发射为揽月着陆器，第二次发射为梦舟飞船）的气动外壳，飞出大气层后沿纵向对半剖开抛离。长征十号的整流罩为全新研制、直径与芯级同为 5 米；载人构型下罩顶还装有逃逸塔。',
-      detachGroup: 'fairing', side: 1, cull: 'none', explodeOff: [1.7, 2.6, 0] });
-    addPart({ name: 'fairingL', geom: geom.lathe(fairingProfile, SEG, Math.PI / 2, Math.PI * 1.5), color: COLORS.white, y: 8.40, centerY: 1.03,
-      detachGroup: 'fairing', side: -1, cull: 'none', explodeOff: [-1.7, 2.6, 0] });
-    addPart({ name: 'fairingRingR', geom: geom.torus(0.605, 0.018, SEG, 8, -Math.PI / 2, Math.PI / 2), color: COLORS.gold, y: 8.40, detachGroup: 'fairing', side: 1, explodeOff: [1.7, 2.6, 0] });
-    addPart({ name: 'fairingRingL', geom: geom.torus(0.605, 0.018, SEG, 8, Math.PI / 2, Math.PI * 1.5), color: COLORS.gold, y: 8.40, detachGroup: 'fairing', side: -1, explodeOff: [-1.7, 2.6, 0] });
+      detachGroup: 'fairing', side: 1, cull: 'none', explodeOff: [1.9, 3.9, 0] });
+    addPart({ name: 'fairingL', geom: geom.lathe(fairingProfile, SEG, Math.PI / 2, Math.PI * 1.5), color: COLORS.white, y: FAIRING_Y, centerY: 1.03,
+      detachGroup: 'fairing', side: -1, cull: 'none', explodeOff: [-1.9, 3.9, 0] });
+    addPart({ name: 'fairingRingR', geom: geom.torus(0.605, 0.018, SEG, 8, -Math.PI / 2, Math.PI / 2), color: COLORS.gold, y: FAIRING_Y, detachGroup: 'fairing', side: 1, explodeOff: [1.9, 3.9, 0] });
+    addPart({ name: 'fairingRingL', geom: geom.torus(0.605, 0.018, SEG, 8, Math.PI / 2, Math.PI * 1.5), color: COLORS.gold, y: FAIRING_Y, detachGroup: 'fairing', side: -1, explodeOff: [-1.9, 3.9, 0] });
 
     // ---- 揽月着陆器（上升段 + 下降段 + 四腿），藏于整流罩内 ----
+    // 关键约束：罩内可用内壁半径随高度沿 ogive 迅速收窄（fy=1.54 处 0.498、1.84 处 0.283、
+    // 罩顶 2.05 处为 0）。故舱体各部件的「外径 × 高度」必须整体落在内壁包络之内——
+    // 否则整流罩顶部会被撑破、露出一截（曾用 r=0.44 的乘员舱 + 到 fy=2.08 的对接机构，越界最多 0.33）。
+    // 以下尺寸按包络反推：最高点 fy≈1.88 < 2.05，各环留 ≥0.05 余量。
     // 下降段：八棱柱感的主承力 + 下降发动机
-    addPart({ name: 'landerDescent', geom: geom.cylinder(0.48, 0.52, 0.60, 8), color: COLORS.foil, y: 8.72, centerY: 0.30,
+    addPart({ name: 'landerDescent', geom: geom.cylinder(0.48, 0.52, 0.60, 8), color: COLORS.foil, y: FAIRING_Y + 0.30, centerY: 0.30,
       label: '揽月下降段', desc: '揽月着陆器下降段：装有变推力下降发动机与着陆缓冲机构，负责把着陆器从环月轨道减速、安全送至月面。',
-      detachGroup: 'lander', explodeOff: [0, -1.6, 0] });
-    addPart({ name: 'landerDescentTop', geom: geom.cylinder(0.50, 0.48, 0.10, 8), color: COLORS.landerDark, y: 9.32, centerY: 0.05, detachGroup: 'lander', explodeOff: [0, -1.2, 0] });
+      detachGroup: 'lander', explodeOff: [0, 2.2, 0] });
+    addPart({ name: 'landerDescentTop', geom: geom.cylinder(0.50, 0.48, 0.10, 8), color: COLORS.landerDark, y: FAIRING_Y + 0.90, centerY: 0.05, detachGroup: 'lander', explodeOff: [0, 2.2, 0] });
     // 下降发动机喷管（朝下，动力下降时反推制动）
-    addPart({ name: 'landerNozzle', geom: geom.cylinder(0.12, 0.24, 0.22, 20), color: COLORS.nozzle, y: 8.56, centerY: 0.11,
+    addPart({ name: 'landerNozzle', geom: geom.cylinder(0.12, 0.24, 0.22, 20), color: COLORS.nozzle, y: FAIRING_Y + 0.14, centerY: 0.11,
       label: '下降发动机', desc: '变推力下降发动机：动力下降段持续反推制动，把着陆速度降到近乎为零，实现月面软着陆。',
-      detachGroup: 'lander', explodeOff: [0, -2.2, 0] });
+      detachGroup: 'lander', explodeOff: [0, 2.2, 0] });
     // 上升段：乘员舱 + 顶部对接/天线
-    addPart({ name: 'landerAscent', geom: geom.cylinder(0.44, 0.46, 0.52, 16), color: COLORS.landerBody, y: 9.42, centerY: 0.26,
+    addPart({ name: 'landerAscent', geom: geom.cylinder(0.42, 0.44, 0.42, 16), color: COLORS.landerBody, y: FAIRING_Y + 1.00, centerY: 0.21,
       label: '揽月上升段', desc: '着陆器上升段：两名航天员进入月面作业后，乘上升段从月面起飞，回到环月轨道与梦舟飞船对接。',
-      detachGroup: 'lander', explodeOff: [0, 1.4, 0] });
-    addPart({ name: 'landerCabin', geom: geom.lathe([[0.02, 0], [0.30, 0.06], [0.42, 0.18], [0.44, 0.30], [0.26, 0.40], [0.16, 0.44]], 16), color: COLORS.landerBody, y: 9.94, centerY: 0.22,
-      detachGroup: 'lander', explodeOff: [0, 1.9, 0] });
-    addPart({ name: 'landerDock', geom: geom.cylinder(0.10, 0.12, 0.12, 12), color: COLORS.landerDark, y: 10.36, centerY: 0.06, detachGroup: 'lander', explodeOff: [0, 2.2, 0] });
+      detachGroup: 'lander', explodeOff: [0, 3.4, 0] });
+    addPart({ name: 'landerCabin', geom: geom.lathe([[0.02, 0], [0.26, 0.05], [0.34, 0.12], [0.36, 0.22], [0.24, 0.32], [0.13, 0.38]], 16), color: COLORS.landerBody, y: FAIRING_Y + 1.42, centerY: 0.19,
+      detachGroup: 'lander', explodeOff: [0, 3.4, 0] });
+    addPart({ name: 'landerDock', geom: geom.cylinder(0.09, 0.10, 0.10, 12), color: COLORS.landerDark, y: FAIRING_Y + 1.80, centerY: 0.05, detachGroup: 'lander', explodeOff: [0, 3.4, 0] });
     // 着陆器舷窗 / 国旗标识
-    addPart({ name: 'landerFlag', geom: geom.arcPatch(0.475, 0.20, -0.28, 0.28, 12), color: COLORS.flagRed, y: 9.46, centerY: 0.10, detachGroup: 'lander', explodeOff: [0, 1.4, 0] });
-    // 四条着陆腿：hip 在下降段四角，飞行中向上收拢（收于整流罩内），着陆前向下展开撑地
+    addPart({ name: 'landerFlag', geom: geom.arcPatch(0.445, 0.18, -0.28, 0.28, 12), color: COLORS.flagRed, y: FAIRING_Y + 1.02, centerY: 0.09, detachGroup: 'lander', explodeOff: [0, 3.4, 0] });
+    // 四条着陆腿：hip 在下降段四角，飞行中向上收拢（收于整流罩内），着陆前向下展开撑地。
+    // 收拢角 LEG_ROT_STOW 由「罩内包络」反推：hip 半径 0.44 + 腿长 0.90、外张 φ 角时脚尖到轴心
+    // ≈ 0.44 + 0.90·sinφ。φ 取 0.08 rad（≈2.9 → 3.06 rad）时约 0.54，小于罩壁 0.62 与
+    // 该高度（fy≈1.27）的 ogive 内壁 0.59；若仍用 2.9（外张 14°）脚尖到 0.68，会直接戳穿罩壁。
+    // 撑开角（LEG_ROT_DEPLOY=0.72）与 hip 半径未变，故着陆姿态 / LAND_RM 标定不受影响。
+    var LEG_ROT_STOW = 3.06;
     var legG = geom.box(0.055, 0.90, 0.055);
     for (var li = 0; li < 4; li++) {
       var la = li * Math.PI / 2 + Math.PI / 4;
       addPart({ name: 'leg' + li, geom: legG, color: COLORS.landerDark,
-        y: 7.88, x: Math.cos(la) * 0.44, z: Math.sin(la) * 0.44, rotY: -la - Math.PI / 2, rotX: 2.9, centerY: 0.90,
-        detachGroup: 'lander', explodeOff: [0, -1.6, 0] });
+        y: FAIRING_Y - 0.52, x: Math.cos(la) * 0.44, z: Math.sin(la) * 0.44, rotY: -la - Math.PI / 2, rotX: LEG_ROT_STOW, centerY: 0.90,
+        detachGroup: 'lander', explodeOff: [0, 2.2, 0] });
     }
+
+    // ---- 芯三级（液氢液氧上面级，真实构型安装 3 台 YF-75E）----
+    addPart({ name: 'upper3', geom: geom.cylinder(CORE_R, CORE_R, S3_H, SEG), color: COLORS.white, y: S3_Y, centerY: S3_H / 2,
+      label: '芯三级', desc: '长征十号芯三级：5 米直径液氢液氧上面级（真实构型 3 台 YF-75E 氢氧发动机，真空推力 9 吨级）。芯一级 / 芯二级把组合体送到亚轨道速度后，由本级接管完成入轨；随后在停泊轨道上二次点火执行地月转移入射（TLI），再与载荷分离。氢氧级比冲高、可长时间工作；本应用按时间压缩对推力做了标定（见 README「构型核对」）。',
+      detachGroup: 'stage3', explodeOff: [0, 1.9, 0] });
+    addPart({ name: 'upper3Stripe', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: S3_Y + 0.26, detachGroup: 'stage3', explodeOff: [0, 1.9, 0] });
+    addPart({ name: 'upper3Band', geom: geom.cylinder(0.505, 0.505, 0.10, SEG), color: COLORS.stripe, y: S3_Y + S3_H - 0.18, detachGroup: 'stage3', explodeOff: [0, 1.9, 0] });
+    var nozS3G = geom.cylinder(0.07, 0.145, 0.22, 16);
+    for (var s3 = 0; s3 < 3; s3++) {
+      var s3a = s3 * Math.PI * 2 / 3 + Math.PI / 2;   // 3 台呈三角形布置
+      addPart({ name: 'nozS3_' + s3, geom: nozS3G, color: COLORS.nozzle,
+        y: INTER2_Y, x: Math.cos(s3a) * 0.24, z: Math.sin(s3a) * 0.24, centerY: 0.11,
+        label: s3 === 0 ? '芯三级发动机' : '',
+        desc: s3 === 0 ? '芯三级 3 台 YF-75E 液氢液氧发动机（真空推力 9 吨级，可双向摇摆）：入轨与地月转移入射均由本级完成。' : '',
+        detachGroup: 'stage3', explodeOff: [0, 1.7, 0] });
+    }
+
+    // ---- 二三级级间段 ----
+    addPart({ name: 'inter2', geom: geom.cylinder(0.47, CORE_R, INTER2_H, SEG), color: COLORS.dark, y: INTER2_Y, centerY: INTER2_H / 2,
+      label: '二三级级间段', desc: '连接芯二级与芯三级的过渡段：二级关机后在此断开，芯三级氢氧发动机随即点火。',
+      detachGroup: 'stage2', explodeOff: [0, 1.2, 0] });
 
     // ---- 芯二级（液氧煤油，真实构型安装 2 台 YF-100M）----
-    addPart({ name: 'upper', geom: geom.cylinder(CORE_R, CORE_R, 1.90, SEG), color: COLORS.white, y: 6.50, centerY: 0.95,
-      label: '芯二级', desc: '长征十号芯二级：5 米直径液氧煤油级（真实构型 2 台 YF-100M，真空推力 146 吨级），负责把着陆器 / 飞船加速到入轨速度。注：真实长征十号为三级半构型，地月转移由芯三级完成，本应用把芯二级 / 芯三级合并为一个上面级示意。',
-      detachGroup: 'stage2', explodeOff: [0, 1.4, 0] });
-    addPart({ name: 'upperStripe', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: 6.72, detachGroup: 'stage2', explodeOff: [0, 1.4, 0] });
+    addPart({ name: 'upper', geom: geom.cylinder(CORE_R, CORE_R, S2_H, SEG), color: COLORS.white, y: S2_Y, centerY: S2_H / 2,
+      label: '芯二级', desc: '长征十号芯二级：5 米直径液氧煤油级（真实构型 2 台 YF-100M，真空推力 146 吨级），把组合体从一级分离后的速度继续加速；推进剂耗尽后分离，由芯三级接管。',
+      detachGroup: 'stage2', explodeOff: [0, 1.2, 0] });
+    addPart({ name: 'upperStripe', geom: geom.torus(0.505, 0.014, SEG, 8), color: COLORS.gold, y: S2_Y + 0.22, detachGroup: 'stage2', explodeOff: [0, 1.2, 0] });
     var nozS2G = geom.cylinder(0.09, 0.20, 0.24, 16);
     for (var sn = 0; sn < 2; sn++) {
-      addPart({ name: 'nozS2_' + sn, geom: nozS2G, color: COLORS.nozzle, y: 6.28, x: (sn ? 1 : -1) * 0.20, centerY: 0.12,
+      addPart({ name: 'nozS2_' + sn, geom: nozS2G, color: COLORS.nozzle, y: INTER1_Y, x: (sn ? 1 : -1) * 0.20, centerY: 0.12,
         label: sn === 0 ? '芯二级发动机' : '',
-        desc: sn === 0 ? '芯二级 2 台 YF-100M 液氧煤油发动机（真空推力 146 吨级）：一二级分离后点火，把组合体加速到入轨速度。真实长征十号的地月转移由芯三级完成。' : '',
-        detachGroup: 'stage2', explodeOff: [0, 0.9, 0] });
+        desc: sn === 0 ? '芯二级 2 台 YF-100M 液氧煤油发动机（真空推力 146 吨级）：一二级分离后点火，接力加速。' : '',
+        detachGroup: 'stage2', explodeOff: [0, 0.7, 0] });
     }
 
-    // ---- 级间段 ----
-    addPart({ name: 'inter', geom: geom.cylinder(0.47, CORE_R, 0.22, SEG), color: COLORS.dark, y: 6.28, centerY: 0.11,
-      label: '级间段', desc: '连接芯一级与芯二级的过渡段：级间分离时在此断开，芯二级发动机随即点火。',
+    // ---- 一二级级间段 ----
+    addPart({ name: 'inter', geom: geom.cylinder(0.47, CORE_R, INTER1_H, SEG), color: COLORS.dark, y: INTER1_Y, centerY: INTER1_H / 2,
+      label: '一二级级间段', desc: '连接芯一级与芯二级的过渡段：级间分离时在此断开，芯二级发动机随即点火。',
       detachGroup: 'stage1', explodeOff: [0, 0.2, 0] });
 
     // ---- 芯一级 ----
@@ -253,7 +292,8 @@
 
     return {
       parts: parts, height: ROCKET_HEIGHT, center: ROCKET_CENTER,
-      coreR: CORE_R, boosterDist: BOOSTER_DIST, boosterR: BOOSTER_R
+      coreR: CORE_R, boosterDist: BOOSTER_DIST, boosterR: BOOSTER_R,
+      legRotStow: LEG_ROT_STOW          // 着陆腿收拢角：mission.js 的展开动画以此起点，勿各自写一份
     };
   }
 
@@ -329,7 +369,7 @@
     pad.towerBase = renderer.createMesh(geom.box(1.0, 0.32, 1.0), COLORS.concrete, { group: 'pad' });
     mat4.identity(pad.towerBase.modelMatrix);
     mat4.translate(pad.towerBase.modelMatrix, pad.towerBase.modelMatrix, [towerX, 0, towerZ]);
-    var railG = geom.box(0.10, 11.6, 0.10);
+    var railG = geom.box(0.10, 12.2, 0.10);
     var railPos = [[-0.42, -0.42], [0.42, -0.42], [-0.42, 0.42], [0.42, 0.42]];
     pad.towerRails = [];
     for (var ri = 0; ri < 4; ri++) {
@@ -348,15 +388,16 @@
     }
     pad.towerTop = renderer.createMesh(geom.box(0.55, 0.8, 0.55), COLORS.dark, { group: 'pad' });
     mat4.identity(pad.towerTop.modelMatrix);
-    mat4.translate(pad.towerTop.modelMatrix, pad.towerTop.modelMatrix, [towerX, 11.9, towerZ]);
+    mat4.translate(pad.towerTop.modelMatrix, pad.towerTop.modelMatrix, [towerX, 12.5, towerZ]);
     pad.towerAntenna = renderer.createMesh(geom.cylinder(0.015, 0.015, 1.2, 8), COLORS.red, { group: 'pad' });
     mat4.identity(pad.towerAntenna.modelMatrix);
-    mat4.translate(pad.towerAntenna.modelMatrix, pad.towerAntenna.modelMatrix, [towerX, 12.7, towerZ]);
+    mat4.translate(pad.towerAntenna.modelMatrix, pad.towerAntenna.modelMatrix, [towerX, 13.3, towerZ]);
 
     // ---- 回转平台摆臂 ----
     pad.arms = [];
     var armG = geom.box(2.4, 0.09, 0.26);
-    var armHeights = [4.4, 6.9, 9.4];
+    // 三级半构型：摆臂分别抱住芯一级 / 芯二级 / 芯三级 / 整流罩
+    var armHeights = [4.4, 6.6, 8.5, 10.5];
     for (var ai = 0; ai < armHeights.length; ai++) {
       var arm = renderer.createMesh(armG, COLORS.tower, { group: 'pad' });
       mat4.identity(arm.modelMatrix);

@@ -330,7 +330,7 @@ body {
 .ignite-btn:disabled { opacity: 0.55; cursor: default; animation: none; }
 
 /* 长按加速按钮：与点火按钮同位同族（球面渐变 + 分段刻度环 + 呼吸辉光），
-   绿色配色区分功能；点火后接替点火钮的位置，按住期间仿真倍率 ×3 */
+   绿色配色区分功能；点火后接替点火钮的位置，按住期间仿真倍率分段爬升（3× → 60×，见 mission.js） */
 .warp-btn {
   position: absolute;
   left: 50%;
@@ -390,6 +390,12 @@ body {
   animation: warpRingSpin 1.2s linear infinite;
   opacity: 1;
 }
+/* 高倍率挡（≥25×）：箭头更多、指针环转得更快、标题转亮，提示「已经很快了」。
+   箭头随挡位变多，故字号相应收小，保证仍在圆形按钮内不溢出 */
+.warp-btn.fast .w-arrows { font-size: 11px; letter-spacing: 1px; text-indent: 1px; }
+.warp-btn.fast .w-label { color: #eaffe9; text-shadow: 0 0 8px rgba(120, 255, 170, 0.9); }
+.warp-btn.fast.holding { animation-duration: 0.7s; }
+.warp-btn.fast.holding::before { animation-duration: 0.55s; }
 .warp-btn:active { transform: translateX(-50%) scale(0.94); }
 @keyframes warpRingSpin { to { transform: rotate(360deg); } }
 @keyframes warp-glow {

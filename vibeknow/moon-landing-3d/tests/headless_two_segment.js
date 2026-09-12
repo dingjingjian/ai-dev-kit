@@ -3,8 +3,9 @@
 //  无头自检：完整跑通「双箭发射」两段式登月任务时序
 //  - 用 vm 沙箱 + 桩渲染器加载 math.js / craft.js / mission.js
 //  - 校验：阶段事件顺序、无 NaN、两次发射各自入轨、交会对接先于船器分离、
-//    着陆 rm-MR ≈ 1.7
-//  运行：node tests/headless_two_segment.js
+//    着陆 rm-MR = LAND_RM（着陆腿恰好触月、缩放收敛）、罩内载荷不穿模、
+//    长按加速倍率分段爬升 / 松手回落
+//  运行：node tests/headless_two_segment.js（默认长按加速；NOWARP=1 跑 1× 全分辨率）
 // ============================================================
 const vm = require('vm');
 const fs = require('fs');
@@ -28,9 +29,14 @@ load('math.js');           // 定义 M3D.mat4 / M3D.vec3
 function emptyGeom() {
   return { positions: new Float32Array(0), normals: new Float32Array(0), indices: new Uint16Array(0) };
 }
+// 桩同时记录形状类型与调用参数：文件末尾的「罩内载荷不穿模」自检要用几何母线（lathe 的 profile 等）
+function stubGeom(kind) {
+  return function () { var g = emptyGeom(); g.kind = kind; g.args = [].slice.call(arguments); return g; };
+}
 sandbox.M3D.geom = {
-  cone: emptyGeom, cylinder: emptyGeom, box: emptyGeom, sphere: emptyGeom, torus: emptyGeom,
-  lathe: emptyGeom, ring: emptyGeom, disk: emptyGeom, arcPatch: emptyGeom, fin: emptyGeom
+  cone: stubGeom('cone'), cylinder: stubGeom('cylinder'), box: stubGeom('box'), sphere: stubGeom('sphere'),
+  torus: stubGeom('torus'), lathe: stubGeom('lathe'), ring: stubGeom('ring'), disk: stubGeom('disk'),
+  arcPatch: stubGeom('arcPatch'), fin: stubGeom('fin')
 };
 
 load('craft.js');          // 定义 buildCZ10 / buildPad / updatePartTransforms / updateDetached + 常量
@@ -86,6 +92,7 @@ function getPart(name) { return parts.filter(p => p.name === name)[0]; }
 function centroidOf(list) { let s = 0; for (const p of list) s += p.baseY + p.centerY; return list.length ? s / list.length : 0; }
 const G = {
   booster: byGroup('booster'), stage1: byGroup('stage1'), stage2: byGroup('stage2'),
+  stage3: byGroup('stage3'),
   fairing: byGroup('fairing'), lander: byGroup('lander'), ship: byGroup('ship'),
   tower: byGroup('tower'), panel: byGroup('panel')
 };
@@ -93,6 +100,8 @@ const allVisible = list => list.every(p => p.mesh.visible);
 const noneVisible = list => list.every(p => !p.mesh.visible);
 const svc0 = getPart('svcModule').baseY;      // 复位后的原始 baseY（baseY0）
 const baseY0 = parts.map(p => p.baseY);       // 全部件初始 baseY 快照（createMissionSystem 内部已 reset）
+const legRotX0 = getPart('leg0').localRotX;   // 着陆腿收拢角（复位后即 craft.js 的 leg rotX 初值）
+const LEG_LEN = 0.90, LEG_W = 0.055;          // 着陆腿盒体尺寸（craft.js 的 geom.box(0.055, 0.90, 0.055)）
 
 // ---- 真实构型核对：长征十号为三级半，芯一级 7 台 + 两个助推器各 7 台 = 起飞 21 台 ----
 const nozCoreList = parts.filter(p => p.name.indexOf('nozCore') === 0);
@@ -102,7 +111,18 @@ ok(nozCoreList.length === 7, '芯一级 7 台发动机（实际 ' + nozCoreList.
 ok(nozBoost0.length === 7 && nozBoost1.length === 7, '两枚助推器各 7 台发动机（实际 ' + nozBoost0.length + '/' + nozBoost1.length + '）');
 ok(nozCoreList.length + nozBoost0.length + nozBoost1.length === 21,
   '起飞共 21 台发动机（实际 ' + (nozCoreList.length + nozBoost0.length + nozBoost1.length) + '）');
-approx(getPart('svcModule').baseY, 8.40, 1e-9, '梦舟服务舱坐在整流罩内基准面（罩底 8.40）');
+
+// ---- 三级半构型：助推 + 芯一级 + 芯二级 + 芯三级（自下而上堆叠，整流罩坐在芯三级顶端）----
+ok(G.stage2.length > 0 && G.stage3.length > 0, '存在芯二级 / 芯三级两个上面级部件组');
+ok(parts.filter(p => p.name.indexOf('nozS2') === 0).length === 2, '芯二级 2 台 YF-100M 发动机');
+ok(parts.filter(p => p.name.indexOf('nozS3') === 0).length === 3, '芯三级 3 台 YF-75E 发动机（氢氧）');
+approx(getPart('inter').baseY, getPart('upper').baseY, 0.3, '一二级级间段位于芯一级与芯二级之间');
+approx(getPart('upper').baseY + 1.22, getPart('inter2').baseY, 1e-9, '二三级级间段接在芯二级顶端（芯二级高 1.22）');
+approx(getPart('inter2').baseY + 0.18, getPart('upper3').baseY, 1e-9, '芯三级接在二三级级间段顶端（级间段高 0.18）');
+approx(getPart('upper3').baseY + 1.10, getPart('fairingR').baseY, 1e-9, '整流罩坐在芯三级顶端（芯三级高 1.10）');
+approx(getPart('svcModule').baseY, getPart('fairingR').baseY, 1e-9, '梦舟服务舱坐在整流罩内基准面（罩底）');
+ok(getPart('upper3').baseY > getPart('upper').baseY && getPart('upper').baseY > getPart('inter').baseY,
+  '芯三级在芯二级之上、芯二级在级间段之上（三级半堆叠顺序）');
 
 const MR = M3D.MOON.R, MC = M3D.MOON.center, EC = M3D.EARTH.center;
 
@@ -158,6 +178,9 @@ while (!S.landed && steps < MAX) {
   var djCur = 0;
   if (prevLaPos) djCur = Math.hypot(laM[12] - prevLaPos[0], laM[13] - prevLaPos[1], laM[14] - prevLaPos[2]);
   prevLaPos = [laM[12], laM[13], laM[14]];
+  // 归一化到「每场景秒」：环月段体本就是绕月心转动的（0.028 rad/s × 519 ≈ 14.5 单位/场景秒），
+  // 一帧的位移随加速倍率线性增长，不归一化的话高倍率下会把正常环月位移误判成瞬移。
+  djCur = djCur / Math.max(1, S.warp);
   if (S.docked && !sawDocked) dockJump = djCur;                 // 交会 → 对接帧
   if (S.phase === 'descent' && sepJump < 0) sepJump = djCur;    // 船器分离 → 动力下降帧
   if (S.phase === 'approach') sawApproach = true;
@@ -215,7 +238,7 @@ while (!S.landed && steps < MAX) {
     const legs = G.lander.filter(p => p.name.indexOf('leg') === 0);
     snap.seg1Ascent = {
       shipHidden: noneVisible(G.ship), towerHidden: noneVisible(G.tower), panelHidden: noneVisible(G.panel),
-      coreVisible: allVisible(G.booster) && allVisible(G.stage1) && allVisible(G.stage2),
+      coreVisible: allVisible(G.booster) && allVisible(G.stage1) && allVisible(G.stage2) && allVisible(G.stage3),
       fairingVisible: allVisible(G.fairing), landerBodyVisible: allVisible(landerBody), legsHidden: noneVisible(legs)
     };
   }
@@ -225,7 +248,7 @@ while (!S.landed && steps < MAX) {
       shipVisible: allVisible(G.ship), towerVisible: allVisible(G.tower),
       fairingVisible: allVisible(G.fairing), panelHidden: noneVisible(G.panel),
       landerHidden: noneVisible(G.lander),
-      coreVisible: allVisible(G.booster) && allVisible(G.stage1) && allVisible(G.stage2),
+      coreVisible: allVisible(G.booster) && allVisible(G.stage1) && allVisible(G.stage2) && allVisible(G.stage3),
       towerSkirtY: getPart('towerSkirt').baseY, fairingTopY: getPart('fairingR').baseY + 2.05
     };
   }
@@ -266,20 +289,44 @@ ok(touchdown === true, 'onTouchdown 回调触发');
 ok(sawApproach, '着陆末段进入 approach 相位（真实相位，而非仅字幕）');
 ok(metRegress === null, 'MET 全程单调不回退（含入轨 / 环月段）' + (metRegress ? ' [' + metRegress + ']' : ''));
 ok(dockJump >= 0 && dockJump < 1.5,
-  '交会→对接着陆器位置连续（对接帧跳变 ' + (dockJump < 0 ? 'n/a' : dockJump.toFixed(3)) + ' < 1.5 单位，仅含驻留体正常环月位移）');
+  '交会→对接着陆器位置连续（对接帧跳变 ' + (dockJump < 0 ? 'n/a' : dockJump.toFixed(3)) + ' < 1.5 单位/场景秒，仅含驻留体正常环月位移）');
 ok(shipSepDev < 0.05,
   '船器分离后梦舟整体漂离、不散架（部件相对位置变化 ' + shipSepDev.toFixed(3) + ' < 0.05 单位）');
 ok(shipSepAlpha > 0.99,
   '船器分离后梦舟保持可见、不淡出（最低 alpha ' + shipSepAlpha.toFixed(2) + '）');
 ok(sepJump >= 0 && sepJump < 1.5,
-  '对接→船器分离连续（着陆器成为独立活动体时跳变 ' + (sepJump < 0 ? 'n/a' : sepJump.toFixed(3)) + ' < 1.5 单位）');
+  '对接→船器分离连续（着陆器成为独立活动体时跳变 ' + (sepJump < 0 ? 'n/a' : sepJump.toFixed(3)) + ' < 1.5 单位/场景秒）');
 ok(snap.loiAlign !== undefined && snap.loiAlign < 25,
   '近月制动段机头顺着航迹（夹角 ' + (snap.loiAlign === undefined ? 'n/a' : snap.loiAlign.toFixed(1)) + '° < 25°）');
 
-// 位置校验
-approx(S.rm - MR, 1.7, 0.02, '着陆时 rm - MR ≈ 1.7');
+// 位置校验：触地时活动体原点（= 着陆器质心）落在 LAND_RM 上
+approx(S.rm - MR, mission.LAND_RM - MR, 1e-6, '着陆时 rm = LAND_RM（原点半径 ' + (mission.LAND_RM - MR).toFixed(2) + '）');
 const landDist = Math.hypot(S.x - MC[0], S.y - MC[1]);
-approx(landDist - MR, 1.7, 0.05, '着陆器世界位置距月心 - MR ≈ 1.7');
+approx(landDist - MR, mission.LAND_RM - MR, 1e-6, '着陆器世界位置距月心 = LAND_RM');
+
+// ---- 着陆末段（动力下降 → 月面软着陆）：几何与姿态必须与加速倍率无关 ----
+// 60× 下这段真实时长不足 0.5 s：缩放 / 着陆腿展开若用原始 dt 收敛就来不及，
+// 会出现「腿只展开一半、器体被放大数倍并插进月面」（曾实测 scale 9.55 / legsDeploy 0.38 / 鞋底 -3.2）。
+function minRadiusOfBox(part, w, h, d) {     // 盒体（几何坐标系 y 自 0 到 h）绕月心的最近距离
+  const m = part.mesh.modelMatrix, lo = [];
+  for (const sx of [-w / 2, w / 2]) for (const sy of [0, h]) for (const sz of [-d / 2, d / 2]) {
+    const x = m[0] * sx + m[4] * sy + m[8] * sz + m[12];
+    const y = m[1] * sx + m[5] * sy + m[9] * sz + m[13];
+    const z = m[2] * sx + m[6] * sy + m[10] * sz + m[14];
+    lo.push(Math.hypot(x - MC[0], y - MC[1], z - MC[2]));
+  }
+  return Math.min.apply(null, lo);
+}
+const foot = minRadiusOfBox(getPart('leg0'), LEG_W, LEG_LEN, LEG_W) - MR;
+ok(foot > -0.05 && foot < 0.12, '触地时着陆腿末端恰好落在月面上（鞋底离月面 ' + foot.toFixed(3) + ' 单位，应 ∈[-0.05, 0.12]）');
+const nozzleAlt = minRadiusOfBox(getPart('landerNozzle'), 0.24, 0.22, 0.48) - MR;
+ok(nozzleAlt > 0.2, '触地时下降发动机喷管悬在月面之上（' + nozzleAlt.toFixed(3) + ' 单位 > 0.2）');
+approx(S.legsDeploy, 1, 1e-6, '触地时着陆腿展开量 legsDeploy = 1（加速下也不留半收状态）');
+approx(getPart('leg0').localRotX, mission.LEG_ROT_DEPLOY, 1e-6, '触地时着陆腿转到撑开角 LEG_ROT_DEPLOY');
+approx(mission.LEG_ROT_STOW, legRotX0, 1e-9,
+  '收拢角单一真源：mission.LEG_ROT_STOW (' + mission.LEG_ROT_STOW + ') = craft.js 的 leg rotX 初值 (' + legRotX0.toFixed(3) + ')');
+approx(S.scale, 1.4, 1e-6, '触地时着陆缩放收敛到 1.4（加速下不残留放大）');
+approx(S.moonAlt, 0, 1e-9, '触地时遥测月面高度归零');
 
 // 两段式结构
 ok(sawSegment2, '进入第二次发射 (segment=2)');
@@ -332,7 +379,7 @@ const transitCount = phaseLog.filter(k => k === 'transit').length;
 ok(parkCount === 2, 'parkOrbit 触发两次（两次发射各一次），实际 ' + parkCount);
 ok(lorbCount === 2, 'lunarOrbit 触发两次（两次发射各一次），实际 ' + lorbCount);
 ok(transitCount === 2, 'transit 触发两次（两次发射各一次），实际 ' + transitCount);
-ok(idx('stage2Sep') < idx('transit') && idx('transit') < idx('loi'), '第一次发射 stage2Sep < transit < loi');
+ok(idx('stage3Sep') < idx('transit') && idx('transit') < idx('loi'), '第一次发射 stage3Sep < transit < loi');
 
 // 地月转移：真实 TLI 是「近地点切向加速 + 椭圆滑行」，不是垂直抬升；
 // 末速度还必须与地月转移段起点严格衔接（否则遥测在切换帧跳变）。
@@ -343,10 +390,13 @@ ok(!!tliTrack && transitSpeed > 0 && Math.abs(transitSpeed - tliTrack.speedEnd) 
   'TLI 末速度与地月转移段起点衔接（' + (tliTrack ? tliTrack.speedEnd.toFixed(0) : 'n/a') + ' → ' +
   (transitSpeed > 0 ? transitSpeed.toFixed(0) : 'n/a') + ' m/s，跳变 < 100）');
 
-// 上升段子事件顺序（第一次发射）
+// 上升段子事件顺序（第一次发射）：三级半构型 = 助推 → 一级 → 二级 → 三级，逐级接力
 ok(idx('liftoff') < idx('pitch') && idx('pitch') < idx('maxQ'), '第一次发射 liftoff < pitch < maxQ');
 ok(idx('boosterSep') < idx('stage1Sep') && idx('stage1Sep') < idx('stage2Ignition'), '第一次发射 boosterSep < stage1Sep < stage2Ignition');
-ok(idx('stage2Ignition') < idx('parkOrbit'), '第一次发射 stage2Ignition < parkOrbit');
+ok(idx('stage2Ignition') < idx('stage2Sep') && idx('stage2Sep') < idx('stage3Ignition'),
+  '第一次发射 stage2Ignition < stage2Sep < stage3Ignition（二级耗尽后三级接管）');
+ok(idx('stage3Ignition') < idx('parkOrbit'), '第一次发射 stage3Ignition < parkOrbit（由芯三级完成入轨）');
+ok(idx('fairingSep') > idx('stage2Ignition'), '第一次发射整流罩在二级点火之后分离');
 
 // MET 单调性抽查：着陆时 MET 应约 10 天量级
 ok(S.met > 800000 && S.met < 900000, '着陆 MET 处于第二次发射后区间（约 10 天），实际 ' + Math.round(S.met));
@@ -397,6 +447,34 @@ if (snap.docked) {
     '对接后：着陆器质心恰在飞船前方 DOCK_GAP=' + mission.DOCK_GAP + ' 处（两器实体不穿插）');
 }
 
+// ---- 长按加速：倍率随按住时长分段爬升，松手立即回到 1× ----
+console.log('\n=== 长按加速 ===');
+const tiers = mission.warpTiers;
+ok(Array.isArray(tiers) && tiers.length >= 3 && tiers[0] >= 2 && tiers[tiers.length - 1] >= 20,
+  '加速挡位表可用（' + (tiers || []).join('× / ') + '×），顶挡足以越过巡航长段');
+
+mission.reset();
+mission.setHoldWarp(true);
+mission.ignite();
+const rampAt = [];
+let rampMonotonic = true, prevW = 0;
+const HOOKS = [0, Math.round(1.2 * 60), Math.round(3.0 * 60)];
+for (let s = 0; s < 60 * 8; s++) {          // 按住 8 s（覆盖全部挡位时点）
+  mission.update(dt, cam);
+  if (S.warp < prevW) rampMonotonic = false;
+  prevW = S.warp;
+  if (HOOKS.indexOf(s) >= 0) rampAt.push(S.warp);
+}
+ok(rampMonotonic && rampAt[0] === tiers[0] && rampAt[1] > rampAt[0] && rampAt[2] > rampAt[1],
+  '倍率随按住时长单调爬升：' + rampAt.join('× → ') + '×');
+ok(S.warp === tiers[tiers.length - 1],
+  '按住 8 s 后到达顶挡 ' + tiers[tiers.length - 1] + '×（实际 ' + S.warp + '×），倍率越高、越过长段越快');
+mission.setHoldWarp(false);
+mission.update(dt, cam);
+ok(S.warp === 1, '松手后倍率立即回到 1×（实际 ' + S.warp + '×）');
+mission.reset();
+ok(S.holdT === 0 && S.warp === 1 && S.hold === false, 'reset 后加速状态（按住时长 / 倍率 / hold）归零');
+
 // ---- reset 完整性：restoreAll 必须撤销全部再归零与飞船下移，可重复播放 ----
 console.log('\n=== reset 完整性 ===');
 mission.reset();
@@ -428,6 +506,74 @@ ok(S.variant === 2 && S.segment === 2, 'setVariant 同步 state.variant / state.
 mission.setVariant(1);
 ok(noneVisible(G.ship) && allVisible(G.fairing) && parts.every(p => !p.parked && !p.detached),
   '构型可重复切换：切回构型①无残留状态');
+
+// ---- 罩内载荷不穿模：两枚箭的载荷（含收拢的着陆腿）必须整体落在整流罩内壁包络之内 ----
+// 整流罩母线：fy ≤ 1.02 为半径 0.62 的圆柱段，其上按 ogive 收窄到罩顶（fy = 2.05）为 0。
+// 载荷若越过内壁就会从罩壁 / 罩顶「穿模」露出一截（曾实测：乘员舱越界 0.157、对接机构到 fy=2.08
+// 直接戳出罩外、收拢的着陆腿脚尖到轴心 0.68 > 罩壁 0.62 而戳穿罩壁）。
+console.log('\n=== 整流罩包络（罩内载荷不穿模）===');
+const F_Y = getPart('fairingR').baseY, F_R = 0.62, F_H = 2.05, F_CYL = 1.02;
+function fairingInnerR(fy) {
+  if (fy < 0 || fy > F_H) return -1;                       // 罩外（-1 → 越界量必然为正，直接判失败）
+  if (fy <= F_CYL) return F_R;
+  const L = F_H - F_CYL, rho = (F_R * F_R + L * L) / (2 * F_R), off = Math.sqrt(rho * rho - L * L), t = fy - F_CYL;
+  return Math.sqrt(Math.max(0, rho * rho - t * t)) - off;
+}
+// 几何坐标系下的抽样点：旋转面按母线绕 +Y 旋转，盒体（着陆腿）取 8 个角点
+function geomPoints(g) {
+  if (!g || !g.kind) return null;
+  if (g.kind === 'box') {
+    const w = g.args[0] / 2, h = g.args[1], d = g.args[2] / 2, pts = [];
+    for (const sx of [-w, w]) for (const sy of [0, h]) for (const sz of [-d, d]) pts.push([sx, sy, sz]);
+    return pts;
+  }
+  let prof;
+  if (g.kind === 'cylinder' || g.kind === 'cone') prof = [[g.args[1], 0], [g.args[0], g.args[2]]];
+  else if (g.kind === 'lathe') prof = g.args[0];
+  else if (g.kind === 'arcPatch') prof = [[g.args[0], 0], [g.args[0], g.args[1]]];
+  else return null;
+  const pts = [];
+  for (const pr of prof) {
+    pts.push([0, pr[1], 0]);
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2;
+      pts.push([Math.cos(a) * pr[0], pr[1], Math.sin(a) * pr[0]]);
+    }
+  }
+  return pts;
+}
+function worstOverflow(list) {                             // 需在「静置姿态」下调用（scale=1 / tilt=0 / 腿收拢）
+  let worst = null;
+  for (const p of list) {
+    const pts = geomPoints(p.mesh.geometry); if (!pts) continue;
+    const m = p.mesh.modelMatrix;
+    for (const pt of pts) {
+      const wx = m[0] * pt[0] + m[4] * pt[1] + m[8] * pt[2] + m[12];
+      const wy = m[1] * pt[0] + m[5] * pt[1] + m[9] * pt[2] + m[13];
+      const wz = m[2] * pt[0] + m[6] * pt[1] + m[10] * pt[2] + m[14];
+      const over = Math.hypot(wx, wz) - fairingInnerR(wy - F_Y);
+      if (!worst || over > worst.over) worst = { over: over, name: p.name, fy: wy - F_Y };
+    }
+  }
+  return worst;
+}
+function restPose() {
+  M3D.updatePartTransforms(parts, {
+    rotY: 0, explode: 0, launchY: S.y, launchX: S.x, tilt: S.tiltVis,
+    launchT: S.t, scale: S.scale, fade: 0.17
+  });
+}
+console.log('  （整流罩内壁半径：fy≤' + F_CYL + ' 为 ' + F_R + '，其上收窄至罩顶 fy=' + F_H + ' 为 0）');
+mission.reset();
+mission.setVariant(1); restPose();
+const ovLander = worstOverflow(G.lander);                 // 含收拢的着陆腿（4 条腿沿斜上方收在舱体四周）
+ok(!!ovLander && ovLander.over < -0.02,
+  '构型①：揽月着陆器（含收拢的着陆腿）整体收在整流罩内壁之内（最紧处余量 ' + (ovLander ? (-ovLander.over).toFixed(3) + ' 单位 @ ' + ovLander.name : 'n/a') + '）');
+mission.setVariant(2); restPose();
+const ovShip = worstOverflow(G.ship);
+ok(!!ovShip && ovShip.over < -0.02,
+  '构型②：梦舟飞船整体收在整流罩内壁之内（最紧处余量 ' + (ovShip ? (-ovShip.over).toFixed(3) + ' 单位 @ ' + ovShip.name : 'n/a') + '）');
+mission.setVariant(1); restPose();
 
 console.log('\n=== 汇总 ===');
 console.log('检查项: ' + checks + '，失败: ' + failures);

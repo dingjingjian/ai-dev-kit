@@ -269,17 +269,46 @@
     if(cardK>0.5)camera.setViewOffset(W,H,0,cardK,W,H);else camera.clearViewOffset();
   }
 
-  var dragging=false,lx=0,ly=0,pinch=0;
-  cv.addEventListener('pointerdown',function(e){dragging=true;lx=e.clientX;ly=e.clientY;cv.setPointerCapture(e.pointerId);});
-  cv.addEventListener('pointerup',function(e){dragging=false;try{cv.releasePointerCapture(e.pointerId)}catch(_){}});
+  /* 手势：单指旋转 / 双指缩放，两者互斥。
+   * 触屏上 pointer* 与 touch* 是并行发出的两套事件，而旧版只用一个裸 dragging 布尔、
+   * 不区分是哪根手指 —— 双指按下时两根手指各发各的 pointermove、都去改 thetaG/phiG，
+   * 且 lx/ly 被两指轮流覆盖（算出来的是跨手指的巨大位移），画面就在两指之间来回跳。
+   * 现在每根手指单独记坐标，只有「屏上仅一根手指」时旋转。 */
+  var pointers={},dragId=null,pinch=0;
+  function pCount(){var n=0,k;for(k in pointers)if(pointers[k])n++;return n;}
+  function armDrag(id){dragId=id;lx=pointers[id].x;ly=pointers[id].y;}
+  function stopDrag(){dragId=null;}
+  function tdist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
+  cv.addEventListener('pointerdown',function(e){
+    pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+    if(pCount()>1){stopDrag();return;}                 // 第二指落下：旋转让位给缩放
+    armDrag(e.pointerId);
+    cv.setPointerCapture(e.pointerId);
+  });
+  function onPointerEnd(e){
+    delete pointers[e.pointerId];
+    if(dragId===e.pointerId)stopDrag();
+    try{cv.releasePointerCapture(e.pointerId)}catch(_){}
+    var n=pCount();
+    if(n===0){stopDrag();return;}
+    if(n===1){for(var id in pointers)if(pointers[id]){armDrag(Number(id));break;}}   // 缩放抬起一指：剩下那根接回旋转
+  }
+  cv.addEventListener('pointerup',onPointerEnd);
+  cv.addEventListener('pointercancel',onPointerEnd);
   cv.addEventListener('pointermove',function(e){
-    if(!dragging)return;
+    var p=pointers[e.pointerId];if(!p)return;
+    p.x=e.clientX;p.y=e.clientY;
+    if(e.pointerId!==dragId)return;
+    if(pCount()>1){stopDrag();return;}                 // 兜底：漏掉 pointerdown 时也不旋转
     var dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;
     thetaG-=dx*0.005;phiG-=dy*0.005;phiG=Math.max(0.08,Math.min(Math.PI-0.08,phiG));
   });
   cv.addEventListener('wheel',function(e){e.preventDefault();radiusG*=1+Math.sign(e.deltaY)*0.08;radiusG=Math.max(R_MIN,Math.min(R_MAX,radiusG));userZoomed=true;},{passive:false});
-  cv.addEventListener('touchstart',function(e){if(e.touches.length===2){pinch=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);}},{passive:true});
-  cv.addEventListener('touchmove',function(e){if(e.touches.length===2){e.preventDefault();var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);if(pinch){radiusG*=pinch/d;radiusG=Math.max(R_MIN,Math.min(R_MAX,radiusG));userZoomed=true;}pinch=d;}},{passive:false});
+  cv.addEventListener('touchstart',function(e){if(e.touches.length===2){stopDrag();pinch=tdist(e.touches);}},{passive:true});
+  cv.addEventListener('touchend',function(e){if(e.touches.length<2)pinch=0;},{passive:true});   // 清基线：下次双指重新按下按当下指距起算
+  cv.addEventListener('touchcancel',function(){pinch=0;},{passive:true});
+  /* 两指几乎重合时 d→0，pinch/d 会炸成天文数字把镜头甩飞；12px 以内只更新基线不缩放 */
+  cv.addEventListener('touchmove',function(e){if(e.touches.length!==2)return;e.preventDefault();var d=tdist(e.touches);if(pinch>12&&d>12){radiusG*=pinch/d;radiusG=Math.max(R_MIN,Math.min(R_MAX,radiusG));userZoomed=true;}pinch=d;},{passive:false});
 
   // ===== 科普内容 =====
   var MODES={

@@ -126,6 +126,10 @@
         else DC.ui.selectTarget(c.id);
         return;
       }
+      /* 点城市 = 让相机飞过去（简报 / 危机期，以及战争期点己方城市）。
+       * 此前这一路完全无声，而抽屉城市列表里同一个动作是响 tap 的
+       * （ui.buildCityList 的注释写明了理由：点了不知道有没有生效）—— 这里补齐同一声。 */
+      if (DC.audio) DC.audio.play('tap');
       DC.render.flyTo(c.lat, c.lon);
     }, { passive: true });
 

@@ -192,7 +192,8 @@ async function runCase(browser, opt) {
       pending: window.DC.ui.getPending(),
       launched: st.stats[st.playerFaction].launched,
       drawerOpen: document.getElementById('drawer').classList.contains('open'),
-      fireDisabled: document.getElementById('fireBtn').disabled
+      // 发射键不再用原生 disabled（会把 click 吞掉，deny 反馈走不到），改读 aria-disabled
+      fireDisabled: document.getElementById('fireBtn').getAttribute('aria-disabled') === 'true'
     };
   });
   await page.click('#fireBtn');

@@ -1217,16 +1217,49 @@
 
   var R_MIN = 2.4, R_MAX = 14;
   function bindCam(canvas) {
+    /* 手指追踪表：pointerId → 最近一次坐标。
+     * 触屏上 pointer* 与 touch* 是并行发出的两套事件。旧版没有分辨是哪根手指：
+     * 两指同时按下时，两根手指各自发 pointermove、都去改 tTheta/tPhi，
+     * 而 lastX/lastY 被两指轮流覆盖 —— 于是画面在两指之间来回跳。
+     * 现在只允许「屏上仅一根手指」旋转地球，第二根落下立即交出控制权给缩放。 */
+    var pointers = {};
+    var dragId = null;
+    function pointerCount() {
+      var n = 0, k;
+      for (k in pointers) { if (pointers[k]) n++; }
+      return n;
+    }
+    function stopDrag() { dragging = false; dragId = null; }
+    function touchDist(t) {
+      return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    }
+    function armDrag(id) {
+      dragging = true; dragId = id;
+      lastX = pointers[id].x; lastY = pointers[id].y;
+    }
     canvas.addEventListener('pointerdown', function (e) {
-      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (pointerCount() > 1) { stopDrag(); return; }   // 第二指落下：旋转让位给缩放
+      armDrag(e.pointerId);
       if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
     });
-    canvas.addEventListener('pointerup', function (e) {
-      dragging = false;
+    function onPointerEnd(e) {
+      delete pointers[e.pointerId];
+      if (dragId === e.pointerId) stopDrag();
       if (canvas.releasePointerCapture) { try { canvas.releasePointerCapture(e.pointerId); } catch (_) {} }
-    });
+      var n = pointerCount();
+      if (n === 0) { stopDrag(); return; }
+      /* 缩放结束抬起一指后，剩下那根接回旋转（坐标已记录，首帧位移为 0，不跳） */
+      if (n === 1) { for (var id in pointers) { if (pointers[id]) { armDrag(Number(id)); break; } } }
+    }
+    canvas.addEventListener('pointerup', onPointerEnd);
+    canvas.addEventListener('pointercancel', onPointerEnd);
     canvas.addEventListener('pointermove', function (e) {
-      if (!dragging) return;
+      var p = pointers[e.pointerId];
+      if (!p) return;
+      p.x = e.clientX; p.y = e.clientY;
+      if (!dragging || e.pointerId !== dragId) return;
+      if (pointerCount() > 1) { stopDrag(); return; }   // 兜底：漏掉 pointerdown 时也不旋转
       cam.tTheta -= (e.clientX - lastX) * 0.005;
       cam.tPhi -= (e.clientY - lastY) * 0.005;
       cam.tPhi = Math.max(0.08, Math.min(Math.PI - 0.08, cam.tPhi));
@@ -1239,23 +1272,26 @@
     }, { passive: false });
     canvas.addEventListener('touchstart', function (e) {
       if (e.touches.length === 2) {
-        pinch = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY);
+        stopDrag();
+        pinch = touchDist(e.touches);
       }
     }, { passive: true });
+    // 松手后清掉基线：下次双指重新按下时按当下指距重新起算，避免沿用旧基线跳一下
+    canvas.addEventListener('touchend', function (e) {
+      if (e.touches.length < 2) pinch = 0;
+    }, { passive: true });
+    canvas.addEventListener('touchcancel', function () { pinch = 0; }, { passive: true });
     canvas.addEventListener('touchmove', function (e) {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        var d = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY);
-        if (pinch) {
-          cam.tRadius *= pinch / d;
-          cam.tRadius = Math.max(R_MIN, Math.min(R_MAX, cam.tRadius));
-        }
-        pinch = d;
+      if (e.touches.length !== 2) return;
+      e.preventDefault();
+      if (dragging) stopDrag();
+      var d = touchDist(e.touches);
+      /* 两指几乎重合时 d→0，pinch/d 会炸成天文数字把镜头甩飞；阈值内只更新基线不缩放 */
+      if (pinch > 12 && d > 12) {
+        cam.tRadius *= pinch / d;
+        cam.tRadius = Math.max(R_MIN, Math.min(R_MAX, cam.tRadius));
       }
+      pinch = d;
     }, { passive: false });
   }
 

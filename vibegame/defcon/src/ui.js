@@ -106,7 +106,10 @@
 
     pending = null; salvo = 1;
     sig.factions = ''; sig.cities = ''; sig.card = ''; sig.choice = -2;
-    sig.war = -1; sig.over = false; sig.dc = 0; sig.impacts = 0; sig.intercepts = -1;
+    /* sig.dc 必须初始化为**当前** DEFCON，不能写 0：defcon 音效是「等级跃迁告警」，
+     * 初值 0 会让主循环第一帧判出一次 0→5 的假跃迁 —— 表现为点完阵营立刻多响一声告警。
+     * （pumpAudio / pumpCityLoss 的初值 -1 是同一个道理，此前只有这里漏了。） */
+    sig.war = -1; sig.over = false; sig.dc = state.defcon; sig.impacts = 0; sig.intercepts = -1;
     lastFlashAt = -1e9;
     sig.target = null; sig.fireOk = null; sig.tip = ''; sig.sheet = null; sig.tone = '';
     sig.pop = null; sig.ms = null; sig.fs = ''; sig.dcAlerted = false;
@@ -571,8 +574,12 @@
     el.salvoBtn.classList.toggle('on', salvo !== 1);
   }
 
+  /* 三种「射不出去」都归到这里：没选目标 / 弹头耗尽 / 不在战争期。
+   * 判定必须在这一层做全 —— 不能靠 fireBtn 的原生 disabled 去挡（见 updateWarBar）：
+   * 原生 disabled 会把 click 整个吞掉，deny() 的「被拒」音与发射条红抖就永远触发不到。 */
   function fire() {
-    if (!pending) { deny(); return; }
+    if (!pending || !cur || cur.phase !== 'war' ||
+        S.totalMissiles(cur, cur.playerFaction) <= 0) { deny(); return; }
     var id = pending;
     // 打完立刻清空：连点不会在没重新选目标的情况下把剩下的弹头一口气泼出去
     clearTarget();
@@ -678,7 +685,15 @@
     renderTarget(state);
 
     var ok = !!pending && ammo > 0;
-    if (sig.fireOk !== ok) { sig.fireOk = ok; el.fireBtn.disabled = !ok; }
+    /* 用 .off + aria-disabled 表达「按不下去」，**不再用原生 disabled**：
+     * 原生 disabled 会让 click 根本不派发，玩家按上去零反馈，
+     * 于是 deny() 那一声「被拒」和发射条红抖成了永远走不到的死代码。
+     * 现在的口径是「看着是灰的、按下去明确被拒一次」——反馈由 deny() 给（见 fire()）。 */
+    if (sig.fireOk !== ok) {
+      sig.fireOk = ok;
+      el.fireBtn.classList.toggle('off', !ok);
+      el.fireBtn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+    }
     var tip = ammo <= 0 ? '弹头耗尽 —— 转入终局战果结算'
       : pending ? '再按一次确认发射 —— 弹道不可撤收'
       : '先装订敌方目标坐标，再按发射';

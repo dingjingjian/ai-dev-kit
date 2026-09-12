@@ -235,7 +235,8 @@
   .fireRow.empty .am b{color:var(--red)}
   #fireBtn{flex:1;min-height:46px;background:rgba(226,75,74,.14);border:1px solid rgba(226,75,74,.55);
     color:var(--red);font-family:var(--mono);font-size:14px;letter-spacing:3px;cursor:pointer}
-  #fireBtn:disabled{opacity:.35;cursor:default}
+  /* .off 取代原生 disabled：按钮仍可点，靠 deny() 给「被拒」反馈（见 src/ui.js updateWarBar） */
+  #fireBtn.off{opacity:.35;cursor:default}
   .fireBtnWrap{display:flex;gap:8px;flex:1}
   #salvoBtn{min-width:60px;min-height:46px;background:rgba(127,212,232,.08);
     border:1px solid var(--line);color:var(--cyan);font-family:var(--mono);font-size:12px;cursor:pointer}
@@ -513,7 +514,7 @@
       <span class="am" data-page-node-id="9XD0r8QToRXOoNcvlAyd2t">弹头<b id="wbAmmo" data-page-node-id="uYcLPs9WjYHMuLNkuqB2ch">18</b></span>
       <span class="fireBtnWrap" data-page-node-id="NJBoccRn0BMuIgj1z66kCu">
         <button type="button" id="salvoBtn" data-page-node-id="Rt1TnoqcSD5eyiYV7bC5TS">齐射 ×3</button>
-        <button type="button" id="fireBtn" disabled data-page-node-id="qESQQzaVHDrxHgFjbPFl7V">发 射</button>
+        <button type="button" id="fireBtn" class="off" aria-disabled="true" data-page-node-id="qESQQzaVHDrxHgFjbPFl7V">发 射</button>
       </span>
     </div>
     <div class="tip" id="wbTip" data-page-node-id="eBKYnAxXjYQWnCmu5IuSt5">核打击不可撤收 —— 先装订目标，再确认发射</div>
