@@ -30,6 +30,18 @@
   // 环月轨道半径：月面以上 ~100 km（28 单位）
   var MOON_ORBIT_R = MOON_R + 100 / KM_PER_UNIT;
 
+  // ---- 太阳方向（世界空间常量，光照唯一真源）----
+  // 地月轨道面 = 世界 XY 平面（月球极轴 = 世界 ±Z，见下方地球/月球的定向注释），
+  // 太阳即取在该平面内 —— 于是地球/月球恒呈「半个球被照亮、晨昏线过两极」的经典侧照形态。
+  // 方位角 -55°（自 +X 起算）由两条现场约束反算，改这里务必回看 tests/headless_two_segment.js 的断言：
+  //   ① 着陆点（月面法线 ≈ (-0.219, -0.976)）太阳高度角 ≈ 42°，月面有可辨投影；
+  //   ② 同一时刻从着陆点看地球相位 ≈ 80%（地球是月空主角，不能被照成一条细牙）。
+  // 注意发射场在地球「北极」（世界 +Y）——本方向会把它压到晨昏线以下。这正是上升段不切太阳的原因：
+  // 地球/月球在入轨前仍与箭体共用「相机随动光」，入轨（spaceLightK → 1）后才整体切到本方向，
+  // 故发射段观感与改动前完全一致（见 app.js updateLight）。
+  var SUN_TH = -55 * Math.PI / 180;
+  var SUN_DIR = [Math.cos(SUN_TH), Math.sin(SUN_TH), 0];
+
   var SEG = 32;
   var COLORS = {
     white: [0.90, 0.91, 0.93], boostWhite: [0.85, 0.86, 0.89], dark: [0.20, 0.22, 0.26],
@@ -304,7 +316,7 @@
     var pad = {};
 
     // ---- 地球 ----
-    pad.earth = renderer.createMesh(geom.sphere(EARTH_R, 168, 104), [1, 1, 1], { group: 'earth', isEarth: true });
+    pad.earth = renderer.createMesh(geom.sphere(EARTH_R, 168, 104), [1, 1, 1], { group: 'earth', isEarth: true, useSun: true });
     pad.earth.atmo = 0.18;
     mat4.identity(pad.earth.modelMatrix);
     mat4.translate(pad.earth.modelMatrix, pad.earth.modelMatrix, EARTH_CENTER);
@@ -312,7 +324,7 @@
 
     // ---- 云层壳 ----
     pad.clouds = renderer.createMesh(geom.sphere(EARTH_R * 1.012, 128, 80), [0.95, 0.96, 0.98],
-      { group: 'earth', isCloud: true, depthWrite: false, fill: 0 });
+      { group: 'earth', isCloud: true, depthWrite: false, fill: 0, useSun: true });
     pad.clouds.alpha = 0.62;
     mat4.identity(pad.clouds.modelMatrix);
     mat4.translate(pad.clouds.modelMatrix, pad.clouds.modelMatrix, EARTH_CENTER);
@@ -321,14 +333,14 @@
     }, (typeof global.CLOUDS_TEXTURE_URI === 'string') ? global.CLOUDS_TEXTURE_URI : undefined);
 
     // ---- 大气辉光壳 ----
-    pad.atmo = renderer.createMesh(geom.sphere(EARTH_R * ATMO_SCALE, 192, 112), COLORS.sky, { group: 'earth', blend: 'add', cull: 'front', atmoShader: true });
+    pad.atmo = renderer.createMesh(geom.sphere(EARTH_R * ATMO_SCALE, 192, 112), COLORS.sky, { group: 'earth', blend: 'add', cull: 'front', atmoShader: true, useSun: true });
     pad.atmo.atmoInner = 1 / ATMO_SCALE;
     pad.atmo.atmoStrength = 1.25;
     mat4.identity(pad.atmo.modelMatrix);
     mat4.translate(pad.atmo.modelMatrix, pad.atmo.modelMatrix, EARTH_CENTER);
 
     // ---- 月球 ----（初始隐藏，转移段淡入）
-    pad.moon = renderer.createMesh(geom.sphere(MOON_R, 128, 80), [1, 1, 1], { group: 'moon', fill: 0.10 });
+    pad.moon = renderer.createMesh(geom.sphere(MOON_R, 128, 80), [1, 1, 1], { group: 'moon', fill: 0, useSun: true });
     // 定向：rotateX(-90°) 把月球极轴转到世界 -Z（XY 转移面即月球赤道面），
     // rotateZ(spin) 让等距圆柱贴图近地面中心（u=0.5）正对地球。
     var mDirX = EARTH_CENTER[0] - MOON_CENTER[0], mDirY = EARTH_CENTER[1] - MOON_CENTER[1];
@@ -553,6 +565,7 @@
     R: MOON_R, center: MOON_CENTER, dist: MOON_DIST, th: MOON_TH, orbitR: MOON_ORBIT_R,
     kmPerUnit: KM_PER_UNIT
   };
+  M3D.SUN = { dir: SUN_DIR, th: SUN_TH };   // 太阳方向（世界空间，光照唯一真源）
   M3D.buildCZ10 = buildCZ10;
   M3D.buildPad = buildPad;
   M3D.spinEarth = spinEarth;

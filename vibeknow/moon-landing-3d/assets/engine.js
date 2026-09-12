@@ -34,6 +34,7 @@
     'uniform vec3 uAmbient;', 'uniform vec3 uRimColor;',
     'uniform float uAlpha;', 'uniform float uGlow;', 'uniform float uIsEarth;', 'uniform float uIsCloud;', 'uniform float uTime;',
     'uniform float uAtmo;', 'uniform float uUseTex;', 'uniform sampler2D uTex;', 'uniform float uFill;',
+    'uniform float uSun;',   // 0=相机随动光（箭体/发射场，沿用原配色） 1=真实太阳（地月天体）
     'float hash31(vec3 p){',
     ' p=fract(p*0.3183099+vec3(0.71,0.113,0.419)); p*=17.0;',
     ' return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }',
@@ -124,18 +125,25 @@
     ' float spec=pow(max(dot(N,H),0.0),150.0)*waterMask;',
     ' float rim=pow(1.0-max(dot(N,V),0.0),2.5);',
     ' float ndl=dot(N,L);',
-    ' float day=smoothstep(-0.14,0.25,ndl);',
-    ' vec3 col=baseCol*(uAmbient+uLightColor*diff*day)+uLightColor*spec*0.42*day;',
+    // 晨昏线：uSun=0（随动光 / 发射段）沿用原来的柔边配色；uSun=1（真实太阳）收紧到 ~7°
+    // —— 真空天体（月球）本就把昼夜切得极硬，地球再靠大气辉光补出晨昏过渡。
+    ' float day=smoothstep(mix(-0.14,-0.05,uSun),mix(0.25,0.08,uSun),ndl);',
+    // 夜面亮度：真实太阳下压到 ~30%，地球/月球才真的「一半白天、一半黑夜」，
+    // 地球夜面的城市灯光（下面单独叠加）也才显得出来。
+    ' vec3 amb=mix(uAmbient,uAmbient*0.30,uSun);',
+    ' vec3 col=baseCol*(amb+uLightColor*diff*day)+uLightColor*spec*0.42*day;',
     // 大气边缘散射（日照侧靠近地平线更亮）
     ' float limb=pow(1.0-max(dot(N,V),0.0),3.0);',
     ' col+=uAtmo*limb*max(ndl,0.0);',
-    // 夜面城市灯光
-    ' if(uIsEarth>0.5 && ndl<0.12){',
+    // 夜面城市灯光：随晨昏线一起收紧，不能漏到白昼侧
+    ' float cityLo=mix(0.12,0.02,uSun), cityHi=mix(-0.18,-0.12,uSun);',
+    ' if(uIsEarth>0.5 && ndl<cityLo){',
     '   vec3 sp2=normalize(vObjPos);',
     '   float city=pow(smoothstep(0.70,0.94,noise3(sp2*26.0)),3.2)*landMask;',
-    '   col+=vec3(1.0,0.80,0.46)*city*smoothstep(0.12,-0.18,ndl)*1.2;',
+    '   col+=vec3(1.0,0.80,0.46)*city*smoothstep(cityLo,cityHi,ndl)*1.2;',
     ' }',
-    ' col+=uRimColor*rim*0.6;',
+    // 假边缘光只服务随动光下的器体；真实太阳的边缘亮线交给大气辉光，不叠 rim
+    ' col+=uRimColor*rim*0.6*(1.0-uSun);',
     // 相机侧补光：箭体大姿态转弯后向阳面背离镜头时仍可辨（地球不受此光）
     ' col+=vec3(1.0,0.98,0.95)*uFill*max(dot(N,V),0.0);',
     ' col=mix(col,baseCol*1.7,uGlow);',
@@ -443,7 +451,8 @@
       uIsEarth: gl.getUniformLocation(phong, 'uIsEarth'), uIsCloud: gl.getUniformLocation(phong, 'uIsCloud'), uTime: gl.getUniformLocation(phong, 'uTime'),
       uAtmo: gl.getUniformLocation(phong, 'uAtmo'),
       uUseTex: gl.getUniformLocation(phong, 'uUseTex'), uTex: gl.getUniformLocation(phong, 'uTex'),
-      uFill: gl.getUniformLocation(phong, 'uFill')
+      uFill: gl.getUniformLocation(phong, 'uFill'),
+      uSun: gl.getUniformLocation(phong, 'uSun')
     };
     var aL = atmo ? {
       aPosition: gl.getAttribLocation(atmo, 'aPosition'), aNormal: gl.getAttribLocation(atmo, 'aNormal'),
@@ -471,7 +480,13 @@
 
     var view = mat4.create(), proj = mat4.create(), tmpInv = mat4.create(), normalMat = mat4.create(), skyView = mat4.create();
     var camera = { eye: [0, 3, 9], target: [0, 3, 0], up: [0, 1, 0], fov: 45 * Math.PI / 180, near: 0.1, far: 2000 };
-    var light = { dir: [0.5, 0.8, 0.3], color: [1, 0.97, 0.9], ambient: [0.16, 0.18, 0.22], rim: [0.25, 0.35, 0.55] };
+    // dir      = 相机随动光方向（箭体/发射场用，保证任何机位都不背光）
+    // sunDir   = 世界空间太阳方向（地月天体的 useSun 网格用）
+    // sunMix   = 太阳权重 0→1：由 app.js 按 spaceLightK 推进，入轨前为 0（天体也用随动光）
+    var light = {
+      dir: [0.5, 0.8, 0.3], sunDir: [0.5, 0.8, 0.3], sunMix: 0,
+      color: [1, 0.97, 0.9], ambient: [0.16, 0.18, 0.22], rim: [0.25, 0.35, 0.55]
+    };
     var clearColor = [0.04, 0.05, 0.09];
     var meshes = [], lost = false, time = 0;
 
@@ -528,6 +543,7 @@
         geometry: g, color: color || [0.8, 0.8, 0.8],
         modelMatrix: mat4.identity(mat4.create()), visible: true, alpha: 1, glow: 0,
         group: opts.group || 'scene', isEarth: opts.isEarth || false, isCloud: opts.isCloud || false,
+        useSun: opts.useSun || false,   // true=受世界空间太阳照射（地月天体），false=随动光（箭体/发射场）
         atmo: opts.atmo || 0, atmoShader: opts.atmoShader || false, atmoMode: 0,
         fill: opts.fill != null ? opts.fill : (opts.isEarth ? 0 : 0.26),  // 相机侧补光强度
         blend: opts.blend || 'alpha',        // 'alpha' | 'add' | 'none'
@@ -666,7 +682,8 @@
       gl.uniformMatrix4fv(L.uNormalMat, false, normalMat);
       gl.uniformMatrix4fv(L.uView, false, view); gl.uniformMatrix4fv(L.uProj, false, proj);
       gl.uniform3fv(L.uCamPos, camera.eye);
-      gl.uniform3fv(L.uLightDir, light.dir);
+      // 地月天体取世界空间太阳方向，其余（箭体/发射场）取随动光
+      gl.uniform3fv(L.uLightDir, (m.useSun && light.sunDir) ? light.sunDir : light.dir);
       gl.uniform3fv(L.uColor, m.color);
       if (!useAtmo) {
         gl.uniform3fv(L.uLightColor, light.color);
@@ -678,6 +695,7 @@
         gl.uniform1f(L.uTime, time);
         gl.uniform1f(L.uAtmo, m.atmo || 0);
         gl.uniform1f(L.uFill, m.fill || 0);
+        gl.uniform1f(L.uSun, m.useSun ? (light.sunMix == null ? 1 : light.sunMix) : 0);
       } else {
         gl.uniform1f(L.uInner, m.atmoInner || 0.9);
         gl.uniform1f(L.uStrength, m.atmoStrength == null ? 1 : m.atmoStrength);

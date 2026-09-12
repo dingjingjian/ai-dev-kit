@@ -304,6 +304,25 @@ approx(S.rm - MR, mission.LAND_RM - MR, 1e-6, '着陆时 rm = LAND_RM（原点�
 const landDist = Math.hypot(S.x - MC[0], S.y - MC[1]);
 approx(landDist - MR, mission.LAND_RM - MR, 1e-6, '着陆器世界位置距月心 = LAND_RM');
 
+// ---- 光照：太阳方向（M3D.SUN.dir）必须同时喂饱「月面着陆」与「月空地球」 ----
+// craft.js 的 useSun 网格（地球 / 云 / 大气 / 月球）受它定向照射；箭体 / 发射场走随动光，
+// 两条光在入轨处按 spaceLightK 交接（app.js updateLight）。改太阳方向后这两条约束会各自拦住。
+console.log('\n=== 太阳方向（地月天体光照）===');
+const sunDir = M3D.SUN.dir;
+approx(Math.hypot(sunDir[0], sunDir[1], sunDir[2]), 1, 1e-9, '太阳方向为单位矢量');
+approx(sunDir[2], 0, 1e-9, '太阳位于地月轨道面（世界 XY 平面）内 —— 地球 / 月球晨昏线恒过两极');
+const nSite = [(S.x - MC[0]) / landDist, (S.y - MC[1]) / landDist, 0];      // 着陆点月面法线
+const clamp1 = (v) => Math.max(-1, Math.min(1, v));
+const sunElev = Math.asin(clamp1(nSite[0] * sunDir[0] + nSite[1] * sunDir[1]));
+ok(sunElev > 20 * Math.PI / 180 && sunElev < 60 * Math.PI / 180,
+  '着陆点被真太阳照到：太阳高度角 ' + (sunElev * 180 / Math.PI).toFixed(1) + '° ∈ (20°, 60°)（月面有可辨投影，又非顶光）');
+const eDir = [M3D.EARTH.center[0] - S.x, M3D.EARTH.center[1] - S.y, 0];    // 着陆点 → 地心
+const eLen = Math.hypot(eDir[0], eDir[1], eDir[2]);
+const sunElong = clamp1((eDir[0] * sunDir[0] + eDir[1] * sunDir[1] + eDir[2] * sunDir[2]) / eLen);
+const earthPhase = (1 - sunElong) / 2;                                     // 地球被照亮的盘面比例
+ok(earthPhase > 0.70,
+  '从着陆点看地球相位 ' + (earthPhase * 100).toFixed(0) + '% > 70%（地球是月空主角，不能被照成一条细牙）');
+
 // ---- 着陆末段（动力下降 → 月面软着陆）：几何与姿态必须与加速倍率无关 ----
 // 60× 下这段真实时长不足 0.5 s：缩放 / 着陆腿展开若用原始 dt 收敛就来不及，
 // 会出现「腿只展开一半、器体被放大数倍并插进月面」（曾实测 scale 9.55 / legsDeploy 0.38 / 鞋底 -3.2）。

@@ -100,13 +100,15 @@ body {
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
 
-/* 任务阶段徽标：画布左上角，指示当前所处的登月大阶段 */
+/* 任务阶段徽标：并入底部 HUD 行（--hud-bottom），与右下角的音效按钮同一水平线，置于左下角。
+   仅在登月模式点火后显示，此时 .variants 已被 app.js 隐藏，左下角正好空出，二者不会重叠 */
 #mission-tag {
   display: none; position: absolute;
-  top: 14px; left: 12px;
+  bottom: var(--hud-bottom, 16px); left: 14px;
+  height: 38px; line-height: 36px;              /* 与右侧音效按钮等高，二者对齐成一行 */
   font-size: 11px; font-weight: 600; letter-spacing: 1px;
   color: #d9e6ff;
-  padding: 5px 12px;
+  padding: 0 14px 0 12px;
   background: linear-gradient(135deg, rgba(120, 96, 220, 0.55), rgba(60, 90, 180, 0.45));
   border: 1px solid rgba(160, 150, 255, 0.35);
   border-radius: 999px; z-index: 6; pointer-events: none;
@@ -450,6 +452,7 @@ body {
   .warp-btn::before { inset: -11px; }
   :root { --hud-bottom: 12px; }               /* 底部 HUD 行随移动端下移，音效 / 构型切换仍保持同级 */
   .variants { left: 10px; }
+  #mission-tag { left: 10px; height: 34px; line-height: 32px; }   /* 与移动端音效按钮（34px）同行对齐 */
   .sound-btn { right: 10px; height: 34px; padding: 0 11px 0 9px; font-size: 11px; }
 }
 

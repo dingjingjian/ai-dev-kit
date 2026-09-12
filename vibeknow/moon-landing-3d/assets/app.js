@@ -218,20 +218,31 @@
     var la = cam.yaw + 0.45;
     var ax = Math.sin(la) * 0.80, ay = 0.45, az = Math.cos(la) * 0.80;
     var l = Math.sqrt(ax * ax + ay * ay + az * az) || 1; ax /= l; ay /= l; az /= l;
-    if (spaceLightK < 0.002) { d[0] = ax; d[1] = ay; d[2] = az; return; }
-    // 深空段：以“头灯”方式从镜头方向打光，保证地球/月球/器体始终清晰可见，略带天顶偏置增加立体感
-    var ex = renderer.camera.eye, tgt = renderer.camera.target;
-    var lx = ex[0] - tgt[0], ly = ex[1] - tgt[1], lz = ex[2] - tgt[2];
-    var ll = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1;
-    lx /= ll; ly /= ll; lz /= ll;
-    var sx = lx * 0.82 + 0.05, sy = ly * 0.82 + 0.42, sz = lz * 0.82 + 0.18;
-    var sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
-    sx /= sl; sy /= sl; sz /= sl;
-    d[0] = ax + (sx - ax) * spaceLightK;
-    d[1] = ay + (sy - ay) * spaceLightK;
-    d[2] = az + (sz - az) * spaceLightK;
-    l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
-    d[0] /= l; d[1] /= l; d[2] /= l;
+    if (spaceLightK < 0.002) {
+      d[0] = ax; d[1] = ay; d[2] = az;
+    } else {
+      // 深空段：以“头灯”方式从镜头方向打光，保证器体始终清晰可见，略带天顶偏置增加立体感
+      var ex = renderer.camera.eye, tgt = renderer.camera.target;
+      var lx = ex[0] - tgt[0], ly = ex[1] - tgt[1], lz = ex[2] - tgt[2];
+      var ll = Math.sqrt(lx * lx + ly * ly + lz * lz) || 1;
+      lx /= ll; ly /= ll; lz /= ll;
+      var sx = lx * 0.82 + 0.05, sy = ly * 0.82 + 0.42, sz = lz * 0.82 + 0.18;
+      var sl = Math.sqrt(sx * sx + sy * sy + sz * sz) || 1;
+      sx /= sl; sy /= sl; sz /= sl;
+      d[0] = ax + (sx - ax) * spaceLightK;
+      d[1] = ay + (sy - ay) * spaceLightK;
+      d[2] = az + (sz - az) * spaceLightK;
+      l = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]) || 1;
+      d[0] /= l; d[1] /= l; d[2] /= l;
+    }
+    // 地月天体（地球 / 云 / 大气 / 月球，见 craft.js 的 useSun 标记）另走世界空间太阳方向
+    // —— 唯一真源 M3D.SUN.dir。入轨前（spaceLightK=0）与箭体同向，发射段观感与改动前一致；
+    // 入轨后整体切到太阳，地球 / 月球于是出现晨昏线、昼夜面与随视角变化的真实相位。
+    var sd = renderer.light.sunDir, S0 = M3D.SUN.dir, k = spaceLightK;
+    var gx = d[0] + (S0[0] - d[0]) * k, gy = d[1] + (S0[1] - d[1]) * k, gz = d[2] + (S0[2] - d[2]) * k;
+    var gn = Math.sqrt(gx * gx + gy * gy + gz * gz) || 1;
+    sd[0] = gx / gn; sd[1] = gy / gn; sd[2] = gz / gn;
+    renderer.light.sunMix = k;   // 着色器侧同步收紧晨昏线、压低夜面亮度（见 engine.js PHONG_FS）
   }
 
   function updateSceneBg() {
@@ -357,7 +368,7 @@
 
   function updateTelemetry() {
     if (!telemetryEl) return;
-    if (mode !== 'launch' || !S.ignited) { telemetryEl.style.display = 'none'; return; }
+    if (mode !== 'launch' || !S.ignited || S.landed) { telemetryEl.style.display = 'none'; return; }
     telemetryEl.style.display = 'block';
     var launchTag = S.segment === 2 ? '第二次发射' : '第一次发射';
     var t = launchTag + ' T+' + fmtMet(S.met);
@@ -417,7 +428,8 @@
     // docking / landerSep / landing 只是「事件字幕」（见 mission.js 的 PHASES），不会成为 state.phase；
     // 对应阶段由 docked / descent(含 approach) / landed 表示。
     if (ph === 'rendezvous' || ph === 'docked') seg = '交会对接';
-    else if (ph === 'descent' || ph === 'approach' || ph === 'landed') seg = '着陆下降';
+    else if (ph === 'landed') seg = '成功落月';
+    else if (ph === 'descent' || ph === 'approach') seg = '着陆下降';
     else if (S.segment === 2) seg = '第二次发射 · 梦舟飞船';
     else seg = '第一次发射 · 揽月着陆器';
     missionTagEl.textContent = seg;
