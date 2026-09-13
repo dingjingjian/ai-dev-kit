@@ -41,7 +41,8 @@ sandbox.requestAnimationFrame = () => 0;
 vm.createContext(sandbox);
 
 const SCRIPTS = ['math.js', 'earth-data.js', 'clouds-data.js', 'mercury-data.js', 'venus-data.js',
-  'mars-data.js', 'jupiter-data.js', 'saturn-data.js', 'engine.js', 'bodies.js', 'game.js', 'audio.js', 'app.js'];
+  'mars-data.js', 'jupiter-data.js', 'saturn-data.js', 'orbit.js', 'engine.js', 'bodies.js',
+  'game.js', 'story.js', 'audio.js', 'app.js'];
 
 const loadErrors = [];
 for (const f of SCRIPTS) {
@@ -57,6 +58,10 @@ const W = M3D.WORLD || {};
 check(typeof M3D.buildWorld === 'function', 'bodies.js 导出 buildWorld');
 check(typeof M3D.createGame === 'function', 'game.js 导出 createGame');
 check(typeof M3D.orientUp === 'function', 'bodies.js 导出 orientUp');
+check(typeof M3D.orbit === 'object' && typeof M3D.orbit.elements === 'function', 'orbit.js 导出轨道解算');
+check(typeof M3D.createStory === 'function', 'story.js 导出 createStory');
+check(Array.isArray(M3D.STORY_DATA.PROLOGUE) && M3D.STORY_DATA.PROLOGUE.length === 7, '序章共 7 幕（含交还操控的转场）');
+check(Array.isArray(M3D.STORY_DATA.REBELLION) && M3D.STORY_DATA.REBELLION.length === 3, '叛乱段共 3 幕（叛乱 / 处决 / 氦闪）');
 
 // ---------- 常量与单位换算 ----------
 const U = M3D.GAME_UNITS || {};
@@ -161,6 +166,86 @@ function simulate(game, strategy, maxGameSeconds) {
   }, 40);
   check(sawExhaust, '燃料会被耗尽（推力资源有限）', '剩余燃料 ' + (g.state.fuel * 100).toFixed(1) + '%');
   check(g.state.thrustMag === 0, '燃料耗尽后推力自动归零');
+}
+
+// 6) 轨道解算自洽（轨道线与点火窗口的地基）
+{
+  const O = M3D.orbit;
+  const el = O.elements(W.AU, 0, 0, W.V_CIRC, W.G_SUN);
+  check(near(el.e, 0, 0.01), '圆轨道偏心率 ≈ 0', 'e = ' + el.e.toFixed(4));
+  check(near(el.a, W.AU, 2), '圆轨道半长轴 ≈ 1 AU', 'a = ' + (el.a / W.AU).toFixed(3) + ' AU');
+  check(near(el.period, 60, 1.5), '圆轨道周期 ≈ 60 游戏秒（= 1 年）', el.period.toFixed(1) + ' 秒');
+  const fast = O.elements(W.AU, 0, 0, W.V_CIRC * 1.5, W.G_SUN);
+  check(!fast.bound && fast.e > 1, '超过逃逸速度后轨道不再闭合（双曲线）', 'e = ' + fast.e.toFixed(3));
+  const after = O.afterDv(W.AU, 0, 0, W.V_CIRC, W.G_SUN, 0, 2, {});
+  check(near(after.rp, W.AU, 2), '圆轨道上顺向点火 → 点火点成为近日点', 'rp = ' + (after.rp / W.AU).toFixed(3) + ' AU');
+}
+
+// 7) 绕日圈数：10 年应累计约 10 圈
+{
+  const g = M3D.createGame();
+  g.state.timeScale = 8; g.start();
+  simulate(g, () => {}, 600);
+  check(near(g.state.laps, 10, 0.8), '绕日圈数累计正确（10 年 ≈ 10 圈）', g.state.laps.toFixed(2) + ' 圈');
+  check(g.state.lap >= 9 && g.state.lap === Math.floor(g.state.laps),
+    '整圈计数与浮点圈数一致', Math.floor(g.state.laps) + ' 圈（' + g.state.laps.toFixed(2) + '）');
+}
+
+// 8) 奥伯特效应：同样的燃料在近日点点火能换来更多速度
+{
+  // a = 100 的椭圆：近日点 60、远日点 140，速度由 vis-viva 给出
+  const a = 100, rp = 60, ra = 140;
+  const vP = Math.sqrt(W.G_SUN * (2 / rp - 1 / a));
+  const vA = Math.sqrt(W.G_SUN * (2 / ra - 1 / a));
+  function burnGain(pos, vel, dirZ, dv) {
+    const g = M3D.createGame();
+    g.debugSet(pos, vel);
+    g.start();
+    g.step(1e-4);                       // 让 updateDerived 算出当前真近点角
+    const before = Math.hypot(g.state.vel[0], g.state.vel[2]);
+    const peri = g.state.peri;
+    g.commitBurn(0, dirZ, dv);
+    let n = 0;
+    while (g.state.burn && n++ < 100000) g.step(1 / 60);
+    const after = Math.hypot(g.state.vel[0], g.state.vel[2]);
+    return { gain: after - before, peri: peri };
+  }
+  const P = burnGain([rp, 0, 0], [0, 0, vP], 1, 1.0);
+  const A = burnGain([-ra, 0, 0], [0, 0, -vA], -1, 1.0);
+  check(P.peri > 0.5 && A.peri < 0.05, '近日点窗口强度在近/远日点分别为高/低',
+    '近日点 ' + P.peri.toFixed(2) + ' · 远日点 ' + A.peri.toFixed(2));
+  check(P.gain > A.gain * 1.15, '同样燃料在近日点点火获得更多速度（奥伯特效应）',
+    '近日点 +' + P.gain.toFixed(3) + ' · 远日点 +' + A.gain.toFixed(3) + ' 单位/秒');
+}
+
+// 9) 预定量点火：烧掉指定 Δv 后自动停止，燃料按量扣减
+{
+  const g = M3D.createGame();
+  g.start();
+  g.debugSet([W.AU, 0, 0], [0, 0, W.V_CIRC]);
+  g.step(1e-4);
+  const f0 = g.state.fuel;
+  const accepted = g.commitBurn(0, 1, 2.0);
+  check(near(accepted, 2.0, 1e-3), 'commitBurn 接受指定的速度增量', 'Δv = ' + accepted.toFixed(3));
+  let n = 0;
+  while (g.state.burn && n++ < 100000) g.step(1 / 60);
+  check(g.state.burn === null, '烧完预定量后自动停机');
+  const used = (f0 - g.state.fuel) * W.fuelDv;
+  check(near(used, 2.0, 0.05), '燃料按速度增量扣减（不按时间）', '消耗 ' + used.toFixed(3) + ' / 指定 2.000');
+}
+
+// 10) 氦闪：太阳膨胀到地球轨道以内会吞没地球
+{
+  const g = M3D.createGame();
+  g.start();
+  g.state.flashR = W.AU * 2;            // 太阳半径膨胀到 2 AU
+  g.step(1 / 60);
+  check(g.state.status === 'burned', '氦闪膨胀到地球轨道内 → 被吞没（失败）', g.state.reason || g.state.status);
+  const g2 = M3D.createGame();
+  g2.start();
+  g2.state.flashR = 0;
+  g2.step(1 / 60);
+  check(g2.state.status === 'flying', '未膨胀时不触发吞没判定', g2.state.status);
 }
 
 // ---------- 输出 ----------

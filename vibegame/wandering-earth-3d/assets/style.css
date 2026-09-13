@@ -1,658 +1,384 @@
-:root{
-  --bg:#05060d;
-  --panel:rgba(12,18,34,.78);
-  --line:rgba(120,160,220,.16);
-  --txt:#eaf1fb;
-  --mut:#8da2c0;
-  --acc:#5cc8ff;
-  --warm:#ffb84d;
-  /* HUD 定位：画面全屏铺满、四周不留白。
-     --hud-top    ：顶部提示条（toast）的行高；
-     --hud-bottom ：底部 HUD 行高，音效按钮与构型切换按钮共用，两者同一条水平线（左 / 右对称）。 */
-  --hud-top: 82px;
-  --hud-bottom: 16px;
+/**
+ * 流浪地球 · 逃出太阳系 —— 界面样式
+ *
+ * 排版口径（与项目其他页一致，避免"组件化堆砌"）：
+ *   · 层次只靠字号 / 字重 / 字距 / 留白，不靠圆角胶囊与色块；
+ *   · 遥测一律"标签左、数值右"，数值用 tabular-nums 右对齐成列；
+ *   · 分隔只用 1px 细线；强调色全局只有一个（--acc），警示时才用 --warn。
+ */
+
+:root {
+  --bg: #05070e;
+  --ink: #e8eefb;
+  --ink-2: #9aa8c0;
+  --ink-3: #6b7794;
+  --line: rgba(140, 170, 220, 0.14);
+  --line-2: rgba(140, 170, 220, 0.28);
+  --acc: #5cc8ff;
+  --warn: #ffb84d;
+  --bad: #ff7f6e;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
 }
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
 html, body { height: 100%; }
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none; user-select: none;
   -webkit-touch-callout: none;
-  background: var(--bg); color: var(--txt); overflow: hidden;
-  /* 全屏应用无滚动：禁用下拉刷新/回弹手势，避免发射操作误触发浏览器行为 */
+  background: var(--bg);
+  color: var(--ink);
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
-#app {
-  display: flex; flex-direction: column;
-  height: 100vh; height: var(--app-height, 100vh);
-  width: 100%;
-  /* 画面全屏铺满，顶部不预留空白；仅操作按钮避让安全区（见 .variants） */
-  background: radial-gradient(130% 70% at 50% 0%, #0c1430 0%, #06070d 60%, #04050a 100%);
-}
-
-/* 顶部品牌栏 */
-.topbar {
-  flex: 0 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  padding: 8px 14px;
-  padding-top: calc(8px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-  z-index: 5;
-}
-.brand { display: flex; align-items: center; }
-.brand > * + * { margin-left: 9px; }
-.logo {
-  width: 26px; height: 26px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #ffe6c2, #ffb84d 45%, #e0703a 75%, #6e2a10);
-  box-shadow: 0 0 12px rgba(255, 184, 77, 0.5);
-}
-.brand b { font-size: 15px; font-weight: 600; letter-spacing: 0.5px; }
+#app { height: 100vh; height: var(--app-height, 100vh); width: 100%; }
 
 #stage-wrap {
-  flex: 1 1 auto; min-height: 0; position: relative; width: 100%; overflow: hidden;
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% 42%, #0a1024 0%, #06080f 55%, #04050a 100%);
 }
+
 #stage { display: block; width: 100%; height: 100%; touch-action: none; }
 
-/* 段间过渡黑场（第一次发射 → 第二次发射），不透明度由 app.js 每帧驱动 */
-#seg-fade {
-  display: none; position: absolute; inset: 0; background: #000;
-  opacity: 0; z-index: 6; pointer-events: none;
+#fx {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 2;
 }
 
-#countdown {
-  display: none; position: absolute;
-  left: 50%; top: 38%; transform: translate(-50%, -50%);
-  font-size: 88px; font-weight: 800; color: #ffd166; letter-spacing: 2px;
-  text-shadow:
-    0 0 18px rgba(255, 140, 58, 0.9),
-    0 0 52px rgba(255, 106, 58, 0.55),
-    0 4px 16px rgba(0, 0, 0, 0.9);
-  z-index: 7; pointer-events: none;
-}
-/* 文字背后的暗色光斑，保证任意背景下都可读 */
-#countdown::before {
-  content: ""; position: absolute; z-index: -1;
-  inset: -28% -60%;
-  border-radius: 50%;
-  background: radial-gradient(50% 50% at 50% 50%, rgba(4, 5, 10, 0.62) 0%, rgba(4, 5, 10, 0) 72%);
-}
-#countdown.pop { animation: cdPop 0.85s cubic-bezier(0.16, 0.9, 0.3, 1) both; }
-/* 「点火！」文字比数字小一号，避免占满移动端屏幕 */
-#countdown.cd-ignite { font-size: 44px; letter-spacing: 6px; }
-@keyframes cdPop {
-  0% { transform: translate(-50%, -50%) scale(1.9); opacity: 0.15; }
-  24% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  70% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  100% { transform: translate(-50%, -50%) scale(0.94); opacity: 0.9; }
-}
+/* ── 顶栏 ───────────────────────────────────────────── */
 
-/* 遥测提示条（toast）：画布顶部居中，行高由 --hud-top 统一定义 */
-#telemetry {
-  display: none; position: absolute;
-  top: var(--hud-top, 82px); left: 12px; right: 12px; margin: 0 auto; width: fit-content; max-width: calc(100% - 24px);
-  font-size: 12px; font-weight: 500; letter-spacing: 0.5px;
-  font-variant-numeric: tabular-nums; text-align: center; line-height: 1.45;
-  color: var(--mut); background: var(--panel);
-  border: 1px solid var(--line); border-radius: 20px;
-  padding: 6px 14px; z-index: 6; pointer-events: none;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+#topbar {
+  position: absolute; top: 0; left: 0; right: 0;
+  z-index: 5;
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: calc(12px + var(--safe-t)) calc(16px + var(--safe-r)) 10px calc(16px + var(--safe-l));
+  pointer-events: none;
 }
+#topbar > * { pointer-events: auto; }
 
-/* 任务阶段徽标：并入底部 HUD 行（--hud-bottom），与右下角的音效按钮同一水平线，置于左下角。
-   仅在登月模式点火后显示，此时 .variants 已被 app.js 隐藏，左下角正好空出，二者不会重叠 */
-#mission-tag {
-  display: none; position: absolute;
-  bottom: var(--hud-bottom, 16px); left: 14px;
-  height: 38px; line-height: 36px;              /* 与右侧音效按钮等高，二者对齐成一行 */
-  font-size: 11px; font-weight: 600; letter-spacing: 1px;
-  color: #d9e6ff;
-  padding: 0 14px 0 12px;
-  background: linear-gradient(135deg, rgba(120, 96, 220, 0.55), rgba(60, 90, 180, 0.45));
-  border: 1px solid rgba(160, 150, 255, 0.35);
-  border-radius: 999px; z-index: 6; pointer-events: none;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: 0 2px 12px rgba(90, 80, 200, 0.28);
+.tb-phase {
+  font-size: 14px; font-weight: 600; letter-spacing: 0.08em;
+  color: var(--ink);
+  line-height: 1.3;
 }
-#mission-tag::before {
-  content: ""; display: inline-block; vertical-align: middle;
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #c3a6ff; margin-right: 7px;
-  box-shadow: 0 0 8px rgba(195, 166, 255, 0.9);
+.tb-lap {
+  margin-top: 3px;
+  font-size: 12px; font-weight: 400; letter-spacing: 0.05em;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
 }
+.tb-lap.reached { color: var(--acc); }
 
-/* 音效开关：画布右下角，胶囊造型与底部玻璃质感面板同族；
-   与左下角的构型切换按钮共用 --hud-bottom，两者保持同一条水平线 */
-.sound-btn {
-  position: absolute;
-  bottom: var(--hud-bottom, 16px); right: 14px;
-  display: flex; align-items: center; justify-content: center; gap: 6px;
-  height: 38px;
-  padding: 0 14px 0 11px;
-  font: inherit;
-  font-size: 12px; font-weight: 500; letter-spacing: 1px;
-  color: var(--mut);
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 999px;
+.tb-right { display: flex; align-items: center; gap: 14px; }
+
+.ts-group { display: flex; gap: 12px; }
+.ts-btn {
+  font: inherit; font-size: 12px; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  background: none; border: none;
+  border-bottom: 1px solid transparent;
+  padding: 2px 1px 3px;
   cursor: pointer;
-  z-index: 6;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  transition: color 0.18s, box-shadow 0.18s, transform 0.12s;
+  transition: color 0.18s, border-color 0.18s;
 }
-.sound-btn .s-label { line-height: 1; }
-.sound-btn:active { opacity: 0.8; transform: scale(0.94); }
-.sound-btn .s-off { display: none; }
-.sound-btn.muted { color: #5a6a84; }
-.sound-btn.muted .s-wave { display: none; }
-.sound-btn.muted .s-off { display: block; }
-.sound-btn:not(.muted) { color: var(--acc); box-shadow: 0 0 10px rgba(92, 200, 255, 0.22); }
+.ts-btn.active { color: var(--acc); border-bottom-color: var(--acc); }
 
-/* 部件标签 */
-#labels { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 4; }
-.ptag {
-  position: absolute; transform: translate(-50%, -50%);
-  font-size: 11px; font-weight: 500; color: var(--txt);
-  background: rgba(8, 14, 28, 0.55); border: 1px solid var(--line);
-  border-radius: 10px; padding: 3px 9px; white-space: nowrap;
-  pointer-events: auto; cursor: pointer;
-  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+.icon-btn {
+  font: inherit; font-size: 12px; letter-spacing: 0.1em;
+  color: var(--ink-3);
+  background: none; border: none;
+  padding: 2px 1px 3px;
+  cursor: pointer;
+  transition: color 0.18s;
 }
-.ptag.sel {
-  background: linear-gradient(135deg, rgba(92, 200, 255, 0.9), rgba(74, 144, 226, 0.9));
-  border-color: transparent; color: #fff;
-  box-shadow: 0 2px 10px rgba(92, 200, 255, 0.35);
+.icon-btn.on { color: var(--acc); }
+.icon-btn.off { color: #4a5670; }
+
+/* ── 遥测列 ─────────────────────────────────────────── */
+
+#telemetry {
+  position: absolute;
+  left: calc(16px + var(--safe-l));
+  bottom: calc(72px + var(--safe-b));
+  z-index: 4;
+  width: 158px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  transition: opacity 0.5s;
+  pointer-events: none;
 }
-.ptag::before {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  width: 10px; height: 10px; margin: -5px 0 0 -5px;
-  border-radius: 50%; background: rgba(120, 160, 220, 0.5);
-  transform: translate(0, -16px);
+.tm-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+  line-height: 1.9;
+}
+.tm-k {
+  font-size: 11px; letter-spacing: 0.1em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.tm-v {
+  font-size: 12.5px; font-weight: 500;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.tm-v.ok { color: var(--acc); }
+.tm-v.warn { color: var(--warn); }
+
+/* ── 燃料（底部细线） ───────────────────────────────── */
+
+#bottom {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  z-index: 5;
+  padding: 0 calc(16px + var(--safe-r)) calc(14px + var(--safe-b)) calc(16px + var(--safe-l));
+  transition: opacity 0.5s;
+  pointer-events: none;
+}
+.fuel-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11px; letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin-bottom: 7px;
+}
+#fuel-num { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.fuel-track {
+  height: 2px; width: 100%;
+  background: var(--line);
+  overflow: hidden;
+}
+#fuel-fill {
+  height: 100%; width: 100%;
+  background: var(--acc);
+  transform-origin: left center;
+  transition: background-color 0.4s;
+}
+#fuel-fill.low { background: var(--warn); }
+#fuel-fill.out { background: var(--bad); }
+
+/* ── 提示层 ─────────────────────────────────────────── */
+
+#warn, #aim, #guide {
+  position: absolute; left: 0; right: 0;
+  z-index: 4;
+  text-align: center;
+  pointer-events: none;
+  padding: 0 20px;
 }
 
-/* 科普说明卡片 */
-#desc-box {
-  display: none; position: absolute;
-  left: 50%; bottom: 16px; transform: translateX(-50%);
-  width: 86%; max-width: 380px;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 16px; padding: 12px 16px; z-index: 6;
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+#warn {
+  top: 21%;
+  font-size: 12.5px; letter-spacing: 0.06em;
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.25s;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
 }
-#desc-title {
-  font-size: 15px; font-weight: 600; color: var(--txt); margin-bottom: 4px;
-  display: flex; align-items: center;
-}
-#desc-title::before {
-  content: ""; width: 9px; height: 9px; border-radius: 50%;
-  background: var(--acc); margin-right: 8px; flex-shrink: 0;
-}
-#desc-text { font-size: 13px; line-height: 1.55; color: var(--mut); }
 
-/* 开场载入画面 */
+#aim {
+  top: 15%;
+  font-size: 13px; letter-spacing: 0.06em;
+  color: var(--acc);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transition: opacity 0.15s;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.9);
+}
+
+#guide {
+  bottom: 33%;
+  font-size: 13px; line-height: 1.65; letter-spacing: 0.03em;
+  color: var(--ink-2);
+  opacity: 0;
+  transition: opacity 0.45s;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.95);
+}
+#guide.show { opacity: 1; }
+
+/* ── 剧情层 ─────────────────────────────────────────── */
+
+#story {
+  position: absolute; inset: 0;
+  z-index: 7;
+  display: none;
+  align-items: flex-end;
+  pointer-events: none;          /* 点击穿透到画布，由画布统一处理"点击推进剧情" */
+  background: linear-gradient(to top, rgba(3, 5, 11, 0.94) 0%, rgba(3, 5, 11, 0.72) 34%, rgba(3, 5, 11, 0) 72%);
+}
+#story.show { display: flex; }
+
+.st-inner {
+  width: 100%;
+  max-width: 560px;
+  padding: 0 calc(20px + var(--safe-r)) calc(30px + var(--safe-b)) calc(20px + var(--safe-l));
+  margin: 0 auto;
+}
+.st-year {
+  font-size: 11px; letter-spacing: 0.22em;
+  color: var(--acc);
+  font-variant-numeric: tabular-nums;
+  min-height: 15px;
+}
+.st-title {
+  margin-top: 9px;
+  font-size: 21px; font-weight: 600; letter-spacing: 0.04em;
+  color: var(--ink);
+  line-height: 1.35;
+}
+.st-text {
+  margin-top: 11px;
+  font-size: 14.5px; font-weight: 400; line-height: 1.78;
+  color: var(--ink-2);
+  letter-spacing: 0.01em;
+  max-width: 30em;
+}
+.st-bar {
+  margin-top: 18px;
+  height: 1px; width: 100%;
+  background: var(--line);
+}
+#st-fill {
+  height: 100%; width: 0%;
+  background: var(--acc);
+  transition: width 0.2s linear;
+}
+.st-hint {
+  margin-top: 10px;
+  font-size: 11.5px; letter-spacing: 0.12em;
+  color: var(--ink-3);
+  min-height: 16px;
+}
+
+#st-skip {
+  position: absolute;
+  top: calc(12px + var(--safe-t)); right: calc(16px + var(--safe-r));
+  pointer-events: auto;
+  font: inherit; font-size: 11.5px; letter-spacing: 0.16em;
+  color: var(--ink-3);
+  background: none; border: none;
+  border-bottom: 1px solid transparent;
+  padding: 2px 1px 3px;
+  cursor: pointer;
+  transition: color 0.18s, border-color 0.18s;
+}
+#st-skip:hover { color: var(--ink-2); border-bottom-color: var(--line-2); }
+
+/* 剧情播放时收起仪表与控件，让画面干净 */
+body.in-story #telemetry,
+body.in-story #bottom,
+body.in-story #guide,
+body.in-story .ts-group,
+body.in-story .icon-btn { opacity: 0; pointer-events: none; }
+
+/* ── 结算 ───────────────────────────────────────────── */
+
+#result {
+  position: absolute; inset: 0;
+  z-index: 8;
+  display: none;
+  align-items: center; justify-content: center;
+  background: rgba(4, 6, 12, 0.9);
+  padding: 24px;
+}
+#result.show { display: flex; }
+.rs-inner {
+  width: 100%; max-width: 380px;
+  text-align: left;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.rs-title {
+  font-size: 25px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--ink);
+  line-height: 1.3;
+}
+.rs-title.good { color: var(--acc); }
+.rs-title.bad { color: var(--bad); }
+.rs-text {
+  margin-top: 12px;
+  font-size: 14.5px; line-height: 1.75;
+  color: var(--ink-2);
+}
+.rs-stat {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.rs-stat .tm-row { line-height: 2.05; }
+.rs-btn {
+  margin-top: 26px;
+  font: inherit; font-size: 13px; letter-spacing: 0.16em;
+  color: var(--acc);
+  background: none; border: none;
+  border-bottom: 1px solid var(--acc);
+  padding: 3px 2px 5px;
+  cursor: pointer;
+  transition: opacity 0.18s;
+}
+.rs-btn:active { opacity: 0.65; }
+
+/* ── 白闪 / 加载 / 兜底 ─────────────────────────────── */
+
+#flash {
+  position: absolute; inset: 0;
+  z-index: 9;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+
 #loader {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background: radial-gradient(130% 70% at 50% 0%, #0c1430 0%, #06070d 60%, #04050a 100%);
-  z-index: 20;
+  position: absolute; inset: 0;
+  z-index: 10;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  background: var(--bg);
+  color: var(--ink-3);
+  font-size: 13px; letter-spacing: 0.08em;
   transition: opacity 0.6s;
 }
 #loader.hide { opacity: 0; pointer-events: none; }
 .loader-spin {
-  width: 42px; height: 42px;
-  border: 3px solid rgba(92, 200, 255, 0.2);
+  width: 26px; height: 26px;
+  border: 1px solid var(--line-2);
   border-top-color: var(--acc);
   border-radius: 50%;
-  animation: loaderSpin 1s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
-@keyframes loaderSpin { to { transform: rotate(360deg); } }
-#loader p { margin-top: 14px; font-size: 13px; color: var(--mut); }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* WebGL 不支持降级页 */
 .fallback {
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
-  background: radial-gradient(80% 60% at 50% 40%, #0e1530, #05060d);
-}
-.fb-rocket { margin-bottom: 18px; filter: drop-shadow(0 6px 18px rgba(255, 184, 77, 0.25)); }
-.fb-text { font-size: 16px; font-weight: 600; color: var(--txt); }
-.fb-sub { font-size: 13px; color: var(--mut); margin-top: 6px; }
-
-/* 底部面板 */
-.bottombar {
-  flex: 0 0 auto;
-  display: flex; flex-direction: column; align-items: center;
-  padding: 8px 14px;
-  padding-bottom: calc(10px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
-  background: linear-gradient(0deg, rgba(6, 9, 20, 0.96), rgba(6, 9, 20, 0.4));
-  z-index: 5;
-}
-/* 单行 + 溢出省略：长文案（如「任务完成…点击重新观看」）在窄屏换行会把底部面板顶高，
-   导致画布高度跳变，故锁定为一行 */
-.phase-text {
-  font-size: 12px; color: var(--mut); margin-bottom: 7px; text-align: center;
-  height: 16px; line-height: 16px;                 /* 固定行高：跨平台/字号下高度都恒定 */
-  max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.phase-text.phase-in { animation: phaseIn 0.35s ease-out; }
-@keyframes phaseIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* 模式切换 dock（胶囊） */
-.modes {
-  display: flex; align-items: center;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 999px; padding: 5px;
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  max-width: calc(100vw - 16px);
-}
-.mode-btn {
-  font: inherit; font-size: 13px; font-weight: 500; color: var(--mut);
-  background: transparent; border: none;
-  border-radius: 999px; padding: 9px 18px; min-height: 38px; cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
-}
-.mode-btn .dot {
-  display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-  margin-right: 6px; vertical-align: middle;
-}
-.mode-btn:active { opacity: 0.75; }
-.mode-btn.active {
-  color: #fff;
-  background: linear-gradient(135deg, rgba(92, 200, 255, 0.9), rgba(74, 144, 226, 0.9));
-  box-shadow: 0 2px 10px rgba(92, 200, 255, 0.35);
-}
-
-/* 构型切换：与模式 dock 同族（一个玻璃容器 + 透明选项），尺寸更小以区分主次。
-   悬浮在画布左下角，与右下角的音效按钮同在 --hud-bottom 这条水平线上（左右对称）：
-   既不放顶部（会压住拆解视图的部件标签），也不放底部居中（会与说明卡片 #desc-box 重叠）；
-   不参与底部面板布局 —— 因此展示 / 拆解 / 登月之间切换时底部面板高度恒定；
-   仅展示 / 拆解可见，登月模式下由 app.js 置为 display:none */
-.variants {
-  display: none; align-items: center;
-  position: absolute; bottom: var(--hud-bottom, 16px); left: 14px;
-  background: var(--panel); border: 1px solid var(--line);
-  border-radius: 999px; padding: 3px;
-  max-width: calc(100vw - 16px); z-index: 6;
-  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-}
-.variants .variant-btn { padding: 5px 13px; min-height: 30px; font-size: 12px; }
-.variants .mode-btn.active {
-  background: linear-gradient(135deg, rgba(92, 200, 255, 0.72), rgba(74, 144, 226, 0.66));
-  box-shadow: 0 1px 8px rgba(92, 200, 255, 0.22);
-}
-
-/* 点火发射按钮：脱离文档流，悬浮于画布底部、底部面板上方 */
-.ignite-btn {
-  position: absolute;
-  left: 50%;
-  bottom: 40px;
-  transform: translateX(-50%);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 76px;
-  height: 76px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
-  background: radial-gradient(circle at 35% 28%, #ffb08a 0%, #ff6a3a 38%, #d92c10 72%, #8f1d09 100%);
-  box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.1),
-    0 0 0 9px rgba(255, 122, 58, 0.25),
-    0 10px 26px rgba(217, 76, 26, 0.5),
-    inset 0 -6px 10px rgba(0, 0, 0, 0.4),
-    inset 0 4px 6px rgba(255, 255, 255, 0.28);
-  cursor: pointer;
-  animation: ignite-glow 1.6s ease-in-out infinite;
-  z-index: 6;
-}
-.ignite-btn::before {
-  content: '';
-  position: absolute;
-  inset: -15px;
-  border-radius: 50%;
-  background: repeating-conic-gradient(#d9a23a 0deg 18deg, #1d2027 18deg 36deg);
-  -webkit-mask: radial-gradient(circle, transparent 61%, #000 62%);
-  mask: radial-gradient(circle, transparent 61%, #000 62%);
-  opacity: 0.9;
-  z-index: -1;
-}
-.ignite-btn:active { transform: translateX(-50%) scale(0.94); }
-.ignite-btn:disabled { opacity: 0.55; cursor: default; animation: none; }
-
-/* 长按加速按钮：与点火按钮同位同族（球面渐变 + 分段刻度环 + 呼吸辉光），
-   绿色配色区分功能；点火后接替点火钮的位置，按住期间仿真倍率分段爬升（3× → 60×，见 mission.js） */
-.warp-btn {
-  position: absolute;
-  left: 50%;
-  bottom: 40px;
-  transform: translateX(-50%);
+  position: absolute; inset: 0;
+  z-index: 10;
   display: none;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 2px;
-  width: 72px;
-  height: 72px;
-  padding: 0;
-  border: none;
-  border-radius: 50%;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: #fff;
-  text-shadow: 0 1px 4px rgba(0, 40, 15, 0.75), 0 0 8px rgba(0, 40, 15, 0.4);
-  background: radial-gradient(circle at 30% 20%, #d6ffdc 0%, #6cf09a 22%, #21b367 52%, #0a5c37 100%);
-  box-shadow:
-    0 0 0 4px rgba(255, 255, 255, 0.10),
-    0 0 0 9px rgba(94, 220, 140, 0.22),
-    0 10px 26px rgba(24, 160, 90, 0.5),
-    inset 0 -6px 10px rgba(0, 30, 12, 0.45),
-    inset 0 4px 6px rgba(255, 255, 255, 0.35);
-  cursor: pointer;
-  touch-action: none;
-  animation: warp-glow 2.4s ease-in-out infinite;
-  z-index: 6;
-  -webkit-user-select: none; user-select: none;
-}
-.warp-btn::before {
-  content: '';
-  position: absolute;
-  inset: -13px;
-  border-radius: 50%;
-  background: repeating-conic-gradient(#2ecb74 0deg 18deg, #1d2430 18deg 36deg);
-  -webkit-mask: radial-gradient(circle, transparent 61%, #000 62%);
-  mask: radial-gradient(circle, transparent 61%, #000 62%);
-  opacity: 0.9;
-  z-index: -1;
-}
-.warp-btn .w-arrows {
-  font-size: 16px; line-height: 1; letter-spacing: 2px; text-indent: 2px;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 45, 18, 0.8);
-}
-.warp-btn .w-label { font-size: 10px; letter-spacing: 1px; color: #fff; opacity: 0.95; text-shadow: 0 1px 3px rgba(0, 45, 18, 0.8); }
-.warp-btn.holding {
-  transform: translateX(-50%) scale(0.94);
-  animation: warp-glow 0.9s ease-in-out infinite;
-}
-.warp-btn.holding::before {
-  animation: warpRingSpin 1.2s linear infinite;
-  opacity: 1;
-}
-/* 高倍率挡（≥25×）：箭头更多、指针环转得更快、标题转亮，提示「已经很快了」。
-   箭头随挡位变多，故字号相应收小，保证仍在圆形按钮内不溢出 */
-.warp-btn.fast .w-arrows { font-size: 11px; letter-spacing: 1px; text-indent: 1px; }
-.warp-btn.fast .w-label { color: #eaffe9; text-shadow: 0 0 8px rgba(120, 255, 170, 0.9); }
-.warp-btn.fast.holding { animation-duration: 0.7s; }
-.warp-btn.fast.holding::before { animation-duration: 0.55s; }
-.warp-btn:active { transform: translateX(-50%) scale(0.94); }
-@keyframes warpRingSpin { to { transform: rotate(360deg); } }
-@keyframes warp-glow {
-  0%, 100% {
-    box-shadow:
-      0 0 0 4px rgba(255, 255, 255, 0.10),
-      0 0 0 9px rgba(94, 220, 140, 0.22),
-      0 10px 26px rgba(24, 160, 90, 0.5),
-      inset 0 -6px 10px rgba(0, 30, 12, 0.45),
-      inset 0 4px 6px rgba(255, 255, 255, 0.35);
-  }
-  50% {
-    box-shadow:
-      0 0 0 4px rgba(255, 255, 255, 0.10),
-      0 0 0 9px rgba(94, 220, 140, 0.42),
-      0 10px 36px rgba(70, 220, 140, 0.75),
-      inset 0 -6px 10px rgba(0, 30, 12, 0.45),
-      inset 0 4px 6px rgba(255, 255, 255, 0.35);
-  }
-}
-@keyframes ignite-glow {
-  0%, 100% {
-    box-shadow:
-      0 0 0 4px rgba(255, 255, 255, 0.1),
-      0 0 0 9px rgba(255, 122, 58, 0.25),
-      0 10px 26px rgba(217, 76, 26, 0.5),
-      inset 0 -6px 10px rgba(0, 0, 0, 0.4),
-      inset 0 4px 6px rgba(255, 255, 255, 0.28);
-  }
-  50% {
-    box-shadow:
-      0 0 0 4px rgba(255, 255, 255, 0.1),
-      0 0 0 9px rgba(255, 122, 58, 0.45),
-      0 10px 36px rgba(255, 106, 58, 0.75),
-      inset 0 -6px 10px rgba(0, 0, 0, 0.4),
-      inset 0 4px 6px rgba(255, 255, 255, 0.28);
-  }
-}
-
-/* ============================================================
-   流浪地球 · 逃出太阳系：游戏 HUD
-   ============================================================ */
-#hud {
-  position: absolute;
-  top: calc(12px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-  left: calc(12px + var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
-  z-index: 5;
-  padding: 9px 12px;
-  border-radius: 10px;
-  background: rgba(6, 12, 24, 0.55);
-  border: 1px solid rgba(120, 170, 255, 0.16);
-  backdrop-filter: blur(6px);
-  pointer-events: none;
-}
-.hud-row { display: flex; align-items: baseline; }
-.hud-row + .hud-row { margin-top: 3px; }
-.hud-k { font-size: 11px; color: var(--mut); min-width: 56px; }
-.hud-v { font-size: 13px; font-weight: 600; color: var(--txt); font-variant-numeric: tabular-nums; }
-
-#warn {
-  position: absolute;
-  left: 50%;
-  top: calc(58px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
-  transform: translateX(-50%);
-  z-index: 5;
-  max-width: 92%;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #ffd27a;
-  background: rgba(60, 26, 6, 0.72);
-  border: 1px solid rgba(255, 184, 77, 0.35);
-  opacity: 0;
-  transition: opacity 0.18s ease;
-  pointer-events: none;
+  align-items: center; justify-content: center;
+  gap: 8px;
+  background: var(--bg);
   text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 24px;
 }
+.fb-text { font-size: 14px; color: var(--ink); }
+.fb-sub { font-size: 12.5px; color: var(--ink-3); }
 
-#hint {
-  position: absolute;
-  left: 50%;
-  top: 46%;
-  transform: translate(-50%, -50%);
-  z-index: 4;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: rgba(200, 226, 255, 0.92);
-  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.8);
-  opacity: 0;
-  transition: opacity 0.25s ease;
-  pointer-events: none;
+@media (prefers-reduced-motion: reduce) {
+  .loader-spin { animation: none; }
 }
-#hint.show { animation: hintBreath 2.4s ease-in-out infinite; }
-@keyframes hintBreath { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
-
-#overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2, 6, 14, 0.62);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.28s ease;
-}
-#overlay.show { opacity: 1; pointer-events: auto; }
-.ov-card {
-  width: min(86%, 340px);
-  padding: 22px 20px 18px;
-  border-radius: 14px;
-  text-align: center;
-  background: rgba(10, 18, 34, 0.94);
-  border: 1px solid rgba(120, 170, 255, 0.22);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.55);
-}
-.ov-title { font-size: 20px; font-weight: 700; letter-spacing: 2px; }
-.ov-title.bad { color: #ff7a5c; }
-.ov-title.good { color: #6ee7a8; }
-.ov-text { margin-top: 10px; font-size: 13px; line-height: 1.6; color: var(--mut); }
-.ov-btn {
-  margin-top: 18px;
-  width: 100%;
-  min-height: 42px;
-  border: none;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  color: #04223a;
-  background: linear-gradient(135deg, #7fd1ff, #5cc8ff);
-  cursor: pointer;
-}
-.ov-btn:active { transform: scale(0.97); }
-
-.fuel-wrap { width: 100%; max-width: 260px; }
-.fuel-label { font-size: 11px; color: var(--mut); letter-spacing: 0.4px; }
-.fuel-track {
-  height: 7px;
-  margin-top: 5px;
-  border-radius: 4px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.10);
-}
-.fuel-fill {
-  height: 100%;
-  width: 100%;
-  border-radius: 4px;
-  background: linear-gradient(90deg, #5cc8ff, #9ef0ff);
-  transition: width 0.12s linear, background 0.3s ease;
-}
-.fuel-fill.low { background: linear-gradient(90deg, #ff7a3a, #ffb84d); }
-
-.ts-group { display: flex; margin-top: 9px; }
-.ts-group > * + * { margin-left: 6px; }
-.ts-btn {
-  min-width: 44px;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--mut);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  cursor: pointer;
-}
-.ts-btn.active {
-  color: #04223a;
-  background: linear-gradient(135deg, #7fd1ff, #5cc8ff);
-  border-color: transparent;
-}
-.ts-btn:active { opacity: 0.8; }
-
-.progress { width: 100%; max-width: 360px; margin-top: 8px; }
-.progress-track { height: 5px; background: rgba(255, 255, 255, 0.08); border-radius: 3px; overflow: hidden; }
-.progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #ff7a3a, var(--warm)); border-radius: 3px; transition: width 0.12s linear; }
-
-@media (max-width: 599px) {
-  #countdown { font-size: 64px; }
-  #countdown.cd-ignite { font-size: 34px; }
-  .variants .variant-btn { font-size: 11px; padding: 4px 10px; min-height: 28px; }
-  #telemetry { font-size: 11px; padding: 5px 12px; max-width: calc(100% - 16px); }
-  .warp-btn { bottom: 40px; width: 62px; height: 62px; }
-  .warp-btn .w-arrows { font-size: 13px; }
-  .warp-btn .w-label { font-size: 9px; }
-  .warp-btn::before { inset: -11px; }
-  :root { --hud-bottom: 12px; }               /* 底部 HUD 行随移动端下移，音效 / 构型切换仍保持同级 */
-  .variants { left: 10px; }
-  #mission-tag { left: 10px; height: 34px; line-height: 32px; }   /* 与移动端音效按钮（34px）同行对齐 */
-  .sound-btn { right: 10px; height: 34px; padding: 0 11px 0 9px; font-size: 11px; }
-}
-
-@media (min-width: 600px) {
-  .brand b { font-size: 17px; }
-  .phase-text { font-size: 13px; }
-  .mode-btn { padding: 9px 24px; font-size: 14px; }
-  .ignite-btn { width: 86px; height: 86px; font-size: 13px; }
-  .warp-btn { width: 80px; height: 80px; font-size: 12px; }
-  .warp-btn .w-arrows { font-size: 18px; }
-  .warp-btn .w-label { font-size: 11px; }
-}
-
-/* ============================================================
-   前置剧情（开场过场）：自转暂停 / 行星发动机启动 / 月球剧情
-   ============================================================ */
-/* 过场期间隐藏游戏内 HUD 与底部面板，避免与字幕重叠 */
-body.prologuing #hud,
-body.prologuing #warn,
-body.prologuing #hint,
-body.prologuing .bottombar { display: none !important; }
-
-/* 点火白闪：不透明度由 app.js 每帧驱动衰减 */
-#flash {
-  position: absolute; inset: 0; z-index: 11;
-  background: #d4ecff; opacity: 0; pointer-events: none;
-}
-
-/* 字幕卡：居于画面下方，类似电影字幕，不遮挡地球 */
-#prologue {
-  position: absolute; inset: 0; z-index: 12;
-  display: none; align-items: flex-end; justify-content: center;
-  pointer-events: none;
-  padding-bottom: 13%;
-  background: linear-gradient(0deg, rgba(2, 4, 10, 0.85) 0%, rgba(2, 4, 10, 0) 46%);
-}
-#prologue.show { display: flex; animation: proFade 0.6s ease; }
-@keyframes proFade { from { opacity: 0; } to { opacity: 1; } }
-.pro-card { max-width: 560px; width: 86%; text-align: center; pointer-events: none; }
-.pro-title {
-  font-size: 18px; font-weight: 700; letter-spacing: 2px;
-  color: var(--acc); margin-bottom: 10px;
-  text-shadow: 0 2px 14px rgba(92, 200, 255, 0.4);
-}
-.pro-text {
-  font-size: 14px; line-height: 1.7; color: var(--txt);
-  background: rgba(8, 14, 28, 0.5); border: 1px solid var(--line);
-  border-radius: 14px; padding: 12px 16px;
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-}
-.pro-text.pop { animation: proPop 0.5s ease-out; }
-@keyframes proPop { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.pro-hint { margin-top: 12px; font-size: 11px; color: var(--mut); letter-spacing: 1px; }
-#pro-skip {
-  position: absolute;
-  top: calc(12px + var(--safe-area-inset-top, 0px)); right: 12px;
-  height: 34px; padding: 0 14px; font: inherit; font-size: 12px;
-  color: var(--mut); background: var(--panel); border: 1px solid var(--line);
-  border-radius: 999px; cursor: pointer; z-index: 13; pointer-events: auto;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-}
-#pro-skip:active { opacity: 0.8; }

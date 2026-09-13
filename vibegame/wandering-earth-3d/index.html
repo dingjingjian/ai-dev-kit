@@ -4,40 +4,71 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <title>流浪地球 · 逃出太阳系</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
   <div id="app">
     <main id="stage-wrap">
       <canvas id="stage"></canvas>
+      <canvas id="fx"></canvas>
 
-      <div id="hud">
-        <div class="hud-row"><span class="hud-k">距日</span><span id="hud-dist" class="hud-v">1.00 AU</span></div>
-        <div class="hud-row"><span class="hud-k">速度</span><span id="hud-speed" class="hud-v">29.8 km/s</span></div>
-        <div class="hud-row"><span class="hud-k">任务时间</span><span id="hud-time" class="hud-v">0.00 年</span></div>
-      </div>
+      <header id="topbar">
+        <div class="tb-left">
+          <div id="phase" class="tb-phase">序章 · 刹车时代</div>
+          <div id="lap" class="tb-lap">第 0 / 15 圈</div>
+        </div>
+        <div class="tb-right">
+          <div class="ts-group" role="group" aria-label="时间倍率">
+            <button class="ts-btn active" data-ts="1" type="button">1×</button>
+            <button class="ts-btn" data-ts="2" type="button">2×</button>
+            <button class="ts-btn" data-ts="4" type="button">4×</button>
+          </div>
+          <button id="btn-sound" class="icon-btn" type="button" aria-label="声音开关">声</button>
+        </div>
+      </header>
+
+      <section id="telemetry">
+        <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">1.00 AU</span></div>
+        <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">29.8 km/s</span></div>
+        <div class="tm-row"><span class="tm-k">逃逸比</span><span id="tm-esc" class="tm-v">0.71</span></div>
+        <div class="tm-row"><span class="tm-k">远日点</span><span id="tm-apa" class="tm-v">1.00 AU</span></div>
+        <div class="tm-row"><span class="tm-k">任务时间</span><span id="tm-year" class="tm-v">0.0 年</span></div>
+      </section>
 
       <div id="warn"></div>
-      <div id="hint">滑动屏幕，点火推动地球</div>
+      <div id="aim"></div>
+      <div id="guide"></div>
 
-      <div id="overlay">
-        <div class="ov-card">
-          <div id="overlay-title" class="ov-title bad">任务失败</div>
-          <div id="overlay-text" class="ov-text"></div>
-          <button id="btn-restart" class="ov-btn" type="button">重新开始</button>
+      <footer id="bottom">
+        <div class="fuel-head">
+          <span>行星发动机燃料</span>
+          <span id="fuel-num">100%</span>
+        </div>
+        <div class="fuel-track"><div id="fuel-fill"></div></div>
+      </footer>
+
+      <div id="story">
+        <button id="st-skip" type="button">跳过</button>
+        <div class="st-inner">
+          <div id="st-year" class="st-year"></div>
+          <h2 id="st-title" class="st-title"></h2>
+          <p id="st-text" class="st-text"></p>
+          <div class="st-bar"><div id="st-fill"></div></div>
+          <div id="st-hint" class="st-hint"></div>
+        </div>
+      </div>
+
+      <div id="result">
+        <div class="rs-inner">
+          <div id="rs-title" class="rs-title"></div>
+          <div id="rs-text" class="rs-text"></div>
+          <div id="rs-stat" class="rs-stat"></div>
+          <button id="rs-btn" class="rs-btn" type="button">重新开始</button>
         </div>
       </div>
 
       <div id="flash"></div>
-
-      <div id="prologue">
-        <button id="pro-skip" type="button">跳过</button>
-        <div class="pro-card">
-          <div id="pro-title" class="pro-title"></div>
-          <div id="pro-text" class="pro-text"></div>
-          <div id="pro-hint" class="pro-hint"></div>
-        </div>
-      </div>
 
       <div id="loader">
         <div class="loader-spin"></div>
@@ -53,19 +84,8 @@
         <p class="fb-sub">无法显示 3D 内容，请升级浏览器或更换设备</p>
       </div>
     </main>
-
-    <footer class="bottombar">
-      <div class="fuel-wrap">
-        <div class="fuel-label">行星发动机燃料</div>
-        <div class="fuel-track"><div id="fuel-fill" class="fuel-fill"></div></div>
-      </div>
-      <div class="ts-group" role="group" aria-label="时间倍率">
-        <button class="ts-btn active" data-ts="1" type="button">1×</button>
-        <button class="ts-btn" data-ts="2" type="button">2×</button>
-        <button class="ts-btn" data-ts="4" type="button">4×</button>
-      </div>
-    </footer>
   </div>
+
   <script src="./assets/math.js"></script>
   <script src="./assets/earth-data.js"></script>
   <script src="./assets/clouds-data.js"></script>
@@ -74,9 +94,11 @@
   <script src="./assets/mars-data.js"></script>
   <script src="./assets/jupiter-data.js"></script>
   <script src="./assets/saturn-data.js"></script>
+  <script src="./assets/orbit.js"></script>
   <script src="./assets/engine.js"></script>
   <script src="./assets/bodies.js"></script>
   <script src="./assets/game.js"></script>
+  <script src="./assets/story.js"></script>
   <script src="./assets/audio.js"></script>
   <script src="./assets/app.js"></script>
 </body>

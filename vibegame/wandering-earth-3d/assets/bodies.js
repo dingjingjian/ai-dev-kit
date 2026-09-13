@@ -252,6 +252,64 @@
   }
 
   // ============================================================
+  //  行星发动机阵列：地球表面的加色光柱
+  // ============================================================
+  // 一万二千台发动机显然不可能逐个建出来，这里用斐波那契球面均匀撒 N 个光柱代表：
+  // 数量足够形成"整颗星球被光柱包裹"的观感，代价只是 N 个小圆柱（8 段）。
+  // 光柱挂在地球的局部坐标系下（父矩阵 = 地球 modelMatrix），因此随地球自转一起转。
+  var GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+
+  function buildEngines(renderer, count) {
+    var list = [];
+    var h = EARTH_R * 0.95, rIn = EARTH_R * 0.025, rOut = EARTH_R * 0.11;
+    var geo = geom.cylinder(rOut, rIn, h, 8);       // 内细外粗：贴地表的一端细，向外扩散变粗
+    for (var i = 0; i < count; i++) {
+      var y = 1 - (i / Math.max(1, count - 1)) * 2;
+      var rr = Math.sqrt(Math.max(0, 1 - y * y));
+      var th = i * GOLDEN_ANGLE;
+      var n = [Math.cos(th) * rr, y, Math.sin(th) * rr];
+      var nl = Math.sqrt(n[0] * n[0] + n[1] * n[1] + n[2] * n[2]) || 1;
+      n[0] /= nl; n[1] /= nl; n[2] /= nl;
+
+      var m = renderer.createMesh(geo, [0.55, 0.86, 1.0],
+        { group: 'fx', blend: 'add', glow: 1, depthWrite: false, cull: 'none', fill: 0 });
+      m.visible = false; m.alpha = 0;
+
+      // 局部变换：先沿 +Y 抬到地表外，再把 +Y 转到该点的法线方向
+      var rot = orientUp(mat4.create(), n);
+      var trans = mat4.identity(mat4.create());
+      mat4.translate(trans, trans, [0, EARTH_R + h * 0.5, 0]);
+      var local = mat4.identity(mat4.create());
+      mat4.multiply(local, rot, trans);
+
+      list.push({ mesh: m, local: local });
+    }
+    return list;
+  }
+
+  // 发动机阵列每帧更新：挂到地球矩阵下，亮度由剧情与推力决定
+  var _tmpM = mat4.create();
+  function updateEngines(engines, earthMatrix, intensity) {
+    var shown = intensity > 0.02;
+    for (var i = 0; i < engines.length; i++) {
+      var e = engines[i];
+      e.mesh.visible = shown;
+      if (!shown) continue;
+      mat4.multiply(_tmpM, earthMatrix, e.local);
+      mat4.copy(e.mesh.modelMatrix, _tmpM);
+      e.mesh.alpha = intensity * 0.85;
+    }
+  }
+
+  // 月球被推离时的尾焰（加色锥体，朝远离地球的一侧）
+  function buildMoonPlume(renderer) {
+    var f = renderer.createMesh(geom.cylinder(EARTH_R * 0.10, EARTH_R * 0.42, EARTH_R * 2.2, 12),
+      [0.62, 0.84, 1.0], { group: 'fx', blend: 'add', glow: 1, depthWrite: false, cull: 'none', fill: 0 });
+    f.visible = false; f.alpha = 0.8;
+    return f;
+  }
+
+  // ============================================================
   //  装配
   // ============================================================
   function buildWorld(renderer) {
@@ -264,6 +322,8 @@
     w.proxima = buildProxima(renderer);
     w.thruster = buildThruster(renderer);
     w.moon = buildMoon(renderer);
+    w.moonPlume = buildMoonPlume(renderer);
+    w.engines = buildEngines(renderer, 56);
     return w;
   }
 
@@ -277,5 +337,6 @@
   M3D.orientUp = orientUp;
   M3D.placeSphere = placeSphere;
   M3D.placeEarth = placeEarth;
+  M3D.updateEngines = updateEngines;
   M3D.makeSunTexture = makeSunTexture;
 })(typeof window !== 'undefined' ? window : this);
