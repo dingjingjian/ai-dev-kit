@@ -163,6 +163,9 @@ function resetGame(){
   // 告警锁不清的话，重开后缺口已经消失，玩家却再也收不到下一次的提示。
   selIdx = -1;
   spawn = null;
+  // 天际线也要归零：不清的话重开后那排高楼会在"荒地"上慢慢塌回去，像没清干净
+  _skyDev = 0;
+  _skyDevT = 0;
   alerts.power = alerts.water = alerts.trash = false;
   pendingCell = -1;
   BP_SEL = null;
@@ -381,18 +384,18 @@ var DAY_MS = 240000;
 
 // 天色关键帧：a/b/c 对应 CSS 渐变的三档（天顶 / 中天 / 地平）
 // 关键帧之间的过渡是 smoothstep（见 skyAt），所以色温/亮度变化是连续的。
-// 白天故意不拉到"亮天蓝"——HUD 文字会飘，6×6 沙盘台基也会被冲淡。
-// 整张画面"夜空-晨曦-正午-黄昏"色温变化明显，但亮度始终让位给"沙盘"主体。
+// 白天必须是"白天"：天顶压深一点以保住面板对比，地平一路推到亮天蓝 / 暖白，
+// 让正午一眼就跟深夜分得开 —— 曾经整条链路偏暗，白天的中午看着像晚上。
 var SKY_KEYS = [
-  { t: 0.00, a: '#0E1526', b: '#1A2440', c: '#2C3050' },  // 深夜
-  { t: 0.18, a: '#1C1E38', b: '#38294C', c: '#5A3A4E' },  // 破晓前
-  { t: 0.26, a: '#3C4A70', b: '#7E5A6E', c: '#C87A5E' },  // 日出
-  { t: 0.36, a: '#1E3860', b: '#3A5A7E', c: '#7A8AA8' },  // 上午
-  { t: 0.50, a: '#162C50', b: '#2E4A70', c: '#5E7C9E' },  // 正午
-  { t: 0.66, a: '#1C3A60', b: '#4A6684', c: '#9A8060' },  // 午后
-  { t: 0.76, a: '#3C3454', b: '#84505A', c: '#CE7A50' },  // 日落
-  { t: 0.86, a: '#1E2440', b: '#33304E', c: '#4A3850' },  // 暮色
-  { t: 1.00, a: '#0E1526', b: '#1A2440', c: '#2C3050' }   // 回到深夜
+  { t: 0.00, a: '#0C1322', b: '#16203A', c: '#232A44' },  // 深夜
+  { t: 0.18, a: '#241F44', b: '#4A3A5C', c: '#82505A' },  // 破晓前
+  { t: 0.26, a: '#5E7EB4', b: '#B58C86', c: '#EDA55C' },  // 日出
+  { t: 0.36, a: '#3F77B9', b: '#79A5D0', c: '#BAD0E5' },  // 上午
+  { t: 0.50, a: '#2F6DB6', b: '#5F9BD5', c: '#AECDE8' },  // 正午
+  { t: 0.66, a: '#3F7ABE', b: '#86AACE', c: '#D8C49E' },  // 午后
+  { t: 0.76, a: '#5B4A7A', b: '#B26A60', c: '#F0A052' },  // 日落
+  { t: 0.86, a: '#2A2C4C', b: '#443C5E', c: '#6A4A58' },  // 暮色
+  { t: 1.00, a: '#0C1322', b: '#16203A', c: '#232A44' }   // 回到深夜
 ];
 
 // 相位定格：截图 / 做宣传图时由外部设 window.dayPhaseFixed = 0–1，
@@ -437,9 +440,11 @@ function skyAt(p){
   return [z.a, z.b, z.c];
 }
 
-// 天体拱形轨迹：u=0 东边地平线，u=1 西边地平线
-function skyArc(u, W, H){
-  return { x: W * (0.10 + u * 0.80), y: H * (0.50 - Math.sin(u * Math.PI) * 0.40) };
+// 天体拱形轨迹：u=0 东边地平线，u=1 西边地平线，u=0.5 到天顶。
+// 地平线取 groundY（沙盘上沿＝城市天际线基线），于是太阳从楼群后面升起、落到楼群后面，
+// 而不是从半空的沙盘边框里钻出来。topY 是正午的高度上限（留出顶栏的位置）。
+function skyArc(u, W, groundY, topY){
+  return { x: W * (0.10 + u * 0.80), y: groundY - Math.sin(u * Math.PI) * (groundY - topY) };
 }
 function wrap01(v){ v = v % 1; return v < 0 ? v + 1 : v; }
 
@@ -452,11 +457,16 @@ function syncSkyCss(p){
   var root = document.documentElement;
   if (!root || !root.style) return;
   var cs = skyAt(p);
+  var light = dayLight(p);
   var rs = root.style;
   rs.setProperty('--sky-1', cs[0]);
   rs.setProperty('--sky-2', cs[1]);
   rs.setProperty('--sky-3', cs[2]);
-  rs.setProperty('--star-op', (0.55 * (1 - dayLight(p))).toFixed(3));
+  rs.setProperty('--star-op', (0.55 * (1 - light)).toFixed(3));
+  // 画面底部那团暖光＝"城市灯火的辉光"：夜里明显，白天只留一点余韵
+  rs.setProperty('--warm-op', (0.05 + 0.15 * (1 - light)).toFixed(3));
+  // 底部提示文字压在地平线上：白天天空变亮，字要跟着压深，否则糊成一片
+  rs.setProperty('--hint-ink', mixHex('#6E7A8D', '#3B4A5C', light));
 }
 
 // ---------------------------------------------------------------- 城市渲染
@@ -472,33 +482,38 @@ function drawCity(){
   var g2 = f.g, W = f.w, H = f.h;
   g2.clearRect(0, 0, W, H);
 
-  // ---- 纵深：远山 + 日月 + 极光 + 星空（全在画布里画，填满原本 60% 的空黑）
-  //      天空底色交给 CSS 的 .sky（syncSkyCss 每 5 帧写 CSS 变量），画布透明透出来
-  var t = cityT / 1000;
-  var p = dayPhase();
-  var light = dayLight(p);
-  var night = 1 - light;                  // 夜色浓度：星空 / 极光按它淡入淡出
-  syncSkyCss(p);
-
-  // 1) 远山（昼夜两副颜色之间插值）
-  drawHorizon(g2, W, H, t, light);
-
-  // 2) 极光：只在夜里出现
-  drawAurora(g2, W, H, t, night);
-
-  // 3) 星空：白天退场
-  drawCityStars(g2, W, H, t, night);
-
-  // 4) 太阳 / 月亮：错开半天，各走一条拱形轨迹
-  drawCelestial(g2, W, H, p, t);
-
-  // ---- 城市网格：和原来一样算 cell/原点
+  // ---- 城市网格：先算几何。背景的"地平线"就是沙盘上沿 ——
+  //      日月从这条线上升落；天际线则移到画布底部（dock 栏上方），与日月错开
   var pad = 8;
   var cell = Math.floor(Math.min((W - pad * 2) / GRID_N, (H - pad * 2) / GRID_N));
   var bw = cell * GRID_N;
   var ox = Math.round((W - bw) / 2);
   var oy = Math.round((H - bw) / 2);
   cityGeo = { cell: cell, ox: ox, oy: oy, bw: bw };
+  var groundY = oy + 2;
+
+  // ---- 纵深：极光 + 星空 + 日月 + 天际线（全在画布里画）
+  //      天空底色交给 CSS 的 .sky（syncSkyCss 每 5 帧写 CSS 变量），画布透明透出来
+  var t = cityT / 1000;
+  var p = dayPhase();
+  var light = dayLight(p);
+  var night = 1 - light;                  // 夜色浓度：星空 / 极光 / 窗光按它淡入淡出
+  syncSkyCss(p);
+
+  // 1) 极光：只在夜里出现
+  drawAurora(g2, W, H, t, night, groundY);
+
+  // 2) 星空：白天退场，只铺在地平线以上
+  drawCityStars(g2, W, H, t, night, groundY);
+
+  // 3) 太阳 / 月亮：错开半天，各走一条拱形轨迹（地平线 = groundY）
+  drawCelestial(g2, W, H, p, t, groundY, false);
+
+  // 4) 天际线：移到画布底部（dock 栏上方、沙盘下方），避免与太阳重叠
+  drawSkyline(g2, W, H, t, light, oy + bw);
+
+  // 4b) 日月的光晕补一层在天际线之上：圆盘被楼群挡住，光却应该漏出来
+  drawCelestial(g2, W, H, p, t, groundY, true);
 
   // 5) 沙盘台基：把网格当成一张小桌，光从桌面下往上泛
   drawCityBase(g2, ox, oy, bw, t);
@@ -521,63 +536,189 @@ function drawCity(){
   }
 }
 
-// 远山：两层山脊，颜色在「夜（冷暗）」与「昼（亮灰蓝）」之间插值
-function drawHorizon(g2, W, H, t, light){
-  var baseY = H * 0.74;
-  var far = mixHex('#141C2A', '#7E94AC', light);   // 远山：夜里近黑，白天雾蓝
-  var near = mixHex('#1E283A', '#5C708A', light);  // 近山
-  var step = Math.max(20, W / 22);
-  g2.save();
-  // 远山：更深更冷，靠后
-  g2.fillStyle = far;
-  g2.beginPath();
-  g2.moveTo(0, H);
-  g2.lineTo(0, baseY);
-  for (var x = 0; x <= W; x += step) {
-    var h1 = Math.sin(x * 0.013 + 1.2) * 18 + Math.sin(x * 0.04 + 2.7) * 6;
-    g2.lineTo(x, baseY - 8 - h1);
-  }
-  g2.lineTo(W, H);
-  g2.closePath();
-  g2.fill();
+// ---------------------------------------------------------------- 天际线
+// 背景的主景不是远山，而是"你的城市"在城外投下的一条剪影，它跟村庄一起长：
+//   荒地（0～）    天际线是空的，什么都还没有
+//   村落（1～）    坡顶小屋 + 零星几栋，只有一层楼高
+//   小镇（2～）    楼块出现，屋顶从坡顶换成平顶，开始有天线
+//   街区/城区      楼群变密变高，夜里窗光连成片
+//   都会/巨城      高楼林立，塔吊退场，只剩尖顶与航空障碍灯
+// 发展度 = 人口档位（与称号同一套阈值，连续插值）× 0.68 + 建筑密度 × 0.32，
+// 再逐帧平滑趋近 —— 所以城市是"长"起来的，不会因为点了一栋楼就整张背景跳变。
+var _skyDev = 0, _skyDevT = 0;
+function skyDevOf(){
+  var count = 0;
+  for (var i = 0; i < S.grid.length; i++) if (S.grid[i]) count++;
+  var T = DATA.titles, lvl = 0;
+  for (var k = 0; k < T.length; k++) if (S.pop >= T[k].pop) lvl = k;
+  var cur = T[lvl], nxt = T[Math.min(lvl + 1, T.length - 1)];
+  var frac = nxt.pop > cur.pop ? clamp((S.pop - cur.pop) / (nxt.pop - cur.pop), 0, 1) : 0;
+  var byPop = lvl + frac;                          // 0（荒地）… 6（巨城）
+  var byBuild = count / (GRID_N * GRID_N) * 6;     // 沙盘填满＝6
+  return byPop * 0.68 + byBuild * 0.32;
+}
+function skyDev(ts){
+  var target = skyDevOf();
+  if (!_skyDevT) { _skyDevT = ts; _skyDev = target; return _skyDev; }
+  var dt = clamp(ts - _skyDevT, 0, 500);
+  _skyDevT = ts;
+  _skyDev += (target - _skyDev) * (1 - Math.pow(0.5, dt / 1400));
+  return _skyDev;
+}
+// 稳定伪随机：同一个下标永远同一个值 —— 逐帧不抖、进档不闪、刷新不变
+function rnd01(i, salt){
+  var v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
+  return v - Math.floor(v);
+}
 
-  // 近山：稍亮、稍高、稍暖
-  g2.fillStyle = near;
-  g2.beginPath();
-  g2.moveTo(0, H);
-  g2.lineTo(0, baseY + 14);
-  for (var x2 = 0; x2 <= W; x2 += step) {
-    var h2 = Math.sin(x2 * 0.017 + 0.4) * 26 + Math.sin(x2 * 0.05 + 1.3) * 8;
-    g2.lineTo(x2, baseY + 14 - 10 - h2);
+function drawSkyline(g2, W, H, t, light, sandBottom){
+  var L = clamp(skyDev(cityT), 0, 6);
+  var growth = L / 6;
+  // 密度：荒地（L<0.35）天际线是空的；村落只是稀稀落落几户，越往后越密
+  var density = clamp((L - 0.35) / 2.2, 0, 1);
+  if (density <= 0.001) return;
+  // 坡顶系数：村落阶段是坡顶小屋，过了小镇就换成平顶楼块（中间一段混杂两者）
+  var roofMix = clamp(1 - (L - 1.05) / 1.15, 0, 1);
+  var night = 1 - light;
+  var lit = clamp(S.pop / 40, 0.06, 1);            // 亮窗比例：人多＝灯多
+
+  var farC  = mixHex('#121A2B', '#8AA0B8', light); // 远层：更淡（空气透视）
+  var nearC = mixHex('#1A2438', '#61798F', light); // 近层
+  // 天际线基线＝画布底（dock 栏上方），高度受沙盘下沿限制，不越过沙盘、也不与太阳重叠
+  var baseY = H;
+  var wantMax = H * (0.10 + 0.16 * growth);
+  var nearMax = Math.max(0, Math.min(wantMax, baseY - sandBottom - 4));
+  if (nearMax < 2) return;                          // 横屏沙盘占满高度时无空间，跳过
+  var farMax = nearMax * 0.62;
+  var step = Math.max(15, W / 19);                 // 每栋楼占的水平步距
+  var farGround = baseY - Math.max(3, step * 0.22);    // 远层地平线抬一点＝更远
+
+  // ---- 远层：只画色块，做"一片城"的底
+  var nFar = Math.ceil(W / step) + 1, i, j;
+  g2.fillStyle = farC;
+  for (i = 0; i < nFar; i++) {
+    if (rnd01(i, 3.1) > density) continue;
+    var fw = step * (0.50 + rnd01(i, 5.7) * 0.34);
+    var fx = i * step + (step - fw) * 0.5;
+    var fh = farMax * (0.32 + rnd01(i, 9.3) * 0.68);
+    g2.fillRect(fx, farGround - fh, fw, baseY + 2 - (farGround - fh));
   }
-  g2.lineTo(W, H);
-  g2.closePath();
-  g2.fill();
+
+  // ---- 近层：有屋顶、有窗、有天线，是"能读出发展程度"的那一层
+  var nstep = step * 1.35;
+  var nNear = Math.ceil(W / nstep) + 1;
+  for (j = 0; j < nNear; j++) {
+    if (rnd01(j, 2.3) > density) continue;
+    var bwid = nstep * (0.62 + rnd01(j, 4.4) * 0.22 - 0.16 * growth);
+    var hh = nearMax * (0.34 + rnd01(j, 8.8) * 0.66);
+    var bx = j * nstep + (nstep - bwid) * 0.5;
+    var bTop = baseY - hh;
+    g2.fillStyle = nearC;
+    rrect(g2, bx, bTop, bwid, hh + 4, Math.max(1.5, bwid * 0.10));
+    g2.fill();
+
+    var winTop = bTop;
+    if (rnd01(j, 6.6) < roofMix) {
+      // 坡顶小屋（村落）：屋顶压过楼身，窗从屋檐下开始排
+      g2.beginPath();
+      g2.moveTo(bx - bwid * 0.10, bTop + 1);
+      g2.lineTo(bx + bwid * 0.5, bTop - bwid * 0.62);
+      g2.lineTo(bx + bwid * 1.10, bTop + 1);
+      g2.closePath();
+      g2.fill();
+      winTop = bTop + bwid * 0.52;
+    } else if (rnd01(j, 12.1) > 0.70) {
+      // 平顶楼：一部分带天线，夜里顶上一颗航空障碍灯在闪
+      var ah = Math.min(bwid * 1.6, hh * 0.42);
+      var acx = bx + bwid * 0.5;
+      g2.fillRect(acx - 0.7, bTop - ah, 1.4, ah);
+      if (night > 0.20) {
+        var bl = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 2.2 + j));
+        g2.fillStyle = 'rgba(232,90,80,' + (night * bl).toFixed(3) + ')';
+        g2.beginPath();
+        g2.arc(acx, bTop - ah - 1.6, Math.max(1.2, bwid * 0.075), 0, Math.PI * 2);
+        g2.fill();
+      }
+    }
+    drawSkylineWindows(g2, bx, winTop, bwid, baseY + 2 - winTop, j * 7.7, lit, night);
+  }
+
+  // ---- 塔吊：只在"档位正在长"的时候立在天际线上（进档中段最明显），
+  //      走到档位顶端就收起来 —— sin(π·分数) 让它是一场过场，而不是常驻装饰
+  if (L >= 1.15) {
+    var tierFrac = L - Math.floor(L);
+    var craneA = Math.sin(Math.PI * tierFrac) * density;
+    var craneC = mixHex('#0E1626', '#4C6478', light);   // 比近层再压一档，免得糊在楼里
+    if (craneA > 0.03) drawCrane(g2, W * 0.70, baseY, nearMax * 1.12, craneC, craneA);
+  }
+}
+
+// 窗：夜里按入住率点亮，白天是深色窗格。
+// 用 fillRect 不用 arc —— 一帧几百个圆在移动端太贵，方窗在这个尺寸下也更像窗。
+function drawSkylineWindows(g2, x, y, w, h, seed, lit, night){
+  var cell = Math.max(2.2, w * 0.17);
+  var gx = cell * 1.75, gy = cell * 2.0;
+  var cols = Math.floor((w - cell * 0.8) / gx);
+  var rows = Math.floor((h - cell * 1.2) / gy);
+  if (cols < 1 || rows < 1) return;
+  var sx = x + (w - (cols * gx - (gx - cell))) * 0.5;
+  var sy = y + cell * 0.9;
+  for (var c = 0; c < cols; c++) {
+    for (var r = 0; r < rows; r++) {
+      var v = rnd01(seed + c * 3.7, r * 2.9 + 11.3);
+      g2.fillStyle = (night > 0.04 && v < lit)
+        ? 'rgba(246,214,140,' + (night * (0.30 + 0.55 * v)).toFixed(3) + ')'
+        : 'rgba(18,28,46,' + (0.34 * (1 - 0.5 * night)).toFixed(3) + ')';
+      g2.fillRect(sx + c * gx, sy + r * gy, cell, cell);
+    }
+  }
+}
+
+// 塔吊：塔身 + 起重臂 + 吊索，剪影色跟近层一致（它就是城里的一台设备）
+function drawCrane(g2, x, baseY, h, col, a){
+  var jib = h * 0.55, back = h * 0.26, headY = baseY - h - h * 0.10;
+  g2.save();
+  g2.globalAlpha = a;
+  g2.strokeStyle = col;
+  g2.fillStyle = col;
+  g2.lineWidth = Math.max(1.4, h * 0.028);
+  g2.beginPath(); g2.moveTo(x, baseY); g2.lineTo(x, baseY - h); g2.stroke();
+  g2.beginPath(); g2.moveTo(x - back, baseY - h); g2.lineTo(x + jib, baseY - h); g2.stroke();
+  g2.beginPath(); g2.moveTo(x, headY); g2.lineTo(x + jib * 0.62, baseY - h); g2.stroke();
+  g2.beginPath(); g2.moveTo(x, headY); g2.lineTo(x - back * 0.8, baseY - h); g2.stroke();
+  g2.fillRect(x - back * 0.9, baseY - h, back * 0.34, h * 0.07);
+  g2.beginPath();
+  g2.moveTo(x + jib * 0.72, baseY - h);
+  g2.lineTo(x + jib * 0.72, baseY - h + h * 0.30);
+  g2.stroke();
   g2.restore();
 }
 
-// 日与月：错开半天，各沿 skyArc 走一条拱形；u>1 表示已落地平线下，不画
-function drawCelestial(g2, W, H, p, t){
+// 日与月：错开半天，各沿 skyArc 走一条拱形；u>1 表示已落地平线下，不画。
+// halos=true 时只画外圈柔光（画在天际线之后），让日月的光晕漫过楼群剪影 ——
+// 日落时那道"透过楼缝的光"就是这么来的，圆盘本身仍老老实实待在天际线后面。
+function drawCelestial(g2, W, H, p, t, groundY, halos){
   var r = Math.min(W, H) * 0.082;
+  var topY = H * 0.10;
   // 太阳：dayPhase 0.25(东) → 0.75(西)
   var uS = wrap01(p - 0.25) / 0.5;
   if (uS <= 1.08) {
-    var sp = skyArc(clamp(uS, 0, 1), W, H);
-    drawSun(g2, sp.x, sp.y, r * 0.86, clamp((1.08 - uS) / 0.14, 0, 1));
+    var sp = skyArc(clamp(uS, 0, 1), W, groundY, topY);
+    drawSun(g2, sp.x, sp.y, r * 0.86, clamp((1.08 - uS) / 0.14, 0, 1), halos);
   }
   // 月亮：dayPhase 0.75(东) → 0.25(西)，正好错开半天
   var uM = wrap01(p - 0.75) / 0.5;
   if (uM <= 1.08) {
-    var mp = skyArc(clamp(uM, 0, 1), W, H);
-    drawMoon(g2, mp.x, mp.y, r, clamp((1.08 - uM) / 0.14, 0, 1));
+    var mp = skyArc(clamp(uM, 0, 1), W, groundY, topY);
+    drawMoon(g2, mp.x, mp.y, r, clamp((1.08 - uM) / 0.14, 0, 1), halos);
   }
 }
 
 // 月：金白软月，带两处月坑
-function drawMoon(g2, cx, cy, r, a){
+function drawMoon(g2, cx, cy, r, a, halos){
   if (a <= 0.01) return;
   g2.save();
-  g2.globalAlpha = a;
+  g2.globalAlpha = a * (halos ? 0.55 : 1);
   // 外晕（光圈）
   var halo = g2.createRadialGradient(cx, cy, r * 0.6, cx, cy, r * 3.4);
   halo.addColorStop(0, 'rgba(245,212,131,0.18)');
@@ -585,6 +726,7 @@ function drawMoon(g2, cx, cy, r, a){
   halo.addColorStop(1, 'rgba(245,212,131,0)');
   g2.fillStyle = halo;
   g2.beginPath(); g2.arc(cx, cy, r * 3.4, 0, Math.PI * 2); g2.fill();
+  if (halos) { g2.restore(); return; }
   // 月体
   var body = g2.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.2, cx, cy, r);
   body.addColorStop(0, '#FFF6E2');
@@ -600,16 +742,17 @@ function drawMoon(g2, cx, cy, r, a){
 }
 
 // 日：暖金圆盘 + 大范围柔光，不画光芒射线（保持克制）
-function drawSun(g2, cx, cy, r, a){
+function drawSun(g2, cx, cy, r, a, halos){
   if (a <= 0.01) return;
   g2.save();
-  g2.globalAlpha = a;
+  g2.globalAlpha = a * (halos ? 0.55 : 1);
   var halo = g2.createRadialGradient(cx, cy, r * 0.5, cx, cy, r * 3.8);
   halo.addColorStop(0, 'rgba(255,214,140,0.26)');
   halo.addColorStop(0.32, 'rgba(255,190,110,0.09)');
   halo.addColorStop(1, 'rgba(255,180,90,0)');
   g2.fillStyle = halo;
   g2.beginPath(); g2.arc(cx, cy, r * 3.8, 0, Math.PI * 2); g2.fill();
+  if (halos) { g2.restore(); return; }
   var body = g2.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.2, cx, cy, r);
   body.addColorStop(0, '#FFFDF2');
   body.addColorStop(0.55, '#FFE79A');
@@ -619,66 +762,69 @@ function drawSun(g2, cx, cy, r, a){
   g2.restore();
 }
 
-// 极光：上 1/3 三道流动光带，只在夜里出现（night 从 1 到 0 淡出）
-function drawAurora(g2, W, H, t, night){
+// 极光：天空里三道流动光带，只在夜里出现（night 从 1 到 0 淡出）。
+// 高度按 groundY 折算而不是按画布高 —— 天际线以上才是天空，光带不能飘到城市下面去。
+function drawAurora(g2, W, H, t, night, groundY){
   if (night <= 0.02) return;
   g2.save();
   g2.globalCompositeOperation = 'screen';
   g2.globalAlpha = night;
+  var thick = Math.max(40, groundY * 0.30);
   var bands = [
-    { y: 0.10, a: 0.18, hue: '120,220,180' },
-    { y: 0.16, a: 0.12, hue: '140,200,220' },
-    { y: 0.22, a: 0.08, hue: '180,160,210' }
+    { y: 0.16, a: 0.15, hue: '120,220,180' },
+    { y: 0.30, a: 0.10, hue: '140,200,220' },
+    { y: 0.44, a: 0.06, hue: '180,160,210' }
   ];
   for (var i = 0; i < bands.length; i++) {
     var b = bands[i];
-    var by = H * b.y;
-    var grad = g2.createLinearGradient(0, by, 0, by + H * 0.18);
+    var by = groundY * b.y;
+    var grad = g2.createLinearGradient(0, by, 0, by + thick);
     grad.addColorStop(0, 'rgba(' + b.hue + ',0)');
     grad.addColorStop(0.5, 'rgba(' + b.hue + ',' + b.a + ')');
     grad.addColorStop(1, 'rgba(' + b.hue + ',0)');
     g2.fillStyle = grad;
     g2.beginPath();
-    g2.moveTo(0, by + H * 0.08);
+    g2.moveTo(0, by + thick * 0.45);
     for (var x = 0; x <= W; x += 8) {
       var yy = by + Math.sin(x * 0.011 + t * 0.4 + i) * 8 + Math.sin(x * 0.024 + t * 0.7) * 4;
       g2.lineTo(x, yy);
     }
-    g2.lineTo(W, by + H * 0.18);
-    g2.lineTo(0, by + H * 0.18);
+    g2.lineTo(W, by + thick);
+    g2.lineTo(0, by + thick);
     g2.closePath();
     g2.fill();
   }
   g2.restore();
 }
 
-// 星空：50 颗随机亮度点 + 闪烁相位（用固定种子，画面静止也有微动）
+// 星空：56 颗随机亮度点 + 闪烁相位（用固定种子，画面静止也有微动）
 var _cityStars = (function(){
   // 用 sin 算位置，避免每帧 random 抖动
   var arr = [];
   for (var i = 0; i < 56; i++) {
     arr.push({
       x: (Math.sin(i * 12.97) * 0.5 + 0.5),
-      y: (Math.sin(i * 78.23 + 1.1) * 0.5 + 0.5) * 0.55,   // 只在上半空
+      y: (Math.sin(i * 78.23 + 1.1) * 0.5 + 0.5),   // 0..1，再按地平线高度铺开
       r: 0.6 + (Math.sin(i * 3.7) * 0.5 + 0.5) * 1.3,
-      p: Math.sin(i * 2.31) * Math.PI,                     // 闪烁相位
+      p: Math.sin(i * 2.31) * Math.PI,              // 闪烁相位
       a: 0.25 + (Math.sin(i * 5.13) * 0.5 + 0.5) * 0.55
     });
   }
   return arr;
 })();
-function drawCityStars(g2, W, H, t, night){
+function drawCityStars(g2, W, H, t, night, groundY){
   if (night <= 0.02) return;
+  // 只铺在地上那条天际线以上：星星落到城市后面去就穿帮了
+  var span = Math.max(60, groundY - 18);
   g2.save();
   g2.globalAlpha = night;
   for (var i = 0; i < _cityStars.length; i++) {
     var s = _cityStars[i];
-    if (s.y > 0.55) continue;                             // 远山遮挡下半
     var a = s.a * (0.45 + 0.55 * Math.sin(t * 1.6 + s.p));
     if (a < 0.05) continue;
     g2.fillStyle = 'rgba(255,243,214,' + a + ')';
     g2.beginPath();
-    g2.arc(s.x * W, s.y * H, s.r, 0, Math.PI * 2);
+    g2.arc(s.x * W, 8 + s.y * span, s.r, 0, Math.PI * 2);
     g2.fill();
   }
   g2.restore();
@@ -1107,32 +1253,75 @@ function sfx(name, arg){
 }
 
 // ---------------------------------------------------------------- BGM
-// D 大调 I–vi–IV–V，四小节一循环（约 13 秒）。走「稀疏」路线：低音一小节一个
-// 长音、铺底和弦慢起慢落、琶音只落在四分音符上。注意力应该在拼豆上，
-// 音乐只负责填满留白，不负责抓耳朵。
+// 三段式（A 主歌 / B 副歌 / C 桥段），每段 8 小节，共 24 小节约 80 秒一个大循环。
+// 仍是 D 大调、实时合成、稀疏路线，但段落之间在和弦进行、琶音密度、音量上
+// 有明确起伏，避免单一旋律无限循环听腻。注意力还是应该在拼豆上，音乐只
+// 负责填满留白，不负责抓耳朵。
 var BPM = 72;
 var STEP = 60 / BPM / 2;                  // 八分音符 ≈ 0.417s
-var LOOP = 32;                            // 4 小节 × 8 步
-var CHORDS = [
-  { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 76] },   // D
-  { bass: 35, pad: [47, 54, 62], arp: [71, 74, 78, 81] },   // Bm
-  { bass: 43, pad: [43, 50, 59], arp: [67, 71, 74, 81] },   // G
-  { bass: 45, pad: [45, 52, 61], arp: [69, 73, 76, 78] }    // A
+var BARS = 8, SPB = 8;                    // 每段 8 小节，每小节 8 步（八分音符）
+var SECTIONS = [
+  { // A 段：主歌，D–Bm–G–A 循环两遍，稀疏琶音（四分音符）
+    chords: [
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 76, 78, 74, 71, 69] },  // D
+      { bass: 35, pad: [47, 54, 62], arp: [71, 74, 78, 81, 78, 74, 71, 69] },  // Bm
+      { bass: 43, pad: [43, 50, 59], arp: [67, 71, 74, 81, 78, 74, 71, 67] },  // G
+      { bass: 45, pad: [45, 52, 61], arp: [69, 73, 76, 78, 81, 76, 73, 69] },  // A
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 76, 78, 74, 71, 69] },  // D
+      { bass: 35, pad: [47, 54, 62], arp: [71, 74, 78, 81, 78, 74, 71, 69] },  // Bm
+      { bass: 43, pad: [43, 50, 59], arp: [67, 71, 74, 81, 78, 74, 71, 67] },  // G
+      { bass: 45, pad: [45, 52, 61], arp: [69, 73, 76, 78, 81, 76, 73, 69] }   // A
+    ],
+    arpEvery: 2, bassGain: 0.15, padGain: 0.04, arpGain: 0.075, hiGain: 0.032,
+    hiBars: [1, 3, 5, 7]
+  },
+  { // B 段：副歌，G–D–Em–A 循环两遍，琶音加密到八分音符，音量略升
+    chords: [
+      { bass: 43, pad: [43, 50, 59], arp: [67, 74, 79, 74, 71, 74, 79, 83] },  // G
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 78, 74, 78, 81, 86] },  // D
+      { bass: 40, pad: [52, 59, 64], arp: [76, 79, 83, 79, 76, 79, 83, 88] },  // Em
+      { bass: 45, pad: [45, 52, 61], arp: [69, 76, 81, 76, 73, 76, 81, 85] },  // A
+      { bass: 43, pad: [43, 50, 59], arp: [67, 74, 79, 74, 71, 74, 79, 83] },  // G
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 78, 74, 78, 81, 86] },  // D
+      { bass: 40, pad: [52, 59, 64], arp: [76, 79, 83, 79, 76, 79, 83, 88] },  // Em
+      { bass: 45, pad: [45, 52, 61], arp: [69, 76, 81, 76, 73, 76, 81, 85] }   // A
+    ],
+    arpEvery: 1, bassGain: 0.16, padGain: 0.05, arpGain: 0.058, hiGain: 0.04,
+    hiBars: [1, 3, 5, 7]
+  },
+  { // C 段：桥段，Bm–G–D–A–Em–G–A–D，回到稀疏琶音，换和弦顺序收束回主歌
+    chords: [
+      { bass: 35, pad: [47, 54, 62], arp: [71, 74, 78, 81, 78, 74, 71, 69] },  // Bm
+      { bass: 43, pad: [43, 50, 59], arp: [67, 71, 74, 81, 78, 74, 71, 67] },  // G
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 76, 78, 74, 71, 69] },  // D
+      { bass: 45, pad: [45, 52, 61], arp: [69, 73, 76, 78, 81, 76, 73, 69] },  // A
+      { bass: 40, pad: [52, 59, 64], arp: [76, 79, 83, 79, 76, 79, 83, 88] },  // Em
+      { bass: 43, pad: [43, 50, 59], arp: [67, 71, 74, 81, 78, 74, 71, 67] },  // G
+      { bass: 45, pad: [45, 52, 61], arp: [69, 73, 76, 78, 81, 76, 73, 69] },  // A
+      { bass: 38, pad: [50, 57, 66], arp: [74, 78, 81, 76, 78, 74, 71, 69] }   // D
+    ],
+    arpEvery: 2, bassGain: 0.14, padGain: 0.045, arpGain: 0.07, hiGain: 0.038,
+    hiBars: [1, 3, 5, 7]
+  }
 ];
+var LOOP = SECTIONS.length * BARS * SPB;   // 24 小节 × 8 步 = 192 步
 var bgmStep = 0, bgmNext = 0, bgmTimer = 0;
 
 function bgmAt(step, t){
-  var bar = (step / 8) | 0, s = step % 8, c = CHORDS[bar], i;
+  var secLen = BARS * SPB;
+  var sec = SECTIONS[(step / secLen) | 0];
+  var local = step % secLen;
+  var bar = (local / SPB) | 0, s = local % SPB, c = sec.chords[bar], i;
   if (s === 0) {
-    tone({ type:'sine', f:mtof(c.bass), dur: STEP * 7.6, gain:0.15, atk:0.3, at:t, bus:G_BGM });
+    tone({ type:'sine', f:mtof(c.bass), dur: STEP * 7.6, gain: sec.bassGain, atk:0.3, at:t, bus:G_BGM });
     for (i = 0; i < c.pad.length; i++)
-      tone({ type:'triangle', f:mtof(c.pad[i]), dur: STEP * 7.2, gain:0.04, atk:0.7, at:t, bus:G_BGM });
+      tone({ type:'triangle', f:mtof(c.pad[i]), dur: STEP * 7.2, gain: sec.padGain, atk:0.7, at:t, bus:G_BGM });
   }
-  if (s % 2 === 0)
-    tone({ type:'sine', f:mtof(c.arp[s / 2]), dur:0.85, gain:0.075, atk:0.005, at:t, bus:G_BGM });
-  // 第 2、4 小节的弱拍上点一颗高音，避免四小节听起来一模一样
-  if ((bar === 1 || bar === 3) && s === 5)
-    tone({ type:'sine', f:mtof(c.arp[3] + 12), dur:1.1, gain:0.032, atk:0.01, at:t, bus:G_BGM });
+  if (s % sec.arpEvery === 0)
+    tone({ type:'sine', f:mtof(c.arp[s / sec.arpEvery]), dur:0.85, gain: sec.arpGain, atk:0.005, at:t, bus:G_BGM });
+  // 指定小节的弱拍上点一颗高音，避免段落内小节听起来一模一样
+  if (sec.hiBars.indexOf(bar) >= 0 && s === 5)
+    tone({ type:'sine', f:mtof(c.arp[3] + 12), dur:1.1, gain: sec.hiGain, atk:0.01, at:t, bus:G_BGM });
 }
 // 提前量调度：每次把未来 0.5 秒内的音符排好，避免依赖 setInterval 的抖动。
 function bgmSchedule(){

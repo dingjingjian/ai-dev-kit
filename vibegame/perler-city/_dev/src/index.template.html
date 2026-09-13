@@ -10,6 +10,8 @@
 :root{
   --sky-1:#1B2436; --sky-2:#2A3550; --sky-3:#4A3A52;
   --star-op:.5;              /* 由 JS 按昼夜亮度实时写，白天归零、夜里拉满 */
+  --warm-op:.16;             /* 画面底部暖光（城市灯火辉光）：夜里强、白天弱，同样由 JS 写 */
+  --hint-ink:#6E7A8D;        /* 底部提示字色：白天天空变亮后由 JS 压深，保住可读性 */
   --ink:#F2F5FA; --ink-dim:#A9B4C6; --ink-faint:#6E7A8D;
   --gold:#E8B64C; --gold-soft:#F5D483;
   --paper:#23314A;        /* 蓝图用纸：深蓝印纸 */
@@ -66,16 +68,16 @@ button{font-family:inherit;cursor:pointer;border:none;outline:none;background:no
 canvas{display:block;}
 
 /* ---------- 背景 ---------- */
-#dust{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;}
+#dust{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;}
 .sky{
-  position:fixed;inset:0;z-index:0;pointer-events:none;
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:0;pointer-events:none;
   background:
-    radial-gradient(120% 70% at 50% 108%, rgba(232,182,76,0.16), transparent 58%),
+    radial-gradient(120% 70% at 50% 108%, rgba(232,182,76,var(--warm-op)), transparent 58%),
     radial-gradient(80% 50% at 12% 4%, rgba(120,160,220,0.14), transparent 60%),
     linear-gradient(178deg, var(--sky-1) 0%, var(--sky-2) 48%, var(--sky-3) 100%);
 }
 .stars{
-  position:fixed;inset:0;z-index:0;pointer-events:none;opacity:var(--star-op);
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:0;pointer-events:none;opacity:var(--star-op);
   background-image:
     radial-gradient(1.4px 1.4px at 18% 12%, rgba(255,255,255,.9), transparent),
     radial-gradient(1.2px 1.2px at 72% 8%, rgba(255,255,255,.7), transparent),
@@ -219,7 +221,7 @@ canvas{display:block;}
   box-shadow:inset 0 2px 4px rgba(0,0,0,.55);
 }
 .dm .bar::before{
-  content:"";position:absolute;inset:0;pointer-events:none;
+  content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
   background-image:repeating-linear-gradient(90deg,
     rgba(255,255,255,.13) 0 1px, transparent 1px 25%);
 }
@@ -254,7 +256,7 @@ canvas{display:block;}
 #cityCanvas{width:100%;height:100%;}
 .hint{
   position:absolute;left:0;right:0;bottom:6px;text-align:center;
-  font-size:11px;color:var(--ink-faint);pointer-events:none;letter-spacing:.5px;
+  font-size:11px;color:var(--hint-ink);pointer-events:none;letter-spacing:.5px;
   transition:opacity .4s var(--ease);
 }
 @keyframes hintBreath{0%,100%{opacity:.5;}50%{opacity:1;}}
@@ -314,14 +316,14 @@ canvas{display:block;}
 /* 浮层 = 一块实体控制台面：不透明、无 blur。
    底纹用 16px 极淡网格，替代玻璃的"通透感"，大面积暗色不显死板。 */
 .overlay{
-  position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
+  position:fixed;top:0;right:0;bottom:0;left:0;z-index:20;display:flex;flex-direction:column;
   background:linear-gradient(180deg, #131A25 0%, #0E141D 100%);
   opacity:0;visibility:hidden;pointer-events:none;transform:translateY(12px);
   transition:opacity .26s var(--ease),visibility .26s,transform .32s var(--ease);
   padding-top:var(--safe-top);
 }
 .overlay::before{
-  content:"";position:absolute;inset:0;pointer-events:none;opacity:.6;
+  content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;opacity:.6;
   background-image:
     linear-gradient(rgba(255,255,255,.016) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255,255,255,.016) 1px, transparent 1px);
@@ -480,7 +482,7 @@ canvas{display:block;}
 }
 /* 卡内细密蓝印网格，靠 background-image 拉出来，不影响文字 */
 .bp-feat::before{
-  content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
+  content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;opacity:.55;
   background-image:
     linear-gradient(rgba(120,160,220,0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(120,160,220,0.06) 1px, transparent 1px);
@@ -517,7 +519,7 @@ canvas{display:block;}
    不做 N 份小卡片，靠 1px dotted 分隔。
    数值列右对齐，类别色按语义：产能 ok / 耗用 warn / 供给 #8FD3FF */
 .bp-feat-stats{
-  display:grid;grid-template-columns:1fr 1fr;column-gap:12px;row-gap:0;
+  display:grid;grid-template-columns:1fr 1fr;grid-gap:0 12px;
   margin-top:3px;font-size:10.5px;
 }
 .bp-feat-stats i{
@@ -1193,6 +1195,55 @@ canvas{display:block;}
 
 /* 7) 资源栏顶缘那道金线会和资源格的颜色刻度打架，去掉 */
 #hud::after{background:none;}
+
+/* ---- Chrome 61 降级：flex gap 不支持时用 margin 兜底（gap 仍作增强保留） ---- */
+@supports not (gap:1px){
+  #demand > * + * { margin-left:7px; }
+  .dm > * + * { margin-left:6px; }
+  #dock > * + * { margin-left:7px; }
+  #dock button > * + * { margin-top:3px; }
+  .ov-foot > * + * { margin-left:10px; }
+  .ov-foot button > * + * { margin-left:8px; }
+  .tab > * + * { margin-left:5px; }
+  .bp-feat-main > * + * { margin-left:12px; }
+  .bp-feat-body > * + * { margin-top:5px; }
+  .bp-feat-cat > * + * { margin-left:5px; }
+  .bp-strip-item > * + * { margin-top:3px; }
+  .bp-dock > * + * { margin-left:9px; }
+  .bp-dock-x > * + * { margin-left:8px; }
+  .dp-title-l > * + * { margin-top:2px; }
+  .dp-ring-row > * + * { margin-left:14px; }
+  .dp-stack-l i > * + * { margin-left:4px; }
+  .dp-unlock > * + * { margin-left:10px; }
+  .dp-cat-l i > * + * { margin-left:4px; }
+  .hp-h > * + * { margin-left:12px; }
+  .hp-visual > * + * { margin-left:8px; }
+  .uhero-top > * + * { margin-left:10px; }
+  .udiag > * + * { margin-left:7px; }
+  .urow > * + * { margin-left:10px; }
+  .ures-h > * + * { margin-left:10px; }
+  .udemand > * + * { margin-top:2px; }
+  .mtitle > * + * { margin-left:9px; }
+  .bv-head > * + * { margin-left:10px; }
+  .bv-dock > * + * { margin-left:6px; }
+  .bv-dock button > * + * { margin-top:3px; }
+  .modal-btns > * + * { margin-left:8px; }
+  .tabs > * { margin-right:6px; }
+  .bp-strip > * { margin-right:7px; }
+  .dp-stack-l > * { margin-right:12px; }
+  .dp-cat-l > * { margin-right:12px; }
+  .palette > * { margin-right:7px; }
+  @media (max-width:360px){
+    #demand > * + * { margin-left:6px; }
+    .dm > * + * { margin-left:4px; }
+    .tab > * + * { margin-left:4px; }
+    .tabs > * { margin-right:5px; }
+    .dp-ring-row > * + * { margin-left:11px; }
+  }
+  @media (max-height:620px){
+    #demand > * + * { margin-left:5px; }
+  }
+}
 </style>
 </head>
 <body>
