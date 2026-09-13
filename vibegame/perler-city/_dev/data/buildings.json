@@ -84,6 +84,46 @@
       "k": "V",
       "name": "暮紫",
       "hex": "#6B5B95"
+    },
+    {
+      "k": "f",
+      "name": "肉色",
+      "hex": "#E8B89B"
+    },
+    {
+      "k": "b",
+      "name": "鲜红",
+      "hex": "#E63946"
+    },
+    {
+      "k": "e",
+      "name": "暖橙",
+      "hex": "#FFB347"
+    },
+    {
+      "k": "p",
+      "name": "花粉",
+      "hex": "#D63384"
+    },
+    {
+      "k": "c",
+      "name": "纯白",
+      "hex": "#F8F8F2"
+    },
+    {
+      "k": "q",
+      "name": "铜绿",
+      "hex": "#4ECDC4"
+    },
+    {
+      "k": "o",
+      "name": "深棕",
+      "hex": "#6B4423"
+    },
+    {
+      "k": "m",
+      "name": "砖棕",
+      "hex": "#8B5A2B"
     }
   ],
   "cats": [
@@ -605,21 +645,345 @@
       "unlockPop": 76,
       "desc": "二十六人挤一栋楼。抬头看不见顶，低头看不见树。",
       "rows": [
-        ".......Y.......",
-        "......SYS......",
-        ".....TTTTT.....",
-        ".....TKTKT.....",
-        ".....TSTST.....",
-        "....TKTKTKT....",
-        "....TSTSTST....",
-        "...TKTKTKTKT...",
-        "...TSTSTSTST...",
-        "..TKTKTKTKTKT..",
-        "..TSTSTSTSTST..",
-        ".aaaaaaaaaaaaa.",
-        ".aWKaaaOaaaKWa.",
-        ".aaaaaaaaaaaaa.",
+        ".......S.......",
+        "......SSS......",
+        ".....SKSKS.....",
+        "....SSTTSSS....",
+        "....SKSKSKS....",
+        "...SSTTTTSSS...",
+        "...STKSKSKTS...",
+        "..SSTTTTTTSSS..",
+        "..STKSKSKSKTS..",
+        "..STSTTTSTSTS..",
+        "..STKSKSKSKTS..",
+        "..STSTTTSTSTS..",
+        ".aaSTTTTTTTSaa.",
+        ".aWKKOOOOKKWWa.",
         ".GGGGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "incinerator",
+      "name": "焚烧电厂",
+      "cat": "trash",
+      "cost": 280,
+      "popCap": 0,
+      "jobs": 4,
+      "income": 10,
+      "happy": -3,
+      "use": {
+        "power": 3,
+        "water": 2
+      },
+      "gen": {
+        "trash": 24
+      },
+      "unlockPop": 30,
+      "desc": "焚烧发电两不误。清运 +24，但烟囱里的味道让幸福 −3。",
+      "rows": [
+        ".............",
+        ".............",
+        ".....d.......",
+        ".....d.......",
+        "....ddd......",
+        "....ddd......",
+        ".aaaaaaaaaaa.",
+        ".BBBBBBBBBBB.",
+        ".BeeeeeeeeeB.",
+        ".BebbbbbbbeB.",
+        ".BBBOOOOOBBB.",
+        ".aaaaaaaaaaa.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "compost",
+      "name": "堆肥站",
+      "cat": "trash",
+      "cost": 120,
+      "popCap": 0,
+      "jobs": 2,
+      "income": 4,
+      "happy": 2,
+      "use": {
+        "power": 1,
+        "water": 1
+      },
+      "gen": {
+        "trash": 8
+      },
+      "unlockPop": 8,
+      "desc": "慢工出细活。清运 +8，还顺手让街坊觉得你很环保。",
+      "rows": [
+        "...........",
+        "...d.......",
+        "..n.n.n.n..",
+        ".nNnNnNnNn.",
+        ".mmmmmmmmm.",
+        ".mOOOOOOOm.",
+        ".mOoOoOoOm.",
+        ".mOoOoOoOm.",
+        ".mOOOOOOOm.",
+        ".mmmmmmmmm.",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "villa",
+      "name": "花园别墅",
+      "cat": "res",
+      "cost": 120,
+      "popCap": 6,
+      "jobs": 0,
+      "income": 0,
+      "happy": 4,
+      "use": {
+        "power": 2,
+        "water": 2,
+        "trash": 2
+      },
+      "gen": {},
+      "unlockPop": 6,
+      "desc": "六人住带花园的小楼。幸福 +4，水电都省着用。",
+      "rows": [
+        ".............",
+        ".............",
+        "....d........",
+        ".....RRR.....",
+        "....RRRRR....",
+        "...RRRRRRR...",
+        "...WWWWWWW...",
+        "...WTTWTTW...",
+        "...WWWWWWW...",
+        "...WOOOOOW...",
+        ".npnmmmmmnpn.",
+        ".nnnnnnnnnnn.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "townhouse",
+      "name": "联排住宅",
+      "cat": "res",
+      "cost": 240,
+      "popCap": 18,
+      "jobs": 0,
+      "income": 0,
+      "happy": 1,
+      "use": {
+        "power": 4,
+        "water": 4,
+        "trash": 4
+      },
+      "gen": {},
+      "unlockPop": 24,
+      "desc": "三户拼一栋，十八人挤得下。占地省，密度高。",
+      "rows": [
+        ".............",
+        ".............",
+        ".RRR.RRR.RRR.",
+        ".RRRRRRRRRRR.",
+        ".WWWWWWWWWWW.",
+        ".WTWWWTWWWTW.",
+        ".WWWWWWWWWWW.",
+        ".WWOWWOWWOWW.",
+        ".WWWWWWWWWWW.",
+        ".WTWWWTWWWTW.",
+        ".WWWWWWWWWWW.",
+        ".WOOOOOOOOOW.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "supermarket",
+      "name": "豆鲜超市",
+      "cat": "com",
+      "cost": 280,
+      "popCap": 0,
+      "jobs": 10,
+      "income": 52,
+      "happy": 3,
+      "use": {
+        "power": 4,
+        "water": 3,
+        "trash": 4
+      },
+      "gen": {},
+      "unlockPop": 40,
+      "desc": "十个岗位，货最全。收益 52/分，但水电胃口大。",
+      "rows": [
+        ".............",
+        ".............",
+        ".bbbbbbbbbbb.",
+        ".bYYYYYYYYYb.",
+        ".WWWWWWWWWWW.",
+        ".WTTTTTTTTTW.",
+        ".WTTTTTTTTTW.",
+        ".WTTTTTTTTTW.",
+        ".WWWWWWWWWWW.",
+        ".WOOOOOOOOOW.",
+        ".WWWWWWWWWWW.",
+        "..c..........",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "restaurant",
+      "name": "江畔餐厅",
+      "cat": "com",
+      "cost": 160,
+      "popCap": 0,
+      "jobs": 5,
+      "income": 28,
+      "happy": 5,
+      "use": {
+        "power": 2,
+        "water": 2,
+        "trash": 3
+      },
+      "gen": {},
+      "unlockPop": 20,
+      "desc": "五个岗位，灯笼亮起来。幸福 +5，夜里有人愿意出门。",
+      "rows": [
+        "...........",
+        "...d.......",
+        ".bYb...bYb.",
+        ".OOOOOOOOO.",
+        ".WWWWWWWWW.",
+        ".WTTWWWTTW.",
+        ".WWWWWWWWW.",
+        ".WTTWWWTTW.",
+        ".WWWWWWWWW.",
+        ".WOOOOOOOW.",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "warehouse",
+      "name": "储豆仓库",
+      "cat": "ind",
+      "cost": 200,
+      "popCap": 0,
+      "jobs": 8,
+      "income": 30,
+      "happy": -2,
+      "use": {
+        "power": 2,
+        "water": 1,
+        "trash": 2
+      },
+      "gen": {},
+      "unlockPop": 20,
+      "desc": "八个岗位，存东西不赚钱。收益 30/分，污染比工厂小。",
+      "rows": [
+        "...........",
+        "...d.......",
+        "...d.......",
+        "..ddddd....",
+        ".aaaaaaaaa.",
+        ".aaaaaaaaa.",
+        ".WWWWWWWWW.",
+        ".WOOOOOOOW.",
+        ".WOOOOOOOW.",
+        ".mmmmmmmmm.",
+        ".GGGGGGGGG."
+      ]
+    },
+    {
+      "id": "solar",
+      "name": "光伏电站",
+      "cat": "power",
+      "cost": 260,
+      "popCap": 0,
+      "jobs": 1,
+      "income": 0,
+      "happy": 2,
+      "use": {},
+      "gen": {
+        "power": 16
+      },
+      "unlockPop": 28,
+      "desc": "阳光变电，发电 +16。干净，但比燃煤少一半。",
+      "rows": [
+        ".............",
+        ".............",
+        ".............",
+        "....e........",
+        ".TTT.TTT.TTT.",
+        ".TTT.TTT.TTT.",
+        ".aaaaaaaaaaa.",
+        ".TTT.TTT.TTT.",
+        ".YYYYYYYYYYY.",
+        ".YYYYYYYYYYY.",
+        ".aaaaaaaaaaa.",
+        ".aaaaaaaaaaa.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "desalinator",
+      "name": "海水淡化",
+      "cat": "water",
+      "cost": 240,
+      "popCap": 0,
+      "jobs": 2,
+      "income": 0,
+      "happy": -1,
+      "use": {
+        "power": 4
+      },
+      "gen": {
+        "water": 32
+      },
+      "unlockPop": 44,
+      "desc": "海水变淡水，供水 +32。耗电 4 度，但够养一座大城。",
+      "rows": [
+        ".............",
+        ".....SSS.....",
+        "....SSSSS....",
+        "....wwwww....",
+        "....wwwww....",
+        "....SSSSS....",
+        ".....SSS.....",
+        ".wwwwwwwwwww.",
+        ".aaaaaaaaaaa.",
+        ".aWWWWWWWWWa.",
+        ".aWwwwwwwwWa.",
+        ".aaaaaaaaaaa.",
+        ".GGGGGGGGGGG."
+      ]
+    },
+    {
+      "id": "hospital",
+      "name": "豆仁医院",
+      "cat": "civ",
+      "cost": 360,
+      "popCap": 0,
+      "jobs": 4,
+      "income": 0,
+      "happy": 8,
+      "use": {
+        "power": 4,
+        "water": 3,
+        "trash": 2
+      },
+      "gen": {},
+      "unlockPop": 50,
+      "desc": "红十字亮起来，幸福 +8。四个岗位，水电照付。",
+      "rows": [
+        ".............",
+        "......b......",
+        "....bbbbb....",
+        "......b......",
+        ".ccccccccccc.",
+        ".aaaaaaaaaaa.",
+        ".ccccccccccc.",
+        ".ccTccTccTcc.",
+        ".ccccccccccc.",
+        ".ccTccTccTcc.",
+        ".ccccccccccc.",
+        ".cOOOOOOOOOc.",
+        ".GGGGGGGGGGG."
       ]
     }
   ]

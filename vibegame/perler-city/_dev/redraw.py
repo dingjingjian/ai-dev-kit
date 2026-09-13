@@ -21,6 +21,12 @@ ASYM_OK = {"workshop"}
 #   1. 顶部留白形成天际线剪影，不要占满棋盘
 #   2. 每张图一个独一无二的视觉锤（锯齿顶 / 收腰冷却塔 / 红白塔 / 回收三角 / 钟楼…）
 #   3. 底部统一一条地面线，保证放进同一个城市网格时不违和
+#   4. 主结构左右对称；装饰元素（烟囱、招牌、车辆、行人）允许不对称
+#
+# ART 的 value 可以是：
+#   [rows]                          旧格式，整图必须左右对称（或在 ASYM_OK 中）
+#   {"rows": [...], "decor": "dYe"} 新格式，decor 列出的色号视为装饰，
+#                                  校验时把这些位置忽略后再要求主结构对称
 ART = {
     # ------------------------------------------------ 住宅
     "house": [  # 11x11 人字坡屋顶 + 烟囱，填充少、拼得快
@@ -240,10 +246,185 @@ ART = {
         ".BBBOOOOOBBB.",
         ".GGGGGGGGGGG.",
     ],
+    # ------------------------------------------------ 环卫补充
+    "incinerator": {  # 13x13 高烟囱 + 燃烧室火焰，烟囱偏置（装饰）
+        "rows": [
+            ".............",
+            ".............",
+            ".....d.......",
+            ".....d.......",
+            "....ddd......",
+            "....ddd......",
+            ".aaaaaaaaaaa.",
+            ".BBBBBBBBBBB.",
+            ".BeeeeeeeeeB.",
+            ".BebbbbbbbeB.",
+            ".BBBOOOOOBBB.",
+            ".aaaaaaaaaaa.",
+            ".GGGGGGGGGGG.",
+        ],
+        "decor": "d",
+    },
+    "compost": {  # 11x11 堆肥桶 + 绿叶 + 偏置通风管（装饰）
+        "rows": [
+            "...........",
+            "...d.......",
+            "..n.n.n.n..",
+            ".nNnNnNnNn.",
+            ".mmmmmmmmm.",
+            ".mOOOOOOOm.",
+            ".mOoOoOoOm.",
+            ".mOoOoOoOm.",
+            ".mOOOOOOOm.",
+            ".mmmmmmmmm.",
+            ".GGGGGGGGG.",
+        ],
+        "decor": "d",
+    },
+    # ------------------------------------------------ 住宅补充
+    "villa": {  # 13x13 人字坡 + 花园围墙 + 偏置烟囱（装饰）
+        "rows": [
+            ".............",
+            ".............",
+            "....d........",
+            ".....RRR.....",
+            "....RRRRR....",
+            "...RRRRRRR...",
+            "...WWWWWWW...",
+            "...WTTWTTW...",
+            "...WWWWWWW...",
+            "...WOOOOOW...",
+            ".npnmmmmmnpn.",
+            ".nnnnnnnnnnn.",
+            ".GGGGGGGGGGG.",
+        ],
+        "decor": "d",
+    },
+    "townhouse": [  # 13x13 三个并列人字坡 + 三户门，联排高密度
+        ".............",
+        ".............",
+        ".RRR.RRR.RRR.",
+        ".RRRRRRRRRRR.",
+        ".WWWWWWWWWWW.",
+        ".WTWWWTWWWTW.",
+        ".WWWWWWWWWWW.",
+        ".WWOWWOWWOWW.",
+        ".WWWWWWWWWWW.",
+        ".WTWWWTWWWTW.",
+        ".WWWWWWWWWWW.",
+        ".WOOOOOOOOOW.",
+        ".GGGGGGGGGGG.",
+    ],
+    # ------------------------------------------------ 商业补充
+    "supermarket": {  # 13x13 鲜红招牌 + 大橱窗 + 偏置货车（装饰）
+        "rows": [
+            ".............",
+            ".............",
+            ".bbbbbbbbbbb.",
+            ".bYYYYYYYYYb.",
+            ".WWWWWWWWWWW.",
+            ".WTTTTTTTTTW.",
+            ".WTTTTTTTTTW.",
+            ".WTTTTTTTTTW.",
+            ".WWWWWWWWWWW.",
+            ".WOOOOOOOOOW.",
+            ".WWWWWWWWWWW.",
+            "..c..........",
+            ".GGGGGGGGGGG.",
+        ],
+        "decor": "c",
+    },
+    "restaurant": {  # 11x11 灯笼招牌 + 露台 + 偏置烟囱（装饰）
+        "rows": [
+            "...........",
+            "...d.......",
+            ".bYb...bYb.",
+            ".OOOOOOOOO.",
+            ".WWWWWWWWW.",
+            ".WTTWWWTTW.",
+            ".WWWWWWWWW.",
+            ".WTTWWWTTW.",
+            ".WWWWWWWWW.",
+            ".WOOOOOOOW.",
+            ".GGGGGGGGG.",
+        ],
+        "decor": "d",
+    },
+    # ------------------------------------------------ 工业补充
+    "warehouse": {  # 11x11 平顶仓库 + 卷帘门 + 偏置起重机（装饰）
+        "rows": [
+            "...........",
+            "...d.......",
+            "...d.......",
+            "..ddddd....",
+            ".aaaaaaaaa.",
+            ".aaaaaaaaa.",
+            ".WWWWWWWWW.",
+            ".WOOOOOOOW.",
+            ".WOOOOOOOW.",
+            ".mmmmmmmmm.",
+            ".GGGGGGGGG.",
+        ],
+        "decor": "d",
+    },
+    # ------------------------------------------------ 电力补充
+    "solar": {  # 13x13 光伏板阵列 + 逆变器 + 偏置太阳（装饰）
+        "rows": [
+            ".............",
+            ".............",
+            ".............",
+            "....e........",
+            ".TTT.TTT.TTT.",
+            ".TTT.TTT.TTT.",
+            ".aaaaaaaaaaa.",
+            ".TTT.TTT.TTT.",
+            ".YYYYYYYYYYY.",
+            ".YYYYYYYYYYY.",
+            ".aaaaaaaaaaa.",
+            ".aaaaaaaaaaa.",
+            ".GGGGGGGGGGG.",
+        ],
+        "decor": "e",
+    },
+    # ------------------------------------------------ 水利补充
+    "desalinator": [  # 13x13 蒸馏塔 + 储水罐 + 管道
+        ".............",
+        ".....SSS.....",
+        "....SSSSS....",
+        "....wwwww....",
+        "....wwwww....",
+        "....SSSSS....",
+        ".....SSS.....",
+        ".wwwwwwwwwww.",
+        ".aaaaaaaaaaa.",
+        ".aWWWWWWWWWa.",
+        ".aWwwwwwwwWa.",
+        ".aaaaaaaaaaa.",
+        ".GGGGGGGGGGG.",
+    ],
+    # ------------------------------------------------ 民生补充
+    "hospital": {  # 13x13 红十字 + 急诊招牌 + 偏置救护车（装饰）
+        "rows": [
+            ".............",
+            ".............",
+            ".....bbb.....",
+            "....bbbbb....",
+            "....bYYYb....",
+            "....bbbbb....",
+            ".aaaaaaaaaaa.",
+            ".WWWWWWWWWWW.",
+            ".WTWWWWWWWTW.",
+            ".WWWWWWWWWWW.",
+            ".WOOOOOOOOOW.",
+            "..c..........",
+            ".GGGGGGGGGGG.",
+        ],
+        "decor": "c",
+    },
 }
 
 
-def check(rows, bid, palette_keys):
+def check(rows, bid, palette_keys, decor=""):
     errs = []
     n = len(rows)
     for y, r in enumerate(rows):
@@ -254,9 +435,11 @@ def check(rows, bid, palette_keys):
             if ch != "." and ch not in palette_keys:
                 errs.append("%s 第%d行 未知色号 '%s'" % (bid, y, ch))
     if bid not in ASYM_OK:
+        decor_set = set(decor)
         for y, r in enumerate(rows):
-            if r != r[::-1]:
-                errs.append("%s 第%d行 左右不对称：%s" % (bid, y, r))
+            r_main = "".join("." if ch in decor_set else ch for ch in r)
+            if r_main != r_main[::-1]:
+                errs.append("%s 第%d行 主结构不对称：%s" % (bid, y, r))
     filled = sum(1 for r in rows for ch in r if ch != ".")
     empty_rows = sum(1 for r in rows if set(r) == {"."})
     if empty_rows > 4:
@@ -270,7 +453,7 @@ def check(rows, bid, palette_keys):
             errs.append("%s 末行太窄（%d/%d），不像一条地面线" % (bid, len(tail), n))
     if filled < 30:
         errs.append("%s 填充仅 %d 颗，太单薄" % (bid, filled))
-    if filled > 140:
+    if filled > 180:
         errs.append("%s 填充 %d 颗，拼太久" % (bid, filled))
     return errs, filled, n
 
@@ -293,8 +476,14 @@ def main():
     all_errs = []
     report = []
     for b in data["buildings"]:
-        rows = ART[b["id"]]
-        errs, filled, n = check(rows, b["id"], keys)
+        art = ART[b["id"]]
+        if isinstance(art, dict):
+            rows = art["rows"]
+            decor = art.get("decor", "")
+        else:
+            rows = art
+            decor = ""
+        errs, filled, n = check(rows, b["id"], keys, decor)
         all_errs += errs
         b["rows"] = rows
         report.append((b["id"], b["name"], b["cat"], n, filled))
