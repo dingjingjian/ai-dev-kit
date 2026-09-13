@@ -15,17 +15,40 @@
   --paper:#23314A;        /* 蓝图用纸：深蓝印纸 */
   --paper-2:#1A2236;
   --paper-line:rgba(120,160,220,0.16);
+  /* 第三色 · 档案纸（米白）：全站三材质的"上层"。
+     金 = 强调，深蓝 = 底，米白 = 排印。只用于抬头 / 段题 / 珠串，不铺面。 */
+  --ink-paper:#EDE4D2;
+  --ink-paper-dim:rgba(237,228,210,0.46);
+  --bead:rgba(237,228,210,0.30);
   --panel:rgba(22,28,40,0.92); --panel-2:#1E2735; --line:rgba(255,255,255,0.10);
+  /* ---- 市政控制台材质（第十三轮）----
+     方向：干掉玻璃感，回到「实体控件」。
+     面板 = 不透明渐变 + 深色硬描边 + 顶部内高光 + 底部硬投影
+     （像一块压进桌面的仪表面板，而不是一片飘着的半透明玻璃）。
+     全站不再用 backdrop-filter —— 毛玻璃是后台管理页的语言，不是城建工具的语言。 */
+  --con-hi:#2C3748; --con-mid:#1B2431; --con-lo:#141B27;
+  --con-edge:#070A10;
+  --con-hi-line:rgba(255,255,255,.10);
+  --con-seam:rgba(0,0,0,.50);
+  --r-lg:11px; --r-md:8px; --r-sm:5px;
+  --c-res:#9CCB84; --c-com:#6FBEDC; --c-ind:#EFB65C;
+  --c-pow:#F0C24B; --c-wat:#5BC8E8; --c-san:#B98FD0; --c-pin:#E9A0B0;
   --ok:#5DBE8A; --warn:#E0754B; --bad:#D6544B;
   --ease:cubic-bezier(.2,.7,.3,1);
   --ease-back:cubic-bezier(.2,1.35,.4,1);
-  --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  /* 顶部强制留白：小红书 iframe 里 env(safe-area-inset-top) 恒为 0，
+     顶栏会直接顶在屏幕最上沿（被宿主 UI / 小工具自带按钮压住）。
+     用一条显式常量留白，顶栏整体下移 —— 上方露出天空/星空，不再是一整块面板。
+     改这一个值就能调，body / .overlay / 矮屏 hud 都跟着它走。（参照 defcon 的 --top-gap 机制） */
+  --top-gap:50px;
+  --safe-top:calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
   --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-l:0px;
   --safe-r:0px;
 }
-body.in-app{ --safe-top:calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 40px);
-             --safe-l:48px; --safe-r:92px; }
+/* 小红书宿主内嵌：左右安全区给宿主按钮预留空间。
+   顶部预留已由 :root 的 --top-gap 无条件承担，不再依赖 body.in-app 被注入。 */
+body.in-app{ --safe-l:48px; --safe-r:92px; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
@@ -67,35 +90,42 @@ canvas{display:block;}
 /* ---------- 顶栏：统计铭牌 ---------- */
 /* 整块顶栏是一条「蓝图标题块」。不再用 3 颗圆角胶囊，
    改成 4 个段落、靠 1px 细线分段，每段一个数值 + 一个标签。 */
+/* 资源栏：一块压进桌面的仪表面板，不是半透明玻璃。
+   硬描边 + 顶部内高光 + 底部硬投影 = 实体感；无 blur、无透明。 */
 #hud{
   flex:0 0 auto;position:relative;display:flex;align-items:stretch;
-  background:linear-gradient(180deg, rgba(20,26,38,.94), rgba(14,20,30,.78));
-  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
-  border-bottom:1px solid rgba(255,255,255,.06);
-  box-shadow:0 4px 20px rgba(0,0,0,.32);
+  margin:0 8px 2px;border-radius:var(--r-lg);
+  background:linear-gradient(180deg, var(--con-hi) 0%, var(--con-mid) 52%, var(--con-lo) 100%);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             inset 0 -2px 0 rgba(0,0,0,.34),
+             0 3px 0 rgba(0,0,0,.46),
+             0 6px 16px rgba(0,0,0,.34);
 }
-/* 底边一道金色余晖，和城市画布的暖光衔接 */
+/* 顶缘一条金色刻度线：仪表面板的"铭牌边"，收在圆角内 */
 #hud::after{
-  content:"";position:absolute;left:0;right:0;bottom:-1px;height:1px;
-  background:linear-gradient(90deg, transparent, rgba(232,182,76,.38), transparent);
+  content:"";position:absolute;left:12px;right:12px;top:0;height:2px;
+  border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg, transparent, rgba(232,182,76,.60), transparent);
+  pointer-events:none;
 }
-/* 4 段：城市名 / 金币 / 人口 / 幸福。段间用 1px 细线，不用竖向胶囊 */
+/* 左侧城市块：靠一道「暗线 + 亮线」的凹槽和右侧统计分开（仪器面板的分模线） */
 .hud-left{
-  flex:1 1 auto;min-width:0;padding:10px 12px 9px 14px;
-  border-right:1px solid rgba(255,255,255,.07);
+  flex:1 1 auto;min-width:0;padding:10px 12px 9px 15px;
+  border-right:1px solid var(--con-seam);
+  box-shadow:1px 0 0 rgba(255,255,255,.055);
 }
 .city-name{
-  font-size:20px;font-weight:800;letter-spacing:1.2px;line-height:1.15;
+  font-size:20px;font-weight:800;letter-spacing:1.4px;line-height:1.15;
   background:linear-gradient(92deg,#FFF6E2,var(--gold) 46%,#C08A2E);
   -webkit-background-clip:text;background-clip:text;color:transparent;
   white-space:nowrap;
-  text-shadow:0 1px 10px rgba(232,182,76,.18), 0 0 18px rgba(232,182,76,.10);
 }
 .city-sub{font-size:10.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:.2px;
   font-variant-numeric:tabular-nums;position:relative;padding-bottom:6px;}
 /* 城市名下方一道极细金线，延伸到整个 HUD 宽度，撑起"档案抬头"感 */
 .city-sub::after{
-  content:"";position:absolute;left:-14px;right:0;bottom:0;height:1px;
+  content:"";position:absolute;left:-15px;right:0;bottom:0;height:1px;
   background:linear-gradient(90deg,
     rgba(232,182,76,0) 0%,
     rgba(232,182,76,.55) 6%,
@@ -104,21 +134,33 @@ canvas{display:block;}
   pointer-events:none;
 }
 .hud-stats{display:flex;align-items:stretch;flex:0 0 auto;}
+/* 资源格：每格顶端一条类别色刻度（金币金 / 人口蓝 / 幸福粉）。
+   颜色只染这一条 2px，不铺面 —— 和"类别色每处只出现一次"的约定同口径。 */
 .hud-stat{
+  position:relative;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
-  min-width:54px;padding:8px 10px 7px;
-  border-left:1px solid rgba(255,255,255,.07);
+  min-width:56px;padding:9px 10px 8px;
+  border-left:1px solid var(--con-seam);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.055);
 }
+.hud-stat::before{
+  content:"";position:absolute;left:10px;right:10px;top:0;height:2px;
+  border-radius:0 0 2px 2px;background:currentColor;opacity:.85;
+}
+.hud-stat.st-coin{color:var(--gold);}
+.hud-stat.st-pop{color:#6FBEDC;}
+.hud-stat.st-happy{color:#E9A0B0;}
+/* 数值不再发光 —— 光晕是"数据大屏"的语言，实体仪表靠字重和色块拉开层次 */
 .hud-stat b{
-  font-size:16px;font-weight:800;line-height:1.1;
+  font-size:17px;font-weight:800;line-height:1.1;letter-spacing:-.2px;
   font-variant-numeric:tabular-nums;color:var(--ink);
-  transition:text-shadow .3s,color .3s;
+  transition:color .3s;
 }
-.hud-stat b.gold{color:var(--gold-soft);text-shadow:0 0 12px rgba(232,182,76,.32);}
-.hud-stat b.pop{color:#A8DCFF;text-shadow:0 0 12px rgba(79,168,199,.32);}
-.hud-stat b.happy{color:#F7AEC0;text-shadow:0 0 12px rgba(233,160,176,.32);}
-.hud-stat b.bad{color:var(--bad);text-shadow:0 0 12px rgba(214,84,75,.4);}
-.hud-stat span{font-size:9px;color:var(--ink-faint);margin-top:2px;letter-spacing:.5px;}
+.hud-stat b.gold{color:var(--gold-soft);}
+.hud-stat b.pop{color:#A8DCFF;}
+.hud-stat b.happy{color:#F7AEC0;}
+.hud-stat b.bad{color:var(--bad);}
+.hud-stat span{font-size:9px;color:var(--ink-faint);margin-top:2px;letter-spacing:.8px;}
 @keyframes statBump{ 0%{transform:translateY(0);} 40%{transform:translateY(-2px);} 100%{transform:translateY(0);} }
 .hud-stat.bump b{animation:statBump .38s var(--ease);}
 
@@ -128,7 +170,8 @@ canvas{display:block;}
 .hud-snd{
   flex:0 0 auto;display:flex;align-items:center;justify-content:center;
   width:44px;padding:8px 0 7px;
-  border-left:1px solid rgba(255,255,255,.07);
+  border-left:1px solid var(--con-seam);
+  box-shadow:inset 1px 0 0 rgba(255,255,255,.055);
   color:var(--ink-faint);
   transition:color .2s var(--ease);
 }
@@ -149,29 +192,41 @@ canvas{display:block;}
    提到 12px（跟 .mbar 同口径）+ 双层内凹 + 顶部高光，让它有实体感。
    中线的「平衡点」单独加粗到 2px：玩家得先看见基准，才读得出偏向哪边。 */
 #demand{
-  flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:5px 14px 7px;
+  /* 左右内缩对齐资源栏内容区（面板 8px 外边距 + 1px 描边 + 15px 内边距 ≈ 24px） */
+  flex:0 0 auto;display:flex;align-items:center;gap:7px;padding:7px 24px 8px;
 }
 .dm{flex:1 1 0;display:flex;align-items:center;gap:6px;}
+/* 标签做成实心类别色方块 —— 这是城建游戏 RCI 表的标准长相，
+   比一枚淡色文字更像「开关」，也让三条一眼可分。 */
 .dm i{
-  font-style:normal;font-size:11.5px;font-weight:800;color:var(--ink-faint);
-  width:15px;flex:0 0 auto;text-align:center;
+  font-style:normal;font-size:10px;font-weight:800;color:#0E141C;
+  width:17px;height:17px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  border-radius:var(--r-sm);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.40), 0 1px 0 rgba(0,0,0,.45);
 }
-/* 标签用类别提亮色（与市政面板 .tagt 同口径），三条一眼可分。
-   注意 fill 的绿/红是「需求/过剩」语义，跟标签色不在同一个维度上，
+.dm.r i{background:#8FC178;}
+.dm.c i{background:#5FB3D6;}
+.dm.i i{background:#E8AB4E;}
+/* 表盘：深色凹槽 + 25% 刻度。有刻度才像仪表，不像进度条。
+   注意 fill 的绿/红是「需求/过剩」语义，跟标签色不在同一维度，
    靠位置（标签最左、色块从中线长出去）分开，不会读混。 */
-.dm.r i{color:#9CCB84;}
-.dm.c i{color:#6FBEDC;}
-.dm.i i{color:#EFB65C;}
 .dm .bar{
-  position:relative;flex:1 1 auto;height:12px;border-radius:6px;
-  background:rgba(255,255,255,0.06);overflow:hidden;
-  border:1px solid rgba(255,255,255,.045);
-  box-shadow:inset 0 1px 3px rgba(0,0,0,.42), inset 0 -1px 0 rgba(255,255,255,.03);
+  position:relative;flex:1 1 auto;height:14px;border-radius:var(--r-sm);
+  background:linear-gradient(180deg,#0D131C,#141C27);
+  overflow:hidden;
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.55);
 }
-/* 首页 12px 条：中线加粗，基准要看得见 */
+.dm .bar::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:repeating-linear-gradient(90deg,
+    rgba(255,255,255,.13) 0 1px, transparent 1px 25%);
+}
 .dm .bar::after{
   content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;margin-left:-1px;
-  background:rgba(255,255,255,0.30);
+  background:rgba(255,255,255,0.34);
+  box-shadow:0 0 0 1px rgba(0,0,0,.28);
 }
 /* 市政面板 6px 条：有文字陪同，中线保持 1px，否则占掉三分之一太高 */
 .udm .bar::after{
@@ -179,13 +234,12 @@ canvas{display:block;}
   background:rgba(255,255,255,0.22);
 }
 .dm .fill{
-  position:absolute;top:0;bottom:0;border-radius:6px;
+  position:absolute;top:0;bottom:0;border-radius:3px;
   transition:width .35s var(--ease),background .3s;
 }
-.dm .fill.pos, .udm .fill.pos{background:linear-gradient(90deg,#4E9E73,var(--ok));
-  box-shadow:0 0 9px rgba(93,190,138,.60), inset 0 1px 0 rgba(255,255,255,.22);}
-.dm .fill.neg, .udm .fill.neg{background:linear-gradient(270deg,#9E4E48,var(--bad));
-  box-shadow:0 0 9px rgba(214,84,75,.60), inset 0 1px 0 rgba(255,255,255,.22);}
+/* 去掉外发光：发光是"数据大屏"的语言，实体仪表靠色块本身读 */
+.dm .fill.pos, .udm .fill.pos{background:linear-gradient(180deg,#6BC79A,#4E9E73);}
+.dm .fill.neg, .udm .fill.neg{background:linear-gradient(180deg,#D9695F,#A3433B);}
 /* 窄屏：三等分变挤，标签收窄、条优先 */
 @media (max-width:360px){
   #demand{gap:6px;padding:4px 10px 6px;}
@@ -209,22 +263,28 @@ canvas{display:block;}
 
 /* ---------- 底栏：4 颗功能键（图标上 · 文字下） ---------- */
 #dock{
-  flex:0 0 auto;position:relative;display:flex;gap:6px;
-  padding:8px 10px calc(8px + var(--safe-bottom));
+  flex:0 0 auto;position:relative;display:flex;gap:7px;
+  padding:9px 10px calc(9px + var(--safe-bottom));
 }
-/* 整段底栏靠 1px 上边线 + 一道金线收口 */
+/* 整段底栏靠一条珠串收口（原来是渐隐白线） */
 #dock::before{
-  content:"";position:absolute;left:0;right:0;top:0;height:1px;
-  background:linear-gradient(90deg, transparent, rgba(255,255,255,.10), transparent);
+  content:"";position:absolute;left:14px;right:14px;top:0;height:5px;
+  background-image:radial-gradient(circle, var(--bead) 1.1px, transparent 1.2px);
+  background-size:8px 5px;background-repeat:repeat-x;background-position:1px center;
+  opacity:.5;pointer-events:none;
 }
+/* 控制台按键：实体键帽（硬描边 + 顶部内高光 + 底部 2px 硬投影 = 凸起）。
+   按下时翻成内凹 + 下沉 1px —— 靠阴影方向表达行程，不靠缩放。 */
 #dock button{
-  flex:1 1 0;height:54px;border-radius:13px;
+  flex:1 1 0;height:56px;border-radius:var(--r-md);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   font-size:11px;font-weight:700;letter-spacing:.6px;
-  background:linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.03));
-  border:1px solid rgba(255,255,255,0.10);color:var(--ink-dim);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 2px 8px rgba(0,0,0,.24);
-  transition:transform .14s var(--ease),background .2s,border-color .2s,color .2s;
+  background:linear-gradient(180deg, #303B4D 0%, #212A39 55%, #1A2230 100%);
+  border:1px solid var(--con-edge);color:var(--ink-dim);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             inset 0 -2px 0 rgba(0,0,0,.30),
+             0 2px 0 rgba(0,0,0,.48);
+  transition:transform .12s var(--ease),background .2s,border-color .2s,color .2s,box-shadow .12s;
 }
 /* 图标统一跟随文字色（stroke:currentColor），换主次态不用改两份颜色 */
 #dock button svg{
@@ -232,51 +292,85 @@ canvas{display:block;}
   fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round;
 }
-#dock button:active{transform:scale(.95);}
-#dock button.primary{
-  background:linear-gradient(180deg,#F7DA96,var(--gold) 62%,#DDA63C);
-  color:#3A2A08;border-color:rgba(255,255,255,0.34);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.5), 0 3px 12px rgba(232,182,76,.34);
+#dock button:active{
+  transform:translateY(2px);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.58), inset 0 -1px 0 rgba(255,255,255,.04);
 }
-#dock button.primary:active{background:linear-gradient(180deg,var(--gold-soft),var(--gold));}
+/* 主键：黄铜键帽。铜色描边而不是白色描边 —— 白描边是"网页按钮"味 */
+#dock button.primary{
+  background:linear-gradient(180deg,#F9E2A8 0%, var(--gold) 58%, #D19B34 100%);
+  color:#3A2A08;border-color:#6B4A12;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62),
+             inset 0 -2px 0 rgba(120,78,10,.42),
+             0 2px 0 rgba(0,0,0,.55);
+}
+#dock button.primary:active{
+  background:linear-gradient(180deg,#E6BE6A,#C99A38);
+  transform:translateY(2px);
+  box-shadow:inset 0 2px 6px rgba(90,58,6,.55);
+}
 
 /* ---------- 浮层 ---------- */
+/* 浮层 = 一块实体控制台面：不透明、无 blur。
+   底纹用 16px 极淡网格，替代玻璃的"通透感"，大面积暗色不显死板。 */
 .overlay{
   position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;
-  background:rgba(11,15,22,0.96);
-  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  background:linear-gradient(180deg, #131A25 0%, #0E141D 100%);
   opacity:0;visibility:hidden;pointer-events:none;transform:translateY(12px);
   transition:opacity .26s var(--ease),visibility .26s,transform .32s var(--ease);
   padding-top:var(--safe-top);
 }
-.overlay.show{opacity:1;visibility:visible;pointer-events:auto;transform:none;}
-/* 蓝图/数据/玩法三页都走同一种头部：标题 + 关闭。
-   标题用「大号字 + 金色渐变 + 一行小副标题」三段式。 */
-.ov-head{
-  flex:0 0 auto;display:flex;align-items:flex-start;justify-content:space-between;
-  padding:12px 14px 10px;border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(38,49,66,.55), rgba(38,49,66,0));
+.overlay::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.6;
+  background-image:
+    linear-gradient(rgba(255,255,255,.016) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.016) 1px, transparent 1px);
+  background-size:16px 16px, 16px 16px;
 }
-.ov-title-wrap{min-width:0;}
+.overlay > *{position:relative;z-index:1;}
+.overlay.show{opacity:1;visibility:visible;pointer-events:auto;transform:none;}
+/* 面板抬头：实体标题条（有底色、有硬下缘），像老城建游戏的面板标题。
+   左侧一道实心金条锚住标题；底缘仍留一排珠串 —— 拼豆身份的唯一保留符号。 */
+.ov-head{
+  position:relative;flex:0 0 auto;display:flex;align-items:flex-start;justify-content:space-between;
+  padding:12px 14px 11px;
+  background:linear-gradient(180deg, #222C3B 0%, #18202C 100%);
+  border-bottom:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line), 0 1px 0 rgba(255,255,255,.055);
+}
+.ov-head::after{
+  content:"";position:absolute;left:14px;right:14px;bottom:1px;height:4px;
+  background-image:radial-gradient(circle, rgba(237,228,210,.26) 1px, transparent 1.1px);
+  background-size:7px 4px;background-repeat:repeat-x;background-position:1px center;
+  pointer-events:none;
+}
+.ov-title-wrap{min-width:0;position:relative;padding-left:12px;}
+.ov-title-wrap::before{
+  content:"";position:absolute;left:0;top:3px;bottom:1px;width:3px;border-radius:2px;
+  background:linear-gradient(180deg,var(--gold-soft),var(--gold) 60%,#B8842A);
+  box-shadow:0 0 0 1px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.45);
+}
 .ov-title{
-  font-size:17px;font-weight:800;letter-spacing:.6px;
-  background:linear-gradient(92deg,#FFF3D6,var(--gold) 70%);
+  font-size:19px;font-weight:800;letter-spacing:.9px;
+  background:linear-gradient(92deg,#FFF6E2,var(--gold) 62%,#C08A2E);
   -webkit-background-clip:text;background-clip:text;color:transparent;
 }
-.ov-sub{font-size:10.5px;color:var(--ink-faint);margin-top:3px;letter-spacing:.3px;}
+.ov-sub{font-size:10.5px;color:var(--ink-paper-dim);margin-top:4px;letter-spacing:.35px;}
 
 /* 浮层底栏：关闭 / 返回一律收在底部，与主屏 dock 同一套视觉语言。
    顶部只留标题，视线从上往下扫完内容，手指自然落在底部的动作上。 */
 .ov-foot{
   flex:0 0 auto;position:relative;display:flex;align-items:center;gap:10px;
   padding:9px 12px calc(9px + var(--safe-bottom));
-  border-top:1px solid var(--line);
-  background:linear-gradient(0deg, rgba(38,49,66,.62), rgba(38,49,66,0));
+  background:linear-gradient(180deg, #1B2431, #131A25);
+  border-top:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line);
 }
-/* 上沿一道金色细线收口，与顶栏的暖金标题呼应 */
+/* 上沿一道金色刻度线收口，与资源栏顶缘同语言 */
 .ov-foot::before{
-  content:"";position:absolute;left:0;right:0;top:-1px;height:1px;
-  background:linear-gradient(90deg, transparent, rgba(232,182,76,.28), transparent);
+  content:"";position:absolute;left:12px;right:12px;top:0;height:2px;border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg, transparent, rgba(232,182,76,.42), transparent);
+  pointer-events:none;
 }
 .ov-foot-note{
   flex:1 1 auto;min-width:0;
@@ -287,20 +381,26 @@ canvas{display:block;}
 .ov-foot-note.warn{color:var(--warn);}
 .ov-foot-note.bad{color:var(--bad);}
 .ov-foot button{
-  flex:0 0 auto;height:44px;padding:0 18px;border-radius:13px;
+  flex:0 0 auto;height:44px;padding:0 18px;border-radius:var(--r-md);
   display:flex;align-items:center;gap:8px;
   font-size:13px;font-weight:700;letter-spacing:.5px;color:var(--ink-dim);
-  background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.04));
-  border:1px solid rgba(255,255,255,.10);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.10), 0 2px 8px rgba(0,0,0,.24);
-  transition:transform .14s var(--ease),color .2s,background .2s;
+  background:linear-gradient(180deg, #33405A 0%, #232D3D 55%, #1B2431 100%);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             inset 0 -2px 0 rgba(0,0,0,.28),
+             0 2px 0 rgba(0,0,0,.48);
+  transition:transform .12s var(--ease),color .2s,background .2s,box-shadow .12s;
 }
 .ov-foot button svg{
   width:18px;height:18px;display:block;
   fill:none;stroke:currentColor;stroke-width:1.8;
   stroke-linecap:round;stroke-linejoin:round;
 }
-.ov-foot button:active{transform:scale(.94);background:rgba(255,255,255,.13);}
+.ov-foot button:active{
+  transform:translateY(2px);
+  background:linear-gradient(180deg,#2A3547,#1B2431);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.55);
+}
 /* 重置是低频但不可逆的操作：常驻红底 + 红描边 + 红字，在底栏一眼可辨。
    原来那版「幽灵样式」（无底无描边、灰字）太隐蔽——玩家要找半天才看见入口在哪，
    而它偏偏是整页唯一一个「点了就回不来」的按钮，藏起来反而是风险。 */
@@ -321,32 +421,41 @@ canvas{display:block;}
 }
 .ov-foot button.ghost svg{width:15px;height:15px;stroke-width:1.9;}
 
-.ov-scroll{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:10px 12px 18px;}
+/* 滚动区不铺底色 —— 让 .overlay 的 16px 底纹透上来，大面积暗色才有"面板"感 */
+.ov-scroll{
+  flex:1 1 auto;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  padding:12px 12px 18px;
+}
 /* 浮层有 .ov-foot 时：scroll 区域要留出底部 dock 的高度，否则最后一段被遮 */
 .ov-scroll.has-foot{padding-bottom:calc(78px + var(--safe-bottom));}
 .ov-bar{
-  flex:0 0 auto;padding:9px 12px 10px;border-bottom:1px solid var(--line);
-  background:linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0));
+  flex:0 0 auto;padding:9px 12px 10px;
+  background:linear-gradient(180deg, #1B2431, #161E29);
+  border-bottom:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
 }
 .tabs{display:flex;flex-wrap:wrap;gap:6px;min-width:0;}
+/* 筛选键 = 控制台小键帽：硬描边 + 顶高光；选中翻成黄铜键帽 */
 .tab{
   flex:0 0 auto;display:flex;align-items:center;gap:5px;height:28px;padding:0 10px;
-  border-radius:14px;border:1px solid var(--line);background:rgba(255,255,255,0.055);
+  border-radius:var(--r-sm);border:1px solid var(--con-edge);
+  background:linear-gradient(180deg,#2A3546,#1E2734);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.085);
   color:var(--ink-dim);font-size:11.5px;font-weight:700;letter-spacing:.2px;
   transition:background .18s var(--ease),color .18s var(--ease),
              border-color .18s var(--ease),transform .12s var(--ease);
 }
-.tab:active{transform:scale(.93);}
-.tab i{width:7px;height:7px;border-radius:50%;display:block;flex:0 0 auto;
-  box-shadow:0 0 0 2px rgba(255,255,255,.08);}
+.tab:active{transform:translateY(1px);}
+.tab i{width:7px;height:7px;border-radius:2px;display:block;flex:0 0 auto;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35);}
 .tab b{font-size:9.5px;font-weight:800;opacity:.55;font-variant-numeric:tabular-nums;}
 .tab.on{
-  background:linear-gradient(180deg,var(--gold-soft),var(--gold));
-  border-color:rgba(255,255,255,0.42);color:#3A2A08;
-  box-shadow:0 2px 9px rgba(232,182,76,.30);
+  background:linear-gradient(180deg,#F9E2A8,var(--gold) 58%,#D19B34);
+  border-color:#6B4A12;color:#3A2A08;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55);
 }
-.tab.on b{opacity:.78;}
-.tab.on i{box-shadow:0 0 0 2px rgba(58,42,8,.20);}
+.tab.on b{opacity:.72;}
+.tab.on i{box-shadow:0 0 0 1px rgba(58,42,8,.30);}
 
 /* ============================================================
    蓝图页：左大右小 + 底部 dock
@@ -549,10 +658,12 @@ canvas{display:block;}
 
 /* 圆环图 */
 .dp-ring-row{
-  display:flex;align-items:center;gap:16px;
-  padding:10px 0 14px;border-bottom:1px solid rgba(255,255,255,0.07);
+  display:flex;align-items:center;gap:14px;
+  padding:12px 0 16px;border-bottom:1px solid rgba(255,255,255,0.07);
 }
-.dp-ring-row svg{flex:0 0 auto;filter:drop-shadow(0 0 10px rgba(232,182,76,0.10));}
+/* 幸福环是全页的视觉锚点：放大到 156（viewBox 仍是 120，等比放大），
+   外圈 30 颗珠按幸福度点亮 —— 它是刻度，不是装饰。 */
+.dp-ring-row svg{flex:0 0 auto;filter:drop-shadow(0 0 14px rgba(232,182,76,0.12));}
 .dp-ring-body{flex:1 1 auto;min-width:0;}
 .dp-ring-lbl{font-size:10.5px;color:var(--ink-faint);letter-spacing:.4px;}
 .dp-ring-val{font-size:34px;font-weight:800;color:var(--ink);line-height:1.02;
@@ -762,10 +873,24 @@ canvas{display:block;}
 .udm-h span.down{color:var(--warn);}
 
 .mtitle{
-  font-size:11px;font-weight:800;color:var(--ink-faint);letter-spacing:1.6px;
-  margin:22px 0 4px;
+  display:flex;align-items:center;gap:9px;
+  font-size:11px;font-weight:800;color:var(--ink-paper-dim);letter-spacing:1.8px;
+  margin:24px 0 7px;
 }
 .mtitle:first-child{margin-top:0;}
+/* 段题前置一枚金色刻度块 —— 控制台面板的"分区标签" */
+.mtitle::before{
+  content:"";width:3px;height:11px;border-radius:2px;flex:0 0 auto;
+  background:linear-gradient(180deg,var(--gold-soft),#B8842A);
+  box-shadow:0 0 0 1px rgba(0,0,0,.38);
+}
+/* 段题右侧延伸一条珠串：比 1px 细线更清楚地说明"下一段开始了" */
+.mtitle::after{
+  content:"";flex:1 1 auto;height:5px;min-width:20px;
+  background-image:radial-gradient(circle, var(--bead) 1.1px, transparent 1.2px);
+  background-size:8px 5px;background-repeat:repeat-x;background-position:0 center;
+  opacity:.42;
+}
 .mbar{
   height:12px;border-radius:6px;background:rgba(255,255,255,0.07);overflow:hidden;
   box-shadow:inset 0 2px 3px rgba(0,0,0,.40), inset 0 1px 0 rgba(0,0,0,.18);
@@ -823,13 +948,16 @@ canvas{display:block;}
   background:linear-gradient(90deg, transparent, rgba(232,182,76,.28), transparent);
 }
 .bv-dock button{
-  flex:1 1 0;height:52px;border-radius:13px;
+  flex:1 1 0;height:52px;border-radius:14px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
   font-size:10.5px;font-weight:700;letter-spacing:.4px;
-  background:linear-gradient(180deg, rgba(255,255,255,.085), rgba(255,255,255,.03));
-  border:1px solid rgba(255,255,255,.10);color:var(--ink-dim);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.09), 0 2px 8px rgba(0,0,0,.24);
-  transition:transform .14s var(--ease),background .2s,color .2s,border-color .2s;
+  /* 与底栏 dock 同一套「钉板豆槽」语言：内凹 + 下缘见光 */
+  background:linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.10));
+  border:1px solid rgba(237,228,210,.08);color:var(--ink-dim);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.46),
+             inset 0 -1px 0 rgba(237,228,210,.10),
+             0 1px 0 rgba(0,0,0,.30);
+  transition:transform .14s var(--ease),background .2s,color .2s,border-color .2s,box-shadow .2s;
 }
 .bv-dock button svg{
   width:20px;height:20px;display:block;
@@ -910,12 +1038,160 @@ canvas{display:block;}
   .hud-stat b{font-size:14.5px;}
   .hud-left{padding:8px 10px 7px 11px;}
   .city-name{font-size:17px;}
+  #demand{padding:6px 21px 6px;}
+  .ov-title{font-size:17px;}
+  .ov-title-wrap{padding-left:11px;}
+  /* 幸福环等比收回，给右侧数值留出宽度 */
+  .dp-ring-row{gap:11px;}
+  .dp-ring-row svg{width:132px;height:132px;}
+  .dp-ring-val{font-size:30px;}
 }
 @media (max-height:620px){
-  #hud{padding-top:calc(7px + var(--safe-top));padding-bottom:7px;}
+  /* 原来这里是 padding-top:calc(7px + var(--safe-top))。
+     --safe-top 现在含 --top-gap 50px，矮屏顶栏会被撑高 50px ——
+     与「压缩顶栏给城市留空间」的意图正好相反，改为直接收内边距。 */
+  #hud{margin:0 8px 2px;}
+  .hud-left{padding:6px 10px 5px 12px;}
+  .hud-stat{padding:5px 9px 5px;}
   .city-name{font-size:15px;}
-  #demand{gap:5px;padding:5px 10px 6px;}
+  #demand{gap:5px;padding:4px 20px 5px;}
 }
+/* ============================================================
+   第十三轮 · 市政控制台：把第二批"玻璃面"统一改成实体面板。
+   原有的 1px 亮线 / 外发光 / 半透明底都是为玻璃设计的，
+   放到不透明暗面板上会发白、发飘 —— 这里统一收口。
+   ============================================================ */
+
+/* 1) 分隔线：亮线 → 暗缝 + 一道极淡亮边 */
+.dp-title,.dp-ring-row,.dp-inc,.dp-util,.dp-unlock,.hp,.uhero,.urow,.ures,.udm{
+  border-bottom-color:rgba(0,0,0,.45);
+  box-shadow:0 1px 0 rgba(255,255,255,.045);
+}
+
+/* 2) 仪表条：一律深色凹槽 + 平色填充，去掉发光 */
+.dp-util-bar,.dp-unlock-bar,.dp-cat-bar,.mbar,.dp-stack,.uhero-bar,.udm .bar{
+  background:linear-gradient(180deg,#0D131C,#141C27);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.50);
+}
+.dp-util-bar{height:9px;border-radius:var(--r-sm);}
+/* 4px 细线再叠 1px 描边只剩 2px，根本读不出余量 —— 统一抬到 6–7px */
+.dp-unlock-bar{height:6px;border-radius:var(--r-sm);}
+.ures .mbar{height:7px;border-radius:var(--r-sm);}
+.uhero-bar{height:6px;border-radius:var(--r-sm);}
+.dp-util-bar span,.uhero-bar span,.dp-unlock-bar span,.ures .mbar span{
+  border-radius:3px;box-shadow:none;
+}
+.mbar span,.mbar.short span{box-shadow:none;}
+.dp-stack{border-radius:var(--r-sm);}
+.dp-stack i{box-shadow:none;}
+
+/* 3) 诊断块 → 控制台提示条：硬边、按状态分底色 */
+.udiag{
+  border-radius:var(--r-sm);
+  background:linear-gradient(180deg,#212B39,#1A222E);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06), 0 2px 0 rgba(0,0,0,.38);
+}
+.udiag.ok{background:linear-gradient(180deg,#1D3229,#172A22);}
+.udiag.warn{background:linear-gradient(180deg,#332C1C,#2A2418);}
+.udiag.bad{background:linear-gradient(180deg,#34201E,#2A1A19);}
+
+/* 4) 蓝图页：蓝印纸的身份保留，但边缘换成硬框，不再用柔光投影 */
+.bp-feat{
+  border-radius:var(--r-md);
+  border:1px solid #0A1119;
+  box-shadow:inset 0 0 0 1px rgba(120,160,220,.10),
+             inset 0 1px 0 rgba(255,255,255,.06),
+             0 3px 0 rgba(0,0,0,.46);
+}
+.bp-feat-thumb,.bp-strip-item,.bp-strip-item .pic,.dp-unlock .pic{border-radius:var(--r-sm);}
+.bp-strip-item.on{
+  background:linear-gradient(180deg,rgba(232,182,76,.16),rgba(232,182,76,.06));
+  border-color:#8C6420;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08);
+}
+
+/* 5) 蓝图底栏 / 弹窗 / toast：同一套键帽材质 */
+.bp-dock{
+  background:linear-gradient(180deg,#1B2431,#131A25);
+  border-top:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line);
+}
+.bp-dock::before,.bv-dock::before{
+  left:12px;right:12px;top:0;height:2px;border-radius:0 0 2px 2px;
+  background:linear-gradient(90deg,transparent,rgba(232,182,76,.42),transparent);
+}
+.bp-dock-x{
+  border-radius:var(--r-md);
+  background:linear-gradient(180deg,#33405A,#1B2431);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             inset 0 -2px 0 rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.48);
+}
+.bp-dock-x:active{transform:translateY(2px);background:linear-gradient(180deg,#2A3547,#1B2431);}
+.bp-dock-cta{
+  border-radius:var(--r-md);
+  background:linear-gradient(180deg,#F9E2A8 0%, var(--gold) 58%, #D19B34 100%);
+  border:1px solid #6B4A12;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62),
+             inset 0 -2px 0 rgba(120,78,10,.42), 0 2px 0 rgba(0,0,0,.55);
+}
+.bp-dock-cta:active{transform:translateY(2px);box-shadow:inset 0 2px 6px rgba(90,58,6,.5);}
+.bp-dock-cta.gray{
+  background:linear-gradient(180deg,#2A3546,#1B2431);
+  border-color:var(--con-edge);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+.bp-dock-cta.blue{
+  background:linear-gradient(180deg,#9ADCFF,#4FA8C7);border-color:#1D4A5C;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.50),
+             inset 0 -2px 0 rgba(10,60,80,.35), 0 2px 0 rgba(0,0,0,.50);
+}
+.modal-card{
+  border-radius:var(--r-lg);
+  background:linear-gradient(180deg,#2A3547 0%, #1B2431 55%, #161E29 100%);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             0 4px 0 rgba(0,0,0,.50), 0 18px 44px rgba(0,0,0,.55);
+}
+.modal-btns button{
+  border-radius:var(--r-sm);
+  background:linear-gradient(180deg,#33405A,#1B2431);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             inset 0 -2px 0 rgba(0,0,0,.28), 0 2px 0 rgba(0,0,0,.48);
+}
+.modal-btns button:active{transform:translateY(2px);}
+.modal-btns button.main{
+  background:linear-gradient(180deg,#F9E2A8,var(--gold) 58%,#D19B34);
+  border-color:#6B4A12;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62),
+             inset 0 -2px 0 rgba(120,78,10,.42), 0 2px 0 rgba(0,0,0,.55);
+}
+.modal-btns button.ghost,.ov-foot button.ghost{
+  background:linear-gradient(180deg,rgba(214,84,75,.30),rgba(214,84,75,.14));
+  border-color:rgba(214,84,75,.55);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08),
+             inset 0 -2px 0 rgba(0,0,0,.25), 0 2px 0 rgba(0,0,0,.45);
+}
+#toast{
+  border-radius:var(--r-md);
+  background:linear-gradient(180deg,#2A3547,#161E29);
+  border:1px solid var(--con-edge);
+  box-shadow:inset 0 1px 0 var(--con-hi-line),
+             0 4px 0 rgba(0,0,0,.50), 0 8px 22px rgba(0,0,0,.50);
+}
+
+/* 6) 拼豆台：选中态同步硬边材质 */
+.bv-dock button.on{
+  background:linear-gradient(180deg,rgba(232,182,76,.28),rgba(232,182,76,.14));
+  border-color:#8C6420;color:var(--gold-soft);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.16);
+}
+
+/* 7) 资源栏顶缘那道金线会和资源格的颜色刻度打架，去掉 */
+#hud::after{background:none;}
 </style>
 </head>
 <body>
@@ -930,9 +1206,9 @@ canvas{display:block;}
       <div class="city-sub" id="citySub">人口 0 · 岗位 0</div>
     </div>
     <div class="hud-stats">
-      <div class="hud-stat"><b id="vCoins" class="gold">0</b><span>金币</span></div>
-      <div class="hud-stat"><b id="vPop" class="pop">0</b><span>人口</span></div>
-      <div class="hud-stat"><b id="vHappy" class="happy">50</b><span>幸福</span></div>
+      <div class="hud-stat st-coin"><b id="vCoins" class="gold">0</b><span>金币</span></div>
+      <div class="hud-stat st-pop"><b id="vPop" class="pop">0</b><span>人口</span></div>
+      <div class="hud-stat st-happy"><b id="vHappy" class="happy">50</b><span>幸福</span></div>
     </div>
     <button id="btnSound" class="hud-snd" aria-label="声音开关">
       <svg class="ico-on" viewBox="0 0 24 24"><path d="M4 9.4h3.3L12 5.4v13.2L7.3 14.6H4z"/><path d="M15.7 9.2a4.2 4.2 0 0 1 0 5.6"/><path d="M18.2 6.6a7.7 7.7 0 0 1 0 10.8"/></svg>
@@ -1020,7 +1296,7 @@ canvas{display:block;}
 
     <!-- 圆环：幸福度 -->
     <div class="dp-ring-row">
-      <svg id="dpRing" width="120" height="120" viewBox="0 0 120 120"></svg>
+      <svg id="dpRing" width="156" height="156" viewBox="0 0 120 120"></svg>
       <div class="dp-ring-body">
         <div class="dp-ring-lbl">城市幸福度</div>
         <div class="dp-ring-val"><span id="dpHappyVal">50</span><b> · 100</b></div>

@@ -944,11 +944,12 @@ function modal(title, bodyHtml, btns){
     };
     box.appendChild(el);
   });
-  $('modal').classList.add('show'); sfx('open');
+  $('modal').classList.add('show'); sfx('open'); resetScroll($('modal'));
 }
 function hideModal(){ $('modal').classList.remove('show'); sfx('shut'); }
-function showOverlay(el){ el.classList.add('show'); sfx('open'); }
+function showOverlay(el){ resetScroll(el); el.classList.add('show'); sfx('open'); }
 function hideOverlay(el){ el.classList.remove('show'); sfx('shut'); }
+function resetScroll(el){ if(!el||!el.querySelectorAll) return; var b=el.querySelectorAll('.ov-scroll, .modal-body'); for(var i=0;i<b.length;i++) b[i].scrollTop=0; }
 
 // ====================================================================== 音频
 // 全部用 Web Audio 实时合成，不引入任何音频文件 —— 本工具的硬约束是零外部资源、
@@ -1737,6 +1738,18 @@ function renderRing(svg, val){
   var color = pct >= 0.6 ? '#5DBE8A' : (pct >= 0.4 ? '#E8B64C' : '#D6544B');
   var C = 2 * Math.PI * r;
   var html = '';
+  // 烫盘底：环内一层极淡的暖面，让中央数字像压在熨烫过的拼豆盘上
+  html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + (r - w / 2 - 2) + '" ' +
+          'fill="rgba(237,228,210,0.04)"/>';
+  // 珠圈刻度：环外一圈 30 颗小珠，点亮到与幸福度等高的刻度线。
+  // 它承载信息（亮珠数 = 数值），不是装饰 —— 全站「珠子 = 拼豆」的语义在这里收口。
+  var N = 30, litN = Math.round(pct * N);
+  for (var k = 0; k < N; k++) {
+    var a = (k / N) * Math.PI * 2 - Math.PI / 2;
+    html += '<circle cx="' + (cx + Math.cos(a) * 56).toFixed(2) +
+            '" cy="' + (cy + Math.sin(a) * 56).toFixed(2) +
+            '" r="1.5" fill="' + color + '" opacity="' + (k < litN ? 0.85 : 0.16) + '"/>';
+  }
   // 背景圆
   html += '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" ' +
           'stroke="rgba(255,255,255,0.08)" stroke-width="' + w + '"/>';
