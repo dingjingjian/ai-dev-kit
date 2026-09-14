@@ -16,17 +16,19 @@
   --border-gold:rgba(212,175,55,0.28);
   --shadow:rgba(0,0,0,0.45);
   --ease:cubic-bezier(.2,.7,.3,1); --ease-back:cubic-bezier(.2,1.4,.4,1);
-  /* 安全区：PC 模拟器注入 --safe-area-inset-* 变量，真机走 env()，两者都要兼容 */
-  --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  /* 顶部强制留白：小红书 iframe 里 env(safe-area-inset-top) 恒为 0，
+     顶栏会直接顶在屏幕最上沿（被宿主 UI / 小工具自带按钮压住）。
+     用一条显式常量留白，顶栏整体下移 —— 上方露出背景，不再是一整块面板。
+     改这一个值就能调，body / .overlay 都跟着它走。（参照 perler-city 的 --top-gap 机制） */
+  --top-gap:50px;
+  --safe-top:calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
   --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-l:0px;
   --safe-r:0px;
 }
-body.in-app{
-  --safe-top:calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 40px);
-  --safe-l:48px;
-  --safe-r:92px;
-}
+/* 小红书宿主内嵌：左右安全区给宿主按钮预留空间。
+   顶部预留已由 :root 的 --top-gap 无条件承担，不再依赖 body.in-app 被注入。 */
+body.in-app{ --safe-l:48px; --safe-r:92px; }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
