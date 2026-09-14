@@ -3,265 +3,642 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>世界美食大百科</title>
+<title>世界美食大百科 · 寰宇小馆</title>
 <style>
+  /* ===== 寰宇小馆 · 中式老馆视觉体系 =====
+     木（枣木）/ 铜 / 宣纸 / 朱 / 墨，五色定调；七套大洲主题共用这五个变量名换色。
+     字体走衬线（宋），数字走 Georgia，tabular-nums 对齐。
+     结构：菜单页 / 菜品页 / 品鉴页（上菜专用大图）/ 总结页（风味总结）为文档流主体，
+     地球降为「定位组件」（#globeSlot）。
+     菜单页无顶栏牌匾、无顶部留白：大洲横幅自 y=0 通栏铺满，标题压在图上，
+     菜系页签咬在横幅下沿，列表紧接其下。
+     移动端优先：地球仅在菜品页内嵌；无设置抽屉、无桌面端侧栏。
+
+  /* ===== 图片素材图位（逐项规格见 docs/图片素材需求.md）=====
+     ① 菜品图 ×35   assets/foods/<slug>.webp    512×512，主体居中留白。用于 .dthumb（菜品页）、
+                                                .sv-img（品鉴页大图）与 .mthumb（菜单行小图）；
+                                                路径写在 foods.js 的 img 字段，缺图或加载失败时
+                                                回退该条的 color 色卡（见 app.js）
+     ② 餐厅背景     assets/tex/room-360.jpg     天空球贴图（地球组件的场景底）。未生成，暂由 .sky 的程序化
+                                                暖调星空承担 —— 见 app.js 的 starfieldTex()
+     ③ 木牌木纹     assets/tex/wood-sign.webp   512×512 可平铺。已用作横幅的兜底纹理层
+                                                （各洲横幅未生成时，木纹 + 主题渐变顶上）
+     ④ 桌沿木纹     assets/tex/wood-desk.webp   512×512 可平铺。已用于四条底部操作栏
+                                                的上缘木线（.orderbar / .dish-actions /
+                                                .serve-bar / .sum-bar，四者共用一套壳体）
+     ⑤ 朱印章       assets/props/seal.png       暂未接入（原招牌朱印随顶栏牌匾一并移除）
+     ⑥ 各洲横幅 ×7  assets/tex/banner-<key>.webp
+                                                1800×480（约 3.75:1），key = all / asia / europe /
+                                                africa / nam / sam / oce。已用于菜单页 .menu-hero，
+                                                以 cover 铺满（上下各留 8% 安全边）。
+                                                CSS 变量 --banner-img 按 body[data-ctn] 切换；
+                                                未生成时该层 404，退到木纹 + 主题渐变，不影响功能。
+                                                逐张画面要求见 docs/背景横幅配图需求.md
+     ⑦ 缺图占位     assets/foods/_placeholder.webp
+                                                备用，未接入 —— 回退一律走 color 色卡，不留白盘占位 */
+
   :root{
-    --bg:#1a0e06;--bg2:#2a160a;
-    --acc:#e63946;--acc2:#f77f00;--warm:#fcbf49;--hot:#d62828;--mint:#06d6a0;--ink:#2d1810;
-    --paper:#fff8ee;--paper2:#ffeed8;--paper3:#ffe4c4;
-    --txt:#2d1810;--mut:#8a5a32;--dim:#b8896a;
-    --line:rgba(180,100,40,.22);--line2:rgba(220,130,50,.35);
-    --shadow:0 8px 30px rgba(60,30,10,.18);
+    /* 全球（默认）：枣木 / 铜 / 宣纸 / 朱 / 墨 —— 寰宇小馆本体 */
+    --wood-9:#1a0c06;--wood-8:#2b150c;--wood-7:#3d1f12;--wood-6:#532b17;--wood-5:#6b3a1e;--wood-4:#8a5230;
+    --brass:#b0894a;--brass-2:#d8b06a;
+    --paper:#f7eedd;--paper-2:#f2e3c8;--paper-3:#e8d5b0;--paper-4:#d9c19a;
+    --red:#a52a1f;--red-2:#c2402f;
+    --ink:#241610;--ink-2:#7a5c44;--ink-3:#a98b70;--ink-4:#c7b295;
+    --line:rgba(140,90,45,.30);--line-2:rgba(176,137,74,.45);
+    --halo:rgba(176,137,74,.22);        /* 页签选中态外圈的柔光，随本洲铜色走 */
+    /* 横幅兜底：图未生成时由「主题渐变 + 木纹」顶上，不是空白 */
+    --hero-fallback:linear-gradient(112deg,#3d1f12,#6b3a1e 46%,#2b150c);
+    --banner-img:url('./assets/tex/banner-all.webp');
+
+    --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --shadow:0 10px 34px rgba(0,0,0,.45);
+    /* 布局 */
+    --dishbar:52px;--globem:218px;
+    /* 横幅高度：Chrome 61 没有 clamp()，基线给固定值，按视口高分档见样式末尾 */
+    --hero-h:118px;--tabs-h:36px;
+    /* 刘海 / 手势条安全区：基线一律取 0。
+       env() 是 Chrome 69 的能力，Chrome 61 不认识它 —— 但自定义属性会把
+       env() 这个 token 原样收下，等到 calc() 里展开时才失效，连带把整条
+       padding / height 声明丢掉（不是退回 0，是整条作废）。故 env() 不能直接
+       写在这里，必须由下面的 @supports 块接管：Chrome 61 判定条件为假 → 整块
+       跳过 → 变量保持上面的基线值。 */
+    --sat:0px;
+    --sattop:8px;
+    --sab:0px;
   }
+  /* 安全区增强层：只有认得 env() 的内核才会进来 */
+  @supports (top:env(safe-area-inset-top)){
+    :root{
+      --sat:env(safe-area-inset-top,0px);
+      --sattop:calc(8px + env(safe-area-inset-top,0px));
+      --sab:env(safe-area-inset-bottom,0px)}
+  }
+
+  /* ===== 大洲配色主题 =====
+     切页签时由 app.js 写 body[data-ctn]，一组变量整页换装：
+     深色底 / 铜 / 纸 / 强调色（朱位）/ 墨 / 线 / 横幅图。
+     变量名沿用同一套，故菜单、菜品、品鉴、总结、地球槽、底栏一并跟随。 */
+  /* 亚洲：漆朱 · 墨 · 金 */
+  body[data-ctn="asia"]{
+    --wood-9:#12090a;--wood-8:#241014;--wood-7:#37161a;--wood-6:#4d1f22;--wood-5:#68282b;--wood-4:#8c3a38;
+    --brass:#cf9f4a;--brass-2:#e8c377;
+    --paper:#fbf7f0;--paper-2:#f4ede1;--paper-3:#e9dfd0;--paper-4:#d8cab6;
+    --red:#c1272d;--red-2:#d9433f;
+    --ink:#1d1416;--ink-2:#7c6154;--ink-3:#ab9084;--ink-4:#cbb8ac;
+    --line:rgba(150,100,70,.30);--line-2:rgba(207,159,74,.48);--halo:rgba(207,159,74,.26);
+    --hero-fallback:linear-gradient(112deg,#37161a,#8c3a38 52%,#12090a);
+    --banner-img:url('./assets/tex/banner-asia.webp')}
+  /* 欧洲：墨蓝 · 鎏金 · 酒红 */
+  body[data-ctn="europe"]{
+    --wood-9:#0a0f1a;--wood-8:#131b2b;--wood-7:#1d2739;--wood-6:#2a3648;--wood-5:#3a4759;--wood-4:#55647a;
+    --brass:#c9a24a;--brass-2:#e5c884;
+    --paper:#f7f4ec;--paper-2:#efeade;--paper-3:#e2dbc9;--paper-4:#d0c7b1;
+    --red:#8d2b3a;--red-2:#a83a4a;
+    --ink:#141a24;--ink-2:#6d7382;--ink-3:#9ba1ae;--ink-4:#bfc4ce;
+    --line:rgba(90,105,135,.30);--line-2:rgba(201,162,74,.48);--halo:rgba(201,162,74,.30);
+    --hero-fallback:linear-gradient(112deg,#1d2739,#55647a 52%,#0a0f1a);
+    --banner-img:url('./assets/tex/banner-europe.webp')}
+  /* 非洲：落日赭 · 陶土 · 沙金 */
+  body[data-ctn="africa"]{
+    --wood-9:#1a0d05;--wood-8:#2e1608;--wood-7:#43200e;--wood-6:#5c3016;--wood-5:#774120;--wood-4:#9a5c2f;
+    --brass:#d9a441;--brass-2:#f0c46e;
+    --paper:#faf0e0;--paper-2:#f4e5cc;--paper-3:#e8d3ae;--paper-4:#d8bd91;
+    --red:#d2622a;--red-2:#e8813c;
+    --ink:#221408;--ink-2:#7d5a38;--ink-3:#ac8a63;--ink-4:#cbb18e;
+    --line:rgba(150,100,50,.30);--line-2:rgba(217,164,65,.48);--halo:rgba(217,164,65,.26);
+    --hero-fallback:linear-gradient(112deg,#43200e,#9a5c2f 54%,#1a0d05);
+    --banner-img:url('./assets/tex/banner-africa.webp')}
+  /* 北美：炭黑 · 番茄红 · 芥末黄 */
+  body[data-ctn="nam"]{
+    --wood-9:#12100e;--wood-8:#1f1b18;--wood-7:#2c2723;--wood-6:#3b3430;--wood-5:#4d4540;--wood-4:#6a605a;
+    --brass:#c8a24b;--brass-2:#e3c877;
+    --paper:#f9f6ef;--paper-2:#f1ece1;--paper-3:#e4ddd0;--paper-4:#d3cabc;
+    --red:#c0392b;--red-2:#d94f3d;
+    --ink:#191614;--ink-2:#6f6862;--ink-3:#9d968f;--ink-4:#c2bcb5;
+    --line:rgba(120,112,102,.30);--line-2:rgba(200,162,75,.48);--halo:rgba(200,162,75,.26);
+    --hero-fallback:linear-gradient(112deg,#2c2723,#6a605a 52%,#12100e);
+    --banner-img:url('./assets/tex/banner-nam.webp')}
+  /* 南美：雨林绿 · 青柠 · 辣椒红 */
+  body[data-ctn="sam"]{
+    --wood-9:#08150f;--wood-8:#11261a;--wood-7:#1a3626;--wood-6:#254935;--wood-5:#33604a;--wood-4:#4a7d63;
+    --brass:#cfa93c;--brass-2:#efd071;
+    --paper:#fbf8ec;--paper-2:#f4efdb;--paper-3:#e9e1c6;--paper-4:#d9cfab;
+    --red:#e0453a;--red-2:#ef6449;
+    --ink:#0f1b13;--ink-2:#5d6b58;--ink-3:#8f9c88;--ink-4:#b8c2b1;
+    --line:rgba(100,130,105,.30);--line-2:rgba(207,169,60,.48);--halo:rgba(207,169,60,.26);
+    --hero-fallback:linear-gradient(112deg,#1a3626,#4a7d63 52%,#08150f);
+    --banner-img:url('./assets/tex/banner-sam.webp')}
+  /* 大洋洲：海礁青 · 珊瑚 · 沙金 */
+  body[data-ctn="oce"]{
+    --wood-9:#05121a;--wood-8:#0b2130;--wood-7:#123040;--wood-6:#1a4356;--wood-5:#235a70;--wood-4:#35778e;
+    --brass:#cdb069;--brass-2:#e6cf94;
+    --paper:#f7f6f1;--paper-2:#efeee6;--paper-3:#e1e0d4;--paper-4:#cfcdbd;
+    --red:#d9614c;--red-2:#e8805f;
+    --ink:#0d1a20;--ink-2:#5f7078;--ink-3:#92a2a8;--ink-4:#bac5c9;
+    --line:rgba(95,120,135,.30);--line-2:rgba(205,176,105,.48);--halo:rgba(205,176,105,.26);
+    --hero-fallback:linear-gradient(112deg,#123040,#35778e 52%,#05121a);
+    --banner-img:url('./assets/tex/banner-oce.webp')}
   *{margin:0;padding:0;box-sizing:border-box}
-  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
-  body{background:radial-gradient(ellipse 80% 60% at 50% 35%,var(--bg2),var(--bg) 70%,#0d0603 100%)}
-  #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  body{background:radial-gradient(ellipse 78% 54% at 50% 6%,var(--wood-6),var(--wood-8) 56%,var(--wood-9) 100%)}
 
-  /* ===== 顶部 ===== */
-  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:85px 14px 12px;z-index:10;pointer-events:none}
-  .brand{display:flex;align-items:center;gap:11px;background:var(--paper);border:2px solid var(--paper3);border-radius:999px;padding:8px 20px 8px 9px;pointer-events:auto;box-shadow:var(--shadow)}
-  .brand .logo{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffe5b4,#fcbf49 30%,#f77f00 65%,#d62828);box-shadow:0 0 14px rgba(247,127,0,.5),inset 0 -3px 6px rgba(0,0,0,.2);position:relative;flex-shrink:0}
-  .brand .logo::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.65),transparent 42%)}
-  .brand .tname{font-size:17px;font-weight:800;color:var(--hot);letter-spacing:.5px;line-height:1.1}
-  .brand .tsub{font-size:11px;color:var(--acc2);margin-top:2px;font-weight:600}
-  .top-actions{display:flex;align-items:center;gap:10px;pointer-events:auto}
-  .menu-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:11px 20px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(230,57,70,.4),inset 0 1px 0 rgba(255,255,255,.3);transition:.15s;letter-spacing:1px}
-  .menu-btn:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(230,57,70,.5),inset 0 1px 0 rgba(255,255,255,.3)}
-  .menu-btn:active{transform:translateY(0)}
-  .menu-btn .ico{font-size:17px}
-  .gear{width:42px;height:42px;border-radius:50%;background:var(--paper);border:2px solid var(--paper3);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);transition:.15s}
-  .gear:hover{background:var(--paper2)}
-  .gear svg{width:19px;height:19px;fill:none;stroke:var(--acc2);stroke-width:1.8}
+  /* ===== 地球定位组件 ===== */
+  .globe-slot{position:fixed;z-index:15;overflow:hidden;
+    background:radial-gradient(ellipse 80% 62% at 50% 12%,var(--wood-6),var(--wood-8) 62%,var(--wood-9));
+    box-shadow:0 0 0 1px var(--brass),0 0 0 4px rgba(43,21,12,.92),0 0 0 5px rgba(176,137,74,.3),0 14px 40px rgba(0,0,0,.5)}
+  .globe-slot canvas{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  .globe-light{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+    background:
+      radial-gradient(ellipse 66% 42% at 50% -8%,rgba(255,198,124,.20),transparent 72%),
+      radial-gradient(ellipse 120% 92% at 50% 48%,transparent 44%,rgba(14,5,1,.62) 100%)}
+  .globe-tags{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
+  .globe-cap{position:absolute;left:0;right:0;bottom:0;padding:7px 12px;pointer-events:none;
+    font-size:11.5px;color:var(--brass-2);letter-spacing:1.5px;font-variant-numeric:tabular-nums;
+    display:flex;align-items:baseline;justify-content:space-between;
+    background:linear-gradient(0deg,rgba(20,8,3,.85),rgba(20,8,3,0))}
+  .globe-cap .gname{color:var(--paper);font-family:var(--serif);letter-spacing:2px;font-size:12.5px}
+  .globe-cap .gcoord{font-family:var(--sans);opacity:.85;margin-left:8px}   /* gap 基线 */
 
-  /* ===== 底部大洲过滤 ===== */
-  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;background:var(--paper);border:2px solid var(--paper3);border-radius:999px;padding:6px;box-shadow:0 6px 28px rgba(60,30,10,.25);z-index:10;pointer-events:auto;max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
-  .dock::-webkit-scrollbar{display:none}
-  .dock.scrollable{-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
-  .dock button{border:none;background:transparent;color:var(--mut);font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:999px;cursor:pointer;transition:.18s;white-space:nowrap;flex-shrink:0;margin-left:6px}
-  .dock button:first-child{margin-left:0}
-  .dock button:hover{color:var(--acc);background:var(--paper2)}
-  .dock button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 3px 12px rgba(230,57,70,.4)}
-  .dock button .cnt{font-size:10px;opacity:.8;margin-left:4px;font-variant-numeric:tabular-nums}
+  /* ===== 3D 降级层：无 WebGL / 无 THREE 时压在画布上 =====
+     地球只是「标产地」的组件，它挂了不该连累整页 —— 菜单、菜品介绍、点单上菜、
+     风味总结全部照常。降级层不盖住 .globe-cap，菜名与经纬度照旧读得到。 */
+  .globe-down{position:absolute;top:0;right:0;bottom:0;left:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;padding:0 26px 26px;text-align:center;
+    background:radial-gradient(ellipse 74% 58% at 50% 38%,var(--wood-6),var(--wood-8) 62%,var(--wood-9))}
+  .globe-down.show{display:flex}
+  .globe-down .gd-ttl{font-size:14px;color:var(--paper);letter-spacing:3px}
+  .globe-down .gd-sub{margin-top:9px;font-size:11.5px;line-height:1.9;color:var(--ink-3);letter-spacing:1px}
 
-  /* ===== 美食详情卡片 ===== */
-  .card{position:fixed;left:50%;bottom:80px;transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--paper);border:2px solid var(--paper3);border-radius:22px;padding:18px 20px 16px;box-shadow:0 16px 50px rgba(60,30,10,.3);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
-  .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-  .card .chead{display:flex;align-items:flex-start;gap:13px}
-  .card .swatch{width:58px;height:58px;border-radius:50%;flex-shrink:0;background:var(--acc);box-shadow:0 4px 16px rgba(230,57,70,.4),inset 0 -4px 10px rgba(0,0,0,.25),inset 0 3px 8px rgba(255,255,255,.3);position:relative;overflow:hidden;border:3px solid var(--paper2)}
-  .card .swatch::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.6),transparent 50%)}
-  .card .ctitle{flex:1;min-width:0;padding-top:2px}
-  .card .cname{font-size:20px;font-weight:800;color:var(--ink);line-height:1.2}
-  .card .cloc{font-size:12.5px;color:var(--acc2);margin-top:5px;display:flex;align-items:center;gap:5px;font-weight:600}
-  .card .cloc::before{content:"📍";font-size:13px}
-  .card .cintro{font-size:13.5px;color:var(--txt);margin-top:13px;line-height:1.7;letter-spacing:.2px}
-  .card .csection{margin-top:13px}
-  .card .clabel{font-size:10px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;font-weight:700}
-  .card .cchips{display:flex;flex-wrap:wrap;gap:6px}
-  .card .cchip{font-size:11.5px;background:var(--paper2);border:1px solid var(--line2);color:var(--acc);border-radius:8px;padding:4px 10px;font-weight:600}
-  .card .cchip.ing{background:#fff4e0;border-color:rgba(252,191,73,.4);color:#b8860b}
-  .card .cclose{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:50%;background:var(--paper2);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s}
-  .card .cclose:hover{background:var(--acc);color:#fff;transform:rotate(90deg)}
+  /* ===== 页面容器 ===== */
+  .page{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column}
+  body.mode-menu .page-menu{display:flex}
+  body.mode-dish .page-dish{display:flex}
+  body.mode-serve .page-serve{display:flex}
+  body.mode-sum .page-sum{display:flex}
+  .wrap{width:100%;max-width:820px;margin:0 auto}
+  .menu-col{flex:1;min-height:0;display:flex;flex-direction:column;width:100%;max-width:820px;margin:0 auto}
 
-  /* ===== 设置浮层 ===== */
-  .sheet{position:fixed;top:0;right:0;bottom:0;width:86vw;width:min(300px,86vw);background:var(--paper);border-left:3px solid var(--paper3);z-index:20;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto;box-shadow:-8px 0 40px rgba(60,30,10,.2)}
-  .sheet.show{transform:translateX(0)}
-  .sheet h3{font-size:12px;color:var(--acc);letter-spacing:2px;margin:20px 0 12px;text-transform:uppercase;font-weight:700}
-  .sheet h3:first-child{margin-top:8px}
-  .row{display:flex;align-items:center;justify-content:space-between;margin:13px 0}
-  .row label{font-size:14px;color:var(--txt);font-weight:500}
-  .sw{position:relative;width:44px;height:25px;border-radius:13px;background:var(--paper3);cursor:pointer;transition:.2s;flex-shrink:0}
-  .sw.on{background:linear-gradient(135deg,var(--acc),var(--acc2))}
-  .sw i{position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-  .sw.on i{left:22px}
-  .sheet .close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:var(--paper2);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:16px}
-  .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(10,4,0,.4);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
-  .scrim.show{opacity:1;pointer-events:auto}
-  .sheet .stat{font-size:12.5px;color:var(--mut);line-height:1.8;margin-top:8px;padding:11px 13px;background:var(--paper2);border:1px solid var(--line);border-radius:10px}
-  .sheet .stat b{color:var(--acc);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+  /* ===== 子页上栏（菜品 / 品鉴 / 总结共用）=====
+     只放一道居中的面包屑；返回 / 退出等一律收到底部操作栏 ——
+     三个子页顶部同款，也和首页「操作在底部」的规矩一致。 */
+  .dish-bar{flex:none;height:calc(var(--dishbar) + var(--sattop));padding:var(--sattop) 14px 0;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(26,12,6,.96),rgba(26,12,6,0))}
+  .crumb{flex:0 1 auto;text-align:center;font-size:11.5px;color:var(--ink-4);letter-spacing:1.5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* ===== 城市标签 ===== */
-  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11px;color:var(--ink);background:var(--paper);border:1.5px solid var(--paper3);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(60,30,10,.15);transition:opacity .25s;z-index:5;font-weight:600}
-  .leaders{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:visible}
+  /* ===== 菜单页 ===== */
+  /* 无门头、无留白：横幅自 y=0 起通栏铺满，列表紧接其下 ——
+     菜单可视面积 = 视口高 − 横幅(含页签) − 点单栏。 */
+  .page-menu{padding-top:0;background-color:var(--wood-9)}
+  /* 大洲横幅：cover 铺满整条（高 = 图区 --hero-h + 页签 --tabs-h）。
+     两层兜底：--hero-fallback 主题渐变在下、木纹平铺次之，横幅图在最上；
+     图未生成时该层 404，只掉一层，下面两层照常显示，不会露白底。 */
+  .menu-hero{flex:none;position:relative;height:calc(var(--hero-h) + var(--tabs-h));
+    background-color:var(--wood-8);
+    background-image:var(--banner-img),var(--hero-fallback),url('./assets/tex/wood-sign.webp');
+    background-size:cover,auto,420px 420px;
+    background-position:center,center,center top;
+    background-repeat:no-repeat,no-repeat,repeat;
+    box-shadow:0 8px 22px rgba(0,0,0,.45)}
+  /* 压暗罩：左重右轻 —— 左侧是标题文字区，须压得住；右侧留给画面主体 */
+  .hero-veil{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+    background:linear-gradient(96deg,rgba(10,5,2,.82) 0%,rgba(10,5,2,.60) 34%,rgba(10,5,2,.10) 72%,rgba(10,5,2,0) 100%),
+      linear-gradient(0deg,rgba(10,5,2,.62),rgba(10,5,2,0) 58%)}
+  .hero-txt{position:absolute;left:18px;right:18px;top:0;bottom:var(--tabs-h);
+    display:flex;flex-direction:column;justify-content:center}
+  .menu-ttl{font-size:23px;font-weight:700;color:var(--paper);letter-spacing:9px;text-indent:9px;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  .menu-sub{font-size:11.5px;color:var(--brass-2);margin-top:7px;letter-spacing:2px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  .menu-stat{font-size:11px;color:var(--paper-4);margin-top:5px;letter-spacing:1.5px;font-variant-numeric:tabular-nums;
+    text-shadow:0 1px 3px rgba(0,0,0,.6)}
+  /* 页签：选中态零位移。旧版用 translateY(-5px) 上跳，两个硬伤 ——
+     ① .tabs 是 overflow-x:auto，按规范 overflow-y 也随之变 auto，上跳的 5px 会被容器裁掉；
+     ② 上跳后页签底边与列表顶之间露出 5px 深木色暗缝，纸色页签与纸色列表被切断。
+     现改为顶部朱红细线 + 纸面提亮 + 字色转朱红，只过渡颜色与 inset 阴影。 */
+  /* 页签咬在横幅下沿：纸色页签压在大洲图上，横幅与菜单连成一体，
+     标题浮在图上，列表从页签下沿开始 —— 不再有「横幅 + 标题块」两段占位。
+     padding-top:3px 给选中态外扩描边（2.5px）留空间，避免上沿被 overflow 裁掉 */
+  .tabs{position:absolute;left:0;right:0;bottom:0;height:var(--tabs-h);
+    display:flex;align-items:flex-start;overflow-x:auto;scrollbar-width:none;padding:3px 12px 0}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs button + button{margin-left:4px}          /* gap 基线 */
+  .tabs button{border:none;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:background .18s,color .18s,box-shadow .18s;
+    font-family:var(--serif);font-size:13px;font-weight:600;letter-spacing:1px;color:var(--ink-2);
+    background:linear-gradient(180deg,var(--paper-3),var(--paper-4));padding:7px 13px 9px;border-radius:3px 3px 0 0;
+    /* 不用外阴影：.tabs 的 overflow 会把向上的外阴影裁掉，写了也看不见 */
+    box-shadow:0 -1px 0 rgba(255,255,255,.5) inset,0 0 0 1px rgba(120,75,35,.38) inset}
+  .tabs button:hover{color:var(--ink);background:linear-gradient(180deg,var(--paper-2),var(--paper-3))}
+  /* 选中态要一眼看出"我现在在哪个洲"：铺本洲的深木色实底（--wood-5 → --wood-7），
+     与详情页顶部地球槽同一套洲色，故菜单页与菜品页头部读起来是一家人；
+     未选中的页签是纸色，选中即"沉下去"一块深色木牌。
+     三层标记全部走本洲变量：顶部朱线 --red、铜框 --brass、外圈柔光 --halo。
+     （旧写法是纸色底 + 朱红字，七洲差异只在 13px 的字上，几乎读不出来。） */
+  .tabs button.on{background:linear-gradient(180deg,var(--wood-5),var(--wood-7));color:var(--paper);
+    box-shadow:0 2.5px 0 var(--red) inset,0 0 0 1px var(--brass),0 0 0 2.5px var(--halo)}
+  .tabs button.on:hover{color:var(--paper);background:linear-gradient(180deg,var(--wood-4),var(--wood-6))}
+  .menu-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 14px 96px;
+    background:linear-gradient(184deg,var(--paper),var(--paper-2));
+    box-shadow:0 0 0 1px var(--brass) inset,0 0 0 4px rgba(43,21,12,.5) inset}
+  .menu-list::-webkit-scrollbar{width:6px}
+  .menu-list::-webkit-scrollbar-thumb{background:rgba(140,90,45,.32);border-radius:3px}
+  /* gap 基线：右端小字靠 margin-left:auto 顶到行尾，比 flex gap 更早可用 */
+  .sec{display:flex;align-items:center;margin:14px 0 6px;font-size:13.5px;font-weight:700;color:var(--red);letter-spacing:4px}
+  .sec:first-child{margin-top:0}
+  .sec::after{content:"";flex:1;border-bottom:1px dotted var(--line-2);transform:translateY(-4px)}
+  .mrow{display:flex;align-items:center;padding:8px 9px;border-radius:2px;cursor:pointer;transition:.15s;border:1px solid transparent}
+  .mrow > * + *{margin-left:11px}                 /* gap 基线 */
+  .mrow:hover{background:rgba(165,42,31,.06);border-color:var(--line)}
+  .mrow.added{background:rgba(165,42,31,.05)}
+  .mthumb{width:34px;height:34px;flex-shrink:0;border-radius:2px;background:var(--paper-3);background-size:cover;background-position:center;
+    box-shadow:0 0 0 1px var(--brass),0 1px 4px rgba(60,30,10,.3)}
+  .mname{font-size:14.5px;font-weight:700;color:var(--ink);letter-spacing:1.5px;flex-shrink:0}
+  .mlead{flex:1;min-width:12px;border-bottom:1px dotted var(--line-2);transform:translateY(-3px)}
+  .mmeta{font-size:11.5px;color:var(--ink-2);letter-spacing:1px;flex-shrink:0;white-space:nowrap}
+  .madd{width:24px;height:24px;flex-shrink:0;border-radius:2px;background:transparent;border:1px solid var(--line-2);color:var(--ink-2);
+    cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s;font-family:var(--sans)}
+  .madd:hover{background:var(--red);border-color:var(--red);color:#fff}
+  .mrow.added .madd{background:var(--red);border-color:var(--red);color:#fff;font-size:12px}
+
+  /* ===== 菜品页 ===== */
+  .dish-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:var(--globem);padding:16px 16px 96px;
+    background:linear-gradient(184deg,var(--paper),var(--paper-2));
+    box-shadow:0 0 0 1px var(--brass) inset,0 0 0 4px rgba(43,21,12,.5) inset}
+  .dhead{display:flex;align-items:flex-start}
+  .dhead > * + *{margin-left:14px}                /* gap 基线 */
+  .dthumb{width:92px;height:92px;flex-shrink:0;border-radius:3px;background:var(--paper-3);background-size:cover;background-position:center;
+    box-shadow:0 0 0 1px var(--brass),0 0 0 4px #fbf6ea,0 0 0 5px var(--brass),0 3px 12px rgba(60,30,10,.3)}
+  .dtitle{flex:1;min-width:0;padding-top:2px}
+  .dname{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:3px;line-height:1.3}
+  .dloc{font-size:12.5px;color:var(--red);margin-top:7px;letter-spacing:1.5px}
+  .dloc::before{content:"";display:inline-block;width:5px;height:5px;background:var(--red);margin-right:6px;vertical-align:1px}
+  .dintro{font-size:13.5px;line-height:1.95;text-indent:2em;margin-top:16px;padding-top:14px;border-top:1px dotted var(--line-2)}
+  .dsec{display:flex;align-items:baseline;margin-top:9px}
+  .dlabel{display:flex;align-items:baseline;flex:1;min-width:0;font-size:12.5px;color:var(--ink-2);letter-spacing:1px}
+  .dlabel::after{content:"";flex:1;margin:0 9px;border-bottom:1px dotted var(--line-2);transform:translateY(-4px)}
+  .dval{flex-shrink:0;max-width:64%;text-align:right;font-size:13px;line-height:1.7}
+  .dval span{color:var(--ink)}
+  .dval span:not(:last-child)::after{content:" · ";color:var(--ink-3)}
+  #dTags span{color:var(--red)}
+
+  /* ===== 菜品页 =====
+     底部操作栏、按钮一律走「通用操作栏体系」（见 .orderbar 段），本页不再自成一格。 */
+
+  /* ===== 品鉴页（上菜专用：暗场聚光 + 大图欣赏）===== */
+  .page-serve{background:radial-gradient(ellipse 92% 64% at 50% 26%,var(--wood-5),var(--wood-8) 60%,var(--wood-9))}
+  .sv-stage{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;padding:20px 22px}
+  .sv-wrap{margin:auto;display:flex;flex-direction:column;align-items:center;text-align:center;width:100%}
+  /* 正方形大图：Chrome 61 没有 min()，用「同一个 vw 值 + max-* 收口」达到
+     min(70vw,340px) 的效果 —— 宽高一齐被 max 截到 340px，比例不变形。 */
+  .sv-img{width:70vw;height:70vw;max-width:340px;max-height:340px;border-radius:4px;background:var(--paper-3);background-size:cover;background-position:center;
+    box-shadow:0 0 0 1px var(--brass),0 0 0 10px rgba(247,238,221,.94),0 0 0 11px var(--brass),0 26px 64px rgba(0,0,0,.62)}
+  .sv-name{margin-top:28px;font-size:24px;font-weight:700;color:var(--paper);letter-spacing:6px;text-indent:6px;text-shadow:0 2px 8px rgba(0,0,0,.55)}
+  .sv-loc{margin-top:9px;font-size:12.5px;color:var(--brass-2);letter-spacing:2px}
+  .sv-loc::before{content:"";display:inline-block;width:5px;height:5px;background:var(--brass-2);margin-right:7px;vertical-align:1px}
+  .sv-intro{margin-top:16px;max-width:520px;font-size:13px;line-height:1.95;color:var(--ink-4);text-indent:2em;text-align:left}
+  /* 品鉴底栏：壳体与按钮走通用体系（首页口径），只有舞台是暗场 */
+
+  /* ===== 总结页（本席风味总结：标签频次图谱 + 菜品回顾）===== */
+  .sum-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:var(--globem);padding:18px 16px 96px;
+    background:linear-gradient(184deg,var(--paper),var(--paper-2));
+    box-shadow:0 0 0 1px var(--brass) inset,0 0 0 4px rgba(43,21,12,.5) inset}
+  .sum-ttl{font-size:22px;font-weight:700;color:var(--ink);letter-spacing:6px;text-indent:6px}
+  .sum-sub{font-size:12px;color:var(--ink-2);margin-top:8px;letter-spacing:1.5px}
+  .sum-sub b{color:var(--red);font-size:15px;font-variant-numeric:tabular-nums}
+  /* 一句定评：由六维数据直接生成，不用套话。整行微染 + 前置铜点，不用左边条 */
+  .sum-verdict{margin-top:14px;padding:11px 14px;font-size:14px;letter-spacing:1.5px;line-height:1.7;
+    background:rgba(176,137,74,.13)}
+  .sum-verdict::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--brass);
+    margin-right:9px;vertical-align:2px}
+  .sum-verdict em{font-style:normal;font-weight:700;color:var(--red);font-size:16px;padding:0 1px}
+  .secnote{margin-left:auto;font-size:11px;font-weight:400;color:var(--ink-3);letter-spacing:1px}
+  /* 六维口味图谱：雷达图，内联 SVG，零依赖。
+     网格走 --line / --line-2、数据面走 --red，故随大洲主题一起换色；
+     画布用 viewBox 自适应宽度（最宽 320px），轴与文字都框在 viewBox 内不会被裁。 */
+  .radar{display:block;width:100%;max-width:320px;height:auto;margin:2px auto 0}
+  .radar .grid{fill:none;stroke:var(--line-2);stroke-width:1}
+  .radar .grid.edge{stroke:var(--brass);stroke-width:1.2}
+  .radar .axis{stroke:var(--line);stroke-width:1}
+  .radar .face{fill:var(--red);fill-opacity:.20;stroke:var(--red);stroke-width:1.6;stroke-linejoin:round}
+  .radar .dot{fill:var(--red)}
+  .radar .lab{fill:var(--ink-2);font-family:var(--serif);font-size:12px;font-weight:700;letter-spacing:1px}
+  .radar .lab.peak{fill:var(--red)}
+  .radar .val{fill:var(--ink-3);font-size:10.5px;font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .sum-dish{display:flex;align-items:baseline;padding:8px 2px;border-bottom:1px dotted var(--line)}
+  .sum-dish > * + *{margin-left:9px}              /* gap 基线 */
+  .sum-dish .sum-dot{flex:none;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 1px rgba(43,21,12,.35);transform:translateY(1px)}
+  .sum-dish .sum-dname{flex:none;font-size:14px;font-weight:700;color:var(--ink);letter-spacing:1.5px}
+  .sum-dish .sum-dmeta{flex:1;min-width:12px;font-size:11.5px;color:var(--ink-2);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sum-dish .sum-dtags{flex:none;font-size:12px;color:var(--red);letter-spacing:1px;font-variant-numeric:tabular-nums}
+  /* 热量合计：行式，标签在左、数值右端成列。不落卡片宫格。 */
+  .kc-total{display:flex;align-items:baseline;margin:12px 0 4px}
+  .kc-total > * + *{margin-left:9px}              /* gap 基线 */
+  .kc-total b{font-size:30px;line-height:1.1;color:var(--red);font-weight:700;letter-spacing:1px;font-variant-numeric:tabular-nums}
+  .kc-total span{font-size:12px;color:var(--ink-2);letter-spacing:1.5px}
+  .kc-row{display:flex;align-items:center;margin:8px 0}
+  .kc-row > * + *{margin-left:12px}               /* gap 基线 */
+  .kc-row .kc-k{flex:none;min-width:56px;font-size:12.5px;color:var(--ink-2);letter-spacing:1px}
+  /* 进度条是可让步的一方：min-width 只保住"还是一根条"，多余空间让给右端数值 */
+  .kc-row .kc-t{flex:1;min-width:24px;height:8px;background:var(--line);border-radius:1px;overflow:hidden}
+  .kc-row .kc-t i{display:block;height:100%;background:linear-gradient(90deg,var(--brass),var(--brass-2))}
+  /* 右端这一列是整行的结论（"北京烤鸭 · 560 千卡"），不允许省略：
+     去掉 max-width 与 text-overflow，宁可压短进度条也要显示完整 */
+  .kc-row .kc-v{flex:none;text-align:right;font-size:13px;font-weight:700;color:var(--ink);letter-spacing:.5px;font-variant-numeric:tabular-nums;
+    white-space:nowrap}
+  .kc-row.over .kc-t i{background:linear-gradient(90deg,var(--red),var(--red-2))}
+  .kc-row.over .kc-v{color:var(--red)}
+  .kc-note{margin-top:10px;font-size:11px;line-height:1.8;color:var(--ink-3);letter-spacing:1px}
+
+  /* ===== 通用操作栏体系（以首页点单栏为基准）=====
+     四个页面共用同一套壳体、同一个信息区、同一组三级按钮；只有首页自己的点单栏叫 .orderbar，
+     菜品 / 品鉴 / 总结三页各挂一个同规格的条（.dish-actions / .serve-bar / .sum-bar）。
+     壳体：纸色渐变 + 上缘一道桌沿木线 + 12/16 內距 + 底部安全区；
+     布局：左=CC 状态信息（.oinfo），右=操作按钮组（.acts），space-between + gap 12。 */
+  .orderbar,.dish-actions,.serve-bar,.sum-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:none;
+    align-items:center;justify-content:space-between;
+    /* --sab 自带 0px 基线（env() 版由上方 @supports 块注入），故这行在 Chrome 61 上
+       解析为 calc(12px + 0px)，不必再另写一条静态兜底。 */
+    padding:12px 16px calc(12px + var(--sab));background:linear-gradient(180deg,var(--paper-3),var(--paper-4));
+    box-shadow:0 -8px 26px rgba(0,0,0,.4)}
+  .orderbar > * + *,.dish-actions > * + *,.serve-bar > * + *,.sum-bar > * + *{margin-left:12px}   /* gap 基线 */
+  /* 上缘是一道桌沿木线 */
+  .orderbar::before,.dish-actions::before,.serve-bar::before,.sum-bar::before{content:"";position:absolute;left:0;right:0;top:0;height:7px;pointer-events:none;
+    background-image:url('./assets/tex/wood-desk.webp');background-size:512px 7px;background-repeat:repeat-x;
+    box-shadow:0 1px 0 rgba(176,137,74,.45)}
+  /* 每页只在自己的 mode 下显示自己那条，条永远是唯一的一条 */
+  body.mode-menu .orderbar{display:flex}
+  body.mode-dish .dish-actions{display:flex}
+  /* 菜品页底栏只有右侧按钮组（左侧的「已点 N 道」已撤 —— 390 宽塞不下
+     返回 + 加入点单 + 下一道 三枚按钮再加一列状态文字，是否已点改由
+     「加入点单」按钮自身的 ✓ 态表达，信息不丢），故整组靠右贴拇指端。 */
+  .dish-actions{justify-content:flex-end}
+  body.mode-serve .serve-bar{display:flex}
+  body.mode-sum .sum-bar{display:flex}
+  .oinfo{flex:1;min-width:0;font-size:13px;color:var(--ink-2);letter-spacing:1.5px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .oinfo b{color:var(--red);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
+  .acts{display:flex;flex-shrink:0}
+  .acts > * + *{margin-left:8px}                  /* gap 基线 */
+  /* 一级：主操作，朱红实底（基准 = 首页「开始上菜」） */
+  .obtn{background:var(--red);color:#fff;border:none;border-radius:2px;padding:10px 22px;cursor:pointer;
+    font-family:var(--serif);font-size:14px;font-weight:700;letter-spacing:2px;transition:.15s;white-space:nowrap;
+    box-shadow:0 4px 14px rgba(120,20,10,.35)}
+  .obtn:disabled{background:var(--paper-4);color:var(--ink-3);box-shadow:none;cursor:not-allowed}
+  .obtn:not(:disabled):hover{background:var(--red-2)}
+  /* 二级：次操作，描边（返回 / 退出 / 未点单时的「加入点单」） */
+  .obtn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-2);box-shadow:none;
+    padding:9px 16px;font-size:13px;letter-spacing:1px}
+  .obtn.ghost:hover{background:var(--paper-3);color:var(--ink)}
+  /* 已点态与菜单行尾的 ＋ 同款（见 .mrow.added .madd）：朱红实心，hover 也锁同色不分家 */
+  .obtn.ghost.on,.obtn.ghost.on:hover{background:var(--red);border-color:var(--red);color:#fff}
+  /* 「加入点单」（4 字）→「已点 ✓」（2 字 + 符号）：字数少了，按钮会缩一截，
+     底栏跟着抖一下。钉死 min-width = 未点态的自然宽（4em 字 + 左右内距 + 描边），
+     两态同宽。用 em 不用 px：字号一改，宽度跟着走，不会脱节。 */
+  #dAdd{min-width:5.9em}
+  /* 三级：弱操作，文字链接（首页「清空」） */
+  .olink{background:transparent;border:none;color:var(--ink-2);font-family:var(--serif);font-size:12px;letter-spacing:1.5px;cursor:pointer;text-decoration:underline dotted}
+  .olink:hover{color:var(--red)}
+
+  /* ===== 竹签牌（城市标签，仅当前菜品）===== */
+  .tag{position:absolute;transform:translate(-50%,-142%);font-size:11px;color:var(--ink);padding:2px 7px;white-space:nowrap;pointer-events:none;transition:opacity .25s;font-weight:600;letter-spacing:1px;
+    background:linear-gradient(180deg,var(--paper),var(--paper-3));border:1px solid var(--brass);border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 
   /* ===== 提示 ===== */
-  .tip{position:fixed;left:50%;top:120px;transform:translateX(-50%);font-size:12.5px;color:var(--ink);background:var(--paper);border:1.5px solid var(--paper3);border-radius:20px;padding:7px 16px;box-shadow:var(--shadow);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap;font-weight:600}
+  .tip{position:fixed;left:50%;top:auto;bottom:74px;transform:translateX(-50%);font-size:12px;color:var(--ink);padding:7px 15px;z-index:24;opacity:0;transition:opacity .35s;pointer-events:none;white-space:nowrap;letter-spacing:1px;
+    background:linear-gradient(180deg,var(--paper),var(--paper-2));border:1px solid var(--brass);border-radius:2px;box-shadow:var(--shadow)}
   .tip.show{opacity:1}
-  .hint{position:fixed;left:50%;top:max(120px,env(safe-area-inset-top));transform:translateX(-50%);font-size:12.5px;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));border-radius:20px;padding:7px 18px;box-shadow:0 4px 16px rgba(230,57,70,.4);z-index:8;opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;white-space:nowrap;font-weight:700}
-  .hint.show{opacity:1;transform:translate(-50%,8px)}
+  .hint{position:fixed;left:50%;top:calc(var(--sat) + var(--hero-h) + var(--tabs-h) + 10px);transform:translateX(-50%);font-size:12.5px;color:#fff;padding:7px 16px;z-index:26;opacity:0;transition:opacity .35s;pointer-events:none;letter-spacing:1.5px;font-weight:600;
+    /* 宽度按内容撑开（不用 shrink-to-fit 的"半屏"默认值，否则居中定位会把它挤成两行），
+       再限到视口宽 − 36px：窄屏放不下时自动转行，读数依旧完整。 */
+    white-space:normal;text-align:center;line-height:1.6;width:max-content;max-width:calc(100% - 36px);
+    background:linear-gradient(174deg,var(--red-2),var(--red) 80%);border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 6px 18px rgba(120,20,10,.45)}
+  .hint.show{opacity:1}
+  /* 地球的手势提示要落在地球画布里（竖屏时它是页面顶部那条 --globem），
+     不能再往下滑到菜品介绍上 —— 文案说的是地球，这句话就应该压着地球显示。
+     位置取画布内顶部 12px：底部让给 .globe-cap（菜名 + 经纬度），中心留给标记点与城市牌。 */
+  body.mode-dish .hint{top:calc(var(--dishbar) + var(--sattop) + 12px)}
+  body.mode-serve .hint,body.mode-sum .hint{top:calc(var(--dishbar) + var(--sattop) + 10px)}
+
 
   /* ===== 加载 / 降级 ===== */
-  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,var(--bg2),var(--bg));z-index:100;transition:opacity .6s}
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s;
+    background:radial-gradient(ellipse 70% 50% at 50% 40%,var(--wood-6),var(--wood-8) 60%,var(--wood-9))}
   #loader.hide{opacity:0;pointer-events:none}
-  .spin{width:48px;height:48px;border:4px solid var(--paper3);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  .spin{width:44px;height:44px;border:3px solid rgba(176,137,74,.22);border-top-color:var(--brass-2);border-radius:50%;animation:sp 1s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
-  #loader p{margin-top:16px;font-size:14px;color:var(--warm);font-weight:600}
-  #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}
-  #fallback.show{display:flex}
-  #fallback h2{color:var(--warm);margin-bottom:10px}
-  #fallback p{color:var(--dim);max-width:420px;line-height:1.6}
+  #loader p{margin-top:18px;font-size:14px;color:var(--brass-2);letter-spacing:4px}
+  /* 键盘焦点基线：不依赖 :focus-visible（Chrome 86），用 :focus 保底 */
+  .obtn:focus,.olink:focus,.tabs button:focus,.madd:focus{outline:2px solid var(--brass);outline-offset:1px}
 
-  /* ===== 菜单面板（仿餐厅菜单）===== */
-  .menu-overlay{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(10,4,0,.5);z-index:30;opacity:0;transition:opacity .3s;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
-  .menu-overlay.show{opacity:1;pointer-events:auto}
-  .menu-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%) scale(.96);width:calc(100vw - 32px);width:min(460px,calc(100vw - 32px));height:calc(100vh - 80px);height:min(640px,calc(100vh - 80px));background:linear-gradient(168deg,#fffaef,#f5e6cd);border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.4),0 0 0 1px rgba(180,100,40,.2);z-index:31;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;overflow:hidden;display:flex;flex-direction:column}
-  .menu-overlay.show .menu-panel{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
-  .menu-panel::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 60px,rgba(180,100,40,.03) 60px,rgba(180,100,40,.03) 61px);pointer-events:none;border-radius:22px}
-  .menu-close{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:50%;background:rgba(230,57,70,.12);border:1px solid rgba(230,57,70,.25);color:var(--acc);cursor:pointer;font-size:18px;z-index:2;transition:.15s;font-weight:600}
-  .menu-close:hover{background:var(--acc);color:#fff;transform:rotate(90deg)}
-  .menu-header{padding:30px 24px 18px;text-align:center;border-bottom:2px solid rgba(180,100,40,.15);position:relative}
-  .menu-title{font-family:Georgia,"Songti SC","Noto Serif SC",serif;font-size:24px;font-weight:800;color:var(--hot);letter-spacing:5px}
-  .menu-sub{font-size:12.5px;color:var(--acc2);margin-top:7px;letter-spacing:1px;font-weight:600}
-  .menu-header::after{content:"✦";position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);color:var(--warm);background:linear-gradient(168deg,#fffaef,#f5e6cd);padding:0 12px;font-size:14px}
-  .menu-body{flex:1;overflow-y:auto;padding:20px 22px 24px;-webkit-overflow-scrolling:touch}
-  .menu-body::-webkit-scrollbar{width:6px}
-  .menu-body::-webkit-scrollbar-thumb{background:rgba(180,100,40,.3);border-radius:3px}
-  .menu-group{margin-bottom:22px}
-  .menu-group:last-child{margin-bottom:0}
-  .menu-group-title{display:flex;align-items:center;gap:10px;font-family:Georgia,"Songti SC","Noto Serif SC",serif;font-size:16px;font-weight:800;color:var(--acc);letter-spacing:3px;margin:0 0 10px}
-  .menu-group-title::before,.menu-group-title::after{content:"";flex:1;height:1.5px;background:linear-gradient(90deg,transparent,rgba(230,57,70,.3),transparent);border-radius:1px}
-  .menu-item{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:12px;cursor:pointer;transition:.15s;border:1.5px solid transparent}
-  .menu-item:hover{background:rgba(247,127,0,.1);border-color:rgba(247,127,0,.25);transform:translateX(4px)}
-  .menu-item .mi-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;box-shadow:0 0 8px currentColor,inset 0 -1px 2px rgba(0,0,0,.2)}
-  .menu-item .mi-info{flex:1;min-width:0}
-  .menu-item .mi-name{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3}
-  .menu-item .mi-loc{font-size:11.5px;color:var(--acc2);margin-top:2px;font-weight:600}
-  .menu-item .mi-tags{font-size:10.5px;color:var(--dim);margin-top:3px}
-  .menu-item .mi-arrow{flex-shrink:0;color:var(--acc);opacity:0;transform:translateX(-4px);transition:.15s;font-size:16px;margin-top:3px;font-weight:700}
-  .menu-item:hover .mi-arrow{opacity:1;transform:translateX(0)}
+/* ===== 移动端：地球组件嵌在菜品页上栏之下（预留安全区）===== */
+.globe-slot{top:calc(var(--dishbar) + var(--sattop));left:0;right:0;height:var(--globem);border-radius:0;display:none}
+body.mode-dish .globe-slot{display:block}
 
-@supports (padding: env(safe-area-inset-top)){
-  .top{padding:max(85px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 12px max(14px,env(safe-area-inset-left))}
-  .dock{bottom:max(16px,env(safe-area-inset-bottom))}
-  .card{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 64px)}
-  .sheet{padding-top:max(14px,env(safe-area-inset-top))}
-  .sheet .close{top:max(14px,env(safe-area-inset-top))}
-  .tip{top:max(120px,calc(env(safe-area-inset-top) + 86px))}
+/* ===== 移动端尺寸优化（移动端优先，全局生效）===== */
+.menu-ttl{font-size:21px;letter-spacing:7px;text-indent:7px}
+/* 7 个菜系页签在 390px 下会超出容器、把「大洋洲」挤出屏外，
+   而 .tabs 的横向滚动没有任何可滑提示；收紧内距使其一屏排满。 */
+.tabs button{padding:6px 8px 8px;font-size:12.5px;letter-spacing:0}
+.mname{font-size:14px}
+.mthumb{width:30px;height:30px}
+.dthumb{width:76px;height:76px}
+.dname{font-size:20px;letter-spacing:2px}
+/* 390 上下三枚按钮要排得开，次按钮比主按钮收一档 */
+.obtn{padding:10px 16px;letter-spacing:1px}
+.obtn.ghost{padding:9px 11px;letter-spacing:0}
+.sv-img{width:76vw;height:76vw;max-width:300px;max-height:300px}
+.sv-name{font-size:21px;letter-spacing:4px;text-indent:4px}
+.sum-body{margin-top:0}
+.sum-verdict{font-size:13.5px;letter-spacing:1px}
+/* 矮视口（横屏 / 矮窗口）：横幅压成一条示意性横带，副标题与统计让位，
+   把高度全部还给列表 —— 否则横幅 + 页签会把菜单挤出屏幕。 */
+@media (max-height:520px){
+  .menu-hero{--hero-h:74px}
+  .menu-ttl{font-size:18px}
+  .menu-sub,.menu-stat{display:none}
 }
-  /* 菜单底部订单栏 */
-  .menu-footer{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:linear-gradient(180deg,#f5e6cd,#ead9bc);border-top:2px solid rgba(180,100,40,.18);flex-shrink:0}
-  .order-info{font-size:13px;color:var(--mut);font-weight:600}
-  .order-info b{color:var(--acc);font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
-  .order-btn{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:11px 26px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(230,57,70,.35),inset 0 1px 0 rgba(255,255,255,.3);transition:.15s;letter-spacing:1px}
-  .order-btn:disabled{background:var(--paper3);color:var(--dim);box-shadow:none;cursor:not-allowed}
-  .order-btn:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(230,57,70,.45)}
-  /* 菜单项的加入按钮 */
-  .menu-item .mi-add{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--paper2);border:1.5px solid var(--line2);color:var(--acc);cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1;margin-top:2px}
-  .menu-item .mi-add:hover{background:var(--acc);color:#fff;border-color:var(--acc)}
-  .menu-item.added .mi-add{background:var(--mint);color:#fff;border-color:var(--mint);font-size:14px}
-  .menu-item.added{background:rgba(6,214,160,.08)}
-  /* 详情卡片的品尝动作栏 */
-  .c-actions{margin-top:15px;padding-top:13px;border-top:1.5px dashed var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .c-progress{font-size:11.5px;color:var(--dim);font-weight:600}
-  .c-next{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:9px 22px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(230,57,70,.35);transition:.15s;white-space:nowrap}
-  .c-next:hover{transform:translateX(2px);box-shadow:0 5px 16px rgba(230,57,70,.45)}
-@media (max-width:640px){
-  .dock{padding:5px}
-  .dock button{font-size:12px;padding:7px 10px;margin-left:4px}
-  .brand{padding:7px 14px 7px 7px}
-  .brand .tname{font-size:15px}
-  .brand .tsub{display:none}
-  .menu-btn{padding:9px 16px;font-size:14px}
-  .card{padding:15px 15px 13px}
-  .card .cname{font-size:18px}
-  .card .swatch{width:50px;height:50px}
-  .menu-panel{width:calc(100vw - 24px);height:calc(100vh - 48px)}
-  .menu-body{padding:14px 16px 20px}
-  .menu-title{font-size:20px;letter-spacing:3px}
-}
+
+/* ===== 横幅高度分档：顶替 clamp(92px,19vh,152px) =====
+   Chrome 61 不认 clamp()（整条声明作废，--hero-h 变空值，往下所有 calc 全崩），
+   故基线写死 118px，再按视口高分三档逼近原来的 19vh 曲线。 */
+@media (min-height:820px){:root{--hero-h:136px}}
+@media (min-height:1000px){:root{--hero-h:152px}}
+@media (max-height:600px){:root{--hero-h:100px}}
+
+/* ===== 增强层：Flex gap =====
+   基线是各组件处的子项 margin（见 .tabs / .mrow / .dhead / .acts / .kc-row …），
+   这里只在「gap 在 Flexbox 里真的生效」时用 gap 顶替并清掉 margin。
+   开关来自 <head> 里的行为检测：它真的建一个 flex 容器量 scrollHeight，
+   不是 CSS.supports('gap') —— 后者只能证明浏览器认识这个属性名，
+   证明不了它在 Flexbox 里起作用（只支持 Grid gap 的内核也会返回 true）。 */
+.supports-flex-gap .globe-cap{gap:8px}
+.supports-flex-gap .globe-cap .gcoord{margin-left:0}
+.supports-flex-gap .tabs{gap:4px}
+.supports-flex-gap .tabs button + button{margin-left:0}
+.supports-flex-gap .sec{gap:10px}
+.supports-flex-gap .mrow{gap:11px}
+.supports-flex-gap .mrow > * + *{margin-left:0}
+.supports-flex-gap .dhead{gap:14px}
+.supports-flex-gap .dhead > * + *{margin-left:0}
+.supports-flex-gap .orderbar,.supports-flex-gap .dish-actions,
+.supports-flex-gap .serve-bar,.supports-flex-gap .sum-bar{gap:12px}
+.supports-flex-gap .orderbar > * + *,.supports-flex-gap .dish-actions > * + *,
+.supports-flex-gap .serve-bar > * + *,.supports-flex-gap .sum-bar > * + *{margin-left:0}
+.supports-flex-gap .acts{gap:8px}
+.supports-flex-gap .acts > * + *{margin-left:0}
+.supports-flex-gap .sum-dish{gap:9px}
+.supports-flex-gap .sum-dish > * + *{margin-left:0}
+.supports-flex-gap .kc-total{gap:9px}
+.supports-flex-gap .kc-total > * + *{margin-left:0}
+.supports-flex-gap .kc-row{gap:12px}
+.supports-flex-gap .kc-row > * + *{margin-left:0}
 </style>
+<script>
+/* Chrome 61 兼容：Flex gap 的**行为**检测（样式表里的 .supports-flex-gap 靠它打开）。
+   必须真建一个 flex 容器量尺寸，不能问 CSS.supports('gap') —— 那个只证明浏览器
+   认识 gap 这个属性名，证明不了它在 Flexbox 里生效（只支持 Grid gap 的旧内核
+   一样会返回 true，于是间距全丢）。检测只做一次，且必须在页面渲染前跑完。 */
+(function(){
+  try{
+    var t=document.createElement('div');
+    t.style.position='absolute';
+    t.style.visibility='hidden';
+    t.style.display='flex';
+    t.style.flexDirection='column';
+    t.style.rowGap='1px';
+    t.appendChild(document.createElement('div'));
+    t.appendChild(document.createElement('div'));
+    document.documentElement.appendChild(t);
+    if(t.scrollHeight===1)document.documentElement.className+=' supports-flex-gap';
+    document.documentElement.removeChild(t);
+  }catch(e){}
+})();
+</script>
 </head>
-<body>
-<canvas id="stage"></canvas>
-
-<div class="top">
-  <div class="brand">
-    <div class="logo"></div>
-    <div>
-      <div class="tname">世界美食大百科</div>
-      <div class="tsub">转地球 · 点红点 · 尝人间烟火</div>
-    </div>
+<body class="mode-menu">
+<div class="globe-slot" id="globeSlot">
+  <canvas id="stage"></canvas>
+  <div class="globe-light" aria-hidden="true"></div>
+  <div class="globe-tags" id="globeTags"></div>
+  <!-- 3D 不可用时压在画布上的降级层；.globe-cap 在它之上，菜名与经纬度照常可读 -->
+  <div class="globe-down" id="globeDown">
+    <div class="gd-ttl">地球组件不可用</div>
+    <div class="gd-sub">当前浏览器不支持 WebGL，产地改由下方文字标出。<br>菜单、菜品介绍、点单上菜与风味总结照常可用。</div>
   </div>
-  <div class="top-actions">
-    <button class="menu-btn" id="menuBtn"><span class="ico">📋</span>菜单</button>
-    <div class="gear" id="gear" title="设置">
-      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
-    </div>
-  </div>
+  <div class="globe-cap"><span class="gname" id="capName"></span><span class="gcoord" id="capCoord"></span></div>
 </div>
 
-<div class="tip" id="tip">拖动旋转 · 滚轮缩放 · 点红点看美食 · 底部按大洲筛选</div>
+<main class="page page-menu" id="pageMenu">
+  <div class="menu-col">
+    <header class="menu-hero">
+      <div class="hero-veil" aria-hidden="true"></div>
+      <div class="hero-txt">
+        <div class="menu-ttl" id="menuTtl">菜　单</div>
+        <div class="menu-sub" id="menuSub">寰宇小馆 · 世界美食大百科</div>
+        <div class="menu-stat" id="menuStat"></div>
+      </div>
+      <nav class="tabs" id="tabs">
+        <button data-c="all" class="on">全部</button>
+        <button data-c="asia">亚洲</button>
+        <button data-c="europe">欧洲</button>
+        <button data-c="africa">非洲</button>
+        <button data-c="nam">北美</button>
+        <button data-c="sam">南美</button>
+        <button data-c="oce">大洋洲</button>
+      </nav>
+    </header>
+    <div class="menu-list" id="menuList"></div>
+  </div>
+</main>
+
+<section class="page page-dish" id="pageDish">
+  <div class="dish-bar">
+    <div class="crumb" id="crumb"></div>
+  </div>
+  <div class="dish-body" id="dishBody">
+    <div class="wrap">
+      <div class="dhead">
+        <div class="dthumb" id="dThumb"></div>
+        <div class="dtitle">
+          <h1 class="dname" id="dName"></h1>
+          <div class="dloc" id="dLoc"></div>
+        </div>
+      </div>
+      <p class="dintro" id="dIntro"></p>
+      <div class="dsec">
+        <div class="dlabel">配料</div>
+        <div class="dval" id="dIng"></div>
+      </div>
+      <div class="dsec">
+        <div class="dlabel">口味</div>
+        <div class="dval" id="dTags"></div>
+      </div>
+    </div>
+  </div>
+  <div class="dish-actions">
+    <div class="acts">
+      <button class="obtn ghost" id="backBtn">返回菜单</button>
+      <button class="obtn ghost" id="dAdd">加入点单</button>
+      <button class="obtn" id="dNext">下一道 ›</button>
+    </div>
+  </div>
+</section>
+
+<section class="page page-serve" id="pageServe">
+  <div class="dish-bar">
+    <div class="crumb" id="svCrumb"></div>
+  </div>
+  <div class="sv-stage">
+    <div class="sv-wrap">
+      <div class="sv-img" id="svImg"></div>
+      <h1 class="sv-name" id="svName"></h1>
+      <div class="sv-loc" id="svLoc"></div>
+      <p class="sv-intro" id="svIntro"></p>
+    </div>
+  </div>
+  <div class="serve-bar">
+    <div class="oinfo" id="svProg"></div>
+    <div class="acts">
+      <button class="obtn ghost" id="svQuit">返回菜单</button>
+      <button class="obtn" id="svNext">下一道 ›</button>
+    </div>
+  </div>
+</section>
+
+<section class="page page-sum" id="pageSum">
+  <div class="dish-bar">
+    <div class="crumb">本席风味总结</div>
+  </div>
+  <div class="sum-body" id="sumBody">
+    <div class="wrap">
+      <div class="sum-ttl">风味总结</div>
+      <div class="sum-sub">本席共 <b id="sumCount">0</b> 道菜 · 覆盖 <b id="sumCont">0</b> 大洲 <b id="sumCountry">0</b> 国</div>
+      <div class="sum-verdict" id="sumVerdict"></div>
+      <div class="sec">口味图谱<span class="secnote">六维 · 全席均值 · 满分 5</span></div>
+      <div class="sum-bars" id="sumBars"></div>
+      <div class="sec">菜品回顾<span class="secnote">各菜最突出的两味</span></div>
+      <div id="sumDishes"></div>
+      <div class="sec">热量合计<span class="secnote">按成品一份估量 · 成人日均 2000 千卡</span></div>
+      <div id="sumKcal"></div>
+    </div>
+  </div>
+  <div class="sum-bar">
+    <div class="oinfo" id="sumProg"></div>
+    <div class="acts">
+      <button class="obtn ghost" id="sumBack">返回菜单</button>
+    </div>
+  </div>
+</section>
+
+<div class="orderbar" id="orderBar">
+  <div class="oinfo">已点 <b id="orderCount">0</b> 道菜<button class="olink" id="orderClear" style="margin-left:10px">清空</button></div>
+  <button class="obtn" id="orderBtn" disabled>请先点单</button>
+</div>
+
+<div class="tip" id="tip"></div>
 <div class="hint" id="hint"></div>
 
-<div class="dock" id="dock">
-  <button data-c="all" class="on">全部<span class="cnt" id="cnt-all"></span></button>
-  <button data-c="asia">亚洲<span class="cnt" id="cnt-asia"></span></button>
-  <button data-c="europe">欧洲<span class="cnt" id="cnt-europe"></span></button>
-  <button data-c="africa">非洲<span class="cnt" id="cnt-africa"></span></button>
-  <button data-c="nam">北美<span class="cnt" id="cnt-nam"></span></button>
-  <button data-c="sam">南美<span class="cnt" id="cnt-sam"></span></button>
-  <button data-c="oce">大洋洲<span class="cnt" id="cnt-oce"></span></button>
-</div>
-
-<div class="card" id="card">
-  <button class="cclose" id="cClose">×</button>
-  <div class="chead">
-    <div class="swatch" id="cSwatch"></div>
-    <div class="ctitle">
-      <div class="cname" id="cName"></div>
-      <div class="cloc" id="cLoc"></div>
-    </div>
-  </div>
-  <div class="cintro" id="cIntro"></div>
-  <div class="csection">
-    <div class="clabel">关键食材</div>
-    <div class="cchips" id="cIng"></div>
-  </div>
-  <div class="csection">
-    <div class="clabel">风味标签</div>
-    <div class="cchips" id="cTags"></div>
-  </div>
-  <div class="c-actions" id="cActions" style="display:none">
-    <div class="c-progress" id="cProgress"></div>
-    <button class="c-next" id="cNext">下一道 ›</button>
-  </div>
-</div>
-
-<div class="menu-overlay" id="menuOverlay">
-  <div class="menu-panel">
-    <button class="menu-close" id="menuClose">×</button>
-    <div class="menu-header">
-      <div class="menu-title">欢 迎 光 临</div>
-      <div class="menu-sub">世界美食餐厅 · 请点选您想品尝的菜品</div>
-    </div>
-    <div class="menu-body" id="menuBody"></div>
-    <div class="menu-footer">
-      <div class="order-info">已点 <b id="orderCount">0</b> 道菜</div>
-      <button class="order-btn" id="orderBtn" disabled>请先点单</button>
-    </div>
-  </div>
-</div>
-
-<div class="scrim" id="scrim"></div>
-<div class="sheet" id="sheet">
-  <button class="close" id="sClose">×</button>
-  <h3>显示</h3>
-  <div class="row"><label>自动旋转</label><div class="sw on" id="swPlay"><i></i></div></div>
-  <div class="row"><label>城市标签</label><div class="sw on" id="swLabel"><i></i></div></div>
-  <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
-  <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
-  <div class="row"><label>连线高亮</label><div class="sw on" id="swBeam"><i></i></div></div>
-  <h3>视角</h3>
-  <div style="display:flex;margin-top:4px">
-    <button id="bReset" style="flex:1;font-size:13px;background:var(--paper2);border:1px solid var(--line2);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer;font-weight:600">重置视角</button>
-    <button id="bTop" style="flex:1;font-size:13px;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;border-radius:8px;padding:9px 0;cursor:pointer;margin-left:8px;font-weight:700">俯视</button>
-  </div>
-  <h3>统计</h3>
-  <div class="stat" id="stat"></div>
-</div>
-
-<div id="loader"><div class="spin"></div><p>正在加载美食地球…</p></div>
-<div id="fallback"><h2>无法启动 3D 场景</h2><p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Firefox / Safari。</p></div>
+<div id="loader"><div class="spin"></div><p>正在备菜</p></div>
 
 <script src="./assets/foods.js"></script>
 <script src="./assets/three.min.js"></script>

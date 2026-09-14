@@ -325,13 +325,19 @@
   }
 
   /* 事件修正器查询：把所有生效中的同类修正连乘。
-   * region 传 null 表示只取全局修正；传地区码时再乘该地区的修正。 */
+   * region 传 null 表示只取全局修正；传地区码时再乘该地区的修正。
+   * ca/cb 传航线两端城市时，地区修正匹配任一端所属地区（demand_region 落点）。 */
   function modMul(state, type, region, ca, cb) {
     var m = 1;
     for (var i = 0; i < state.mods.length; i++) {
       var d = state.mods[i];
       if (d.type !== type) continue;
-      if (d.region && d.region !== region) continue;
+      if (d.region) {
+        if (d.region === region) { m *= (1 + d.mult); continue; }
+        if (ca && d.region === ca.region) { m *= (1 + d.mult); continue; }
+        if (cb && d.region === cb.region) { m *= (1 + d.mult); continue; }
+        continue;
+      }
       m *= (1 + d.mult);
     }
     return Math.max(0.2, m);
@@ -667,6 +673,11 @@
     var avgFareAdj = farePerKm * dist *
       ((1 - T.premium) + T.premium * (CONFIG.firstClassMul || 2.1));
     avgFareAdj *= route.fareMul;
+    /* 价格战：竞对对该线发起价格战时，玩家被迫跟进降价（rivalPriceWarMul 折扣票价）。
+     * 此前 priceWars 只被创建与递减、从未被 settleRoute 读取，竞对价格战纯属日志摆设。 */
+    if (routeAtWar(state, route.key)) {
+      avgFareAdj *= (CONFIG.rivalPriceWarMul || 0.86);
+    }
     var revenue = pax * avgFareAdj * 100;
 
     /* ④ 成本 —— 按真实成本结构配比（标定目标：油费/收入 25~40%、全成本/收入 82~93%）
@@ -1731,12 +1742,10 @@
     } else if (e.type === 'demand_all' || e.type === 'demand_region') {
       state.mods.push({ type: 'demand_all', mult: e.mult || 0, turns: e.turns || 2,
                         region: e.region || null, note: state.card.title });
-      if (e.extra && e.extra.cash) state.cash += e.extra.cash;
       log(state, '事件「' + state.card.title + '」→ ' + opt.label + '：需求 ' +
                 ((e.mult || 0) > 0 ? '+' : '') + Math.round((e.mult || 0) * 100) + '% 持续 ' + (e.turns || 2) + ' 回合');
     } else if (e.type === 'cost_all') {
       state.mods.push({ type: 'cost_all', mult: e.mult || 0, turns: e.turns || 3, note: state.card.title });
-      if (e.extra && e.extra.cash) state.cash += e.extra.cash;
       log(state, '事件「' + state.card.title + '」→ ' + opt.label + '：成本 ' +
                 ((e.mult || 0) > 0 ? '+' : '') + Math.round((e.mult || 0) * 100) + '% 持续 ' + (e.turns || 3) + ' 回合');
     } else if (e.type === 'reputation') {

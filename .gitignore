@@ -41,6 +41,13 @@ release/
 **/clips/
 **/docs/video/
 
+# _dev working dirs: ignore generated artifacts (previews/caches), keep build scripts tracked
+**/_dev/**/*.png
+**/_dev/**/*.pyc
+**/_dev/__pycache__/
+# world-food-3d _dev is pure scratch (fully untracked) — ignore the whole dir
+vibeknow/world-food-3d/_dev/
+
 # Project-specific generated promo (moon-landing-3d)
 vibeknow/moon-landing-3d/xiaohongshu/*.mp4
 vibeknow/moon-landing-3d/xiaohongshu/screenshots/

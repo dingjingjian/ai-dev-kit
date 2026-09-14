@@ -984,7 +984,7 @@
 
   function playerWon(st) {
     var rk = S.ranking(st);
-    return !!(rk.length && rk[0] && rk[0].isPlayer) || S.verdict(st).win === true;
+    return !!(rk.length && rk[0] && rk[0].isPlayer) || S.verdict(st).tier === 'giant';
   }
 
   /* 世界事件观察器：资金告急 / 城市升级 / 竞对抢线。
