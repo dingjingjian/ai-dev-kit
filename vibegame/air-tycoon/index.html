@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>航空大亨 · Air Tycoon</title>
+<!-- 内联空图标：http 场景下抑制浏览器默认的 /favicon.ico 请求（404 会污染冒烟的错误计数） -->
+<link rel="icon" href="data:,">
+<style>
+  :root{
+    --bg:#04080e; --panel:rgba(8,16,24,.86); --line:rgba(255,194,71,.22);
+    --gold:#ffc247; --gold-dim:#a87a20; --sky:#7fd4e8; --good:#5ec98a; --bad:#e2604b;
+    --text:#cfe0ea; --text-dim:#7a94a4;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    /* 安全区（Chrome 61 基线）：先落 0px，再由下一条覆盖。
+       只引用容器注入的 --safe-area-inset-*（var 自带静态兜底，Chrome 61 也合法）；
+       env() 不写在这里 —— Chrome 61 不认 env()，会让 calc() 在计算期整体失效、顶栏掉位。
+       env() 放到下面 @supports 增强块里。 */
+    --safe-t:0px; --safe-b:0px;
+    --safe-t:var(--safe-area-inset-top,0px); --safe-b:var(--safe-area-inset-bottom,0px);
+    --top-gap:44px;
+  }
+  @supports (padding-top:env(safe-area-inset-top,0px)){
+    :root{
+      --safe-t:var(--safe-area-inset-top,env(safe-area-inset-top,0px));
+      --safe-b:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+    }
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;overflow:hidden;background:#02040a;color:var(--text);
+    font-family:var(--sans);-webkit-font-smoothing:antialiased;
+    -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;
+    overscroll-behavior:none}
+  /* 竖屏手机容器：桌面端居中成一条 480 宽的竖屏，移动端铺满。
+     只维护一套竖屏布局，不再为桌面做第二套 —— 本作定位就是移动端游戏。 */
+  body{display:flex;justify-content:center}
+  #app{position:relative;width:100%;max-width:480px;height:100%;overflow:hidden;background:var(--bg)}
+
+  /* inset 简写 Chrome 87 才有，基线一律写 top/right/bottom/left 四个物理属性 */
+  #stage{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  /* 暗角：把注意力收到球体上（渐变不做像素读取，file:// 下安全） */
+  #vig{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:5;
+    background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.55) 100%)}
+
+  .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
+  /* 毛玻璃仅作增强：基线就是 --panel 的半透明实底，Chrome 61 忽略模糊也不影响可读性 */
+  .panel{background:var(--panel)}
+  @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+    .panel{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  }
+
+  /* ── 顶栏：公司名 + 回合 + 倍速 ── */
+  #top{top:calc(var(--top-gap) + var(--safe-t));left:10px;right:10px;
+    display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;
+    padding:7px 10px;background:var(--panel)}
+  #uCompany{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--gold);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}
+  #uQuarter{color:var(--text-dim);margin-left:8px;flex:0 0 auto}
+  #uSpeed{margin-left:10px;flex:0 0 auto;color:var(--gold);border:1px solid var(--line);
+    border-radius:5px;padding:2px 7px;cursor:pointer;background:transparent;
+    font-family:var(--mono);font-size:12px}
+  /* 静音键：与 uSpeed 同一套外观，靠 0.35 的透明度表达「关」的状态。
+     为什么用按钮而不是开关：HUD 上多一个 switch 会分散对经营的注意力，
+     而这个键一局最多按一两次，做成低调的小按钮即可。 */
+  #uMute{margin-left:6px;flex:0 0 auto;color:var(--gold);border:1px solid var(--line);
+    border-radius:5px;padding:2px 6px;cursor:pointer;background:transparent;
+    font-family:var(--mono);font-size:12px;line-height:1.35}
+  #uMute.off{opacity:.35}
+
+  /* ── 左侧数据条 ── */
+  #stats{top:calc(var(--top-gap) + var(--safe-t) + 46px);left:10px;width:150px;
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
+  #stats .row{display:flex;justify-content:space-between;margin-top:5px}
+  #stats .row:first-child{margin-top:0}
+  #stats .k{color:var(--text-dim)}
+  #stats .v{color:var(--text);font-weight:600}
+  #uCash{color:var(--gold)}
+  #uNet{color:var(--good)}
+  #uRank{color:var(--sky)}
+
+  /* ── 底部提示 ──
+     位置要让开底部操作条与进度条（两者合计约 60px），否则会被压在下面看不见。 */
+  #uHint{bottom:calc(70px + var(--safe-b));left:0;right:0;text-align:center;
+    color:var(--text-dim);font-size:11px;pointer-events:none}
+
+  /* ── 城市卡片（点城市后弹出）──
+     同样要让开底部操作条（约 60px），否则卡片底边会被按钮条盖住。 */
+  #uCityCard{display:none;bottom:calc(78px + var(--safe-b));left:10px;right:10px;
+    max-height:56%;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
+  #uCityCard.show{display:block}
+  .cc-name{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px}
+  .cc-home{font-size:10px;font-weight:400;color:var(--bg);background:var(--gold);
+    border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle}
+  .cc-row{display:flex;justify-content:space-between;margin-top:3px;font-size:12px}
+  .cc-row span{color:var(--text-dim)}
+  .cc-row b{color:var(--text)}
+
+  /* ── toast ──
+     ⚠ 位置：右半区、顶栏下方的固定带。这个位置是实机试出来的：
+         · 放正中 → 直接压住抽屉面板的列表内容（「已开通航线」盖住目的地）；
+         · 放下方 → 面板升起后同样被压住，且和底部操作条抢位置；
+         · 放左侧 → 压住 #stats 数据卡。
+       右半区在这一带只有球体，没有任何 HUD 与交互元素，是最干净的落点。
+     ⚠ z-index 200 必须高于 .modal(190)：决策确认提示要能浮在模态之上，
+       否则「决策已生效」会被模态遮死，玩家以为点了没反应。 */
+  #uToast{position:absolute;z-index:200;right:10px;
+    top:calc(var(--top-gap) + var(--safe-t) + 50px);
+    max-width:56%;padding:8px 13px;border-radius:8px;background:rgba(8,16,24,.94);
+    border:1px solid var(--line);color:var(--text);font-family:var(--sans);font-size:12px;
+    opacity:0;pointer-events:none;transition:opacity .2s;text-align:right;line-height:1.5}
+  #uToast.show{opacity:1}
+  /* 语义色：ok/bad/warn 三态由 ui.js 的 toast(msg, kind) 传入 */
+  #uToast.ok{border-color:rgba(94,201,138,.6);color:#cfeede}
+  #uToast.bad{border-color:rgba(226,96,75,.6);color:#f3cfc9}
+  #uToast.warn{border-color:rgba(255,194,71,.6);color:#f3e2bd}
+
+  /* ── 加载与降级 ── */
+  #loader{position:absolute;z-index:300;top:0;right:0;bottom:0;left:0;display:flex;
+    align-items:center;justify-content:center;background:#02040a;color:var(--sky);
+    font-family:var(--mono);font-size:13px}
+  #loader.hide{display:none}
+  #fallback{display:none;position:absolute;z-index:290;left:16px;right:16px;top:50%;
+    transform:translateY(-50%);border:1px solid rgba(226,96,75,.5);border-radius:8px;
+    padding:14px;background:rgba(24,10,10,.9);text-align:center;font-size:12px;line-height:1.8}
+  #fallback.show{display:block}
+  #fallback b{display:block;color:var(--bad);font-size:14px;margin-bottom:6px}
+  #fallback span{color:var(--text-dim);display:block}
+
+  /* flex gap 降级（Chrome 61 无 gap）：只在支持时用 gap，否则右项 margin-left:auto */
+  #top{gap:0}
+  html:not(.supports-flex-gap) #stats .row > * + *{margin-left:8px}
+
+  /* ══════════════════════════════════════════════════════════════════════
+     第二部分：经营面板（Task #4）
+     三层结构 —— HUD（常驻）/ 抽屉（可开关）/ 模态（阻塞）。
+     全部类名与 src/ui.js 的输出一一对应，改 ui.js 的输出必须同步这里。
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* 屏幕阅读器占位：保留接口用的隐藏节点 */
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    white-space:nowrap;opacity:0;pointer-events:none}
+
+  /* 语义色（ui.js 用 c-good / c-bad / c-warn 标注数值方向） */
+  .c-good{color:var(--good)}
+  .c-bad{color:var(--bad)}
+  .c-warn{color:var(--gold)}
+
+  /* ── 回合进度条 ──
+     位置：底部操作条之上。宽度=已过时间占比，故视觉上「条形向右长满」代表回合推进。 */
+  #uTimerWrap{bottom:calc(52px + var(--safe-b));left:10px;right:10px;height:3px;
+    border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;pointer-events:none}
+  #uTimerBar{height:100%;width:0;border-radius:2px;background:var(--gold);
+    transition:width .12s linear}
+  #uTimer{bottom:calc(58px + var(--safe-b));right:10px;color:var(--text-dim);font-size:10px;
+    pointer-events:none}
+
+  /* ── 底部操作条 ── */
+  #uDock{bottom:calc(8px + var(--safe-b));left:10px;right:10px;display:flex}
+  .dk{flex:1 1 0;min-width:0;margin-right:8px;padding:9px 4px;border-radius:7px;
+    border:1px solid var(--line);background:var(--panel);color:var(--text);
+    font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer}
+  .dk:last-child{margin-right:0}
+  .dk:active{background:rgba(255,194,71,.14)}
+  .dk-pri{background:rgba(255,194,71,.16);border-color:rgba(255,194,71,.5);color:var(--gold)}
+
+  /* ── 抽屉面板 ──
+     ⚠ 用 visibility 而非 display：display 切换会让面板里的 <input>/<button>
+       在 Chrome 61 上重新计算样式，开合有顿挫；visibility 可参与 transition。
+     ⚠ translateY(14px) 隐藏：不改高度，避免滚动体在动画中反复 reflow。
+     ⚠⚠ pointer-events 必须与 visibility 成对：
+       visibility 从 visible → hidden 时，浏览器会让元素**保持可见直到过渡结束**
+       （这是 visibility 作为可过渡属性的既定行为），于是关闭动画的 0.16s 里，
+       面板仍然盖在底部操作条上方并吃掉点击 —— 实机表现就是
+       「刚关掉面板马上点『机队』，没反应，得点第二下」。
+       故未展开态直接 pointer-events:none，让点击穿透到下面的 dock。
+     ⚠⚠ max-height 62% 是实机调出来的：初版 72% 在 390×844 上会把面板顶到
+       顶栏数据卡的位置，视觉上「面板压住了 HUD」。62% 给顶栏留出干净空间。 */
+  #uPanel{position:absolute;z-index:100;left:0;right:0;bottom:0;max-height:62%;
+    display:flex;flex-direction:column;
+    border-top:1px solid var(--line);border-radius:12px 12px 0 0;
+    background:var(--panel);visibility:hidden;opacity:0;pointer-events:none;
+    -webkit-transform:translateY(14px);transform:translateY(14px);
+    transition:opacity .16s ease-out,-webkit-transform .16s ease-out,transform .16s ease-out,visibility .16s}
+  #uPanel.show{visibility:visible;opacity:1;pointer-events:auto;
+    -webkit-transform:translateY(0);transform:translateY(0)}
+  .pn-head{flex:0 0 auto;display:flex;align-items:center;padding:11px 12px 9px;
+    border-bottom:1px solid var(--line)}
+  .pn-head > span{flex:1 1 auto;min-width:0;font-family:var(--sans);font-size:14px;
+    font-weight:600;color:var(--gold)}
+  .pn-x{flex:0 0 auto;width:28px;height:28px;border-radius:6px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--text-dim);
+    font-size:12px;line-height:1}
+  .pn-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:10px 12px calc(14px + var(--safe-b))}
+
+  /* ── 航线卡片 ── */
+  .rlist{margin-bottom:2px}
+  .rcard{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;
+    background:rgba(255,255,255,.02);cursor:pointer}
+  .rcard.sel{background:rgba(255,194,71,.09);border-color:rgba(255,194,71,.55)}
+  .rcard.loss{border-left:3px solid var(--bad)}
+  .rc-top{display:flex;align-items:baseline}
+  .rc-name{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:var(--text);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rc-profit{flex:0 0 auto;margin-left:8px;font-size:12px;font-weight:600}
+  .rc-sub{margin-top:3px;font-size:10px;color:var(--text-dim)}
+  .rc-bars{margin-top:6px}
+  .rc-hint{margin-top:6px;font-size:10px;color:var(--text-dim);
+    background:rgba(255,255,255,.04);border-radius:5px;padding:4px 7px}
+  .rc-hint.warn{color:var(--gold);background:rgba(255,194,71,.1)}
+
+  /* 细条（客座率 / 槽位）*/
+  .brow{display:flex;align-items:center;margin-top:4px;font-size:10px}
+  .bl{flex:0 0 auto;width:40px;color:var(--text-dim)}
+  .bt{flex:1 1 auto;min-width:0;height:4px;border-radius:2px;margin:0 6px;
+    background:rgba(255,255,255,.1);overflow:hidden}
+  .bt > i{display:block;height:100%;border-radius:2px;background:var(--sky)}
+  .bv{flex:0 0 auto;color:var(--text);font-variant-numeric:tabular-nums}
+
+  /* ── 航线详情（展开区）── */
+  .rdetail{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,194,71,.28)}
+  .rd-sec{margin-bottom:11px}
+  .rd-sec:last-child{margin-bottom:0}
+  .rd-h{font-size:10px;color:var(--gold);margin-bottom:6px;letter-spacing:.02em}
+  .rd-btns{display:flex;flex-wrap:wrap}
+  .rd-note{font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.6}
+  .rd-cost{border-top:1px solid rgba(255,255,255,.07);padding-top:5px}
+
+  /* ── 档位 chip（频次 / 票价 / 城市选择）──
+     .on = 当前选中；.over = 超出上限（仍可点，sim 会夹取并给 reason）； */
+  .chip{flex:0 0 auto;margin:0 6px 6px 0;padding:6px 9px;border-radius:6px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--text);
+    font-family:var(--sans);font-size:12px;text-align:center}
+  .chip:active{background:rgba(255,194,71,.12)}
+  .chip > i{display:block;font-style:normal;font-size:9px;color:var(--text-dim);margin-top:2px}
+  /* 机型 chip 的两行小字：规格行（em）+ 库存行（i）。前者中性、后者带语义色。 */
+  .chip > em{display:block;font-style:normal;font-size:9px;color:var(--text-dim);margin-top:2px}
+  .chip > i.c-good{color:var(--good)}
+  .chip > i.c-warn{color:var(--gold)}
+  /* 「推荐」角标：贴在机型名右侧的小胶囊，只做一个，不喧哗 */
+  .rec-tag{display:inline-block;font-size:8px;font-weight:600;line-height:1;
+    padding:2px 4px;margin-left:5px;border-radius:3px;vertical-align:middle;
+    background:rgba(127,212,232,.2);color:var(--sky)}
+  .chip.on{background:rgba(255,194,71,.18);border-color:rgba(255,194,71,.6);color:var(--gold)}
+  /* 选中态只把「非语义色」的小字染金，语义色的库存行（c-good/c-warn）保持不变 */
+  .chip.on > i:not([class]){color:var(--gold-dim)}
+  .chip.over{border-color:rgba(226,96,75,.45);color:var(--text-dim);cursor:pointer}
+  .chip.over > i{color:var(--bad)}
+  .chip[disabled]{opacity:.42;cursor:default}
+  .chip-wide{flex:1 0 46%;min-width:0;text-align:left}
+  .chips{display:flex;flex-wrap:wrap}
+  /* ⚠ 目的地列表有 20+ 个城市，全部平铺会把第③区（机型）推到好几屏之外 ——
+     实机表现：玩家选完目的地后看不到机型选项，以为面板坏了。
+     故给列表限高 + 内部滚动（约 5 行），让「选目的地 → 选机型 → 开通」
+     三步在一屏内可达。滚动条用细的，不抢视觉。 */
+  #uPanelBody .nw-sec .chips{max-height:186px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #uPanelBody .nw-sec .chips::-webkit-scrollbar{width:3px}
+  #uPanelBody .nw-sec .chips::-webkit-scrollbar-thumb{background:rgba(255,194,71,.28);border-radius:2px}
+  .nw-sec{margin-bottom:12px}
+  .nw-actions{margin-top:2px}
+  .nw-actions > .btn{width:100%;padding:11px 10px;font-size:13px}
+
+  /* ── 通用按钮 ── */
+  .btn{flex:0 0 auto;margin:0 6px 6px 0;padding:7px 11px;border-radius:6px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;color:var(--text);
+    font-family:var(--sans);font-size:12px}
+  .btn:active{background:rgba(255,194,71,.12)}
+  .btn > i{font-style:normal;font-size:9px;color:var(--text-dim);margin-left:5px}
+  .btn-pri{width:100%;margin-right:0;padding:11px 12px;font-size:13px;font-weight:600;
+    background:rgba(255,194,71,.18);border-color:rgba(255,194,71,.55);color:var(--gold)}
+  .btn-sm{padding:4px 9px;font-size:11px;margin:0}
+  .btn-danger{border-color:rgba(226,96,75,.5);color:var(--bad)}
+  .btn.dis{opacity:.45;color:var(--text-dim)}
+
+  /* ── 城市卡片内的补充样式（.cc-* 基础已在前面定义）── */
+  .cc-lines{display:flex;flex-wrap:wrap;margin-top:6px}
+  .cc-tag{font-size:10px;padding:2px 6px;margin:0 5px 4px 0;border-radius:4px;
+    background:rgba(127,212,232,.14);color:var(--sky)}
+  .cc-actions{margin-top:8px}
+  .cc-actions > .btn{width:100%;margin-right:0;padding:8px 10px}
+  .cc-total{display:flex;justify-content:space-between;margin-top:4px;font-size:11px}
+  .cc-total > span{color:var(--text-dim)}
+  .cc-total > b{color:var(--text)}
+
+  .empty{padding:16px 6px;text-align:center;font-size:12px;line-height:1.8;color:var(--text-dim)}
+
+  /* ── 机队面板 ── */
+  .fsec{margin-bottom:14px}
+  .warn-sec .rd-h{color:var(--gold)}
+  .flist{border-top:1px solid rgba(255,255,255,.07)}
+  .frow{display:flex;justify-content:space-between;align-items:center;
+    padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px}
+  .frow > span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .fbtns{flex:0 0 auto;margin-left:8px}
+  .fstate{flex:0 0 auto;margin-left:8px;color:var(--text-dim);font-size:10px}
+  .fstate i{font-style:normal}
+  .plist{border-top:1px solid rgba(255,255,255,.07)}
+  .prow{display:flex;align-items:center;padding:8px 2px;
+    border-bottom:1px solid rgba(255,255,255,.05)}
+  .prow.no{opacity:.55}
+  .pinfo{flex:1 1 auto;min-width:0}
+  .pinfo > b{display:block;font-size:12px;color:var(--text)}
+  .pinfo > span{display:block;font-size:10px;color:var(--text-dim);margin-top:2px}
+  .pact{flex:0 0 auto;margin-left:8px;display:flex;align-items:center}
+  .price{font-size:12px;color:var(--gold);margin-right:7px;font-variant-numeric:tabular-nums}
+
+  /* ── 模态层 ──
+     ⚠ z-index 200：必须压住城市卡片(z-10)、抽屉(z-100)、toast 之下即可。
+       ui.js 的 toast 是 z-200 固定值，故模态取 190 让 toast 仍能浮在最上
+       （否则「决策已生效」这类确认提示会被模态遮死）。 */
+  .modal{position:absolute;top:0;right:0;bottom:0;left:0;z-index:190;display:none;
+    align-items:center;justify-content:center;padding:18px 14px;
+    background:rgba(2,4,10,.72)}
+  .modal.show{display:flex}
+  .md-box{width:100%;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid rgba(255,194,71,.42);border-radius:10px;padding:15px 15px 13px;
+    background:rgba(8,16,24,.97)}
+  .md-kind{font-size:10px;color:var(--gold);letter-spacing:.06em;margin-bottom:5px}
+  .md-title{font-family:var(--sans);font-size:16px;font-weight:600;color:var(--text);
+    line-height:1.4}
+  .md-desc{margin-top:7px;font-size:12px;line-height:1.75;color:var(--text-dim)}
+  .md-opts{margin-top:12px}
+  .mopt{display:block;width:100%;margin-bottom:7px;padding:9px 11px;border-radius:7px;
+    cursor:pointer;text-align:left;border:1px solid var(--line);background:transparent;
+    font-family:var(--sans)}
+  .mopt:active{background:rgba(255,194,71,.14)}
+  .mo-label{display:block;font-size:12px;color:var(--text)}
+  .mo-tag{display:block;font-size:10px;color:var(--gold);margin-top:3px}
+  .mo-note{display:block;font-size:10px;color:var(--text-dim);margin-top:2px}
+  .md-foot{margin-top:8px;font-size:10px;color:var(--text-dim);text-align:center}
+
+  .md-kv{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px}
+  .md-kv > div{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
+  .md-kv > div > span{color:var(--text-dim)}
+  .md-kv > div > b{color:var(--text);font-variant-numeric:tabular-nums;
+    text-align:right;margin-left:10px}
+  .md-kv > div > b > i{font-style:normal;font-size:10px;margin-left:4px}
+  .md-total{margin-top:5px;padding-top:6px;border-top:1px dashed rgba(255,194,71,.3)}
+  .md-total > span{color:var(--gold)}
+  .md-total > b{font-size:14px}
+  .md-notes{margin-top:9px;font-size:11px;line-height:1.75;color:var(--text-dim)}
+  .md-actions{margin-top:13px}
+  .md-actions > .btn{width:100%;margin-right:0}
+
+  /* 面板内滚动条（桌面端可见，移动端不显示；Chrome 61 支持 ::-webkit-scrollbar）*/
+  .pn-body::-webkit-scrollbar,
+  .md-box::-webkit-scrollbar{width:4px}
+  .pn-body::-webkit-scrollbar-thumb,
+  .md-box::-webkit-scrollbar-thumb{background:rgba(255,194,71,.3);border-radius:2px}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <canvas id="stage"></canvas>
+  <div id="vig"></div>
+
+  <div id="top" class="hud">
+    <span id="uCompany">航空公司</span>
+    <span id="uQuarter">Q0 / 60</span>
+    <button id="uSpeed" type="button">1×</button>
+    <button id="uMute" type="button" title="声音开关" aria-label="声音开关">♪</button>
+  </div>
+
+  <div id="stats" class="hud">
+    <div class="row"><span class="k">资金</span><span class="v" id="uCash">—</span></div>
+    <div class="row"><span class="k">净资产</span><span class="v" id="uNet">—</span></div>
+    <div class="row"><span class="k">排名</span><span class="v" id="uRank">—</span></div>
+    <div class="row"><span class="k">航线</span><span class="v" id="uRoutes">0</span></div>
+    <div class="row"><span class="k">机队</span><span class="v" id="uPlanes">0</span></div>
+  </div>
+
+  <div id="uCityCard" class="hud panel"></div>
+
+  <!-- 回合进度条：贴在底部操作条上方，宽度=本季已过时间占比。
+       uTimer 是右侧秒数读数，uTimerBar 是被 JS 改 width 的填充块。 -->
+  <div id="uTimerWrap" class="hud">
+    <div id="uTimerBar"></div>
+  </div>
+
+  <div id="uHint" class="hud">拖动旋转 · 双指缩放 · 点击城市查看</div>
+
+  <!-- 底部操作条：三个抽屉入口。固定在最底部，拇指可及。 -->
+  <div id="uDock" class="hud">
+    <button id="uBtnRoutes" class="dk" type="button">我的航线</button>
+    <button id="uBtnFleet" class="dk" type="button">机队</button>
+    <button id="uBtnNew" class="dk dk-pri" type="button">新航线</button>
+  </div>
+  <div id="uTimer" class="hud">—</div>
+
+  <!-- 抽屉面板：从底部升起，可开可关，**不阻塞**回合计时。
+       结构固定为 头部（标题+关闭） / 滚动体（uPanelBody，内容由 ui.js 填）。 -->
+  <div id="uPanel" class="panel">
+    <div class="pn-head">
+      <span id="uPanelTitle">面板</span>
+      <button id="uPanelClose" class="pn-x" type="button" aria-label="关闭">✕</button>
+    </div>
+    <div id="uPanelBody" class="pn-body"></div>
+  </div>
+
+  <!-- 模态层：事件卡 / 季报 / 终局。**阻塞**回合计时（sim 侧靠 state.card 停下），
+       故必须有遮罩挡住地图与底部条，避免玩家在待决策时误触。 -->
+  <div id="uModal" class="modal">
+    <div class="md-box" id="uModalBody"></div>
+  </div>
+
+  <!-- toast：操作反馈条。z-index 必须高于模态层（.modal 为 z-190），
+       否则「决策已生效」这类确认会被模态遮死、玩家以为点了没反应。 -->
+  <div id="uToast"></div>
+
+  <!-- 兼容占位：ui.js 里 cacheEls 会取这几个 id。
+       tab / trade / mine / dev 属保留接口（ui.js 对 null 是安全的），
+       显式声明是为了避免「找不到节点」的隐式歧义，也方便日后启用。
+       ⚠ 不加 .sr 之外的花样：它们不参与布局，只保证 getElementById 有返回。 -->
+  <span id="uTabRoutes" class="sr"></span>
+  <span id="uTabFleet" class="sr"></span>
+  <span id="uTrade" class="sr"></span>
+  <span id="uMine" class="sr"></span>
+  <span id="uDev" class="sr"></span>
+
+  <div id="fallback">
+    <b>无法启动 3D 渲染</b>
+    <span>当前浏览器或设备不支持 WebGL。</span>
+    <span>游戏仍可继续（经营面板不受影响），或更换现代浏览器后重试。</span>
+  </div>
+
+  <div id="loader">正在装载航线图…</div>
+</div>
+
+<script src="assets/three.min.js"></script>
+<!-- 地球贴图内联版（file:// 下外链 jpg 会被 CORS 拒绝，见 tools/gen-earth-tex.js） -->
+<script src="assets/earth-tex.js"></script>
+<!-- 能力检测最先行：给 <html> 挂 Chrome 61 降级 class，必须在首帧渲染前完成 -->
+<script src="src/compat.js"></script>
+<script src="src/data.js"></script>
+<script src="src/geo.js"></script>
+<!-- 海陆掩膜（布阵/城市地理判定用，Natural Earth 光栅化，离线内联） -->
+<script src="src/landmask.js"></script>
+<script src="src/sim.js"></script>
+<script src="src/render.js"></script>
+<script src="src/ui.js"></script>
+<!-- 音频放在 ui 之后、game 之前：ui 会在操作分支里调 AT.audio.play()，
+     但只会在**事件回调**里调到（那时 audio.js 早已加载完），
+     而 game.js 启动时就要 AT.audio.pump 挂进主循环，故必须在它前面。 -->
+<script src="src/audio.js"></script>
+<script src="src/game.js"></script>
+<script>
+/* 启动：先把 loader 撤掉，再 boot。
+ * 放在最后一个 <script> 里（不在 DOMContentLoaded 里）—— 脚本都在 body 末尾，
+ * 执行到这里 DOM 已完整，不必再加一层事件等待。
+ *
+ * ⚠ 这里**不开航线、不推进阶段**：开局 phase 是 briefing，
+ *   而 openRoute 会检查 `phase !== 'operating'` 直接拒绝（实测 routes 恒为 0）。
+ *   推进阶段由主循环的 tick 负责（briefing 满 8 秒自动转 operating），
+ *   切换瞬间由 game.js 的 seedFirstRoute 给一条示范航线 —— 见 game.js。 */
+(function () {
+  function start() {
+    var ld = document.getElementById('loader');
+    if (ld) ld.className = 'hide';
+    var ok = window.AT && window.AT.game && window.AT.game.init() && window.AT.game.boot({
+      seed: 20260914,
+      homeCityId: 'C01',
+      companyName: '环球航空'
+    });
+    if (!ok) {
+      var fb = document.getElementById('fallback');
+      if (fb) fb.className = 'show';
+    }
+  }
+  try { start(); } catch (e) {
+    console.error('[AT] 启动失败：', e);
+    var ld2 = document.getElementById('loader');
+    if (ld2) ld2.className = 'hide';
+    var fb2 = document.getElementById('fallback');
+    if (fb2) { fb2.className = 'show'; }
+  }
+})();
+</script>
+</body>
+</html>

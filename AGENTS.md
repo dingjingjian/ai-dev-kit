@@ -32,6 +32,7 @@
 | 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 基于 perler-bead-game 引擎的生肖版：12 生肖按地支顺序分三档难度；「导出图纸」首发于此（编号网格 + 色号图例 + 用料清单，全景预览 + 点图放大）；同构工程约定，存档前缀 `pzd_` |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分、连对加成，锻炼心算验算能力 |
 | 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球穿越太阳系：太阳引力 + 五颗行星引力实时作用，被行星引力捕获或撞毁即失败、飞出太阳系即胜利；行星发动机燃料有限，掠过行星时"相对速度"决定被吸走还是引力弹弓；复用手写 WebGL 引擎与 solar-system-3d 行星贴图，`tests/headless_wandering.js` 无头自检（16 项） |
+| 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营模拟：24 座真实城市、开辟航线带动城市开发度成长，双瓶颈设计（薄线卡需求 / 干线卡槽位）逼玩家判断扩张方向，槽位按航线给故换大机型是唯一出路；60 回合（15 年）做到全球航空巨企；复用 defcon 球面引擎与竖屏单手 UI，经营数值唯一真源为 `src/sim.js`（UI 只调其导出接口）；音频为 WebAudio 现场合成（13 音效 + 三段落 BGM，零音频文件）；验证八层：`tests/ui-contract.js` 契约 + `tests/headless.js` 功能 + `tests/audio.js` 音频 + `tools/probe-heading.js`/`tests/verify-heading.py` 朝向（读真实实例矩阵判「飞机倒飞」，离线复算内置反例自证有效）+ `tests/smoke-render.py`/`tests/verify-dist.py` 实机 + `tests/check-chrome61.py`/`check-fallback.py` 兼容 + `tools/balance.js` 平衡 + `tools/audit-econ.js` 审计 |
 
 ### #vibeart　数字艺术
 
@@ -45,6 +46,7 @@
 | 郑和宝船 | `vibeknow/zhenghe-treasure-ship/` | Blender 建模 + 离线 H5 展示的明代宝船科普：九桅十二帆、水密隔舱、七下西洋航线；三种模式（展示/拆解/航行），史料口径见 `docs/史料考证.md`，尺寸真源为 `assets/ship-params.js` |
 | 055 型驱逐舰 | `vibeknow/type-055-destroyer/` | 照四视图线图做的 055 三维模型：舰体线型、隐身上层建筑、集成桅四面 AESA、前 64 + 后 64 垂发；Blender 参数化建模（`assets/ship-params.js` 为唯一真源），含 9 项几何审计与四机位预览 |
 | 3D 地球科普 | `vibeknow/earth-3d/` | 3D 地球科普工具，WebGL 展示蓝色星球、昼夜交替、四季成因、月相（地月系统）、地球内部结构与经纬网格 |
+| 世界美食大百科 | `vibeknow/world-food-3d/` | 复用 earth-3d 框架，35 道世界美食以发光红点钉在地球上，点红点看介绍；按大洲筛选；离线零依赖 |
 | 太阳系 3D | `vibeknow/solar-system-3d/` | 太阳系 3D 可视化，WebGL 渲染行星、轨道与土星环，支持点击追踪天体 |
 | 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 3D 火箭发射模拟，WebGL 渲染，支持展示/拆解等模式，含遥测与倒计时 |
 | 3D 登月全程 | `vibeknow/moon-landing-3d/` | 复用 rocket-launch-3d 引擎与 UI 风格的登月全流程科普：按中国载人登月真实方案，长征十号双箭发射（先发揽月着陆器驻留环月、数日后发梦舟飞船）→环月交会对接→船器分离→动力下降→月面软着陆；展示/拆解/登月三模式，`tests/headless_two_segment.js` 无头自检 |
