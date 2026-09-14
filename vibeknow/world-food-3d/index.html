@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>世界美食大百科</title>
+<style>
+  :root{
+    --bg:#1a0e06;--bg2:#2a160a;
+    --acc:#e63946;--acc2:#f77f00;--warm:#fcbf49;--hot:#d62828;--mint:#06d6a0;--ink:#2d1810;
+    --paper:#fff8ee;--paper2:#ffeed8;--paper3:#ffe4c4;
+    --txt:#2d1810;--mut:#8a5a32;--dim:#b8896a;
+    --line:rgba(180,100,40,.22);--line2:rgba(220,130,50,.35);
+    --shadow:0 8px 30px rgba(60,30,10,.18);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  body{background:radial-gradient(ellipse 80% 60% at 50% 35%,var(--bg2),var(--bg) 70%,#0d0603 100%)}
+  #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* ===== 顶部 ===== */
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:85px 14px 12px;z-index:10;pointer-events:none}
+  .brand{display:flex;align-items:center;gap:11px;background:var(--paper);border:2px solid var(--paper3);border-radius:999px;padding:8px 20px 8px 9px;pointer-events:auto;box-shadow:var(--shadow)}
+  .brand .logo{width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffe5b4,#fcbf49 30%,#f77f00 65%,#d62828);box-shadow:0 0 14px rgba(247,127,0,.5),inset 0 -3px 6px rgba(0,0,0,.2);position:relative;flex-shrink:0}
+  .brand .logo::after{content:"";position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.65),transparent 42%)}
+  .brand .tname{font-size:17px;font-weight:800;color:var(--hot);letter-spacing:.5px;line-height:1.1}
+  .brand .tsub{font-size:11px;color:var(--acc2);margin-top:2px;font-weight:600}
+  .top-actions{display:flex;align-items:center;gap:10px;pointer-events:auto}
+  .menu-btn{display:flex;align-items:center;gap:7px;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:11px 20px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 16px rgba(230,57,70,.4),inset 0 1px 0 rgba(255,255,255,.3);transition:.15s;letter-spacing:1px}
+  .menu-btn:hover{transform:translateY(-1px);box-shadow:0 6px 22px rgba(230,57,70,.5),inset 0 1px 0 rgba(255,255,255,.3)}
+  .menu-btn:active{transform:translateY(0)}
+  .menu-btn .ico{font-size:17px}
+  .gear{width:42px;height:42px;border-radius:50%;background:var(--paper);border:2px solid var(--paper3);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:var(--shadow);transition:.15s}
+  .gear:hover{background:var(--paper2)}
+  .gear svg{width:19px;height:19px;fill:none;stroke:var(--acc2);stroke-width:1.8}
+
+  /* ===== 底部大洲过滤 ===== */
+  .dock{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);display:flex;background:var(--paper);border:2px solid var(--paper3);border-radius:999px;padding:6px;box-shadow:0 6px 28px rgba(60,30,10,.25);z-index:10;pointer-events:auto;max-width:calc(100vw - 16px);overflow-x:auto;scrollbar-width:none}
+  .dock::-webkit-scrollbar{display:none}
+  .dock.scrollable{-webkit-mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent);mask-image:linear-gradient(90deg,transparent,#000 24px,#000 calc(100% - 24px),transparent)}
+  .dock button{border:none;background:transparent;color:var(--mut);font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:999px;cursor:pointer;transition:.18s;white-space:nowrap;flex-shrink:0;margin-left:6px}
+  .dock button:first-child{margin-left:0}
+  .dock button:hover{color:var(--acc);background:var(--paper2)}
+  .dock button.on{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;box-shadow:0 3px 12px rgba(230,57,70,.4)}
+  .dock button .cnt{font-size:10px;opacity:.8;margin-left:4px;font-variant-numeric:tabular-nums}
+
+  /* ===== 美食详情卡片 ===== */
+  .card{position:fixed;left:50%;bottom:80px;transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--paper);border:2px solid var(--paper3);border-radius:22px;padding:18px 20px 16px;box-shadow:0 16px 50px rgba(60,30,10,.3);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+  .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .card .chead{display:flex;align-items:flex-start;gap:13px}
+  .card .swatch{width:58px;height:58px;border-radius:50%;flex-shrink:0;background:var(--acc);box-shadow:0 4px 16px rgba(230,57,70,.4),inset 0 -4px 10px rgba(0,0,0,.25),inset 0 3px 8px rgba(255,255,255,.3);position:relative;overflow:hidden;border:3px solid var(--paper2)}
+  .card .swatch::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 32% 26%,rgba(255,255,255,.6),transparent 50%)}
+  .card .ctitle{flex:1;min-width:0;padding-top:2px}
+  .card .cname{font-size:20px;font-weight:800;color:var(--ink);line-height:1.2}
+  .card .cloc{font-size:12.5px;color:var(--acc2);margin-top:5px;display:flex;align-items:center;gap:5px;font-weight:600}
+  .card .cloc::before{content:"📍";font-size:13px}
+  .card .cintro{font-size:13.5px;color:var(--txt);margin-top:13px;line-height:1.7;letter-spacing:.2px}
+  .card .csection{margin-top:13px}
+  .card .clabel{font-size:10px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px;font-weight:700}
+  .card .cchips{display:flex;flex-wrap:wrap;gap:6px}
+  .card .cchip{font-size:11.5px;background:var(--paper2);border:1px solid var(--line2);color:var(--acc);border-radius:8px;padding:4px 10px;font-weight:600}
+  .card .cchip.ing{background:#fff4e0;border-color:rgba(252,191,73,.4);color:#b8860b}
+  .card .cclose{position:absolute;top:12px;right:12px;width:30px;height:30px;border-radius:50%;background:var(--paper2);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s}
+  .card .cclose:hover{background:var(--acc);color:#fff;transform:rotate(90deg)}
+
+  /* ===== 设置浮层 ===== */
+  .sheet{position:fixed;top:0;right:0;bottom:0;width:86vw;width:min(300px,86vw);background:var(--paper);border-left:3px solid var(--paper3);z-index:20;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto;box-shadow:-8px 0 40px rgba(60,30,10,.2)}
+  .sheet.show{transform:translateX(0)}
+  .sheet h3{font-size:12px;color:var(--acc);letter-spacing:2px;margin:20px 0 12px;text-transform:uppercase;font-weight:700}
+  .sheet h3:first-child{margin-top:8px}
+  .row{display:flex;align-items:center;justify-content:space-between;margin:13px 0}
+  .row label{font-size:14px;color:var(--txt);font-weight:500}
+  .sw{position:relative;width:44px;height:25px;border-radius:13px;background:var(--paper3);cursor:pointer;transition:.2s;flex-shrink:0}
+  .sw.on{background:linear-gradient(135deg,var(--acc),var(--acc2))}
+  .sw i{position:absolute;top:3px;left:3px;width:19px;height:19px;border-radius:50%;background:#fff;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+  .sw.on i{left:22px}
+  .sheet .close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;background:var(--paper2);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:16px}
+  .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(10,4,0,.4);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet .stat{font-size:12.5px;color:var(--mut);line-height:1.8;margin-top:8px;padding:11px 13px;background:var(--paper2);border:1px solid var(--line);border-radius:10px}
+  .sheet .stat b{color:var(--acc);font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+
+  /* ===== 城市标签 ===== */
+  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11px;color:var(--ink);background:var(--paper);border:1.5px solid var(--paper3);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(60,30,10,.15);transition:opacity .25s;z-index:5;font-weight:600}
+  .leaders{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;overflow:visible}
+
+  /* ===== 提示 ===== */
+  .tip{position:fixed;left:50%;top:120px;transform:translateX(-50%);font-size:12.5px;color:var(--ink);background:var(--paper);border:1.5px solid var(--paper3);border-radius:20px;padding:7px 16px;box-shadow:var(--shadow);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap;font-weight:600}
+  .tip.show{opacity:1}
+  .hint{position:fixed;left:50%;top:max(120px,env(safe-area-inset-top));transform:translateX(-50%);font-size:12.5px;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));border-radius:20px;padding:7px 18px;box-shadow:0 4px 16px rgba(230,57,70,.4);z-index:8;opacity:0;transition:opacity .4s,transform .4s;pointer-events:none;white-space:nowrap;font-weight:700}
+  .hint.show{opacity:1;transform:translate(-50%,8px)}
+
+  /* ===== 加载 / 降级 ===== */
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,var(--bg2),var(--bg));z-index:100;transition:opacity .6s}
+  #loader.hide{opacity:0;pointer-events:none}
+  .spin{width:48px;height:48px;border:4px solid var(--paper3);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loader p{margin-top:16px;font-size:14px;color:var(--warm);font-weight:600}
+  #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}
+  #fallback.show{display:flex}
+  #fallback h2{color:var(--warm);margin-bottom:10px}
+  #fallback p{color:var(--dim);max-width:420px;line-height:1.6}
+
+  /* ===== 菜单面板（仿餐厅菜单）===== */
+  .menu-overlay{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(10,4,0,.5);z-index:30;opacity:0;transition:opacity .3s;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
+  .menu-overlay.show{opacity:1;pointer-events:auto}
+  .menu-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-46%) scale(.96);width:calc(100vw - 32px);width:min(460px,calc(100vw - 32px));height:calc(100vh - 80px);height:min(640px,calc(100vh - 80px));background:linear-gradient(168deg,#fffaef,#f5e6cd);border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.4),0 0 0 1px rgba(180,100,40,.2);z-index:31;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;overflow:hidden;display:flex;flex-direction:column}
+  .menu-overlay.show .menu-panel{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto}
+  .menu-panel::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(45deg,transparent,transparent 60px,rgba(180,100,40,.03) 60px,rgba(180,100,40,.03) 61px);pointer-events:none;border-radius:22px}
+  .menu-close{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:50%;background:rgba(230,57,70,.12);border:1px solid rgba(230,57,70,.25);color:var(--acc);cursor:pointer;font-size:18px;z-index:2;transition:.15s;font-weight:600}
+  .menu-close:hover{background:var(--acc);color:#fff;transform:rotate(90deg)}
+  .menu-header{padding:30px 24px 18px;text-align:center;border-bottom:2px solid rgba(180,100,40,.15);position:relative}
+  .menu-title{font-family:Georgia,"Songti SC","Noto Serif SC",serif;font-size:24px;font-weight:800;color:var(--hot);letter-spacing:5px}
+  .menu-sub{font-size:12.5px;color:var(--acc2);margin-top:7px;letter-spacing:1px;font-weight:600}
+  .menu-header::after{content:"✦";position:absolute;left:50%;bottom:-10px;transform:translateX(-50%);color:var(--warm);background:linear-gradient(168deg,#fffaef,#f5e6cd);padding:0 12px;font-size:14px}
+  .menu-body{flex:1;overflow-y:auto;padding:20px 22px 24px;-webkit-overflow-scrolling:touch}
+  .menu-body::-webkit-scrollbar{width:6px}
+  .menu-body::-webkit-scrollbar-thumb{background:rgba(180,100,40,.3);border-radius:3px}
+  .menu-group{margin-bottom:22px}
+  .menu-group:last-child{margin-bottom:0}
+  .menu-group-title{display:flex;align-items:center;gap:10px;font-family:Georgia,"Songti SC","Noto Serif SC",serif;font-size:16px;font-weight:800;color:var(--acc);letter-spacing:3px;margin:0 0 10px}
+  .menu-group-title::before,.menu-group-title::after{content:"";flex:1;height:1.5px;background:linear-gradient(90deg,transparent,rgba(230,57,70,.3),transparent);border-radius:1px}
+  .menu-item{display:flex;align-items:flex-start;gap:11px;padding:10px 12px;border-radius:12px;cursor:pointer;transition:.15s;border:1.5px solid transparent}
+  .menu-item:hover{background:rgba(247,127,0,.1);border-color:rgba(247,127,0,.25);transform:translateX(4px)}
+  .menu-item .mi-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;margin-top:4px;box-shadow:0 0 8px currentColor,inset 0 -1px 2px rgba(0,0,0,.2)}
+  .menu-item .mi-info{flex:1;min-width:0}
+  .menu-item .mi-name{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3}
+  .menu-item .mi-loc{font-size:11.5px;color:var(--acc2);margin-top:2px;font-weight:600}
+  .menu-item .mi-tags{font-size:10.5px;color:var(--dim);margin-top:3px}
+  .menu-item .mi-arrow{flex-shrink:0;color:var(--acc);opacity:0;transform:translateX(-4px);transition:.15s;font-size:16px;margin-top:3px;font-weight:700}
+  .menu-item:hover .mi-arrow{opacity:1;transform:translateX(0)}
+
+@supports (padding: env(safe-area-inset-top)){
+  .top{padding:max(85px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) 12px max(14px,env(safe-area-inset-left))}
+  .dock{bottom:max(16px,env(safe-area-inset-bottom))}
+  .card{bottom:calc(max(16px,env(safe-area-inset-bottom)) + 64px)}
+  .sheet{padding-top:max(14px,env(safe-area-inset-top))}
+  .sheet .close{top:max(14px,env(safe-area-inset-top))}
+  .tip{top:max(120px,calc(env(safe-area-inset-top) + 86px))}
+}
+  /* 菜单底部订单栏 */
+  .menu-footer{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:linear-gradient(180deg,#f5e6cd,#ead9bc);border-top:2px solid rgba(180,100,40,.18);flex-shrink:0}
+  .order-info{font-size:13px;color:var(--mut);font-weight:600}
+  .order-info b{color:var(--acc);font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+  .order-btn{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:11px 26px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(230,57,70,.35),inset 0 1px 0 rgba(255,255,255,.3);transition:.15s;letter-spacing:1px}
+  .order-btn:disabled{background:var(--paper3);color:var(--dim);box-shadow:none;cursor:not-allowed}
+  .order-btn:not(:disabled):hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(230,57,70,.45)}
+  /* 菜单项的加入按钮 */
+  .menu-item .mi-add{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:var(--paper2);border:1.5px solid var(--line2);color:var(--acc);cursor:pointer;font-size:18px;font-weight:700;display:flex;align-items:center;justify-content:center;transition:.15s;line-height:1;margin-top:2px}
+  .menu-item .mi-add:hover{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .menu-item.added .mi-add{background:var(--mint);color:#fff;border-color:var(--mint);font-size:14px}
+  .menu-item.added{background:rgba(6,214,160,.08)}
+  /* 详情卡片的品尝动作栏 */
+  .c-actions{margin-top:15px;padding-top:13px;border-top:1.5px dashed var(--line);display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .c-progress{font-size:11.5px;color:var(--dim);font-weight:600}
+  .c-next{background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;border:none;border-radius:999px;padding:9px 22px;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(230,57,70,.35);transition:.15s;white-space:nowrap}
+  .c-next:hover{transform:translateX(2px);box-shadow:0 5px 16px rgba(230,57,70,.45)}
+@media (max-width:640px){
+  .dock{padding:5px}
+  .dock button{font-size:12px;padding:7px 10px;margin-left:4px}
+  .brand{padding:7px 14px 7px 7px}
+  .brand .tname{font-size:15px}
+  .brand .tsub{display:none}
+  .menu-btn{padding:9px 16px;font-size:14px}
+  .card{padding:15px 15px 13px}
+  .card .cname{font-size:18px}
+  .card .swatch{width:50px;height:50px}
+  .menu-panel{width:calc(100vw - 24px);height:calc(100vh - 48px)}
+  .menu-body{padding:14px 16px 20px}
+  .menu-title{font-size:20px;letter-spacing:3px}
+}
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+
+<div class="top">
+  <div class="brand">
+    <div class="logo"></div>
+    <div>
+      <div class="tname">世界美食大百科</div>
+      <div class="tsub">转地球 · 点红点 · 尝人间烟火</div>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button class="menu-btn" id="menuBtn"><span class="ico">📋</span>菜单</button>
+    <div class="gear" id="gear" title="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="tip" id="tip">拖动旋转 · 滚轮缩放 · 点红点看美食 · 底部按大洲筛选</div>
+<div class="hint" id="hint"></div>
+
+<div class="dock" id="dock">
+  <button data-c="all" class="on">全部<span class="cnt" id="cnt-all"></span></button>
+  <button data-c="asia">亚洲<span class="cnt" id="cnt-asia"></span></button>
+  <button data-c="europe">欧洲<span class="cnt" id="cnt-europe"></span></button>
+  <button data-c="africa">非洲<span class="cnt" id="cnt-africa"></span></button>
+  <button data-c="nam">北美<span class="cnt" id="cnt-nam"></span></button>
+  <button data-c="sam">南美<span class="cnt" id="cnt-sam"></span></button>
+  <button data-c="oce">大洋洲<span class="cnt" id="cnt-oce"></span></button>
+</div>
+
+<div class="card" id="card">
+  <button class="cclose" id="cClose">×</button>
+  <div class="chead">
+    <div class="swatch" id="cSwatch"></div>
+    <div class="ctitle">
+      <div class="cname" id="cName"></div>
+      <div class="cloc" id="cLoc"></div>
+    </div>
+  </div>
+  <div class="cintro" id="cIntro"></div>
+  <div class="csection">
+    <div class="clabel">关键食材</div>
+    <div class="cchips" id="cIng"></div>
+  </div>
+  <div class="csection">
+    <div class="clabel">风味标签</div>
+    <div class="cchips" id="cTags"></div>
+  </div>
+  <div class="c-actions" id="cActions" style="display:none">
+    <div class="c-progress" id="cProgress"></div>
+    <button class="c-next" id="cNext">下一道 ›</button>
+  </div>
+</div>
+
+<div class="menu-overlay" id="menuOverlay">
+  <div class="menu-panel">
+    <button class="menu-close" id="menuClose">×</button>
+    <div class="menu-header">
+      <div class="menu-title">欢 迎 光 临</div>
+      <div class="menu-sub">世界美食餐厅 · 请点选您想品尝的菜品</div>
+    </div>
+    <div class="menu-body" id="menuBody"></div>
+    <div class="menu-footer">
+      <div class="order-info">已点 <b id="orderCount">0</b> 道菜</div>
+      <button class="order-btn" id="orderBtn" disabled>请先点单</button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <button class="close" id="sClose">×</button>
+  <h3>显示</h3>
+  <div class="row"><label>自动旋转</label><div class="sw on" id="swPlay"><i></i></div></div>
+  <div class="row"><label>城市标签</label><div class="sw on" id="swLabel"><i></i></div></div>
+  <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
+  <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
+  <div class="row"><label>连线高亮</label><div class="sw on" id="swBeam"><i></i></div></div>
+  <h3>视角</h3>
+  <div style="display:flex;margin-top:4px">
+    <button id="bReset" style="flex:1;font-size:13px;background:var(--paper2);border:1px solid var(--line2);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer;font-weight:600">重置视角</button>
+    <button id="bTop" style="flex:1;font-size:13px;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;color:#fff;border-radius:8px;padding:9px 0;cursor:pointer;margin-left:8px;font-weight:700">俯视</button>
+  </div>
+  <h3>统计</h3>
+  <div class="stat" id="stat"></div>
+</div>
+
+<div id="loader"><div class="spin"></div><p>正在加载美食地球…</p></div>
+<div id="fallback"><h2>无法启动 3D 场景</h2><p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Firefox / Safari。</p></div>
+
+<script src="./assets/foods.js"></script>
+<script src="./assets/three.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
