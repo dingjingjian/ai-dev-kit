@@ -44,7 +44,7 @@
 
 ## 六、参赛硬约束（来自本仓库既有小工具规范）
 
-上传的「小工具」为**离线 H5 zip**，须满足仓库内既有规范（参见 `vibeknow/rocket-launch/.skill/minitool-zip-builder/` 与 `vibeknow/function-visualization/.skill/references/`）：
+上传的「小工具」为**离线 H5 zip**，须满足仓库内既有规范（参见仓库根 `.skill/minitool-zip-builder/` 与 `.skill/minitool-zip-builder/references/`）：
 
 - `index.html` 必须在 **zip 根目录**；压缩的是目录"内容"而非目录本身
 - **纯离线**：不得引用任何外部 CDN / 在线字体 / 在线图片

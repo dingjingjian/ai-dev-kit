@@ -57,7 +57,8 @@
 
 ## 协作约定（供 AI 助手）
 
-- **先读文档再动手**：进入任意子项目前，先阅读其 `README.md` / `CLAUDE.md` / `SKILL.md`，遵循其中的技术栈、目录结构与约束。
+- **先读文档再动手**：进入任意子项目前，先阅读其 `README.md` / `CLAUDE.md` / `SKILL.md`，遵循其中的技术栈、目录结构与约束。仓库级可复用 Skill 位于根目录 `.skill/`（如小工具打包与兼容性规范 `minitool-zip-builder/`，见 [`TRACKS.md`](TRACKS.md)），涉及 H5 / WebView / 小工具产出时优先查阅其 `SKILL.md` 与工作流。
+- **兼容性基线（H5 / WebView / 小工具）**：任何在浏览器内核中运行的产出，最低兼容基线为 **Android 8.1 出场 Chrome / WebView 61（ES2017）**。新 Web API 必须做能力检测而非 UA / 机型判断，超出基线语法须由构建链转译；CSS 采用「基线层 + `@supports` / 行为检测增强层」，不维护两套完整样式。权威细则见 `.skill/minitool-zip-builder/references/`（`js-compatibility.md` / `css-compatibility.md` / `cross-platform-h5.md` / `device-capabilities.md`），交付前逐条核对其末尾自检清单，未实测须标注「兼容性未实测」。
 - **保持单文件工具的最小依赖**：浏览器端工具优先零依赖单文件 HTML；除非必要，不要引入构建步骤或外部 CDN。
 - **不擅自改动项目定位**：每个子项目有独立用途，改动核心逻辑或依赖前应先确认意图。
 - **目录归属看目录 + `TRACKS.md`**：项目位于哪个顶层目录下即属哪个分类。跨分类迁移用 `git mv`，并同步更新 `TRACKS.md`（唯一真源）与项目 README 顶部的分类行。
