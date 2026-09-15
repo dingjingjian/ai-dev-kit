@@ -1656,8 +1656,8 @@ function renderBpTabs(st, rec){
   var box = $('bpTabs');
   if (!box) return;
   box.innerHTML = '';
-  var defs = [{ id:'auto', name:'推荐', color: rec ? CATS[rec].color : null }];
-  defs.push({ id:'all', name:'全部', color:null });
+  var defs = [{ id:'auto', name:'推荐', color: rec ? CATS[rec].color : '#B9BEC4' }];
+  defs.push({ id:'all', name:'全部', color:'#B9BEC4' });
   DATA.cats.forEach(function(c){ defs.push({ id:c.id, name:c.name, color:c.color }); });
 
   defs.forEach(function(t){
