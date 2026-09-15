@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>侏罗纪公园 · 游览导航</title>
+<style>
+  /* ===== 侏罗纪公园 · 游览导航 app =====
+     致敬 1993 经典电影：大门开启 → 游览车按路线行进 → 化石发现地定位。
+     配色：深丛林绿 / 火焰红橙 / 骨白 / 黄铜 / 暗木棕。
+     四页：路线选择 / 大门过渡 / 游览车游览 / 游览总结。
+     地球为「化石发现地定位组件」，仅在游览页内嵌。
+
+  /* ===== 图片素材图位（逐项规格见 docs/图片素材需求.md）=====
+     ① 恐龙图 ×30   assets/dinos/<slug>.webp    512×512，游览页大图，缺图回退色卡
+     ② 公园大门     assets/tex/gate.webp        大门过渡页背景，缺图用 CSS 画的大门兜底
+     ③ 丛林背景     assets/tex/jungle.webp      路线选择页背景，缺图用 CSS 渐变兜底
+     ④ 路线横幅 ×4  assets/tex/route-<key>.webp  路线卡片背景，缺图用主题渐变兜底
+     ⑤ 木纹纹理     assets/tex/wood.webp        大门与控制栏木纹，缺图用纯色兜底 */
+
+  :root{
+    /* 丛林深绿系（公园本体） */
+    --jungle-9:#06120a;--jungle-8:#0a1a0c;--jungle-7:#0f2412;--jungle-6:#163018;--jungle-5:#1f3f22;--jungle-4:#2a5230;--jungle-3:#3d6b45;
+    /* 火焰红橙系（强调 / 警示 / 火炬） */
+    --flame:#d2622a;--flame-2:#e08040;--flame-3:#cf6b2a;--flame-glow:rgba(210,98,42,.35);
+    /* 骨白米白系（文字 / 卡片） */
+    --bone:#f4f0e6;--bone-2:#ebe5d4;--bone-3:#ddd5be;--bone-4:#cabfa2;
+    /* 黄铜系（边框 / 装饰） */
+    --brass:#b0894a;--brass-2:#d8b06a;--brass-glow:rgba(176,137,74,.22);
+    /* 暗木棕系（大门 / 栅栏） */
+    --wood-9:#1a0c06;--wood-8:#2b150c;--wood-7:#3d1f12;--wood-6:#532b17;--wood-5:#6b3a1e;
+    /* 墨色 */
+    --ink:#1a1a14;--ink-2:#5a5a4a;--ink-3:#8a8a78;--ink-4:#b0b09c;
+    /* 线条 */
+    --line:rgba(176,137,74,.30);--line-2:rgba(176,137,74,.45);
+    /* 路线主题色（默认 = 公园本体，由 app.js 按 route 切换） */
+    --route-dark:var(--jungle-7);--route-mid:var(--jungle-5);--route-light:var(--jungle-3);
+    --route-accent:var(--flame);--route-accent-2:var(--flame-2);
+    --route-banner:url('./assets/tex/route-predator.webp');
+
+    --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --shadow:0 10px 34px rgba(0,0,0,.45);
+    --dishbar:52px;--globem:200px;
+    --hero-h:140px;
+    --sat:0px;--sattop:8px;--sab:0px;
+  }
+  @supports (top:env(safe-area-inset-top)){
+    :root{--sat:env(safe-area-inset-top,0px);--sattop:calc(8px + env(safe-area-inset-top,0px));--sab:env(safe-area-inset-bottom,0px)}
+  }
+
+  /* ===== 路线主题（4 套，由 body[data-route] 切换）===== */
+  /* 掠食者之旅：火焰红橙 */
+  body[data-route="predator"]{
+    --route-dark:#2a0e06;--route-mid:#5c1f0e;--route-light:#9a3c1e;
+    --route-accent:#e0453a;--route-accent-2:#f06449;
+    --route-banner:url('./assets/tex/route-predator.webp')}
+  /* 巨兽之旅：深森林绿 */
+  body[data-route="giants"]{
+    --route-dark:#08150f;--route-mid:#1a3626;--route-light:#3d6b45;
+    --route-accent:#6b9a4a;--route-accent-2:#8ab860;
+    --route-banner:url('./assets/tex/route-giants.webp')}
+  /* 时空之旅：青铜蓝绿 */
+  body[data-route="time"]{
+    --route-dark:#0a1520;--route-mid:#1d3450;--route-light:#3a5a80;
+    --route-accent:#4a9ab0;--route-accent-2:#6ab8d0;
+    --route-banner:url('./assets/tex/route-time.webp')}
+  /* 奇异物种之旅：暗紫琥珀 */
+  body[data-route="bizarre"]{
+    --route-dark:#180a20;--route-mid:#2e1438;--route-light:#5a2e6a;
+    --route-accent:#c080d0;--route-accent-2:#d8a0e0;
+    --route-banner:url('./assets/tex/route-bizarre.webp')}
+
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;color:var(--bone);font-family:var(--serif);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  body{background:radial-gradient(ellipse 80% 60% at 50% 10%,var(--jungle-6),var(--jungle-8) 60%,var(--jungle-9) 100%)}
+
+  /* ===== 页面容器 ===== */
+  .page{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column}
+  body.mode-routes .page-routes{display:flex}
+  body.mode-gate .page-gate{display:flex}
+  body.mode-tour .page-tour{display:flex}
+  body.mode-summary .page-summary{display:flex}
+
+  /* ===== 路线选择页 ===== */
+  .page-routes{overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* 顶部公园大门视觉区 */
+  .park-hero{flex:none;position:relative;height:calc(var(--hero-h) + 60px + var(--sattop));padding-top:var(--sattop);overflow:hidden;
+    background:radial-gradient(ellipse 90% 70% at 50% 30%,var(--jungle-5),var(--jungle-8) 70%,var(--jungle-9))}
+  .park-hero::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+    background-image:url('./assets/tex/jungle.webp');background-size:cover;background-position:center;opacity:.35}
+  .park-hero::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+    background:linear-gradient(180deg,rgba(6,12,6,.4) 0%,rgba(6,12,6,0) 40%,rgba(6,12,6,.7) 100%)}
+  .park-brand{position:relative;z-index:2;text-align:center;padding:20px 16px 0}
+  /* 三角 logo（CSS 画） */
+  .park-logo{display:inline-block;width:64px;height:56px;position:relative;margin-bottom:8px}
+  .park-logo::before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;
+    background:var(--bone);clip-path:polygon(50% 0,100% 100%,0 100%);
+    -webkit-mask:linear-gradient(135deg,transparent 40%,#000 40%)}
+  .park-logo::after{content:"";position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    width:0;height:0;border-left:24px solid transparent;border-right:24px solid transparent;border-bottom:42px solid var(--bone);
+    border-radius:0}
+  .park-ttl{font-size:26px;font-weight:700;color:var(--bone);letter-spacing:8px;text-indent:8px;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+  .park-sub{font-size:12px;color:var(--brass-2);margin-top:6px;letter-spacing:3px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+  /* 火炬（左右两侧，CSS 动画） */
+  .torch{position:absolute;bottom:20px;z-index:2;width:18px;height:60px}
+  .torch.left{left:20px}.torch.right{right:20px}
+  .torch-stick{position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:6px;height:30px;background:linear-gradient(180deg,var(--wood-5),var(--wood-7));border-radius:2px}
+  .torch-flame{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);width:14px;height:28px;
+    background:radial-gradient(ellipse 60% 80% at 50% 80%,var(--flame-2),var(--flame) 50%,transparent 80%);
+    border-radius:50% 50% 50% 50% / 70% 70% 30% 30%;animation:flicker 1.2s ease-in-out infinite alternate;filter:blur(1px)}
+  .torch-flame::before{content:"";position:absolute;bottom:0;left:50%;transform:translateX(-50%);width:8px;height:18px;
+    background:radial-gradient(ellipse 60% 80% at 50% 80%,#ffe080,var(--flame-2) 60%,transparent);border-radius:50% 50% 50% 50% / 70% 70% 30% 30%;filter:blur(.5px)}
+  @keyframes flicker{0%{transform:translateX(-50%) scale(1,.95);opacity:.9}50%{transform:translateX(-50%) scale(1.05,1);opacity:1}100%{transform:translateX(-50%) scale(.95,1.05);opacity:.85}}
+  /* 大门视觉（CSS 画的简化大门） */
+  .gate-mini{position:absolute;bottom:0;left:50%;transform:translateX(-50%);z-index:1;width:200px;height:50px;
+    background:linear-gradient(180deg,var(--wood-7),var(--wood-9));
+    border:2px solid var(--brass);border-bottom:none;border-radius:4px 4px 0 0;
+    box-shadow:0 -4px 16px rgba(0,0,0,.5)}
+  .gate-mini::before{content:"";position:absolute;top:6px;left:50%;transform:translateX(-50%);width:120px;height:3px;background:var(--brass)}
+  .gate-mini::after{content:"";position:absolute;top:14px;left:50%;transform:translateX(-50%);width:80px;height:2px;background:var(--brass-2);opacity:.6}
+
+  /* 路线列表 */
+  .route-section{padding:20px 16px 100px;max-width:680px;margin:0 auto}
+  .route-section-title{font-size:14px;color:var(--brass-2);letter-spacing:4px;margin-bottom:16px;text-align:center}
+  .route-section-title::before,.route-section-title::after{content:"—";color:var(--brass);margin:0 10px;opacity:.5}
+  .route-card{display:block;width:100%;margin-bottom:14px;padding:0;border:none;background:transparent;cursor:pointer;text-align:left;
+    text-decoration:none;color:inherit;position:relative;overflow:hidden;border-radius:6px;
+    transition:transform .2s,box-shadow .2s}
+  .route-card:hover{transform:translateY(-2px)}
+  .route-card-bg{position:absolute;top:0;right:0;bottom:0;left:0;z-index:0;
+    background-image:var(--rc-banner),linear-gradient(135deg,var(--rc-dark),var(--rc-mid));
+    background-size:cover,auto;background-position:center,center;background-repeat:no-repeat,no-repeat}
+  .route-card-bg::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;
+    background:linear-gradient(180deg,rgba(6,12,6,.3) 0%,rgba(6,12,6,.75) 100%)}
+  .route-card-inner{position:relative;z-index:1;padding:18px 20px}
+  .route-card-head{display:flex;align-items:center;justify-content:space-between}
+  .route-card-head > * + *{margin-left:12px}
+  .route-name{font-size:20px;font-weight:700;color:var(--bone);letter-spacing:3px;text-shadow:0 2px 6px rgba(0,0,0,.6)}
+  .route-badge{flex-shrink:0;font-size:11px;color:var(--bone);padding:3px 10px;border-radius:2px;
+    background:var(--rc-accent);letter-spacing:1px;font-weight:600;white-space:nowrap}
+  .route-desc{margin-top:10px;font-size:13px;line-height:1.8;color:var(--bone-2);letter-spacing:.5px}
+  .route-meta{margin-top:12px;display:flex;align-items:center;flex-wrap:wrap}
+  .route-meta > * + *{margin-left:14px}
+  .route-stat{font-size:12px;color:var(--bone-3);letter-spacing:1px;display:flex;align-items:center}
+  .route-stat b{color:var(--rc-accent-2);font-size:14px;font-weight:700;margin-right:4px;font-variant-numeric:tabular-nums}
+  .route-intensity{display:inline-flex;gap:2px}
+  .route-intensity i{width:8px;height:8px;border-radius:50%;background:var(--bone-4);opacity:.3}
+  .route-intensity i.on{background:var(--rc-accent);opacity:1}
+  .route-cta{margin-top:14px;display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:var(--bone);
+    padding:8px 18px;border-radius:3px;background:var(--rc-accent);letter-spacing:2px;
+    box-shadow:0 3px 12px rgba(0,0,0,.3);transition:background .2s}
+  .route-card:hover .route-cta{background:var(--rc-accent-2)}
+  .route-cta::after{content:"›";font-size:18px;line-height:1}
+
+  /* 路线选择页底栏 */
+  .routes-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;
+    padding:10px 16px calc(10px + var(--sab));text-align:center;
+    background:linear-gradient(180deg,var(--jungle-8),var(--jungle-9));border-top:1px solid var(--line)}
+  .routes-bar-text{font-size:11px;color:var(--ink-3);letter-spacing:2px}
+
+  /* ===== 大门过渡页 ===== */
+  .page-gate{background:var(--jungle-9);align-items:center;justify-content:center}
+  .gate-stage{position:relative;width:100%;max-width:480px;text-align:center;padding:0 20px}
+  .gate-walls{position:relative;width:100%;height:200px;margin:0 auto 30px;overflow:hidden;border-radius:4px;
+    border:2px solid var(--brass);box-shadow:0 0 40px rgba(0,0,0,.6)}
+  .gate-walls::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;z-index:0;
+    background-image:url('./assets/tex/gate.webp');background-size:cover;background-position:center;opacity:.7}
+  .gate-walls::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;z-index:1;
+    background:radial-gradient(ellipse 70% 50% at 50% 50%,var(--jungle-5),var(--jungle-8) 80%)}
+  /* 两扇门（CSS 动画向两侧打开） */
+  .gate-door{position:absolute;top:0;bottom:0;z-index:2;width:50%;
+    background:linear-gradient(180deg,var(--wood-7),var(--wood-9));border:2px solid var(--brass)}
+  .gate-door.left{left:0;border-right:3px solid var(--brass-2);transform-origin:left center;animation:doorOpenL 2.2s ease-out forwards}
+  .gate-door.right{right:0;border-left:3px solid var(--brass-2);transform-origin:right center;animation:doorOpenR 2.2s ease-out forwards}
+  .gate-door::before{content:"";position:absolute;top:10px;bottom:10px;width:3px;background:var(--brass);opacity:.4}
+  .gate-door.left::before{right:8px}.gate-door.right::before{left:8px}
+  .gate-door::after{content:"";position:absolute;top:50%;transform:translateY(-50%);width:20px;height:20px;border-radius:50%;
+    background:radial-gradient(circle,var(--flame-2),var(--flame) 60%,transparent);filter:blur(2px);animation:flicker 1s ease-in-out infinite alternate}
+  .gate-door.left::after{right:20px}.gate-door.right::after{left:20px}
+  @keyframes doorOpenL{0%{transform:rotateY(0)}100%{transform:rotateY(-95deg)}}
+  @keyframes doorOpenR{0%{transform:rotateY(0)}100%{transform:rotateY(95deg)}}
+  .gate-logo{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:3;opacity:0;animation:gateLogo 1s ease 1.5s forwards}
+  .gate-logo-inner{width:0;height:0;border-left:30px solid transparent;border-right:30px solid transparent;border-bottom:52px solid var(--bone);
+    filter:drop-shadow(0 0 12px var(--flame-glow))}
+  .gate-logo-text{margin-top:8px;font-size:13px;color:var(--brass-2);letter-spacing:4px;text-shadow:0 0 10px var(--flame-glow)}
+  @keyframes gateLogo{0%{opacity:0;transform:translate(-50%,-50%) scale(.8)}100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  .gate-title{font-size:24px;font-weight:700;color:var(--bone);letter-spacing:6px;text-indent:6px;
+    text-shadow:0 0 20px var(--flame-glow);opacity:0;animation:gateFade 1s ease 1.8s forwards}
+  .gate-subtitle{margin-top:10px;font-size:13px;color:var(--brass-2);letter-spacing:2px;opacity:0;animation:gateFade 1s ease 2.2s forwards}
+  .gate-route-name{margin-top:20px;font-size:16px;color:var(--flame-2);letter-spacing:3px;font-weight:600;opacity:0;animation:gateFade 1s ease 2.6s forwards}
+  @keyframes gateFade{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+
+  /* ===== 地球定位组件 ===== */
+  .globe-slot{position:fixed;z-index:15;overflow:hidden;
+    background:radial-gradient(ellipse 80% 62% at 50% 12%,var(--jungle-5),var(--jungle-8) 62%,var(--jungle-9));
+    box-shadow:0 0 0 1px var(--brass),0 0 0 4px rgba(10,20,8,.92),0 0 0 5px rgba(176,137,74,.3),0 14px 40px rgba(0,0,0,.5)}
+  .globe-slot canvas{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  .globe-light{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
+    background:radial-gradient(ellipse 66% 42% at 50% -8%,rgba(255,198,124,.20),transparent 72%),
+      radial-gradient(ellipse 120% 92% at 50% 48%,transparent 44%,rgba(6,12,6,.62) 100%)}
+  .globe-tags{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
+  .globe-cap{position:absolute;left:0;right:0;bottom:0;padding:7px 12px;pointer-events:none;
+    font-size:11.5px;color:var(--brass-2);letter-spacing:1.5px;font-variant-numeric:tabular-nums;
+    display:flex;align-items:baseline;justify-content:space-between;
+    background:linear-gradient(0deg,rgba(10,20,8,.85),rgba(10,20,8,0))}
+  .globe-cap .gname{color:var(--bone);font-family:var(--serif);letter-spacing:2px;font-size:12.5px}
+  .globe-cap .gcoord{font-family:var(--sans);opacity:.85;margin-left:8px}
+  .globe-down{position:absolute;top:0;right:0;bottom:0;left:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;padding:0 26px 26px;text-align:center;
+    background:radial-gradient(ellipse 74% 58% at 50% 38%,var(--jungle-5),var(--jungle-8) 62%,var(--jungle-9))}
+  .globe-down.show{display:flex}
+  .globe-down .gd-ttl{font-size:14px;color:var(--bone);letter-spacing:3px}
+  .globe-down .gd-sub{margin-top:9px;font-size:11.5px;line-height:1.9;color:var(--ink-3);letter-spacing:1px}
+
+  /* ===== 游览页（游览车视角）===== */
+  .page-tour{background:radial-gradient(ellipse 92% 64% at 50% 26%,var(--route-mid),var(--route-dark) 60%,var(--jungle-9))}
+  .tour-bar{flex:none;height:calc(var(--dishbar) + var(--sattop));padding:var(--sattop) 14px 0;
+    display:flex;align-items:center;justify-content:space-between;
+    background:linear-gradient(180deg,rgba(6,12,6,.96),rgba(6,12,6,0))}
+  .tour-bar > * + *{margin-left:12px}
+  .tour-vehicle{flex-shrink:0;font-size:11px;color:var(--brass-2);letter-spacing:1.5px;font-variant-numeric:tabular-nums;
+    padding:3px 8px;border:1px solid var(--line-2);border-radius:2px;background:rgba(6,12,6,.5)}
+  .tour-vehicle b{color:var(--route-accent-2)}
+  .tour-crumb{flex:1;min-width:0;text-align:center;font-size:11.5px;color:var(--ink-4);letter-spacing:1.5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tour-progress{flex-shrink:0;font-size:11px;color:var(--brass-2);letter-spacing:1px;font-variant-numeric:tabular-nums}
+  .tour-progress b{color:var(--route-accent-2);font-size:13px}
+
+  .tour-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:var(--globem);padding:16px 16px 100px}
+  .tour-wrap{width:100%;max-width:680px;margin:0 auto}
+  .tour-stage{display:flex;flex-direction:column;align-items:center;text-align:center}
+  .tour-img{width:76vw;height:76vw;max-width:320px;max-height:320px;border-radius:4px;background:var(--bone-3);background-size:cover;background-position:center;
+    box-shadow:0 0 0 1px var(--brass),0 0 0 10px rgba(244,240,230,.94),0 0 0 11px var(--brass),0 26px 64px rgba(0,0,0,.62)}
+  .tour-name{margin-top:24px;font-size:24px;font-weight:700;color:var(--bone);letter-spacing:6px;text-indent:6px;text-shadow:0 2px 8px rgba(0,0,0,.55)}
+  .tour-loc{margin-top:8px;font-size:12.5px;color:var(--brass-2);letter-spacing:2px}
+  .tour-loc::before{content:"";display:inline-block;width:5px;height:5px;background:var(--brass-2);margin-right:7px;vertical-align:1px}
+  .tour-intro{margin-top:16px;max-width:520px;font-size:13px;line-height:1.95;color:var(--ink-4);text-indent:2em;text-align:left}
+  .tour-traits{margin-top:16px;max-width:520px;display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+  .tour-trait{font-size:12px;color:var(--bone);padding:3px 10px;border-radius:2px;
+    background:rgba(176,137,74,.15);border:1px solid var(--line-2);letter-spacing:1px}
+  .tour-tags{margin-top:10px;max-width:520px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+  .tour-tag{font-size:11px;color:var(--route-accent-2);padding:2px 8px;border-radius:2px;
+    background:rgba(210,98,42,.10);letter-spacing:1px}
+
+  /* 游览车控制栏 */
+  .tour-controls{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;justify-content:space-between;
+    padding:12px 16px calc(12px + var(--sab));background:linear-gradient(180deg,var(--wood-7),var(--wood-9));
+    border-top:2px solid var(--brass);box-shadow:0 -8px 26px rgba(0,0,0,.5)}
+  .tour-controls > * + *{margin-left:10px}
+  .tour-controls::before{content:"";position:absolute;left:0;right:0;top:0;height:5px;pointer-events:none;
+    background:linear-gradient(90deg,transparent,var(--brass) 20%,var(--brass-2) 50%,var(--brass) 80%,transparent);opacity:.6}
+  .tc-btn{border:none;cursor:pointer;font-family:var(--serif);font-weight:700;transition:.15s;white-space:nowrap;border-radius:3px}
+  .tc-prev{background:transparent;border:1px solid var(--line-2);color:var(--ink-4);padding:9px 14px;font-size:13px;letter-spacing:1px}
+  .tc-prev:hover{background:rgba(176,137,74,.15);color:var(--bone)}
+  .tc-prev:disabled{opacity:.3;cursor:not-allowed}
+  .tc-info{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--brass-2);letter-spacing:1.5px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .tc-info b{color:var(--route-accent-2);font-size:15px;font-variant-numeric:tabular-nums}
+  .tc-next{background:var(--route-accent);color:#fff;padding:10px 20px;font-size:14px;letter-spacing:2px;
+    box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  .tc-next:hover{background:var(--route-accent-2)}
+  .tc-quit{background:transparent;border:1px solid var(--line-2);color:var(--ink-4);padding:9px 14px;font-size:13px;letter-spacing:1px}
+  .tc-quit:hover{background:rgba(210,98,42,.15);color:var(--flame-2)}
+
+  /* ===== 总结页 ===== */
+  .page-summary{background:radial-gradient(ellipse 80% 60% at 50% 10%,var(--jungle-6),var(--jungle-8) 60%,var(--jungle-9))}
+  .summary-bar{flex:none;height:calc(var(--dishbar) + var(--sattop));padding:var(--sattop) 14px 0;
+    display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(6,12,6,.96),rgba(6,12,6,0))}
+  .summary-body{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:20px 16px 100px}
+  .summary-wrap{width:100%;max-width:680px;margin:0 auto}
+  .summary-ttl{font-size:22px;font-weight:700;color:var(--bone);letter-spacing:6px;text-indent:6px;text-align:center}
+  .summary-sub{font-size:12px;color:var(--brass-2);margin-top:8px;letter-spacing:1.5px;text-align:center}
+  .summary-sub b{color:var(--flame-2);font-size:15px;font-variant-numeric:tabular-nums}
+  .summary-thanks{margin:20px auto;padding:16px;text-align:center;font-size:15px;color:var(--bone);letter-spacing:3px;line-height:1.8;
+    background:rgba(176,137,74,.10);border:1px solid var(--line);border-radius:4px;max-width:460px}
+  .summary-thanks em{font-style:normal;color:var(--flame-2);font-weight:700}
+  .sec{display:flex;align-items:center;margin:18px 0 8px;font-size:13.5px;font-weight:700;color:var(--flame-2);letter-spacing:4px}
+  .sec:first-child{margin-top:0}
+  .sec::after{content:"";flex:1;border-bottom:1px dotted var(--line-2);transform:translateY(-4px)}
+  .secnote{margin-left:auto;font-size:11px;font-weight:400;color:var(--ink-3);letter-spacing:1px}
+  /* 六维特征雷达图 */
+  .radar{display:block;width:100%;max-width:320px;height:auto;margin:2px auto 0}
+  .radar .grid{fill:none;stroke:var(--line-2);stroke-width:1}
+  .radar .grid.edge{stroke:var(--brass);stroke-width:1.2}
+  .radar .axis{stroke:var(--line);stroke-width:1}
+  .radar .face{fill:var(--flame);fill-opacity:.20;stroke:var(--flame);stroke-width:1.6;stroke-linejoin:round}
+  .radar .dot{fill:var(--flame)}
+  .radar .lab{fill:var(--ink-3);font-family:var(--serif);font-size:12px;font-weight:700;letter-spacing:1px}
+  .radar .lab.peak{fill:var(--flame-2)}
+  .radar .val{fill:var(--ink-4);font-size:10.5px;font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .sum-dish{display:flex;align-items:baseline;padding:8px 2px;border-bottom:1px dotted var(--line)}
+  .sum-dish > * + *{margin-left:9px}
+  .sum-dish .sum-dot{flex:none;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 1px rgba(10,20,8,.35);transform:translateY(1px)}
+  .sum-dish .sum-dname{flex:none;font-size:14px;font-weight:700;color:var(--bone);letter-spacing:1.5px}
+  .sum-dish .sum-dmeta{flex:1;min-width:12px;font-size:11.5px;color:var(--ink-3);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sum-dish .sum-dtags{flex:none;font-size:12px;color:var(--flame-2);letter-spacing:1px;font-variant-numeric:tabular-nums}
+  /* 体型合计 */
+  .kc-total{display:flex;align-items:baseline;margin:12px 0 4px}
+  .kc-total > * + *{margin-left:9px}
+  .kc-total b{font-size:30px;line-height:1.1;color:var(--flame-2);font-weight:700;letter-spacing:1px;font-variant-numeric:tabular-nums}
+  .kc-total span{font-size:12px;color:var(--ink-3);letter-spacing:1.5px}
+  .kc-row{display:flex;align-items:center;margin:8px 0}
+  .kc-row > * + *{margin-left:12px}
+  .kc-row .kc-k{flex:none;min-width:56px;font-size:12.5px;color:var(--ink-3);letter-spacing:1px}
+  .kc-row .kc-t{flex:1;min-width:24px;height:8px;background:var(--line);border-radius:1px;overflow:hidden}
+  .kc-row .kc-t i{display:block;height:100%;background:linear-gradient(90deg,var(--brass),var(--brass-2))}
+  .kc-row .kc-v{flex:none;text-align:right;font-size:13px;font-weight:700;color:var(--bone);letter-spacing:.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .kc-row.over .kc-t i{background:linear-gradient(90deg,var(--flame),var(--flame-2))}
+  .kc-row.over .kc-v{color:var(--flame-2)}
+  .kc-note{margin-top:10px;font-size:11px;line-height:1.8;color:var(--ink-4);letter-spacing:1px}
+
+  /* 总结页控制栏 */
+  .summary-controls{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;justify-content:center;gap:12px;
+    padding:12px 16px calc(12px + var(--sab));background:linear-gradient(180deg,var(--wood-7),var(--wood-9));
+    border-top:2px solid var(--brass);box-shadow:0 -8px 26px rgba(0,0,0,.5)}
+  .sc-btn{border:none;cursor:pointer;font-family:var(--serif);font-weight:700;transition:.15s;white-space:nowrap;border-radius:3px}
+  .sc-back{background:var(--flame);color:#fff;padding:10px 24px;font-size:14px;letter-spacing:2px;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+  .sc-back:hover{background:var(--flame-2)}
+
+  /* ===== 化石发现地标签 ===== */
+  .tag{position:absolute;transform:translate(-50%,-142%);font-size:11px;color:var(--ink);padding:2px 7px;white-space:nowrap;pointer-events:none;transition:opacity .25s;font-weight:600;letter-spacing:1px;
+    background:linear-gradient(180deg,var(--bone),var(--bone-3));border:1px solid var(--brass);border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+
+  /* ===== 提示 ===== */
+  .hint{position:fixed;left:50%;top:calc(var(--sat) + 60px);transform:translateX(-50%);font-size:12.5px;color:#fff;padding:7px 16px;z-index:26;opacity:0;transition:opacity .35s;pointer-events:none;letter-spacing:1.5px;font-weight:600;
+    white-space:normal;text-align:center;line-height:1.6;width:max-content;max-width:calc(100% - 36px);
+    background:linear-gradient(174deg,var(--flame-2),var(--flame) 80%);border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 6px 18px rgba(120,20,10,.45)}
+  .hint.show{opacity:1}
+  body.mode-tour .hint{top:calc(var(--dishbar) + var(--sattop) + 12px)}
+
+  /* ===== 加载 ===== */
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s;
+    background:radial-gradient(ellipse 70% 50% at 50% 40%,var(--jungle-6),var(--jungle-8) 60%,var(--jungle-9))}
+  #loader.hide{opacity:0;pointer-events:none}
+  .spin{width:44px;height:44px;border:3px solid rgba(176,137,74,.22);border-top-color:var(--brass-2);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loader p{margin-top:18px;font-size:14px;color:var(--brass-2);letter-spacing:4px}
+
+  /* ===== 移动端 ===== */
+  .globe-slot{top:calc(var(--dishbar) + var(--sattop));left:0;right:0;height:var(--globem);border-radius:0;display:none}
+  body.mode-tour .globe-slot{display:block}
+
+  /* 焦点基线 */
+  .route-card:focus,.tc-btn:focus,.sc-btn:focus{outline:2px solid var(--brass);outline-offset:1px}
+
+  /* 矮视口 */
+  @media (max-height:520px){.park-hero{height:calc(100px + 60px + var(--sattop))}.park-ttl{font-size:20px}}
+  @media (min-height:820px){:root{--hero-h:170px}}
+
+  /* 增强层：Flex gap */
+  .supports-flex-gap .route-card-head{gap:12px}
+  .supports-flex-gap .route-card-head > * + *{margin-left:0}
+  .supports-flex-gap .route-meta{gap:14px}
+  .supports-flex-gap .route-meta > * + *{margin-left:0}
+  .supports-flex-gap .tour-bar{gap:12px}
+  .supports-flex-gap .tour-bar > * + *{margin-left:0}
+  .supports-flex-gap .tour-controls{gap:10px}
+  .supports-flex-gap .tour-controls > * + *{margin-left:0}
+  .supports-flex-gap .summary-controls{gap:12px}
+  .supports-flex-gap .sum-dish{gap:9px}
+  .supports-flex-gap .sum-dish > * + *{margin-left:0}
+  .supports-flex-gap .kc-total{gap:9px}
+  .supports-flex-gap .kc-total > * + *{margin-left:0}
+  .supports-flex-gap .kc-row{gap:12px}
+  .supports-flex-gap .kc-row > * + *{margin-left:0}
+</style>
+<script>
+(function(){
+  try{
+    var t=document.createElement('div');
+    t.style.position='absolute';t.style.visibility='hidden';t.style.display='flex';
+    t.style.flexDirection='column';t.style.rowGap='1px';
+    t.appendChild(document.createElement('div'));t.appendChild(document.createElement('div'));
+    document.documentElement.appendChild(t);
+    if(t.scrollHeight===1)document.documentElement.className+=' supports-flex-gap';
+    document.documentElement.removeChild(t);
+  }catch(e){}
+})();
+</script>
+</head>
+<body class="mode-routes">
+<div class="globe-slot" id="globeSlot">
+  <canvas id="stage"></canvas>
+  <div class="globe-light" aria-hidden="true"></div>
+  <div class="globe-tags" id="globeTags"></div>
+  <div class="globe-down" id="globeDown">
+    <div class="gd-ttl">地球组件不可用</div>
+    <div class="gd-sub">当前浏览器不支持 WebGL，化石发现地改由下方文字标出。<br>游览照常进行。</div>
+  </div>
+  <div class="globe-cap"><span class="gname" id="capName"></span><span class="gcoord" id="capCoord"></span></div>
+</div>
+
+<!-- 路线选择页 -->
+<main class="page page-routes" id="pageRoutes">
+  <header class="park-hero">
+    <div class="park-brand">
+      <div class="park-logo"></div>
+      <div class="park-ttl">侏罗纪公园</div>
+      <div class="park-sub">JURASSIC PARK · 游览导航</div>
+    </div>
+    <div class="torch left"><div class="torch-stick"></div><div class="torch-flame"></div></div>
+    <div class="torch right"><div class="torch-stick"></div><div class="torch-flame"></div></div>
+    <div class="gate-mini"></div>
+  </header>
+  <div class="route-section">
+    <div class="route-section-title">选择游览路线</div>
+    <div id="routeList"></div>
+  </div>
+  <div class="routes-bar">
+    <div class="routes-bar-text">* 游览车将按路线自动行进 · 化石发现地实时标注于地球</div>
+  </div>
+</main>
+
+<!-- 大门过渡页 -->
+<section class="page page-gate" id="pageGate">
+  <div class="gate-stage">
+    <div class="gate-walls">
+      <div class="gate-door left"></div>
+      <div class="gate-door right"></div>
+      <div class="gate-logo">
+        <div class="gate-logo-inner"></div>
+        <div class="gate-logo-text">JURASSIC PARK</div>
+      </div>
+    </div>
+    <div class="gate-title" id="gateTitle">欢迎来到侏罗纪公园</div>
+    <div class="gate-subtitle" id="gateSubtitle">When Dinosaurs Ruled the Earth</div>
+    <div class="gate-route-name" id="gateRouteName"></div>
+  </div>
+</section>
+
+<!-- 游览页 -->
+<section class="page page-tour" id="pageTour">
+  <div class="tour-bar">
+    <div class="tour-vehicle" id="tourVehicle">游览车 <b>#01</b></div>
+    <div class="tour-crumb" id="tourCrumb"></div>
+    <div class="tour-progress" id="tourProgress"></div>
+  </div>
+  <div class="tour-body" id="tourBody">
+    <div class="tour-wrap">
+      <div class="tour-stage">
+        <div class="tour-img" id="tourImg"></div>
+        <h1 class="tour-name" id="tourName"></h1>
+        <div class="tour-loc" id="tourLoc"></div>
+        <p class="tour-intro" id="tourIntro"></p>
+        <div class="tour-traits" id="tourTraits"></div>
+        <div class="tour-tags" id="tourTags"></div>
+      </div>
+    </div>
+  </div>
+  <div class="tour-controls">
+    <button class="tc-btn tc-prev" id="tcPrev">‹ 上一展品</button>
+    <div class="tc-info" id="tcInfo"></div>
+    <button class="tc-btn tc-next" id="tcNext">下一展品 ›</button>
+    <button class="tc-btn tc-quit" id="tcQuit">退出</button>
+  </div>
+</section>
+
+<!-- 总结页 -->
+<section class="page page-summary" id="pageSummary">
+  <div class="summary-bar">
+    <div class="tour-crumb" id="summaryCrumb">游览总结</div>
+  </div>
+  <div class="summary-body" id="summaryBody">
+    <div class="summary-wrap">
+      <div class="summary-ttl">游览完毕</div>
+      <div class="summary-sub">本次 <b id="sumCount">0</b> 处展品 · 覆盖 <b id="sumCont">0</b> 个年代 <b id="sumCountry">0</b> 国</div>
+      <div class="summary-thanks" id="sumThanks"></div>
+      <div class="sec">特征图谱<span class="secnote">六维 · 本次均值 · 满分 5</span></div>
+      <div id="sumBars"></div>
+      <div class="sec">展品回顾<span class="secnote">各展品最突出的两维</span></div>
+      <div id="sumDishes"></div>
+      <div class="sec">体型合计<span class="secnote">按成年个体代表体长 · 展厅均长基准 15 米</span></div>
+      <div id="sumKcal"></div>
+    </div>
+  </div>
+  <div class="summary-controls">
+    <button class="sc-btn sc-back" id="scBack">返回选择路线</button>
+  </div>
+</section>
+
+<div class="hint" id="hint"></div>
+<div id="loader"><div class="spin"></div><p>正在开园</p></div>
+
+<script src="./assets/dinos.js"></script>
+<script src="./assets/three.min.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
