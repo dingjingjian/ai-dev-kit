@@ -5,7 +5,7 @@
 ## 目录结构
 
 ```
-xiaohongshu-promo/
+xiaohongshu/
 ├── README.md                          ← 本文件
 ├── xiaohongshu-note.md                ← 小红书笔记文案（标题/正文/话题/配图建议）
 ├── screenshots/                        ← 项目真实运行截图（原始素材）

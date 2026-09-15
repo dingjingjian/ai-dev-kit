@@ -25,7 +25,7 @@ def serve():
 async def render(browser, poster, out, width=900, height=1200):
     ctx = await browser.new_context(viewport={"width": width, "height": height}, device_scale_factor=2)
     page = await ctx.new_page()
-    await page.goto(f"http://127.0.0.1:{PORT}/_dev/rednote/{poster}")
+    await page.goto(f"http://127.0.0.1:{PORT}/_dev/xiaohongshu/{poster}")
     await page.wait_for_timeout(900)
     await page.screenshot(path=str(out))
     print("已生成", out)

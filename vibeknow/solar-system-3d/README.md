@@ -23,7 +23,7 @@ WebGL 渲染的太阳系，行星按轨道运行，可点击任意天体追踪�
 |----|------|
 | zip | `solar-system-3d.zip` |
 | 图标 | `icon.png` |
-| 小红书笔记 | `xhs-note/` |
+| 小红书笔记 | `xiaohongshu/` |
 
 ## 分类判定
 

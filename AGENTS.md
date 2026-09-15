@@ -32,7 +32,7 @@
 | 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 基于 perler-bead-game 引擎的生肖版：12 生肖按地支顺序分三档难度；「导出图纸」首发于此（编号网格 + 色号图例 + 用料清单，全景预览 + 点图放大）；同构工程约定，存档前缀 `pzd_` |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分、连对加成，锻炼心算验算能力 |
 | 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球穿越太阳系：太阳引力 + 五颗行星引力实时作用，被行星引力捕获或撞毁即失败、飞出太阳系即胜利；行星发动机燃料有限，掠过行星时"相对速度"决定被吸走还是引力弹弓；复用手写 WebGL 引擎与 solar-system-3d 行星贴图，`tests/headless_wandering.js` 无头自检（16 项） |
-| 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营模拟：24 座真实城市、开辟航线带动城市开发度成长，双瓶颈设计（薄线卡需求 / 干线卡槽位）逼玩家判断扩张方向，槽位按航线给故换大机型是唯一出路；60 回合（15 年）做到全球航空巨企；复用 defcon 球面引擎与竖屏单手 UI，经营数值唯一真源为 `src/sim.js`（UI 只调其导出接口）；音频为 WebAudio 现场合成（13 音效 + 三段落 BGM，零音频文件）；验证八层：`tests/ui-contract.js` 契约 + `tests/headless.js` 功能 + `tests/audio.js` 音频 + `tools/probe-heading.js`/`tests/verify-heading.py` 朝向（读真实实例矩阵判「飞机倒飞」，离线复算内置反例自证有效）+ `tests/smoke-render.py`/`tests/verify-dist.py` 实机 + `tests/check-chrome61.py`/`check-fallback.py` 兼容 + `tools/balance.js` 平衡 + `tools/audit-econ.js` 审计 |
+| 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营模拟：24 座真实城市、开辟航线带动城市开发度成长，双瓶颈设计（薄线卡需求 / 干线卡槽位）逼玩家判断扩张方向，槽位按航线给故换大机型是唯一出路；60 回合（15 年）做到全球航空巨企；复用 defcon 球面引擎与竖屏单手 UI，经营数值唯一真源为 `src/sim.js`（UI 只调其导出接口）；音频为 WebAudio 现场合成（13 音效 + 三段落 BGM，零音频文件）；修掉三处静默失效（竞对价格战从未进入结算公式、地区类需求修正永不命中、事件选项现金被双倍扣除）并订正胜负判定口径（`verdict` 返回 `tier` 而非 `win`）；验证八层：`tests/ui-contract.js` 契约 + `tests/headless.js` 功能 + `tests/audio.js` 音频 + `tools/probe-heading.js`/`tests/verify-heading.py` 朝向（读真实实例矩阵判「飞机倒飞」，离线复算内置反例自证有效）+ `tests/smoke-render.py`/`tests/verify-dist.py` 实机 + `tests/check-chrome61.py`/`check-fallback.py` 兼容 + `tools/balance.js` 平衡 + `tools/audit-econ.js` 审计 |
 
 ### #vibeart　数字艺术
 
@@ -62,6 +62,7 @@
 - **不擅自改动项目定位**：每个子项目有独立用途，改动核心逻辑或依赖前应先确认意图。
 - **目录归属看目录 + `TRACKS.md`**：项目位于哪个顶层目录下即属哪个分类。跨分类迁移用 `git mv`，并同步更新 `TRACKS.md`（唯一真源）与项目 README 顶部的分类行。
 - **脚本与产物分离**：构建/打包/校验脚本（如 `vibeknow/molecule/`、`vibeknow/rocket-launch/` 下的 `*.mjs`/`*.ps1`）与生成产物（压缩包、导出文件）应分目录管理，避免污染源码。
+- **小红书宣传素材目录命名统一为 `xiaohongshu`**：任意子项目的小红书（REDnote）参赛/宣传素材（笔记文案、封面、海报、配图等）都放在项目根目录下名为 `xiaohongshu/` 的文件夹里，**禁止**使用 `xiaohongshu-promo`、`promo`、`xhs-note`、`rednote`、`小红书*` 等异名，也不要把笔记文案直接散落在项目根目录或 `docs/` 下。构建期生成的小红书海报等内部素材若需独立目录，也用 `xiaohongshu/`（如 `perler-city/_dev/xiaohongshu/`）。
 - **提交与协作**：不要主动 `git commit`/`push`；改动完成后汇总说明，由用户决定提交。
 - **凭据安全**：飞书 API、密钥等凭据不应写入代码或提交到仓库；优先使用环境变量或本地配置。
 
