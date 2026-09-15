@@ -43,12 +43,18 @@
     --brass:#b0894a;--brass-2:#d8b06a;
     --paper:#f7eedd;--paper-2:#f2e3c8;--paper-3:#e8d5b0;--paper-4:#d9c19a;
     --red:#a52a1f;--red-2:#c2402f;
+    /* 底部按钮统一红：不跟随洲主题变，切洲时按钮颜色稳定不变来变去 */
+    --btn-red:#a52a1f;--btn-red-2:#c2402f;
     --ink:#241610;--ink-2:#7a5c44;--ink-3:#a98b70;--ink-4:#c7b295;
     --line:rgba(140,90,45,.30);--line-2:rgba(176,137,74,.45);
     --halo:rgba(176,137,74,.22);        /* 页签选中态外圈的柔光，随本洲铜色走 */
     /* 横幅兜底：图未生成时由「主题渐变 + 木纹」顶上，不是空白 */
     --hero-fallback:linear-gradient(112deg,#3d1f12,#6b3a1e 46%,#2b150c);
     --banner-img:url('./assets/tex/banner-all.webp');
+    /* 横幅图水平定位：各洲主体偏右（58%~72%），cover center 裁切后主体偏移、左侧露深色。
+       --banner-pos 按 body[data-ctn] 切换，让主体在容器水平居中。
+       值由 (P·W − C/2)/(W−C) 算出，W=容器高×3.75≈765，C≈390（常见手机宽）。 */
+    --banner-pos:95%;
 
     --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
@@ -57,12 +63,19 @@
     --dishbar:52px;--globem:218px;
     /* 横幅高度：Chrome 61 没有 clamp()，基线给固定值，按视口高分档见样式末尾 */
     --hero-h:118px;--tabs-h:36px;
+    /* 顶部强制留白：小红书 iframe 内 env(safe-area-inset-top) 恒为 0 且宿主不注入
+       in-app class，菜单页横幅自 y=0 起铺满、标题压在图上 top:0，会被宿主顶部按钮
+       压住。用一条显式硬常量下移顶栏与子页 dish-bar，改这一个值就能调顶部预留。
+       （对齐 defcon / perler-city 的 --top-gap 机制） */
+    --top-gap:50px;
     /* 刘海 / 手势条安全区：基线一律取 0。
        env() 是 Chrome 69 的能力，Chrome 61 不认识它 —— 但自定义属性会把
        env() 这个 token 原样收下，等到 calc() 里展开时才失效，连带把整条
        padding / height 声明丢掉（不是退回 0，是整条作废）。故 env() 不能直接
        写在这里，必须由下面的 @supports 块接管：Chrome 61 判定条件为假 → 整块
-       跳过 → 变量保持上面的基线值。 */
+       跳过 → 变量保持上面的基线值。
+       --sattop 只管子页（菜品/品鉴/总结）的顶部安全区，不含 --top-gap ——
+       子页顶部不需要避让宿主按钮，只有首页菜单页横幅用 --top-gap。 */
     --sat:0px;
     --sattop:8px;
     --sab:0px;
@@ -88,7 +101,7 @@
     --ink:#1d1416;--ink-2:#7c6154;--ink-3:#ab9084;--ink-4:#cbb8ac;
     --line:rgba(150,100,70,.30);--line-2:rgba(207,159,74,.48);--halo:rgba(207,159,74,.26);
     --hero-fallback:linear-gradient(112deg,#37161a,#8c3a38 52%,#12090a);
-    --banner-img:url('./assets/tex/banner-asia.webp')}
+    --banner-img:url('./assets/tex/banner-asia.webp');--banner-pos:87%}
   /* 欧洲：墨蓝 · 鎏金 · 酒红 */
   body[data-ctn="europe"]{
     --wood-9:#0a0f1a;--wood-8:#131b2b;--wood-7:#1d2739;--wood-6:#2a3648;--wood-5:#3a4759;--wood-4:#55647a;
@@ -98,7 +111,7 @@
     --ink:#141a24;--ink-2:#6d7382;--ink-3:#9ba1ae;--ink-4:#bfc4ce;
     --line:rgba(90,105,135,.30);--line-2:rgba(201,162,74,.48);--halo:rgba(201,162,74,.30);
     --hero-fallback:linear-gradient(112deg,#1d2739,#55647a 52%,#0a0f1a);
-    --banner-img:url('./assets/tex/banner-europe.webp')}
+    --banner-img:url('./assets/tex/banner-europe.webp');--banner-pos:75%}
   /* 非洲：落日赭 · 陶土 · 沙金 */
   body[data-ctn="africa"]{
     --wood-9:#1a0d05;--wood-8:#2e1608;--wood-7:#43200e;--wood-6:#5c3016;--wood-5:#774120;--wood-4:#9a5c2f;
@@ -108,7 +121,7 @@
     --ink:#221408;--ink-2:#7d5a38;--ink-3:#ac8a63;--ink-4:#cbb18e;
     --line:rgba(150,100,50,.30);--line-2:rgba(217,164,65,.48);--halo:rgba(217,164,65,.26);
     --hero-fallback:linear-gradient(112deg,#43200e,#9a5c2f 54%,#1a0d05);
-    --banner-img:url('./assets/tex/banner-africa.webp')}
+    --banner-img:url('./assets/tex/banner-africa.webp');--banner-pos:81%}
   /* 北美：炭黑 · 番茄红 · 芥末黄 */
   body[data-ctn="nam"]{
     --wood-9:#12100e;--wood-8:#1f1b18;--wood-7:#2c2723;--wood-6:#3b3430;--wood-5:#4d4540;--wood-4:#6a605a;
@@ -118,7 +131,7 @@
     --ink:#191614;--ink-2:#6f6862;--ink-3:#9d968f;--ink-4:#c2bcb5;
     --line:rgba(120,112,102,.30);--line-2:rgba(200,162,75,.48);--halo:rgba(200,162,75,.26);
     --hero-fallback:linear-gradient(112deg,#2c2723,#6a605a 52%,#12100e);
-    --banner-img:url('./assets/tex/banner-nam.webp')}
+    --banner-img:url('./assets/tex/banner-nam.webp');--banner-pos:66%}
   /* 南美：雨林绿 · 青柠 · 辣椒红 */
   body[data-ctn="sam"]{
     --wood-9:#08150f;--wood-8:#11261a;--wood-7:#1a3626;--wood-6:#254935;--wood-5:#33604a;--wood-4:#4a7d63;
@@ -128,7 +141,7 @@
     --ink:#0f1b13;--ink-2:#5d6b58;--ink-3:#8f9c88;--ink-4:#b8c2b1;
     --line:rgba(100,130,105,.30);--line-2:rgba(207,169,60,.48);--halo:rgba(207,169,60,.26);
     --hero-fallback:linear-gradient(112deg,#1a3626,#4a7d63 52%,#08150f);
-    --banner-img:url('./assets/tex/banner-sam.webp')}
+    --banner-img:url('./assets/tex/banner-sam.webp');--banner-pos:75%}
   /* 大洋洲：海礁青 · 珊瑚 · 沙金 */
   body[data-ctn="oce"]{
     --wood-9:#05121a;--wood-8:#0b2130;--wood-7:#123040;--wood-6:#1a4356;--wood-5:#235a70;--wood-4:#35778e;
@@ -138,7 +151,7 @@
     --ink:#0d1a20;--ink-2:#5f7078;--ink-3:#92a2a8;--ink-4:#bac5c9;
     --line:rgba(95,120,135,.30);--line-2:rgba(205,176,105,.48);--halo:rgba(205,176,105,.26);
     --hero-fallback:linear-gradient(112deg,#123040,#35778e 52%,#05121a);
-    --banner-img:url('./assets/tex/banner-oce.webp')}
+    --banner-img:url('./assets/tex/banner-oce.webp');--banner-pos:66%}
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;color:var(--ink);font-family:var(--serif);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
   body{background:radial-gradient(ellipse 78% 54% at 50% 6%,var(--wood-6),var(--wood-8) 56%,var(--wood-9) 100%)}
@@ -185,28 +198,32 @@
   .dish-bar{flex:none;height:calc(var(--dishbar) + var(--sattop));padding:var(--sattop) 14px 0;
     display:flex;align-items:center;justify-content:center;
     background:linear-gradient(180deg,rgba(26,12,6,.96),rgba(26,12,6,0))}
-  .crumb{flex:0 1 auto;text-align:center;font-size:11.5px;color:var(--ink-4);letter-spacing:1.5px;
+  .crumb{flex:0 1 auto;text-align:center;font-size:13px;color:var(--ink-4);letter-spacing:1.5px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* ===== 菜单页 ===== */
-  /* 无门头、无留白：横幅自 y=0 起通栏铺满，列表紧接其下 ——
-     菜单可视面积 = 视口高 − 横幅(含页签) − 点单栏。 */
+  /* 菜单页顶部不留 padding：横幅自 y=0 起通栏铺满，背景图/渐变/木纹向上延伸到最顶部，
+     文字由 .hero-txt 的 top:var(--top-gap) 下移避让宿主按钮 ——
+     顶部预留区是横幅画面的一部分，不是纯色留白。 */
   .page-menu{padding-top:0;background-color:var(--wood-9)}
-  /* 大洲横幅：cover 铺满整条（高 = 图区 --hero-h + 页签 --tabs-h）。
-     两层兜底：--hero-fallback 主题渐变在下、木纹平铺次之，横幅图在最上；
-     图未生成时该层 404，只掉一层，下面两层照常显示，不会露白底。 */
-  .menu-hero{flex:none;position:relative;height:calc(var(--hero-h) + var(--tabs-h));
+  /* 大洲横幅：高 = 顶部预留 --top-gap + 图区 --hero-h + 页签 --tabs-h。
+     底层渐变+木纹铺满整条；横幅图由 ::before 从 y=0 cover 铺满整个横幅（含顶部预留区），
+     按 --banner-pos 水平定位让各洲主体居中，不因裁切而偏移露深色。
+     图未生成时 ::before 该层 404，退到下层渐变+木纹，不露白底。 */
+  .menu-hero{flex:none;position:relative;height:calc(var(--top-gap) + var(--hero-h) + var(--tabs-h));
     background-color:var(--wood-8);
-    background-image:var(--banner-img),var(--hero-fallback),url('./assets/tex/wood-sign.webp');
-    background-size:cover,auto,420px 420px;
-    background-position:center,center,center top;
-    background-repeat:no-repeat,no-repeat,repeat;
+    background-image:var(--hero-fallback),url('./assets/tex/wood-sign.webp');
+    background-size:auto,420px 420px;
+    background-position:center,center top;
+    background-repeat:no-repeat,repeat;
     box-shadow:0 8px 22px rgba(0,0,0,.45)}
+  .menu-hero::before{content:"";position:absolute;top:0;left:0;right:0;bottom:0;
+    background-image:var(--banner-img);background-size:cover;background-position:var(--banner-pos) center;background-repeat:no-repeat}
   /* 压暗罩：左重右轻 —— 左侧是标题文字区，须压得住；右侧留给画面主体 */
   .hero-veil{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
     background:linear-gradient(96deg,rgba(10,5,2,.82) 0%,rgba(10,5,2,.60) 34%,rgba(10,5,2,.10) 72%,rgba(10,5,2,0) 100%),
       linear-gradient(0deg,rgba(10,5,2,.62),rgba(10,5,2,0) 58%)}
-  .hero-txt{position:absolute;left:18px;right:18px;top:0;bottom:var(--tabs-h);
+  .hero-txt{position:absolute;left:18px;right:18px;top:var(--top-gap);bottom:var(--tabs-h);
     display:flex;flex-direction:column;justify-content:center}
   .menu-ttl{font-size:23px;font-weight:700;color:var(--paper);letter-spacing:9px;text-indent:9px;text-shadow:0 2px 6px rgba(0,0,0,.6)}
   .menu-sub{font-size:11.5px;color:var(--brass-2);margin-top:7px;letter-spacing:2px;text-shadow:0 1px 3px rgba(0,0,0,.6)}
@@ -253,8 +270,10 @@
   .mthumb{width:34px;height:34px;flex-shrink:0;border-radius:2px;background:var(--paper-3);background-size:cover;background-position:center;
     box-shadow:0 0 0 1px var(--brass),0 1px 4px rgba(60,30,10,.3)}
   .mname{font-size:14.5px;font-weight:700;color:var(--ink);letter-spacing:1.5px;flex-shrink:0}
-  .mlead{flex:1;min-width:12px;border-bottom:1px dotted var(--line-2);transform:translateY(-3px)}
-  .mmeta{font-size:11.5px;color:var(--ink-2);letter-spacing:1px;flex-shrink:0;white-space:nowrap}
+  /* 引导线 min-width:0：空间不足时先让位给产地文字，再由 .mmeta ellipsis 兜底，
+     保证右侧 .madd 按钮始终在容器内、各行对齐 —— 不会再被长城市名（如"布宜诺斯艾利斯"）挤出视口。 */
+  .mlead{flex:1;min-width:0;border-bottom:1px dotted var(--line-2);transform:translateY(-3px)}
+  .mmeta{font-size:11.5px;color:var(--ink-2);letter-spacing:1px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .madd{width:24px;height:24px;flex-shrink:0;border-radius:2px;background:transparent;border:1px solid var(--line-2);color:var(--ink-2);
     cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;transition:.15s;font-family:var(--sans)}
   .madd:hover{background:var(--red);border-color:var(--red);color:#fff}
@@ -379,18 +398,18 @@
   .oinfo b{color:var(--red);font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
   .acts{display:flex;flex-shrink:0}
   .acts > * + *{margin-left:8px}                  /* gap 基线 */
-  /* 一级：主操作，朱红实底（基准 = 首页「开始上菜」） */
-  .obtn{background:var(--red);color:#fff;border:none;border-radius:2px;padding:10px 22px;cursor:pointer;
+  /* 一级：主操作，朱红实底（基准 = 首页「开始上菜」）—— 用 --btn-red 固定红，不跟随洲变 */
+  .obtn{background:var(--btn-red);color:#fff;border:none;border-radius:2px;padding:10px 22px;cursor:pointer;
     font-family:var(--serif);font-size:14px;font-weight:700;letter-spacing:2px;transition:.15s;white-space:nowrap;
     box-shadow:0 4px 14px rgba(120,20,10,.35)}
   .obtn:disabled{background:var(--paper-4);color:var(--ink-3);box-shadow:none;cursor:not-allowed}
-  .obtn:not(:disabled):hover{background:var(--red-2)}
+  .obtn:not(:disabled):hover{background:var(--btn-red-2)}
   /* 二级：次操作，描边（返回 / 退出 / 未点单时的「加入点单」） */
   .obtn.ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-2);box-shadow:none;
     padding:9px 16px;font-size:13px;letter-spacing:1px}
   .obtn.ghost:hover{background:var(--paper-3);color:var(--ink)}
   /* 已点态与菜单行尾的 ＋ 同款（见 .mrow.added .madd）：朱红实心，hover 也锁同色不分家 */
-  .obtn.ghost.on,.obtn.ghost.on:hover{background:var(--red);border-color:var(--red);color:#fff}
+  .obtn.ghost.on,.obtn.ghost.on:hover{background:var(--btn-red);border-color:var(--btn-red);color:#fff}
   /* 「加入点单」（4 字）→「已点 ✓」（2 字 + 符号）：字数少了，按钮会缩一截，
      底栏跟着抖一下。钉死 min-width = 未点态的自然宽（4em 字 + 左右内距 + 描边），
      两态同宽。用 em 不用 px：字号一改，宽度跟着走，不会脱节。 */
@@ -493,27 +512,7 @@ body.mode-dish .globe-slot{display:block}
 .supports-flex-gap .kc-row{gap:12px}
 .supports-flex-gap .kc-row > * + *{margin-left:0}
 </style>
-<script>
-/* Chrome 61 兼容：Flex gap 的**行为**检测（样式表里的 .supports-flex-gap 靠它打开）。
-   必须真建一个 flex 容器量尺寸，不能问 CSS.supports('gap') —— 那个只证明浏览器
-   认识 gap 这个属性名，证明不了它在 Flexbox 里生效（只支持 Grid gap 的旧内核
-   一样会返回 true，于是间距全丢）。检测只做一次，且必须在页面渲染前跑完。 */
-(function(){
-  try{
-    var t=document.createElement('div');
-    t.style.position='absolute';
-    t.style.visibility='hidden';
-    t.style.display='flex';
-    t.style.flexDirection='column';
-    t.style.rowGap='1px';
-    t.appendChild(document.createElement('div'));
-    t.appendChild(document.createElement('div'));
-    document.documentElement.appendChild(t);
-    if(t.scrollHeight===1)document.documentElement.className+=' supports-flex-gap';
-    document.documentElement.removeChild(t);
-  }catch(e){}
-})();
-</script>
+<script src="./assets/compat.js"></script>
 </head>
 <body class="mode-menu">
 <div class="globe-slot" id="globeSlot">

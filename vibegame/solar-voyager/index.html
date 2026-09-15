@@ -39,7 +39,7 @@
   #startCanvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; }
   #screenStart .content { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; }
   #screenStart .start-bgm {
-    position: absolute; z-index: 2; top: calc(16px + var(--st, env(safe-area-inset-top, 0px))); right: 16px;
+    position: absolute; z-index: 2; top: calc(50px + env(safe-area-inset-top, 0px)); right: 16px;
     width: 30px; height: 24px; gap: 3px;
   }
   #screenStart .start-bgm i { width: 3px; }
@@ -85,6 +85,8 @@
     backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--line);
   }
+  .turn-row { display: flex; justify-content: center; }
+  .turn-row .turn { font-size: 18px; }
   .top-row { display: flex; align-items: center; justify-content: space-between; }
   .base-name {
     font-size: 14px; font-weight: 700; letter-spacing: .03em; display: flex; align-items: center; gap: 7px;
@@ -558,12 +560,10 @@
 
 <div class="app">
   <div class="topbar">
+    <div class="turn-row"><div class="turn">回合 <b id="turn" class="num">1</b></div></div>
     <div class="top-row">
       <div class="base-name" id="baseName"><span class="dot"></span><span id="baseNameTxt">地球基地</span><span class="sw">⇄</span></div>
-      <div class="tr-right">
-        <button class="bgm-btn" id="btnBgm" type="button" aria-label="关闭背景音乐" title="背景音乐：开"><i></i><i></i><i></i></button>
-        <div class="turn">回合 <b id="turn" class="num">1</b></div>
-      </div>
+      <div class="tr-right"><button class="bgm-btn" id="btnBgm" type="button" aria-label="关闭背景音乐" title="背景音乐：开"><i></i><i></i><i></i></button></div>
     </div>
     <div class="res">
       <div class="r m" id="rM"><div class="ico"></div><span class="rl">金属</span><div class="v num" id="rMetal">0</div></div>
