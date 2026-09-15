@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""ai-os v2 无头自检（playwright）。
+"""ai-os v1 无头自检（playwright）。
 
 断言导航栈 / 安全区变量 / 顶部净空 / Chrome61 基线扫描，并输出回归截图到 _dev/_shots/。
 运行：PYTHONUTF8=1 <python> smoke_test.py
@@ -14,7 +14,25 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 SHOTS = os.path.join(HERE, "_shots")
-CHROME = r"C:\Users\ASUS\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe"
+
+
+def find_chrome():
+    """定位本机 playwright chromium；找不到则回退到 playwright 自带。"""
+    import glob
+    cands = [
+        os.environ.get("CHROME_EXE"),
+        r"C:\Users\dingj\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe",
+        r"C:\Users\ASUS\AppData\Local\ms-playwright\chromium-1243\chrome-win64\chrome.exe",
+    ]
+    for c in cands:
+        if c and os.path.exists(c):
+            return c
+    hits = glob.glob(os.path.expanduser(
+        r"~\\AppData\\Local\\ms-playwright\\chromium-*\\chrome-win64\\chrome.exe"))
+    return hits[0] if hits else None
+
+
+CHROME = find_chrome()
 
 FAIL = []
 
@@ -60,7 +78,7 @@ def main():
     scan_baseline()
 
     with sync_playwright() as p:
-        b = p.chromium.launch(executable_path=CHROME)
+        b = p.chromium.launch(executable_path=CHROME) if CHROME else p.chromium.launch()
         ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2,
                             is_mobile=True, has_touch=True)
         pg = ctx.new_page()

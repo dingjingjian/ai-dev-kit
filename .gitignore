@@ -48,9 +48,9 @@ release/
 # world-food-3d _dev is pure scratch (fully untracked) — ignore the whole dir
 vibeknow/world-food-3d/_dev/
 
-# Project-specific generated promo (moon-landing-3d)
-vibeknow/moon-landing-3d/xiaohongshu/*.mp4
-vibeknow/moon-landing-3d/xiaohongshu/screenshots/
+# Project-specific generated promo (all xiaohongshu dirs)
+**/xiaohongshu/*.mp4
+**/xiaohongshu/screenshots/
 
 # Password manager sensitive files
 data.enc

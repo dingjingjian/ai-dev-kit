@@ -51,6 +51,7 @@
 | 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 3D 火箭发射模拟，WebGL 渲染，支持展示/拆解等模式，含遥测与倒计时 |
 | 3D 登月全程 | `vibeknow/moon-landing-3d/` | 复用 rocket-launch-3d 引擎与 UI 风格的登月全流程科普：按中国载人登月真实方案，长征十号双箭发射（先发揽月着陆器驻留环月、数日后发梦舟飞船）→环月交会对接→船器分离→动力下降→月面软着陆；展示/拆解/登月三模式，`tests/headless_two_segment.js` 无头自检 |
 | 3D 月球科普 | `vibeknow/moon-3d/` | 3D 月球科普展示工具，WebGL 渲染高细节月球，演示月相变化与潮汐锁定等科学知识 |
+| 侏罗纪公园 3D | `vibeknow/jurassic-park-3d/` | 致敬 1993 电影的恐龙园游览导航：30 只恐龙 / 5 个地质年代 / 11 个国家，四条预设路线 + 自选路线，五页流转（路线选择 → 自选路线 → 经典大门 → 游览 → 巡逻日志），六维雷达图，地球标注化石发现地；零依赖单文件 HTML + Three.js（复用 earth-3d 渲染器），含小红书宣传片流水线 `tools/xhs-video/` |
 | 分子结构 | `vibeknow/molecule/` | 分子空间构型可视化（含构建/打包/校验脚本） |
 | 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数可视化工具，浏览器端绘制函数图像 |
 | 火箭发射 | `vibeknow/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时，含构建/打包/校验脚本，生成可分发压缩包 |
