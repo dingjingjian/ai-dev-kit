@@ -13,33 +13,42 @@
   var routeListEl=document.getElementById('routeList');
   var gateTitleEl=document.getElementById('gateTitle');
   var gateRouteNameEl=document.getElementById('gateRouteName');
-  var tourVehicleEl=document.getElementById('tourVehicle');
   var tourCrumbEl=document.getElementById('tourCrumb');
-  var tourProgressEl=document.getElementById('tourProgress');
   var tourBodyEl=document.getElementById('tourBody');
   var tourImgEl=document.getElementById('tourImg');
   var tourNameEl=document.getElementById('tourName');
   var tourLocEl=document.getElementById('tourLoc');
   var tourIntroEl=document.getElementById('tourIntro');
   var tourTraitsEl=document.getElementById('tourTraits');
-  var tourTagsEl=document.getElementById('tourTags');
+  var tourPaddockEl=document.getElementById('tourPaddock');
+  var tourTaglineEl=document.getElementById('tourTagline');
+  var tourDataEl=document.getElementById('tourData');
+  var tourCamEl=document.getElementById('tourCam');
+  var tourTcEl=document.getElementById('tourTc');
   var tcPrevBtn=document.getElementById('tcPrev');
-  var tcInfoEl=document.getElementById('tcInfo');
   var tcNextBtn=document.getElementById('tcNext');
   var tcQuitBtn=document.getElementById('tcQuit');
   var summaryBodyEl=document.getElementById('summaryBody');
   var sumCountEl=document.getElementById('sumCount');
   var sumContEl=document.getElementById('sumCont');
   var sumCountryEl=document.getElementById('sumCountry');
-  var sumThanksEl=document.getElementById('sumThanks');
+  var sumBriefEl=document.getElementById('sumBrief');
   var sumBarsEl=document.getElementById('sumBars');
   var sumDishesEl=document.getElementById('sumDishes');
-  var sumKcalEl=document.getElementById('sumKcal');
   var scBackBtn=document.getElementById('scBack');
+  var scAgainBtn=document.getElementById('scAgain');
+
+  var bdBackBtn=document.getElementById('bdBack');
+  var bdTitleEl=document.getElementById('builderTtl');
+  var bdPickedEl=document.getElementById('bdPicked');
+  var bdPoolEl=document.getElementById('bdPool');
+  var bdStartBtn=document.getElementById('bdStart');
+  var bdRandomBtn=document.getElementById('bdRandom');
+  var builderBodyEl=document.getElementById('builderBody');
   var hintEl=document.getElementById('hint');
 
   /* ================= 路线数据 =================
-   * 每条路线精选若干展品，按游览车行进顺序排列。
+   * 每条路线精选若干恐龙，按游览车行进顺序排列（顺序即「围栏停靠序号」）。
    * 配色与 index.html 的 body[data-route] 一致，同时作为路线卡片的内联主题。 */
   var ROUTES=[
     {key:'predator',name:'掠食者之旅',badge:'高危',intensity:5,
@@ -51,7 +60,7 @@
      dinos:[5,6,9,10,20,21,23,25],
      dark:'#08150f',mid:'#1a3626',light:'#3d6b45',accent:'#6b9a4a',accent2:'#8ab860'},
     {key:'time',name:'时空之旅',badge:'通史',intensity:2,
-     desc:'从二叠纪到新生代，十五件展品串起恐龙的完整兴衰史——一部会行走的地球编年史。',
+     desc:'从二叠纪到新生代，十五只恐龙串起恐龙的完整兴衰史——一部会行走的地球编年史。',
      dinos:[0,1,2,3,5,7,8,9,10,15,16,17,20,28,29],
      dark:'#0a1520',mid:'#1d3450',light:'#3a5a80',accent:'#4a9ab0',accent2:'#6ab8d0'},
     {key:'bizarre',name:'奇异物种之旅',badge:'怪诞',intensity:4,
@@ -60,25 +69,47 @@
      dark:'#180a20',mid:'#2e1438',light:'#5a2e6a',accent:'#c080d0',accent2:'#d8a0e0'}
   ];
 
+  /* 自选路线：玩家在自选页拼出来的路线，同样进游览/总结全流程 */
+  var CUSTOM_ROUTE={key:'custom',name:'自选路线',badge:'自定义',intensity:3,custom:true,
+    desc:'自己排的一条路：点名录加入恐龙，按加入顺序停靠围栏。',
+    dinos:[],
+    dark:'#171205',mid:'#3a2c0a',light:'#8a6a1a',accent:'#c99a1e',accent2:'#e0b429'};
+
   /* ================= 常量 ================= */
   var ERA_LABEL={paleozoic:'古生代',triassic:'三叠纪',jurassic:'侏罗纪',cretaceous:'白垩纪',cenozoic:'新生代'};
   var STATS_DIMS=['体型','威胁','速度','智力','防御','稀有'];
-  var LENGTH_BASE=15;
+  var STORE_KEY='jp3d.customRoute';
 
   /* ================= 状态 ================= */
-  var st={page:'routes',routeIdx:-1,tourIdx:0,sel:0};
+  var st={page:'routes',route:null,routeIdx:-1,tourIdx:0,sel:0,custom:[]};
+
+  /* ================= 自选路线存档（localStorage，失败即静默降级）================= */
+  function loadCustom(){
+    try{
+      var raw=window.localStorage.getItem(STORE_KEY);
+      if(!raw)return [];
+      var arr=JSON.parse(raw);
+      if(!arr||typeof arr.length!=='number')return [];
+      var out=[];
+      for(var i=0;i<arr.length;i++){
+        var v=parseInt(arr[i],10);
+        if(!isNaN(v)&&v>=0&&v<DINOS.length&&out.indexOf(v)<0)out.push(v);
+      }
+      return out;
+    }catch(e){return [];}
+  }
+  function saveCustom(){
+    try{window.localStorage.setItem(STORE_KEY,JSON.stringify(st.custom));}catch(e){}
+  }
+
+  /* 当前路线对象：预设 4 条，或玩家自选那条 */
+  function curRoute(){return st.route||ROUTES[0];}
 
   /* ================= 工具函数 ================= */
   function lengthOf(f){return (f&&typeof f.length==='number')?f.length:0;}
   function fmtL(v){return String(v).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
   function fmtCoord(lat,lon){
     return Math.abs(lat).toFixed(1)+'°'+(lat>=0?'N':'S')+' '+Math.abs(lon).toFixed(1)+'°'+(lon>=0?'E':'W');
-  }
-  function lcRow(k,w,v,over){
-    return '<div class="kc-row'+(over?' over':'')+'">'+
-      '<span class="kc-k">'+k+'</span>'+
-      '<span class="kc-t"><i style="width:'+Math.max(0,Math.min(100,Math.round(w)))+'%"></i></span>'+
-      '<span class="kc-v">'+v+'</span></div>';
   }
 
   /* ================= 颜色与恐龙图（图可缺，回退色卡）================= */
@@ -218,7 +249,7 @@
   loadTex('./assets/earth.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;earthMat.map=t;earthMat.needsUpdate=true;});
   loadTex('./assets/clouds.png',function(t){t.anisotropy=maxA;cloudMat.map=t;cloudMat.alphaMap=t;cloudMat.needsUpdate=true;});
 
-  /* ================= 相机：始终对准当前展品的化石发现地 ================= */
+  /* ================= 相机：始终对准当前这只恐龙的化石发现地 ================= */
   var baseT=0,baseP=1.2;
   var camT=0,camP=1.2,camR=5;
   var camTG=0,camPG=1.2,camRG=5;
@@ -301,7 +332,7 @@
     pinch=d;
   },{passive:false});
 
-  /* ================= 化石发现地标签：只标当前展品 ================= */
+  /* ================= 化石发现地标签：只标当前这只 ================= */
   var tagEl=document.createElement('div');tagEl.className='tag';tagsLayer.appendChild(tagEl);
   var _v=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
   function updateTag(){
@@ -319,10 +350,10 @@
   }
 
   /* ================= 标记点显隐与脉动 =================
-   * 游览页：路线内全部展品标出，当前展品高亮脉动，其余路线成员压暗作上下文。
+   * 游览页：路线上全部恐龙的化石发现地标出，当前这只高亮脉动，同路线其余压暗作上下文。
    * 其余页面：标记点全隐（地球也不渲染）。 */
   function refreshMarkers(){
-    var routeDinos=(st.routeIdx>=0)?ROUTES[st.routeIdx].dinos:[];
+    var routeDinos=st.route?st.route.dinos:[];
     for(var i=0;i<markers.length;i++){
       var m=markers[i];
       var inRoute=routeDinos.indexOf(i)>=0;
@@ -414,74 +445,206 @@
   }
 
   /* ================= 路线选择页渲染 ================= */
-  function renderRoutes(){
-    var html='';
-    for(var i=0;i<ROUTES.length;i++){
-      var r=ROUTES[i];
-      var n=r.dinos.length;
-      var eras={},cns={};
-      for(var k=0;k<n;k++){var f=DINOS[r.dinos[k]];eras[f.era]=1;cns[f.country]=1;}
-      var eraCount=Object.keys(eras).length,cnCount=Object.keys(cns).length;
-      var dots='';
-      for(var d=0;d<5;d++)dots+='<i'+(d<r.intensity?' class="on"':'')+'></i>';
-      html+='<button class="route-card" data-ride="'+i+'">'+
-        '<div class="route-card-bg" style="'+
-          '--rc-dark:'+r.dark+';--rc-mid:'+r.mid+';--rc-light:'+r.light+
-          ';--rc-accent:'+r.accent+';--rc-accent-2:'+r.accent2+
-          ';--rc-banner:url(\'./assets/tex/route-'+r.key+'.webp\')"></div>'+
-        '<div class="route-card-inner" style="'+
-          '--rc-dark:'+r.dark+';--rc-mid:'+r.mid+';--rc-light:'+r.light+
-          ';--rc-accent:'+r.accent+';--rc-accent-2:'+r.accent2+'">'+
-          '<div class="route-card-head">'+
-            '<div class="route-name">'+r.name+'</div>'+
-            '<div class="route-badge">'+r.badge+'</div>'+
-          '</div>'+
-          '<div class="route-desc">'+r.desc+'</div>'+
-          '<div class="route-meta">'+
-            '<span class="route-stat"><b>'+n+'</b>处展品</span>'+
-            '<span class="route-stat"><b>'+eraCount+'</b>个年代</span>'+
-            '<span class="route-stat"><b>'+cnCount+'</b>国</span>'+
-            '<span class="route-stat">刺激度 <span class="route-intensity">'+dots+'</span></span>'+
-          '</div>'+
-          '<div class="route-cta">开始游览</div>'+
+  /* 一张路线导览牌：主题色来自路线对象，横幅缺图自动回退木纹与渐变 */
+  function routeCardHTML(r,ride,tab,cta,extra){
+    var n=r.dinos.length,eras={},cns={},i,dots='',theme=
+      '--rc-dark:'+r.dark+';--rc-mid:'+r.mid+';--rc-light:'+r.light+
+      ';--rc-accent:'+r.accent+';--rc-accent-2:'+r.accent2;
+    for(i=0;i<n;i++){var f=DINOS[r.dinos[i]];eras[f.era]=1;cns[f.country]=1;}
+    for(i=0;i<5;i++)dots+='<i'+(i<r.intensity?' class="on"':'')+'></i>';
+    return '<button class="route-card'+(extra||'')+'" data-ride="'+ride+'">'+
+      '<div class="route-card-bg" style="'+theme+';--rc-banner:url(\'./assets/tex/route-'+r.key+'.webp\')"></div>'+
+      '<div class="route-card-inner" style="'+theme+'">'+
+        '<span class="route-tab">'+tab+'</span>'+
+        '<div class="route-card-head">'+
+          '<div class="route-name">'+r.name+'</div>'+
+          '<div class="route-badge">'+r.badge+'</div>'+
         '</div>'+
-      '</button>';
-    }
+        '<div class="route-desc">'+r.desc+'</div>'+
+        '<div class="route-meta">'+
+          '<span class="route-stat"><b>'+n+'</b>只恐龙</span>'+
+          '<span class="route-stat"><b>'+Object.keys(eras).length+'</b>个年代</span>'+
+          '<span class="route-stat"><b>'+Object.keys(cns).length+'</b>个化石发现国</span>'+
+          (r.custom?'':'<span class="route-stat">刺激度 <span class="route-intensity">'+dots+'</span></span>')+
+        '</div>'+
+        '<div class="route-cta">'+cta+'</div>'+
+      '</div>'+
+    '</button>';
+  }
+  function renderRoutes(){
+    var html='',i;
+    for(i=0;i<ROUTES.length;i++)html+=routeCardHTML(ROUTES[i],i,'TAB-'+('0'+(i+1)).slice(-2),'开始游览','');
+    CUSTOM_ROUTE.dinos=st.custom;
+    CUSTOM_ROUTE.desc=st.custom.length
+      ?'自己排的一条路：按「我的路线」里的顺序，一站一站停靠围栏。'
+      :'还没有路线。进名录挑选恐龙，按自己的顺序排一条穿过全岛的线——想怎么看，你说了算。';
+    html+=routeCardHTML(CUSTOM_ROUTE,'custom','MY LINE',st.custom.length?'开始游览':'去挑选恐龙',' is-custom');
     routeListEl.innerHTML=html;
   }
   routeListEl.addEventListener('click',function(e){
     var btn=e.target;
     while(btn&&btn!==routeListEl&&btn.tagName!=='BUTTON')btn=btn.parentNode;
     if(!btn||btn===routeListEl||btn.tagName!=='BUTTON')return;
-    var idx=parseInt(btn.getAttribute('data-ride'),10);
+    var ride=btn.getAttribute('data-ride');
+    if(ride==='custom'){enterBuilder();return;}
+    var idx=parseInt(ride,10);
     if(isNaN(idx))return;
-    enterGate(idx);
+    enterGate(ROUTES[idx]);
   });
 
-  /* ================= 大门过渡页 ================= */
+  /* ================= 自选路线页 =================
+   * 从 30 只恐龙里挑，按挑选顺序排出一条路线；存档在本机 localStorage。
+   * 排完后走与预设路线完全相同的「大门 → 游览 → 总结」流程。 */
+  function closestAttr(el,attr,root){
+    while(el&&el!==root){
+      if(el.getAttribute&&el.getAttribute(attr)!==null)return el;
+      el=el.parentNode;
+    }
+    return null;
+  }
+  function customRouteObj(){
+    CUSTOM_ROUTE.dinos=st.custom.slice();
+    return CUSTOM_ROUTE;
+  }
+  function renderPicked(){
+    var h='',i;
+    if(!st.custom.length){
+      h='<div class="bd-picked-empty">还没选恐龙 · 从下面的名录里点「＋」加入</div>';
+    }else{
+      for(i=0;i<st.custom.length;i++){
+        var f=DINOS[st.custom[i]];
+        h+='<div class="bd-chip">'+
+          '<span class="bd-seq">'+('0'+(i+1)).slice(-2)+'</span>'+
+          '<span class="bd-dot" style="background:'+(f.color||'#a52a1f')+'"></span>'+
+          '<span class="bd-nm">'+f.name+'</span>'+
+          '<span class="bd-era">'+ERA_LABEL[f.era]+'</span>'+
+          '<button class="bd-mini" data-mv="'+i+'" data-dir="-1"'+(i===0?' disabled':'')+' title="上移">↑</button>'+
+          '<button class="bd-mini" data-mv="'+i+'" data-dir="1"'+(i===st.custom.length-1?' disabled':'')+' title="下移">↓</button>'+
+          '<button class="bd-mini bd-del" data-del="'+i+'" title="移出路线">×</button>'+
+        '</div>';
+      }
+    }
+    bdPickedEl.innerHTML=h;
+    bdTitleEl.textContent='自选路线 · 自由探索（已选 '+st.custom.length+' 只）';
+    bdStartBtn.disabled=!st.custom.length;
+  }
+  function renderPool(){
+    var order=['paleozoic','triassic','jurassic','cretaceous','cenozoic'];
+    var h='',g,i;
+    for(g=0;g<order.length;g++){
+      var era=order[g],rows='';
+      for(i=0;i<DINOS.length;i++){
+        var f=DINOS[i];
+        if(f.era!==era)continue;
+        var on=st.custom.indexOf(i)>=0;
+        rows+='<button class="bd-item'+(on?' picked':'')+'" data-add="'+i+'"'+(on?' disabled':'')+'>'+
+          '<span class="bd-thumb" style="'+thumbStyle(f)+'"></span>'+
+          '<span class="bd-info">'+
+            '<span class="bd-nm2">'+f.name+'</span>'+
+            '<span class="bd-sub">'+f.country+' · '+f.city+' · 体长 '+lengthOf(f)+' 米 · 威胁 '+((f.stats&&f.stats[1])||0)+'/5</span>'+
+          '</span>'+
+          '<span class="bd-add">'+(on?'✓':'＋')+'</span>'+
+        '</button>';
+      }
+      if(rows)h+='<div class="bd-era-group"><div class="bd-era-head">'+ERA_LABEL[era]+'</div>'+rows+'</div>';
+    }
+    bdPoolEl.innerHTML=h;
+  }
+  function renderBuilder(){renderPicked();renderPool();}
+  function enterBuilder(){
+    st.page='builder';
+    document.body.className='mode-builder';
+    document.body.setAttribute('data-route','custom');
+    renderBuilder();
+    builderBodyEl.scrollTop=0;
+    toast('点「＋」把恐龙加进路线 · 顺序即停靠顺序');
+  }
+  function exitBuilder(){
+    hideToast();
+    st.page='routes';
+    document.body.className='mode-routes';
+    document.body.removeAttribute('data-route');
+    renderRoutes();
+  }
+  bdPoolEl.addEventListener('click',function(e){
+    var b=closestAttr(e.target,'data-add',bdPoolEl);
+    if(!b||b.disabled)return;
+    var i=parseInt(b.getAttribute('data-add'),10);
+    if(isNaN(i)||i<0||i>=DINOS.length||st.custom.indexOf(i)>=0)return;
+    st.custom.push(i);saveCustom();renderBuilder();
+  });
+  bdPickedEl.addEventListener('click',function(e){
+    var del=closestAttr(e.target,'data-del',bdPickedEl);
+    if(del){
+      var d=parseInt(del.getAttribute('data-del'),10);
+      if(!isNaN(d)){st.custom.splice(d,1);saveCustom();renderBuilder();}
+      return;
+    }
+    var mv=closestAttr(e.target,'data-mv',bdPickedEl);
+    if(!mv||mv.disabled)return;
+    var k=parseInt(mv.getAttribute('data-mv'),10),dir=parseInt(mv.getAttribute('data-dir'),10);
+    var j=k+(dir<0?-1:1);
+    if(isNaN(k)||j<0||j>=st.custom.length)return;
+    var tmp=st.custom[k];st.custom[k]=st.custom[j];st.custom[j]=tmp;
+    saveCustom();renderBuilder();
+  });
+  bdRandomBtn.addEventListener('click',function(){
+    var pool=[],i;
+    for(i=0;i<DINOS.length;i++)pool.push(i);
+    for(i=pool.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=pool[i];pool[i]=pool[j];pool[j]=t;}
+    st.custom=pool.slice(0,8).sort(function(a,b){return a-b;});
+    saveCustom();renderBuilder();
+    toast('已随机排定 8 只 · 可继续调整顺序');
+  });
+  bdStartBtn.addEventListener('click',function(){
+    if(!st.custom.length)return;
+    enterGate(customRouteObj());
+  });
+  bdBackBtn.addEventListener('click',exitBuilder);
+
+  /* ================= 大门过渡页 · 经典公园大门 =================
+   * 两帧 AI 出图交叉淡化（.gate-shot.closed → .gate-shot.open）+ 细微推近，
+   * 开门过程全在两张图里，这里只负责重置动画、写入路线名，切换走完进游览页。 */
+  var GATE_MS=7100;
+  var gateTimer=null;
+  var GATE_ELS='.gate-shot,.gate-caption,.gate-title,.gate-subtitle,.gate-route-name';
   function resetGateAnim(){
-    var els=document.querySelectorAll('.gate-door,.gate-logo,.gate-title,.gate-subtitle,.gate-route-name');
+    var els=document.querySelectorAll(GATE_ELS);
     for(var i=0;i<els.length;i++){
       els[i].style.animation='none';
       void els[i].offsetWidth;
       els[i].style.animation='';
     }
   }
-  function enterGate(routeIdx){
-    st.routeIdx=routeIdx;
-    var r=ROUTES[routeIdx];
+  function enterGate(route){
+    hideToast();
+    st.route=route;
     st.page='gate';
     document.body.className='mode-gate';
-    document.body.setAttribute('data-route',r.key);
+    document.body.setAttribute('data-route',route.key);
     gateTitleEl.textContent='欢迎来到侏罗纪公园';
-    gateRouteNameEl.textContent='即将开启 · '+r.name;
+    gateRouteNameEl.textContent='即将开启 · '+route.name;
     resetGateAnim();
-    setTimeout(enterTour,3800);
+    if(gateTimer)clearTimeout(gateTimer);
+    gateTimer=setTimeout(enterTour,GATE_MS);
   }
 
   /* ================= 游览页（游览车视角）================= */
+  /* 监控画面角上的走时（只在游览页跑，其它页直接返回） */
+  var recStart=0;
+  function pad2(n){return (n<10?'0':'')+n;}
+  function tickRec(){
+    if(st.page!=='tour'||!tourTcEl)return;
+    var s=Math.floor((Date.now()-recStart)/1000);
+    tourTcEl.textContent=pad2(Math.floor(s/3600))+':'+pad2(Math.floor(s/60)%60)+':'+pad2(s%60);
+  }
+  setInterval(tickRec,500);
+
   function enterTour(){
-    var r=ROUTES[st.routeIdx];
+    var r=st.route;
+    if(!r||!r.dinos.length){quitTour();return;}
+    recStart=Date.now();
+    tickRec();
     st.tourIdx=0;
     st.sel=r.dinos[0];
     st.page='tour';
@@ -489,32 +652,34 @@
     document.body.setAttribute('data-route',r.key);
     if(G)G.setPlaying(true);
     showTourDino();
-    toast(G?'游览车出发 · 拖动地球可转动':'游览车出发 · 发现地见地球标注');
+    toast(G?'游览车已进园 · 拖动地球可转动':'游览车已进园 · 化石发现地见地球标注');
   }
   function showTourDino(){
-    var r=ROUTES[st.routeIdx];
+    var r=curRoute();
     var idx=r.dinos[st.tourIdx];
     st.sel=idx;
     var f=DINOS[idx];
+    var seq=('0'+(st.tourIdx+1)).slice(-2);
+    var threat=(f.stats&&f.stats[1])||0;
     tourImgEl.setAttribute('style',thumbStyle(f));
     tourNameEl.textContent=f.name;
-    tourLocEl.textContent=f.country+' · '+f.city;
+    tourPaddockEl.textContent='PADDOCK-'+seq;
+    tourLocEl.textContent=ERA_LABEL[f.era]+' · '+f.country+' · '+f.city;
     tourIntroEl.textContent=f.intro;
     tourTraitsEl.innerHTML=f.traits.map(function(t){return '<span class="tour-trait">'+t+'</span>';}).join('');
-    tourTagsEl.innerHTML=f.tags.map(function(t){return '<span class="tour-tag">'+t+'</span>';}).join('');
-    tourVehicleEl.innerHTML='游览车 <b>#'+String(st.tourIdx+1).padStart(2,'0')+'</b>';
-    tourCrumbEl.textContent=r.name+' · '+ERA_LABEL[f.era];
-    tourProgressEl.innerHTML='第 <b>'+(st.tourIdx+1)+'</b> / '+r.dinos.length+' 处';
-    tcInfoEl.innerHTML='第 <b>'+(st.tourIdx+1)+'</b> / '+r.dinos.length+' · '+f.name;
+    tourTaglineEl.innerHTML=f.tags.join('<i>·</i>');
+    tourDataEl.innerHTML='体长 <em>'+lengthOf(f)+' 米</em><i>|</i>威胁 <em>'+threat+'/5</em>';
+    tourCamEl.textContent='CAM '+seq;
+    tourCrumbEl.textContent=r.name+' · '+ERA_LABEL[f.era]+' · 第 '+(st.tourIdx+1)+' / '+r.dinos.length+' 站';
     tcPrevBtn.disabled=(st.tourIdx===0);
-    tcNextBtn.textContent=(st.tourIdx+1>=r.dinos.length)?'游览总结 ›':'下一展品 ›';
+    tcNextBtn.textContent=(st.tourIdx+1>=r.dinos.length)?'游览总结 ›':'下一站 ›';
     capName.textContent=f.name;
     capCoord.textContent=fmtCoord(f.lat,f.lon);
     if(G){G.setTag(f.city);G.refreshMarkers();G.aimDino(false);G.fitView(false);G.markDirty();}
     tourBodyEl.scrollTop=0;
   }
   function tourNext(){
-    var r=ROUTES[st.routeIdx];
+    var r=curRoute();
     if(st.tourIdx+1>=r.dinos.length){showSummary();return;}
     st.tourIdx++;
     showTourDino();
@@ -525,15 +690,22 @@
     showTourDino();
   }
   function quitTour(){
+    hideToast();
     st.page='routes';
-    st.routeIdx=-1;
+    st.route=null;
     document.body.className='mode-routes';
     document.body.removeAttribute('data-route');
     if(G)G.setPlaying(false);
+    renderRoutes();
   }
   tcPrevBtn.addEventListener('click',tourPrev);
   tcNextBtn.addEventListener('click',tourNext);
   tcQuitBtn.addEventListener('click',quitTour);
+  var tourMonBtn=document.getElementById('tourMon');
+  tourMonBtn.addEventListener('click',function(){
+    var off=document.body.classList.toggle('mon-off');
+    tourMonBtn.textContent=off?'原图':'监控';
+  });
 
   /* ================= 总结页 ================= */
   /* 六维特征雷达图（内联 SVG，零依赖） */
@@ -576,26 +748,27 @@
     }
     return s+'</svg>';
   }
-  function renderLength(order){
+  /* 游览简报：一句自然话，取代原来的定评句与体型合计条形图 */
+  function renderBrief(order){
     var n=order.length;
-    if(!n){sumKcalEl.innerHTML='<div class="kc-note">本次尚无展品。</div>';return;}
+    if(!n){sumBriefEl.innerHTML='';return;}
     var total=0,max=-1,min=Infinity,maxF=null,minF=null,i,f,k;
     for(i=0;i<n;i++){
       f=DINOS[order[i]];k=lengthOf(f);total+=k;
-      if(k>=max){max=k;maxF=f;}
-      if(k<=min){min=k;minF=f;}
+      if(k>max){max=k;maxF=f;}
+      if(k<min){min=k;minF=f;}
     }
-    var avg=Math.round(total/n*10)/10,pct=Math.round(total/LENGTH_BASE*100);
-    var h='<div class="kc-total"><b>'+fmtL(total.toFixed(1))+'</b><span>米 · 本次 '+n+' 处合计体长</span></div>';
-    h+=lcRow('占基准',pct,pct+'%',pct>100);
-    h+=lcRow('每展品均值',avg/LENGTH_BASE*100,avg+' 米',false);
-    h+=lcRow('最长',max/LENGTH_BASE*100,maxF.name+' · '+max+' 米',false);
-    h+=lcRow('最短',max?min/max*100:0,minF.name+' · '+min+' 米',false);
-    h+='<div class="kc-note">体长为成年个体代表值的估算，实际随个体与化石完整性浮动。展厅均长基准 '+LENGTH_BASE+' 米。</div>';
-    sumKcalEl.innerHTML=h;
+    var s='本次巡游共停靠 <b>'+n+'</b> 站。';
+    if(n>1){
+      s+='这几只成年个体的体长合计约 <b>'+fmtL(total.toFixed(1))+'</b> 米，'+
+        '其中'+maxF.name+'最长（<b>'+max+'</b> 米），'+minF.name+'最短（<b>'+min+'</b> 米）。';
+    }else{
+      s+='这只'+maxF.name+'成年个体的体长约 <b>'+max+'</b> 米。';
+    }
+    sumBriefEl.innerHTML=s;
   }
   function showSummary(){
-    var r=ROUTES[st.routeIdx];
+    var r=curRoute();
     var order=r.dinos;
     st.page='summary';
     document.body.className='mode-summary';
@@ -608,11 +781,10 @@
       for(k=0;k<6;k++)avg[k]+=(f.stats?f.stats[k]:0);
     }
     for(k=0;k<6;k++)avg[k]=avg[k]/Math.max(1,n);
-    var peak=-1,pv=-1,low=-1,lv=9;
-    for(k=0;k<6;k++){if(avg[k]>pv){pv=avg[k];peak=k;}if(avg[k]<lv){lv=avg[k];low=k;}}
+    var peak=-1,pv=-1;
+    for(k=0;k<6;k++){if(avg[k]>pv){pv=avg[k];peak=k;}}
     sumBarsEl.innerHTML=statsRadar(avg,peak);
-    sumThanksEl.innerHTML='本次 <em>'+r.name+'</em> 以<em>'+STATS_DIMS[peak]+'</em>维最为突出，'+
-      (lv<1.5?'<em>'+STATS_DIMS[low]+'</em>维几乎不显':'<em>'+STATS_DIMS[low]+'</em>维最为克制')+'。<br>感谢游览侏罗纪公园。';
+    renderBrief(order);
     var dh='';
     for(i=0;i<n;i++){
       var d=DINOS[order[i]],t=d.stats||[0,0,0,0,0,0];
@@ -631,31 +803,31 @@
     for(i=0;i<n;i++){var g=DINOS[order[i]];eras[g.era]=1;cns[g.country]=1;}
     sumContEl.textContent=Object.keys(eras).length;
     sumCountryEl.textContent=Object.keys(cns).length;
-    renderLength(order);
     summaryBodyEl.scrollTop=0;
     if(G)G.markDirty();
   }
-  scBackBtn.addEventListener('click',function(){
+  /* 回园区大门外（各页统一的「回路线选择」出口） */
+  function backToRoutes(){
+    hideToast();
+    if(gateTimer){clearTimeout(gateTimer);gateTimer=null;}
     st.page='routes';
-    st.routeIdx=-1;
+    st.route=null;
     document.body.className='mode-routes';
     document.body.removeAttribute('data-route');
+    if(G)G.setPlaying(false);
+    renderRoutes();
+  }
+  scBackBtn.addEventListener('click',backToRoutes);
+  scAgainBtn.addEventListener('click',function(){
+    if(!st.route)return;
+    enterGate(st.route);
   });
 
   /* ================= 键盘 ================= */
   window.addEventListener('keydown',function(e){
     if(e.key==='Escape'){
-      if(st.page==='tour')quitTour();
-      else if(st.page==='summary'){
-        st.page='routes';st.routeIdx=-1;
-        document.body.className='mode-routes';
-        document.body.removeAttribute('data-route');
-      }
-      else if(st.page==='gate'){
-        st.page='routes';st.routeIdx=-1;
-        document.body.className='mode-routes';
-        document.body.removeAttribute('data-route');
-      }
+      if(st.page==='builder')exitBuilder();
+      else if(st.page!=='routes')backToRoutes();
     }else if(st.page==='tour'){
       if(e.key==='ArrowLeft')tourPrev();
       else if(e.key==='ArrowRight')tourNext();
@@ -669,14 +841,26 @@
     hintEl.textContent=msg;hintEl.classList.add('show');
     clearTimeout(toastT);toastT=setTimeout(function(){hintEl.classList.remove('show');},TOAST_MS);
   }
+  function hideToast(){clearTimeout(toastT);hintEl.classList.remove('show');}
 
   /* ================= 启动 ================= */
+  st.custom=loadCustom();
   renderRoutes();
   if(G){G.refreshMarkers();}
   document.body.className='mode-routes';
-  toast('选择一条游览路线 · 游览车将带你穿行史前世界');
+  toast('选一条游览路线 · 游览车会带你穿行史前世界');
   setTimeout(function(){if(G)G.markDirty();document.getElementById('loader').classList.add('hide');},520);
   if(G)G.start();
+
+  /* logo 图到位才显示 logo 块（挂在 <html> 上，不会被页面切换的 body.className 覆盖）；
+     没图就整块隐藏，不留任何 CSS 画的替代图形 */
+  (function(){
+    try{
+      var im=new Image();
+      im.onload=function(){document.documentElement.className+=' has-logo';};
+      im.src='./assets/tex/logo.webp';
+    }catch(e){}
+  })();
 
   /* 首屏若图未就绪，等预检结束后统一重绘 */
   setTimeout(function(){
