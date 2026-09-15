@@ -175,7 +175,7 @@ svg{ display:block; }
 }
 .widgets{
   flex:0 0 auto;
-  padding:6px calc(14px + var(--safe-r)) 0 calc(14px + var(--safe-l));
+  padding:6px 14px 0 14px;
 }
 .w-row{ display:flex; }
 .w-half{ flex:1 1 0; min-width:0; }
@@ -289,7 +289,7 @@ body[data-mode="dark"] .widget.w-weather{
   grid-template-columns:repeat(4,1fr);
   grid-gap:20px 14px;
   align-content:flex-start;
-  padding:10px calc(14px + var(--safe-r)) 8px calc(14px + var(--safe-l));
+  padding:10px 14px 8px 14px;
 }
 .app-tile{
   display:flex; flex-direction:column; align-items:center;
@@ -361,6 +361,7 @@ body[data-mode="dark"] .widget.w-weather{
 .row:last-child{ border-bottom:none; }
 .row .lbl{ flex:1 1 auto; min-width:0; font-size:15px; color:var(--ink); }
 .row .val{ font-size:13px; color:var(--ink-dim); margin-right:8px; }
+.about-desc{ padding:13px 2px; font-size:13px; line-height:1.5; color:var(--ink-dim); }
 
 /* 开关 */
 .switch{
@@ -1083,6 +1084,8 @@ JS = r"""
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">人工智能 OS</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">v2.0</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI-1（模拟）</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品</span><span class="val">' + ABOUT_TXT.title + '</span>'));
+    cardAbout.appendChild(el('div', 'row about-desc', ABOUT_TXT.description));
     body.appendChild(cardAbout);
 
     v.appendChild(body);
@@ -2146,12 +2149,15 @@ JS = r"""
     var msgs = (function () {
       try {
         var m = JSON.parse(read('sms_messages', 'null'));
-        if (Array.isArray(m) && m.length) { return m; }
+        if (Array.isArray(m) && m.length) {
+          for (var i = 0; i < m.length; i++) { if (!m[i].conv) { m[i].conv = m[i].sender; } }
+          return m;
+        }
       } catch (e) { /* 忽略 */ }
       var seed = SMS_SEED.map(function (x, i) {
         var o = {}, k;
         for (k in x) { if (Object.prototype.hasOwnProperty.call(x, k)) { o[k] = x[k]; } }
-        o.read = false; o.isReply = false;
+        o.read = false; o.isReply = false; o.conv = x.sender;
         return o;
       });
       try { store('sms_messages', JSON.stringify(seed)); } catch (e) { /* 忽略 */ }
@@ -2183,14 +2189,14 @@ JS = r"""
       list.style.display = 'none';
       chat.style.display = '';
       inputRow.style.display = '';
-      msgs.forEach(function (m) { if (m.sender === sender) { m.read = true; } });
+      msgs.forEach(function (m) { if (m.conv === sender) { m.read = true; } });
       save();
       paintChat();
     }
     function paintChat() {
       chat.innerHTML = '';
       msgs.forEach(function (m) {
-        if (m.sender === openConv || m.sender === '我') {
+        if (m.conv === openConv) {
           chat.appendChild(el('div', 'bub ' + (m.sender === '我' ? 'me' : 'ai'), m.content));
         }
       });
@@ -2202,14 +2208,14 @@ JS = r"""
       input.value = '';
       var d = new Date();
       var now = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
-      msgs.push({ id: Date.now(), sender: '我', content: text, time: now, read: true, isReply: false });
+      msgs.push({ id: Date.now(), sender: '我', content: text, time: now, read: true, isReply: false, conv: openConv });
       save(); paintChat();
       var t = el('div', 'bub ai typing', '<i></i><i></i><i></i>');
       chat.appendChild(t); body.scrollTop = body.scrollHeight;
       global.setTimeout(function () {
         if (t.parentNode) { t.parentNode.removeChild(t); }
         var reply = SMS_REPLY[Math.floor(Math.random() * SMS_REPLY.length)];
-        msgs.push({ id: Date.now() + 1, sender: openConv, content: reply, time: now, read: true, isReply: true });
+        msgs.push({ id: Date.now() + 1, sender: openConv, content: reply, time: now, read: true, isReply: true, conv: openConv });
         save(); paintChat();
       }, 2000);
     }
@@ -2458,9 +2464,9 @@ JS = r"""
       var a = loadAll();
       var F = dims(a);
       big.textContent = Math.round(F.reduce(function (x, y) { return x + y; }, 0) / 6);
-      var maxScore = Math.max(a.calc.highScore || 0, a.assistant.highScore || 0, a.schedule.highScore || 0, a.cal.highScore || 0);
-      var allRounds = (a.calc.rounds || 0) + (a.assistant.rounds || 0) + (a.schedule.rounds || 0) + (a.cal.rounds || 0) + (a.alarm.attempts || 0);
-      var accs = [a.calc.accuracy || 0, a.assistant.accuracy || 0, a.schedule.accuracy || 0];
+      var maxScore = (a.calc.highScore || 0) + (a.assistant.highScore || 0) + (a.schedule.highScore || 0) + (a.cal.highScore || 0);
+      var allRounds = (a.calc.rounds || 0) + (a.assistant.rounds || 0) + (a.schedule.rounds || 0) + (a.cal.rounds || 0);
+      var accs = [a.calc.accuracy || 0, a.assistant.accuracy || 0, a.schedule.accuracy || 0, a.cal.winRate || 0];
       v.querySelector('[data-f="maxScore"]').textContent = maxScore;
       v.querySelector('[data-f="allRounds"]').textContent = allRounds;
       v.querySelector('[data-f="avgAcc"]').textContent = Math.round(accs.reduce(function (x, y) { return x + y; }, 0) / accs.length * 100) + '%';
@@ -2476,7 +2482,7 @@ JS = r"""
         mini.innerHTML = GLYPH[gm.g];
         row.appendChild(mini);
         row.appendChild(el('span', 'rec-name', gm.name));
-        row.appendChild(el('span', 'rec-val', '分数 ' + (st.score || 0) + ' · 轮次 ' + ((st.rounds || st.attempts) || 0)));
+        row.appendChild(el('span', 'rec-val', '分数 ' + ((gm.key === 'alarm' ? (st.onTime || 0) : (st.score || 0))) + ' · 轮次 ' + ((st.rounds || st.attempts) || 0)));
         var rb = el('button', 'rec-reset', '重置');
         rb.addEventListener('click', function () { askReset(gm.key, gm.name); });
         row.appendChild(rb);
