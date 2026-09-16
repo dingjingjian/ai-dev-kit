@@ -98,3 +98,4 @@ ai-dev-kit/
 2. **一个项目只允许一个主分类**。确实跨界的（如工具外壳 + 游戏内核），以第 2 问定主分类，在备注里说明另一面。
 3. **发笔记时的标签以本文件为准**，避免 README 写一遍、文案写一遍、话题标签又是第三遍。
 4. **禁止硬编码绝对路径**。项目整体迁移是常态，任何写死 `C:\Users\...` 的脚本都会在迁移后失效——`vibeknow/rocket-launch/runtime-test.py` 与 `vibeknow/rocket-launch-3d/xiaohongshu/gen_cards.py` 都曾踩过，已改为基于 `__file__` 推导。新脚本一律用相对路径，或 `os.path.dirname(os.path.abspath(__file__))`。
+5. **技能（Skill）只提交目录，不提交打包 zip**。仓库级技能真源在 `.skill/<name>/`，以目录形式入库；`.zip` 属二次产物，一旦入库就会与目录分叉——`minitool-zip-builder.zip` 就落到了「zip 内 SKILL.md 3116B vs 磁盘 4638B」并夹带 macOS `__MACOSX/` 垃圾，2026-09-16 已删除（需要时 `git show a2db1d5:.skill/minitool-zip-builder.zip` 可取回）。要让 Skill 工具真的发现技能，用 `.skill/<name>/sync_check.py --install-user` 装到 `~/.workbuddy/skills/`，不要靠 zip。

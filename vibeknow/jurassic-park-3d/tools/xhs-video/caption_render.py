@@ -17,7 +17,12 @@ import os
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 W, H = 1080, 1920
-FONT_DIR = r"C:\Windows\Fonts"
+# 字体目录：由环境推导（Windows 上即 C:\Windows\Fonts），不写死盘符——换机/迁移是常态
+FONT_DIR = os.path.join(os.environ.get("WINDIR") or r"C:\Windows", "Fonts")
+if not os.path.isdir(FONT_DIR):
+    raise SystemExit(
+        "字幕字体目录不存在：%s\n本 skill 依赖 Windows 自带微软雅黑；"
+        "非 Windows 请改 caption_render.py 的 FONT_DIR 指向可用字体目录。" % FONT_DIR)
 
 # 字体栈：标题用微软雅黑 Bold（视频上最扛得住小屏），副标用雅黑 Regular
 F_TITLE = ("msyhbd.ttc", 1)

@@ -12,19 +12,23 @@ metadata:
 **核心思想：让 app 自己跑，而不是录人操作**——手录滑动必然抖（惯性、momentum 回弹、坐标错位），
 所以给 app 加一个 `?demo` 自动播放模式（见下文「app 侧改造」），再驱动浏览器录整条流程。
 
-## 文件位置与副本（三处，别改飘）
+## 文件位置与副本（四处，别改飘）
 
 | 位置 | 角色 | 入库 |
 |------|------|------|
 | `.skill/demo-video-recorder/`（仓库根） | **真源**，唯一权威版本 | ✅ git 跟踪 |
-| `~/.workbuddy/skills/demo-video-recorder/`、`<repo>/.workbuddy/skills/demo-video-recorder/` | 技能副本，供 Skill 工具发现（与真源同构） | ❌ 被 `.gitignore` 的 `.workbuddy/` 忽略 |
+| `~/.workbuddy/skills/demo-video-recorder/` | 用户级副本，**供 Skill 工具发现**（跨项目可用）；用 `--install-user` 安装/更新 | ❌ 本机私有 |
+| `<repo>/.workbuddy/skills/demo-video-recorder/` | 工作区副本（与真源同构，本机备用） | ❌ 被 `.gitignore` 的 `.workbuddy/` 忽略 |
 | `<项目>/tools/xhs-video/` | 该项目的**实例**：真实 `caption_config.json` + `.work/` + `preview/` | 源码/配置入库，产物忽略 |
+
+**没装用户级副本时 skill 不会被自动发现**——放进 `.skill/` 解决的是「不丢」，不是「自动可用」。
 
 两处布局不同是既定约定，不是笔误：真源里引擎在 `caption/` 子目录，项目实例里**拍平**到
 `tools/xhs-video/` 根（`build_captioned.py` 靠 cwd 里的 `import caption_render` 找同级模块）。
 
-**改引擎后立刻跑一次 `python sync_check.py`** —— 逐文件比 sha，列出漂移并非零退出；`--sync` 以真源
-覆盖全部副本。这个脚本是为防一个真实事故而写的：技能模板与项目源码曾静默分叉，复用技能时拿到的还是旧引擎。
+**改引擎后立刻跑一次 `python sync_check.py`** —— 逐文件比指纹，列出漂移并非零退出；`--sync` 以真源
+覆盖全部副本。脚本用 `.git`/`TRACKS.md` 逐级向上认仓库根，因此**从哪个副本运行都行**（不在仓库内时加
+`--repo <仓库根>`）。这个脚本是为防一个真实事故而写的：技能模板与项目源码曾静默分叉，复用技能时拿到的还是旧引擎。
 
 ## 已验证的铁律（真实踩过的坑，照做即可）
 
@@ -99,7 +103,8 @@ Playwright Python 包期望的 chromium revision（如 1223）常与本地已装
 - `caption/build_captioned.py`：主流程。渲卡片 → ffmpeg overlay（淡入淡出 + 上浮）→ edge-tts 混音 → 出片。
 - `caption/make_preview.py`：对照预览。一小段视频渲出「旧样式 + 三套新样式」并拼一张对照图。
 - `caption/caption_config.example.json`：字段模板，复制到项目 `tools/xhs-video/` 后改名 `caption_config.json` 改文案。
-- `sync_check.py`：副本一致性校验（`--sync` 以真源覆盖）。**改了 `caption/` 或 `record_demo.py` 后跑一次。**
+- `sync_check.py`：副本校验与安装。`--sync` 以真源覆盖副本，`--install-user` 装到
+  `~/.workbuddy/skills/`（只有这样 Skill 工具才能发现本技能）。**改了 `caption/` 或 `record_demo.py` 后跑一次。**
 
 ```bash
 # 阶段一：录屏版（无字幕，供后期二剪）
