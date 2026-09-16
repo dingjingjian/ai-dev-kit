@@ -59,12 +59,33 @@ function updateAtlasActions(){
   var startBtn=Q('startFlyBtn');
   var geneBtn=Q('geneFromAtlasBtn');
   if(n>0){
-    startBtn.disabled=false; startBtn.textContent='去见 '+n+' 只心动小猫 ♥';
+    startBtn.disabled=false; startBtn.textContent='去见 '+n+' 只心动小猫';
     geneBtn.disabled=false;
   }else{
-    startBtn.disabled=true; startBtn.textContent='先心动一只小猫 ♥';
+    startBtn.disabled=true; startBtn.textContent='先心动一只小猫';
     geneBtn.disabled=true;
   }
+  updateAllBtn();
+}
+/* 「全都要」：一键心动全部 / 再点清空 */
+function setAllHearts(on){
+  st.hearts=[];
+  if(on){for(var i=0;i<CATS.length;i++)st.hearts.push(i);}
+  saveHearts();
+  var btns=document.querySelectorAll('[data-heart]');
+  for(var k=0;k<btns.length;k++){
+    var idx=+btns[k].getAttribute('data-heart');
+    var has=st.hearts.indexOf(idx)>=0;
+    btns[k].classList.toggle('on',has);
+    btns[k].textContent=has?'♥':'♡';
+  }
+  updateAtlasActions();
+}
+function updateAllBtn(){
+  var b=Q('allHeartsBtn'); if(!b)return;
+  var all=st.hearts.length>=CATS.length;
+  b.classList.toggle('on',all);
+  b.textContent=all?'取消全选':'全都要';
 }
 function toggleHeart(i){
   var p=st.hearts.indexOf(i);
@@ -82,6 +103,49 @@ function toggleHeart(i){
 function setPage(p){
   st.page=p;
   document.body.className='mode-'+p;
+  /* 顶栏随文档流滚动，切页时把目标页滚回顶部，不继承上一页的滚动位置 */
+  var sc=(p==='atlas')?Q('atlasScroll'):((p==='gene')?Q('geneScroll'):null);
+  if(sc)sc.scrollTop=0;
+}
+
+/* ===== 可爱化地球调色 =====
+   真实卫星贴图（深蓝海洋 + 褐绿大陆）与页面的奶油粉/马卡龙糖果风不搭，
+   这里把贴图逐像素重映射到 UI 同一套色彩语言：
+   - 海洋：天蓝 → 近白粉蓝（同 --sky 家族）
+   - 陆地：蜜桃 → 奶油（同 --peach / --butter 家族），雪线以上转粉白
+   零新增资源、零依赖：Canvas 读像素后生成 CanvasTexture，大陆轮廓保持可辨认。
+   想回退真实卫星贴图：把 CANDY_EARTH 改成 false。 */
+var CANDY_EARTH=true;
+function candyEarthCanvas(img){
+  var w=img.width||1024, h=img.height||512;
+  /* 贴图最长边压到 1024：低端机逐像素处理更快，球面显示足够清晰 */
+  var cw=Math.min(w,1024), ch=Math.max(1,Math.round(cw*h/w));
+  var c=document.createElement('canvas'); c.width=cw; c.height=ch;
+  var ctx=c.getContext('2d');
+  if(!ctx){return img;}
+  ctx.drawImage(img,0,0,cw,ch);
+  var d;
+  try{d=ctx.getImageData(0,0,cw,ch);}catch(e){return img;}
+  var p=d.data, i, r, g, b, l, t;
+  for(i=0;i<p.length;i+=4){
+    r=p[i]; g=p[i+1]; b=p[i+2];
+    l=(r*0.299+g*0.587+b*0.114)/255;
+    /* 海洋判定：贴图实测海面 b-r 为 35~41（太平洋 24/36/60、北海 24/40/65），
+       而暗色植被区 b-r 只有 18~22（西伯利亚 37/40/57、亚马逊 31/34/53、刚果 35/38/53），
+       阈值取 28 正好把两者分开；再要求蓝通道最大，排除沙漠（红最大）与冰原。 */
+    if(b>g && b>r && b-r>28 && l<0.86){
+      t=(l-0.02)/0.30; t=t<0?0:(t>1?1:t);
+      p[i]=132+95*t; p[i+1]=198+52*t; p[i+2]=230+24*t;      /* #84c6e6 → #e3fafe */
+    }else if(l>0.82){
+      t=(l-0.82)/0.18; t=t<0?0:(t>1?1:t);
+      p[i]=255; p[i+1]=238+12*t; p[i+2]=228+22*t;           /* 雪原/冰川 → 粉白 */
+    }else{
+      t=l*0.82+0.12; t=t>1?1:t;
+      p[i]=255; p[i+1]=196+59*t; p[i+2]=152+92*t;           /* 蜜桃 #ffc498 → 奶油 #fffbf4 */
+    }
+  }
+  ctx.putImageData(d,0,0);
+  return c;
 }
 
 /* ===== 飞行场景（Three.js 第一视角） ===== */
@@ -104,11 +168,12 @@ function initFlyScene(){
       var R0=1.6;
 
       /* 真实地球/云层贴图（base64 data URI 内联，规避 file:// WebGL CORS） */
-      function loadTexFromData(uri, cb) {
+      function loadTexFromData(uri, cb, candy) {
         if (!uri) { cb(null); return; }
         var img = new Image();
         img.onload = function() {
-          var tex = new THREE.Texture(img);
+          var src=(candy&&CANDY_EARTH)?candyEarthCanvas(img):img;
+          var tex = new THREE.Texture(src);
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.needsUpdate = true;
           cb(tex);
@@ -117,28 +182,34 @@ function initFlyScene(){
         img.src = uri;
       }
 
-      /* 地球（MeshBasicMaterial 贴图原色直显，不受光照影响，永远明亮不黑） */
+      /* 地球（MeshBasicMaterial 贴图原色直显，不受光照影响，永远明亮不黑）
+         贴图经 candyEarthCanvas 重映射为马卡龙色系，与 UI 同一套色彩语言 */
       var earthMat = new THREE.MeshBasicMaterial({color:0xffffff});
-      loadTexFromData(typeof EARTH_TEX_URI!=='undefined'?EARTH_TEX_URI:null, function(t){ if(t){earthMat.map=t; earthMat.needsUpdate=true;} });
+      loadTexFromData(typeof EARTH_TEX_URI!=='undefined'?EARTH_TEX_URI:null, function(t){ if(t){earthMat.map=t; earthMat.needsUpdate=true;} }, true);
       var earth = new THREE.Mesh(
         new THREE.SphereGeometry(R0,64,44),
         earthMat
       );
       scene.add(earth);
-      /* 云层 */
-      var cloudsMat = new THREE.MeshBasicMaterial({transparent:true, opacity:.62, depthWrite:false});
+      /* 云层（真实云图保留，整体罩一层奶油粉，避免白得发冷） */
+      var cloudsMat = new THREE.MeshBasicMaterial({color:0xffeef4,transparent:true, opacity:.46, depthWrite:false});
       loadTexFromData(typeof CLOUDS_TEX_URI!=='undefined'?CLOUDS_TEX_URI:null, function(t){ if(t){cloudsMat.map=t; cloudsMat.needsUpdate=true;} });
       var clouds = new THREE.Mesh(
         new THREE.SphereGeometry(R0*1.012,48,32),
         cloudsMat
       );
       scene.add(clouds);
-      /* 大气（粉色柔光，配合可爱风 UI） */
+      /* 大气（两层粉色柔光：内层贴着地表做边缘过渡，外层做糖霜光晕） */
       var atmo=new THREE.Mesh(
-        new THREE.SphereGeometry(R0*1.06,48,32),
-        new THREE.MeshBasicMaterial({color:0xffc9dd,transparent:true,opacity:.14,side:THREE.BackSide,depthWrite:false})
+        new THREE.SphereGeometry(R0*1.07,48,32),
+        new THREE.MeshBasicMaterial({color:0xffd7e6,transparent:true,opacity:.22,side:THREE.BackSide,depthWrite:false})
       );
       scene.add(atmo);
+      var halo=new THREE.Mesh(
+        new THREE.SphereGeometry(R0*1.18,40,26),
+        new THREE.MeshBasicMaterial({color:0xffe3ec,transparent:true,opacity:.10,side:THREE.BackSide,depthWrite:false})
+      );
+      scene.add(halo);
       /* 光（sun 在 frame 里跟随相机，确保地球朝相机面始终被照亮，不出现黑黑夜半球） */
       var sun=new THREE.DirectionalLight(0xffffff,1.0); sun.position.set(5,3,5); scene.add(sun);
       scene.add(new THREE.AmbientLight(0xffffff,1.4));
@@ -186,6 +257,23 @@ function initFlyScene(){
         heartTexCache=new THREE.CanvasTexture(hc);
         return heartTexCache;
       }
+      /* 空心爱心贴图（出发地标记用：与目的地实心爱心成对，喻「心从这里出发」） */
+      var heartRingCache=null;
+      function heartRingTex(){
+        if(heartRingCache)return heartRingCache;
+        var rc=document.createElement('canvas'); rc.width=rc.height=64;
+        var rx=rc.getContext('2d');
+        rx.strokeStyle='#ffffff'; rx.lineWidth=7; rx.lineJoin='round'; rx.lineCap='round';
+        rx.beginPath();
+        rx.moveTo(32,55);
+        rx.bezierCurveTo(5,35,5,13,20,11);
+        rx.bezierCurveTo(27,10,31,15,32,21);
+        rx.bezierCurveTo(33,15,37,10,44,11);
+        rx.bezierCurveTo(59,13,59,35,32,55);
+        rx.closePath(); rx.stroke();
+        heartRingCache=new THREE.CanvasTexture(rc);
+        return heartRingCache;
+      }
       /* 柔光贴图：径向渐变圆形光晕（Sprite 不带 map 会渲染成实心方块，必须用贴图压圆） */
       var glowTexCache=null;
       function glowTex(){
@@ -201,19 +289,25 @@ function initFlyScene(){
         return glowTexCache;
       }
       /* 标记点（出发地薄荷绿小圆点 / 目的地粉色爱心，isHeart 切换形状） */
-      function makeMarker(lat,lon,color,isHeart){
+      /* kind: 'heart' 目的地实心爱心 | 'ring' 出发地空心爱心 | 其它 小圆点 */
+      function makeMarker(lat,lon,color,kind){
         var pos=ll2v(lat,lon,R0*1.01);
         var g=new THREE.Group();
         var shape;
-        if(isHeart){
+        if(kind==='heart'){
           shape=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex(),transparent:true,depthWrite:false}));
           shape.scale.set(0.11,0.11,1);
+        }else if(kind==='ring'){
+          shape=new THREE.Sprite(new THREE.SpriteMaterial({map:heartRingTex(),color:color,transparent:true,depthWrite:false}));
+          shape.scale.set(0.095,0.095,1);
         }else{
           shape=new THREE.Mesh(new THREE.SphereGeometry(0.024,12,8),new THREE.MeshBasicMaterial({color:color}));
         }
         shape.position.copy(pos); g.add(shape);
-        var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),color:color,transparent:true,opacity:.6,blending:THREE.AdditiveBlending,depthWrite:false}));
-        glow.scale.set(0.16,0.16,1); glow.position.copy(pos); g.add(glow);
+        /* 出发地光晕收小调淡：不抢目的地爱心的视觉重心 */
+        var ring=kind==='ring';
+        var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),color:color,transparent:true,opacity:ring?.38:.6,blending:THREE.AdditiveBlending,depthWrite:false}));
+        glow.scale.set(ring?0.12:0.16,ring?0.12:0.16,1); glow.position.copy(pos); g.add(glow);
         g.userData.glow=glow; return g;
       }
       /* 大圆航线弧线（粉色虚线感，与 UI 主色一致） */
@@ -221,7 +315,10 @@ function initFlyScene(){
         var pts=[];
         for(var i=0;i<=72;i++){pts.push(slerp(av,bv,i/72).multiplyScalar(R0*1.018));}
         var geo=new THREE.BufferGeometry().setFromPoints(pts);
-        return new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xff8fae,transparent:true,opacity:.8}));
+        /* 虚线呼应 UI 的手账虚线语言（首页地区标题、结果页卡片标题的分隔线同款） */
+        var line=new THREE.Line(geo,new THREE.LineDashedMaterial({color:0xff8fae,transparent:true,opacity:.85,dashSize:0.05,gapSize:0.032}));
+        line.computeLineDistances();
+        return line;
       }
       /* 飞行中的自己：一颗粉色爱心（"我带着一颗心飞去见它"） */
       function makeHeartMarker(){
@@ -276,6 +373,8 @@ function initFlyScene(){
           /* 飞行体（爱心）位置 */
           if(routeObjs.heart){routeObjs.heart.position.copy(p.clone().multiplyScalar(R0*1.02));}
           /* HUD */
+          /* 出发地标记起飞后淡出：近距离航线时它会与目的地爱心叠在一起 */
+          if(routeObjs.from){routeObjs.from.visible=t<0.45;}
           Q('flyProgress').textContent=Math.round(t*100)+'%';
           if(t<.15)Q('flyStatus').textContent='起飞啦';
           else if(t>.85)Q('flyStatus').textContent='降落中';
@@ -297,14 +396,19 @@ function initFlyScene(){
       function fly(fromIdx,toIdx,cb){
         var a=CATS[fromIdx], b=CATS[toIdx];
         fromV=ll2v(a.lat,a.lon,1); toV=ll2v(b.lat,b.lon,1);
+        /* 飞行时长按球面角距伸缩：同地 ≈0.9s，对跖点 ≈4.2s（原先固定 3200ms，近处也要飞满全程） */
+        var ang=Math.acos(Math.max(-1,Math.min(1,fromV.dot(toV))));
+        /* 几乎重合的目的地（同一坐标/同城）不做原地飞行，直接抵达 */
+        if(ang<0.03){goto(toIdx,cb);return;}
+        flyDur=900+3300*(ang/Math.PI);
         onArrive=cb; st.flying=true; st.arrived=false;
         document.body.classList.add('flying');
         document.body.classList.remove('fly-arrived');
         Q('flyRoute').innerHTML=a.city+' <span class="arrow">💗</span> '+b.city;
         /* 标记 + 航线 */
         clearRoute();
-        routeObjs.from=makeMarker(a.lat,a.lon,0x8ad6bd,false);
-        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,true);
+        routeObjs.from=makeMarker(a.lat,a.lon,0x8ad6bd,'ring');
+        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,'heart');
         routeObjs.line=makeRouteLine(fromV,toV);
         routeObjs.heart=makeHeartMarker();
         scene.add(routeObjs.from); scene.add(routeObjs.to); scene.add(routeObjs.line); scene.add(routeObjs.heart);
@@ -332,7 +436,7 @@ function initFlyScene(){
         Q('flyProgress').textContent='100%';
         /* 只显示目的地标记（粉色爱心） */
         clearRoute();
-        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,true);
+        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,'heart');
         scene.add(routeObjs.to);
         if(!animId){resize();animId=requestAnimationFrame(frame);}
         if(cb)cb(idx);
@@ -459,6 +563,12 @@ function renderGene(){
   hearts.forEach(function(c){regionCount[c.region]=(regionCount[c.region]||0)+1;});
   Q('regionBars').innerHTML=geneBars(regionCount,REGION_LABEL,REGION_ORDER,n);
 
+  /* 结果概览胶囊 */
+  Q('geneChips').innerHTML=
+    '<span>💗 心动 '+n+' 只</span>'+
+    '<span>🌍 跨越 '+Object.keys(regionCount).length+' 个大洲</span>'+
+    '<span>✨ 最强「'+STATS_DIMS[peak]+'」'+avg[peak].toFixed(1)+'</span>';
+
   /* 特征构成 */
   var traitCount={};
   hearts.forEach(function(c){c.traits.forEach(function(t){traitCount[t]=(traitCount[t]||0)+1;});});
@@ -532,6 +642,7 @@ function bind(){
     if(hb){toggleHeart(+hb.getAttribute('data-heart'));return;}
   });
   Q('startFlyBtn').addEventListener('click',enterFly);
+  Q('allHeartsBtn').addEventListener('click',function(){setAllHearts(st.hearts.length<CATS.length);});
   Q('geneFromAtlasBtn').addEventListener('click',enterGene);
   Q('flyPrevBtn').addEventListener('click',flyPrev);
   Q('flyNextBtn').addEventListener('click',flyNext);
