@@ -36,14 +36,15 @@
 
 ### #vibeart　数字艺术
 
-暂无项目。不硬凑，补位方案见 `TRACKS.md`。
+| 项目 | 目录 | 说明 |
+|------|------|------|
+| 泰坦尼克号 | `vibeart/Titanic/` | 照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模；尺寸真源为 `assets/titanic-params.js`，`blender/headless_check.py` 含 62 项几何审计并导出 GLB |
+| 郑和宝船 | `vibeart/zhenghe-treasure-ship/` | Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式（展示/拆解/航行）可观赏；史料口径见 `docs/史料考证.md`，尺寸真源为 `assets/ship-params.js` |
 
 ### #vibeknow　人文知识
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
-| 泰坦尼克号 | `vibeknow/Titanic/` | 照乐高 10294 参考图逐像素丈量做参数化建模的泰坦尼克号：三色船壳（红防污/黑舷侧/金线）、四座后倾烟囱、双桅索具、十六艘救生艇、艏艉属具与展示底座；尺寸真源为 `assets/titanic-params.js`，`blender/headless_check.py` 含 62 项几何审计并导出 GLB |
-| 郑和宝船 | `vibeknow/zhenghe-treasure-ship/` | Blender 建模 + 离线 H5 展示的明代宝船科普：九桅十二帆、水密隔舱、七下西洋航线；三种模式（展示/拆解/航行），史料口径见 `docs/史料考证.md`，尺寸真源为 `assets/ship-params.js` |
 | 055 型驱逐舰 | `vibeknow/type-055-destroyer/` | 照四视图线图做的 055 三维模型：舰体线型、隐身上层建筑、集成桅四面 AESA、前 64 + 后 64 垂发；Blender 参数化建模（`assets/ship-params.js` 为唯一真源），含 9 项几何审计与四机位预览 |
 | 3D 地球科普 | `vibeknow/earth-3d/` | 3D 地球科普工具，WebGL 展示蓝色星球、昼夜交替、四季成因、月相（地月系统）、地球内部结构与经纬网格 |
 | 世界美食大百科 | `vibeknow/world-food-3d/` | 复用 earth-3d 框架，35 道世界美食以发光红点钉在地球上，点红点看介绍；按大洲筛选；离线零依赖 |

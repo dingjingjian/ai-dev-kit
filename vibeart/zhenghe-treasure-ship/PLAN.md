@@ -20,7 +20,7 @@
 
 | 任务 | 产出 | 状态 |
 |------|------|------|
-| 定分类与目录 | `vibeknow/zhenghe-treasure-ship/` | ✅ |
+| 定分类与目录 | `vibeart/zhenghe-treasure-ship/` | ✅ |
 | 建骨架 | `README.md` / `docs/` / `assets/` / `blender/` / `tests/` / `xiaohongshu/` | ✅ |
 | 史料口径立档 | `docs/史料考证.md`（尺寸、桅帆排布、福船形制、航线） | ✅ |
 | 打通 Blender 链路 | 实测 28 工具可用，Blender 5.2.1 LTS | ✅ |
