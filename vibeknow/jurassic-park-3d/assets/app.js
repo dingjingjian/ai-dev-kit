@@ -83,6 +83,73 @@
   /* ================= 状态 ================= */
   var st={page:'routes',route:null,routeIdx:-1,tourIdx:0,sel:0,custom:[]};
 
+  /* ================= 自动播放演示模式（?demo / ?demo=giants / ?loop）=================
+   * 用途：小红书宣传片实机录制 + app 内「观演模式」。全程零手动操作——
+   * 路线页停留数秒后自动选路线 → 大门自动播放（自带 7.1s）→ 游览页每站定时自动前进
+   * → 巡逻日志停留后结束（带 ?loop 则回到路线页循环重播）。
+   * 地球摆头动效由 G.setPlaying 自带，无需手拖；键盘在演示模式被禁用，纯播放。
+   * 录制铁律：按手机逻辑尺寸（9:16）录，ffmpeg lanczos 放大，禁止 CSS zoom / transform:scale。 */
+  var QP=(location.search?new URLSearchParams(location.search):new URLSearchParams(''));
+  var DEMO=QP.has('demo');
+  var DEMO_LOOP=QP.has('loop');
+  var DEMO_ROUTE=(QP.get('demo')||'predator');
+  var DEMO_ROUTE_MS=3000;    // 路线选择页停留
+  var DEMO_TOUR_MS=3400;     // 每站停留（含档案卡阅读 + 地球摆头）
+  var DEMO_SUMMARY_MS=5200;  // 巡逻日志页停留
+  /* ?warm=N（秒）：演示开始前先静置 N 秒。软件渲染（SwiftShader）下给着色器/
+     地球组件预热时间，避免开头第一波动作掉帧；录制宣传片时用 ?demo&warm=3 */
+  var DEMO_WARM_MS=Math.max(0,(parseInt(QP.get('warm'),10)||0))*1000;
+  var demoTimers=[];
+  function demoAfter(ms,fn){var id=setTimeout(fn,ms);demoTimers.push(id);return id;}
+  function demoClear(){for(var i=0;i<demoTimers.length;i++)clearTimeout(demoTimers[i]);demoTimers=[];}
+  /* 演示模式下平滑滚动元素到指定位置（用于路线页/总结页一屏放不下时，
+     让录屏能带出完整内容而不是只卡顶部） */
+  function demoSmoothScroll(el, to, duration, cb){
+    if(!el)return cb&&cb();
+    var start=el.scrollTop, t0=null;
+    function step(t){
+      if(!t0)t0=t;
+      var p=Math.min(1,(t-t0)/Math.max(1,duration));
+      p=p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2; // easeInOutQuad
+      el.scrollTop=start+(to-start)*p;
+      if(p<1)requestAnimationFrame(step);
+      else if(cb)cb();
+    }
+    requestAnimationFrame(step);
+  }
+  function startDemo(){
+    // 路线页一屏放不下，演示时先向下扫一眼再回顶，再进入大门
+    var routeSec=document.querySelector('.route-section');
+    if(routeSec){
+      demoAfter(500,function(){
+        var max=Math.max(0,routeSec.scrollHeight-routeSec.clientHeight);
+        if(max>0){
+          demoSmoothScroll(routeSec, max, 1200, function(){
+            demoAfter(200,function(){demoSmoothScroll(routeSec, 0, 700);});
+          });
+        }
+      });
+    }
+    demoAfter(DEMO_ROUTE_MS,function(){
+      if(st.page!=='routes')return;
+      var idx=0;
+      for(var i=0;i<ROUTES.length;i++){if(ROUTES[i].key===DEMO_ROUTE){idx=i;break;}}
+      enterGate(ROUTES[idx]);
+    });
+  }
+  function demoTourStep(){
+    demoAfter(DEMO_TOUR_MS,function(){
+      if(st.page!=='tour')return;
+      tourNext();                 // 前进一站；末站会自动跳到总结页
+      if(st.page==='tour')demoTourStep();
+      /* page==='summary' 时由 showSummary 里的 demoEnd 接管 */
+    });
+  }
+  function demoEnd(){
+    demoClear();
+    if(DEMO_LOOP){backToRoutes();demoAfter(1600,startDemo);}
+  }
+
   /* ================= 自选路线存档（localStorage，失败即静默降级）================= */
   function loadCustom(){
     try{
@@ -128,8 +195,11 @@
     im.src=f.img;
   });
   function thumbStyle(f){
+    /* contain 而非 cover：恐龙图是 1:1 方图，遇到非方形图位（矮屏被挤扁的监控画面）
+       也只留深色边，绝不裁掉头与脚；方形图位（游览页方画框 / 名录 38×38 缩略图）
+       与 cover 等效，不会出现留白 */
     if(f.img&&IMG_OK[f.name]===true)
-      return "background-image:url('"+f.img+"');background-size:cover;background-position:center";
+      return "background-image:url('"+f.img+"');background-size:contain;background-repeat:no-repeat;background-position:center";
     return 'background:'+plateGrad(f.color||'#a52a1f');
   }
   function repaintTourImg(i){
@@ -652,6 +722,7 @@
     document.body.setAttribute('data-route',r.key);
     if(G)G.setPlaying(true);
     showTourDino();
+    if(DEMO)demoTourStep();
     toast(G?'游览车已进园 · 拖动地球可转动':'游览车已进园 · 化石发现地见地球标注');
   }
   function showTourDino(){
@@ -805,6 +876,18 @@
     sumCountryEl.textContent=Object.keys(cns).length;
     summaryBodyEl.scrollTop=0;
     if(G)G.markDirty();
+    if(DEMO){
+      // 总结页内容也常超出一屏，演示时自动下滑到底再回顶，录屏能看到全部恐龙档案
+      demoAfter(600,function(){
+        var max=Math.max(0,summaryBodyEl.scrollHeight-summaryBodyEl.clientHeight);
+        if(max>0){
+          demoSmoothScroll(summaryBodyEl, max, 2000, function(){
+            demoAfter(1200,function(){demoSmoothScroll(summaryBodyEl, 0, 900);});
+          });
+        }
+      });
+      demoAfter(DEMO_SUMMARY_MS,demoEnd);
+    }
   }
   /* 回园区大门外（各页统一的「回路线选择」出口） */
   function backToRoutes(){
@@ -825,6 +908,7 @@
 
   /* ================= 键盘 ================= */
   window.addEventListener('keydown',function(e){
+    if(DEMO)return; /* 演示模式纯播放，不接受键盘 */
     if(e.key==='Escape'){
       if(st.page==='builder')exitBuilder();
       else if(st.page!=='routes')backToRoutes();
@@ -838,6 +922,7 @@
   var toastT=null;
   var TOAST_MS=3600;
   function toast(msg){
+    if(DEMO)return; /* 演示模式纯净播放，不弹提示 */
     hintEl.textContent=msg;hintEl.classList.add('show');
     clearTimeout(toastT);toastT=setTimeout(function(){hintEl.classList.remove('show');},TOAST_MS);
   }
@@ -851,6 +936,7 @@
   toast('选一条游览路线 · 游览车会带你穿行史前世界');
   setTimeout(function(){if(G)G.markDirty();document.getElementById('loader').classList.add('hide');},520);
   if(G)G.start();
+  if(DEMO)demoAfter(DEMO_WARM_MS,startDemo);
 
   /* logo 图到位才显示 logo 块（挂在 <html> 上，不会被页面切换的 body.className 覆盖）；
      没图就整块隐藏，不留任何 CSS 画的替代图形 */
