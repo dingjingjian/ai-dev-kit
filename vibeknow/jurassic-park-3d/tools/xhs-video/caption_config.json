@@ -1,0 +1,55 @@
+{
+  "base_video": "../../xiaohongshu/jurassic-park-3d-demo.mp4",
+  "output": "../../xiaohongshu/jurassic-park-3d-demo-字幕解说版.mp4",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "pad_seconds": 65,
+  "style": {
+    "theme": "scrim",
+    "title_size": 66,
+    "title_tracking": 7,
+    "sub_size": 33,
+    "sub_tracking": 3.5,
+    "rule_half": 62,
+    "rise_px": 16,
+    "fade_in": 0.45,
+    "fade_out": 0.32,
+    "card_y": 0
+  },
+  "cues": [
+    {
+      "start": 2,
+      "end": 5,
+      "title": "选一条史前路线",
+      "subtitle": "游览车带你穿行侏罗纪世界",
+      "narration": "欢迎来到侏罗纪公园。先选一条史前路线，游览车会带你穿行整个恐龙世界。"
+    },
+    {
+      "start": 5,
+      "end": 12,
+      "title": "经典大门，缓缓开启",
+      "subtitle": "园区的第一道震撼",
+      "narration": "经典大门缓缓开启，园区的第一道震撼扑面而来。"
+    },
+    {
+      "start": 12,
+      "end": 30,
+      "title": "巡逻车沿途穿行",
+      "subtitle": "30 只恐龙 · 5 大地质年代",
+      "narration": "巡逻车沿途穿行，三十只恐龙、五大地质年代、十一个国家的化石发现地等你探索。"
+    },
+    {
+      "start": 30,
+      "end": 39,
+      "title": "拖转地球看全景",
+      "subtitle": "化石发现地已钉在地图上",
+      "narration": "拖转地球看全景，化石发现地已经钉在地图上。"
+    },
+    {
+      "start": 39,
+      "end": 46,
+      "title": "一张雷达图收尾",
+      "subtitle": "看懂全园分布与看点",
+      "narration": "最后用一张雷达图收尾，带你一眼看懂全园分布与看点。"
+    }
+  ]
+}

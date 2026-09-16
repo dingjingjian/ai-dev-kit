@@ -1,0 +1,54 @@
+{
+  "_说明": "复制本文件为 caption_config.json 后改文案。所有路径相对本文件所在目录（即 caption/ 或 tools/xhs-video/）。样式字段说明见 SKILL.md「阶段二」。",
+  "base_video": "../../xiaohongshu/<name>-demo.mp4",
+  "output": "../../xiaohongshu/<name>-demo-字幕解说版.mp4",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "pad_seconds": 65,
+  "style": {
+    "theme": "scrim",
+    "title_size": 66,
+    "title_tracking": 7,
+    "sub_size": 33,
+    "sub_tracking": 3.5,
+    "rise_px": 16,
+    "fade_in": 0.45,
+    "fade_out": 0.32
+  },
+  "cues": [
+    {
+      "start": 2,
+      "end": 5,
+      "title": "标题一",
+      "subtitle": "副标题一",
+      "narration": "解说语音文本一。"
+    },
+    {
+      "start": 5,
+      "end": 12,
+      "title": "标题二",
+      "subtitle": "副标题二",
+      "narration": "解说语音文本二。"
+    },
+    {
+      "start": 12,
+      "end": 30,
+      "title": "标题三",
+      "subtitle": "副标题三",
+      "narration": "解说语音文本三。"
+    },
+    {
+      "start": 30,
+      "end": 39,
+      "title": "标题四",
+      "subtitle": "副标题四",
+      "narration": "解说语音文本四。"
+    },
+    {
+      "start": 39,
+      "end": 46,
+      "title": "标题五",
+      "subtitle": "副标题五",
+      "narration": "解说语音文本五。"
+    }
+  ]
+}
