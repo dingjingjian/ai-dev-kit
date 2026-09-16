@@ -16,7 +16,7 @@
 - **逻辑**：vanilla JS，直接按 ES2017 / Chrome 61 基线书写（无 `?.` / `??` / object spread 等超基线语法）。
 - **样式**：Chrome 61 基线层 + `@supports` 增强层（毛玻璃等），不维护两套样式表；Flex 间距用 margin、Grid 间距用 `grid-gap`。
 - **容器适配**：`--top-gap` 显式顶部留白 + `var(--safe-area-inset-*, env(...))` 组合；`body.in-app` 注入左右净空（`--safe-l/--safe-r`），净空内不放任何按钮；导航全部收到底部三大金刚键。
-- **自检**：`_dev/smoke_test.py`（playwright 无头）断言导航栈 / 安全区 / 顶部净空，并扫描 JS/CSS 超基线语法；回归截图输出到 `_dev/_shots/`（临时，不入库）。
+- **自检**：`_dev/smoke_test.py`（playwright 无头）断言导航栈 / 安全区 / 顶部净空 / 计算器固定页（内容区不可滚动、判定阶段页脚不跳动、小屏键盘贴底），并扫描 JS/CSS 超基线语法；回归截图输出到 `_dev/_shots/`（临时，不入库）。整套耗时约 1–3 分钟：闹钟用例要等响铃窗口对齐到 `:00`/`:30`，窗口恰好已过期时会多等一个刻度周期。
 
 ```bash
 # 构建

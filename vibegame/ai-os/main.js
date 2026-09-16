@@ -399,7 +399,7 @@
   function buildCalc() {
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>计算器</h1>'));
-    var body = el('div', 'pbody');
+    var body = el('div', 'pbody calc-body');
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -423,9 +423,9 @@
     disp.style.flexDirection = 'column';
     disp.style.justifyContent = 'flex-end';
     v.appendChild(body);
-    var foot = el('div', 'pfoot');
+    var foot = el('div', 'pfoot calc-foot');
     var keypad = el('div', 'keypad');
-    var judgeRow = el('div', 'judge-row hidden-row');
+    var judgeRow = el('div', 'judge-row calc-judge hidden-row');
     var bOk = el('button', 'judge-btn judge-ok', '对');
     var bNo = el('button', 'judge-btn judge-no', '错');
     judgeRow.appendChild(bOk);
@@ -439,6 +439,15 @@
     var display = '0';
     var judging = false;
     var saved = null; /* {shown, correct} */
+    var errored = false; /* Error 态：下次输入整体清空重来（v1 需手动按 C） */
+
+    var fbNode = body.querySelector('.calc-feedback');
+    var GUIDE = '按出你的算式，按 = 看 AI 的结果';
+    /* 提示四态：默认引导（常驻可见，不被按键清空）/ ask「该你判了」/ ok 判对 / no 判错 —— 字重与配色见 CSS */
+    function say(txt, state) {
+      fbNode.textContent = txt;
+      fbNode.className = 'calc-feedback' + (state ? ' ' + state : '');
+    }
 
     function setStat(f, val) {
       var n = stats.querySelector('[data-f="' + f + '"]');
@@ -457,14 +466,22 @@
     }
     function press(k) {
       if (judging) { return; }
-      var fb = body.querySelector('.calc-feedback');
-      fb.textContent = '';
-      if (k === 'C') { expr = ''; display = '0'; paint(); return; }
+      say(GUIDE, '');
+      /* Error 态下再输入（或按 C）：整体清空，从干净状态重新开始 —— 坏表达式不再接着往后长 */
+      if (errored || k === 'C') {
+        expr = '';
+        display = '0';
+        errored = false;
+        disp.style.borderColor = '';
+        if (k === 'C') { paint(); return; }
+      }
       if (k === '=') {
         var t = calcParse(expr);
         if (t === null) {
+          errored = true;
           display = 'Error';
-          fb.textContent = '表达式无效，AI 拒绝背锅';
+          disp.style.borderColor = 'rgba(224,82,82,.7)';
+          say('表达式无效，AI 拒绝背锅', 'no');
           paint();
           return;
         }
@@ -473,9 +490,9 @@
         saved = { shown: shown, correct: t };
         display = calcFmt(shown);
         judging = true;
-        keypad.classList.add('hidden-row');
+        keypad.classList.add('keys-hidden');
         judgeRow.classList.remove('hidden-row');
-        fb.textContent = '这个结果对吗？';
+        say('这个结果对吗？', 'ask');
         paint();
         return;
       }
@@ -504,10 +521,9 @@
       S.highScore = Math.max(S.highScore, S.score);
       statPut('calc', S);
       refresh();
-      var fb = body.querySelector('.calc-feedback');
-      fb.textContent = right
+      say(right
         ? ('✓ 判断正确 +' + gain + (S.streak >= 3 ? '（' + S.streak + ' 连击奖励）' : ''))
-        : '✗ 判断错误 -5，AI 露出无辜脸';
+        : '✗ 判断错误 -5，AI 露出无辜脸', right ? 'ok' : 'no');
       disp.style.borderColor = right ? 'rgba(31,169,113,.7)' : 'rgba(224,82,82,.7)';
       judging = false;
       saved = null;
@@ -516,9 +532,9 @@
         display = '0';
         judging = false;
         judgeRow.classList.add('hidden-row');
-        keypad.classList.remove('hidden-row');
+        keypad.classList.remove('keys-hidden');
         disp.style.borderColor = '';
-        fb.textContent = '按出你的算式，按 = 看 AI 的结果';
+        say(GUIDE, '');
         paint();
       }, right ? 1200 : 1600);
     }
@@ -665,11 +681,16 @@
     var delta = now - alarmState.target;
     var inWin = delta >= -500 && delta <= 500;
     var ringBtn = document.querySelector('.ring-btn');
-    if (inWin && !alarmState.ringing) {
-      alarmState.ringing = true;
-      if (ringBtn) { ringBtn.disabled = false; ringBtn.classList.add('ringing'); }
-    } else if (!inWin && alarmState.ringing) {
-      /* 窗口已过仍未按：自动记一次「晚了」（v1 行为） */
+    if (inWin) {
+      if (!alarmState.ringing) {
+        alarmState.ringing = true;
+        if (ringBtn) { ringBtn.disabled = false; ringBtn.classList.add('ringing'); }
+      }
+    } else if (delta > 500) {
+      /* 窗口已过仍未按：自动记一次「晚了」（v1 行为）。
+         判定用 delta 而不是 alarmState.ringing —— 否则「目标设下时窗口就已过去」
+         （如 :00.6 打开闹钟，目标对齐到已过的 :00）两条分支都不命中：按钮永远按不动、
+         也不会自动判晚，玩家卡死。 */
       if (alarmFinish) { alarmFinish(false, ALARM_TXT.late); }
     }
   }
@@ -685,7 +706,10 @@
     var COLS = 7;
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>日历</h1>'));
-    var body = el('div', 'pbody');
+    var body = el('div', 'pbody cal-body');
+    /* 纵向 flex：棋盘卡 margin 上下 auto，在剩余空间里垂直居中（消除中段空洞） */
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -705,8 +729,9 @@
     meta.appendChild(flagMini);
     body.appendChild(meta);
     var card = el('div', 'ms-card');
-    card.appendChild(el('div', 'ms-week',
-      '<span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>'));
+    var week = el('div', 'ms-week',
+      '<span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>');
+    card.appendChild(week);
     var grid = el('div', 'ms-grid');
     card.appendChild(grid);
     body.appendChild(card);
@@ -715,6 +740,7 @@
     var frow = el('div', 'ms-foot');
     foot.appendChild(frow);
     v.appendChild(foot);
+    var MS_GAP = 6; /* 与 .ms-week / .ms-grid 的 grid-gap 保持一致 */
 
     var S = statGet('cal', { score: 0, highScore: 0, winRate: 0, rounds: 0, fastest: 999 });
     var diff = 'medium';
@@ -739,6 +765,31 @@
       setStat('win', Math.round(S.winRate * 100) + '%');
       setStat('fast', S.fastest < 999 ? mmss(S.fastest) : '--:--');
       setStat('mines', cfg().mines - flags);
+    }
+    /* 日历整屏摆下（真机日历观感，不上下翻页）：格子是正方形（padding-top:100%），
+       所以缩棋盘宽度即等比缩高度。棋盘可用高度可直接算出（内容区高 − 其余各行占高），
+       一次到位、不依赖滚动溢出量。只缩不放：宽屏保持自然尺寸。列宽/表头共用同一宽度，
+       保证星期表头与列对齐。 */
+    function outerH(node) { /* 元素占高（含上下外边距；卡片用 auto 外边距，故不参与相加） */
+      var s = getComputedStyle(node);
+      return node.offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+    }
+    function fitBoard() {
+      if (body.clientHeight <= 0) { return; } /* 视图尚未上屏（display:none）不测量 */
+      week.style.width = '';
+      grid.style.width = '';
+      var rows = cfg().rows;
+      var natCol = Math.floor((grid.offsetWidth - 6 * MS_GAP) / 7); /* 自然列宽 = 正方形边长 */
+      var bs = getComputedStyle(body);
+      var used = outerH(stats) + outerH(banner) + outerH(meta)
+               + (card.offsetHeight - grid.offsetHeight) /* 卡片边框/内边距/星期条：与棋盘高无关 */
+               + parseFloat(bs.paddingTop) + parseFloat(bs.paddingBottom);
+      var col = Math.floor((body.clientHeight - used - (rows - 1) * MS_GAP) / rows);
+      if (col >= natCol) { return; } /* 装得下：保持自然正方形尺寸 */
+      if (col < 14) { col = 14; } /* 兜底：极小屏不再缩，避免格子消失 */
+      var w = 7 * col + 6 * MS_GAP;
+      week.style.width = w + 'px';
+      grid.style.width = w + 'px';
     }
     function paint(idx) {
       var b = board[idx];
@@ -791,6 +842,7 @@
       banner.textContent = (N === 42 ? CAL_TXT.headerHard : CAL_TXT.header) + ' · 点任意日期开始排雷';
       setStat('time', '00:00');
       refresh();
+      fitBoard(); /* 行数随难度变化 + 提示文案可能折行，重新核算棋盘宽度 */
     }
     function flood(idx) {
       var rows = cfg().rows;
@@ -833,6 +885,8 @@
       statPut('cal', S);
       refresh();
       banner.textContent = CAL_TXT.winTitle + '（+' + gain + '，用时 ' + secs + ' 秒' + (secs < 60 ? '，提速奖励 +10' : '') + '）· ' + CAL_TXT.winMessage;
+      fitBoard(); /* 结算文案更长可能折行：重新核算棋盘宽度 */
+
     }
     function lose(boomIdx) {
       state = 'lost';
@@ -847,6 +901,8 @@
       statPut('cal', S);
       refresh();
       banner.textContent = CAL_TXT.loseTitle + ' · ' + CAL_TXT.loseMessage;
+      fitBoard();
+
     }
     function toggleFlag(idx) {
       if (state === 'won' || state === 'lost') { return; }
@@ -945,6 +1001,11 @@
         setStat('time', mmss(s));
       }
     } };
+    /* 进入本页时可见尺寸才有效（视图缓存复用，尺寸可能已变），以及旋屏后重算 */
+    v.onShow = fitBoard;
+    global.addEventListener('resize', function () {
+      if (current === 'calendar') { fitBoard(); }
+    });
     reset();
     return v;
   }
@@ -1004,7 +1065,12 @@
       setStat('streak', S.streak); setStat('rounds', S.rounds);
       setStat('acc', Math.round(S.accuracy * 100) + '%');
     }
-    function scrollBottom() { body.scrollTop = body.scrollHeight; }
+    /* 滚到底。注意页脚（选项区）高度会变：选项上屏 → 页脚变高 → 内容区变矮，
+       之前滚到的"底部"会被挤下去；故布局变化后必须再贴一次底，并在下一拍补一次。 */
+    function scrollBottom() {
+      body.scrollTop = body.scrollHeight;
+      global.setTimeout(function () { body.scrollTop = body.scrollHeight; }, 0);
+    }
     function addBub(who, text) { chat.appendChild(el('div', 'bub ' + who, text)); scrollBottom(); }
     function aiSay(text, after) {
       var t = el('div', 'bub ai typing', '<i></i><i></i><i></i>');
@@ -1033,6 +1099,7 @@
           opts.appendChild(b);
         });
         busy = false;
+        scrollBottom(); /* 选项上屏后页脚变高、内容区变矮：必须重新贴底，否则最新一条被截 */
       });
     }
     function answer(k) {
@@ -1071,6 +1138,8 @@
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>日程</h1>'));
     var body = el('div', 'pbody');
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -1080,7 +1149,7 @@
         '<span class="si">轮次<b data-f="rounds">0</b></span>' +
       '</div>';
     body.appendChild(stats);
-    var stage = el('div');
+    var stage = el('div', 'sched-stage');
     body.appendChild(stage);
     v.appendChild(body);
     v.appendChild(el('div', 'pfoot', '<div class="pfoot-hint">AI 排的日程，AI 自己都记不住</div>'));
@@ -1110,26 +1179,30 @@
     }
     function showSelect() {
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-sub', '选择难度'));
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '选择难度'));
       [['easy', '简单'], ['medium', '中等'], ['hard', '困难']].forEach(function (d) {
         var cfg = SCHED_DIFF[d[0]];
         var b = el('button', 'sdiff');
         b.innerHTML = '<b>' + d[1] + '</b><span>' + cfg.count + ' 条日程 · ' + cfg.time + ' 秒记忆</span>';
         b.addEventListener('click', function () { curDiff = d[0]; start(d[0]); });
-        stage.appendChild(b);
+        box.appendChild(b);
       });
+      stage.appendChild(box);
     }
     function start(d) {
       items = pick(d); pos = 0; correct = 0; secs = SCHED_DIFF[d].time;
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-q', '记住以下日程'));
-      var cd = el('div', 'recall-sub', secs + ' 秒后开始考验你');
-      stage.appendChild(cd);
-      var list = el('div');
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '记住以下日程'));
+      var cd = el('div', 'recall-cd', secs + ' 秒后开始考验你');
+      box.appendChild(cd);
+      var list = el('div', 'sched-list');
       items.forEach(function (it) {
-        list.appendChild(el('div', 'sitem', '<span class="t">' + it.time + '</span><span>' + it.event + '</span>'));
+        list.appendChild(el('div', 'sitem', '<span class="t">' + it.time + '</span><span class="e">' + it.event + '</span>'));
       });
-      stage.appendChild(list);
+      box.appendChild(list);
+      stage.appendChild(box);
       if (timer) { clearInterval(timer); }
       timer = global.setInterval(function () {
         secs -= 1;
@@ -1140,8 +1213,9 @@
     function showRecall() {
       var it = items[pos];
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-sub', (pos + 1) + ' / ' + items.length));
-      stage.appendChild(el('div', 'recall-q', it.time + ' 做什么？'));
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-sub', (pos + 1) + ' / ' + items.length));
+      box.appendChild(el('div', 'recall-q', it.time + ' 做什么？'));
       var grid = el('div', 'opt-grid');
       optionsFor(it).forEach(function (txt) {
         var b = el('button', 'opt', txt);
@@ -1152,7 +1226,8 @@
         });
         grid.appendChild(b);
       });
-      stage.appendChild(grid);
+      box.appendChild(grid);
+      stage.appendChild(box);
     }
     function finish() {
       var gain = correct * 5 + (correct === items.length ? 10 : 0);
@@ -1163,14 +1238,19 @@
       statPut('schedule', S);
       refresh();
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-q', '记住 ' + correct + ' / ' + items.length + ' 条'));
-      stage.appendChild(el('div', 'recall-sub', '本局 +' + gain + (correct === items.length ? '（全对奖励 +10）' : '')));
-      var again = el('button', 'opt', '再来一次');
-      again.style.marginBottom = '10px';
+      var fill = el('div', 'sched-fill');
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '记住 ' + correct + ' / ' + items.length + ' 条'));
+      box.appendChild(el('div', 'recall-sub', '本局 +' + gain + (correct === items.length ? '（全对奖励 +10）' : '')));
+      fill.appendChild(box);
+      stage.appendChild(fill);
+      var act = el('div', 'act-grid sched-act');
+      var again = el('button', 'act-btn primary', '再来一次');
       again.addEventListener('click', function () { start(curDiff); });
-      var back = el('button', 'opt', '换难度');
+      var back = el('button', 'act-btn ghost', '换难度');
       back.addEventListener('click', showSelect);
-      stage.appendChild(again); stage.appendChild(back);
+      act.appendChild(again); act.appendChild(back);
+      stage.appendChild(act);
     }
     showSelect();
     refresh();

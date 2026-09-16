@@ -53,6 +53,10 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
   --app-bg:#F3F3F7;
   --app-nav:#FBFBFD;
   --app-nav-glass:rgba(251,251,253,.92);
+  /* 扫雷面格（日历日格）：未开口=抬起块（双色渐变），已开口=凹陷平底 */
+  --cell-hi:#F7F7FB;
+  --cell:#E7E7EF;
+  --cell-rev:#F1F1F6;
 }
 body[data-mode="dark"]{
   --ink:#F2F1F7;
@@ -66,6 +70,9 @@ body[data-mode="dark"]{
   --app-bg:#121216;
   --app-nav:#15151A;
   --app-nav-glass:rgba(21,21,26,.92);
+  --cell-hi:#33333E;
+  --cell:#2A2A34;
+  --cell-rev:#191920;
 }
 
 /* 壁纸（颗粒 + 多层 mesh + 底部暗角，避免平涂塑料感） */
@@ -366,8 +373,12 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   padding:8px calc(16px + var(--safe-r)) 16px calc(16px + var(--safe-l));
 }
 .pfoot{
+  /* 页内操作区左右内缩量：绝对定位的覆盖层（计算器判定按钮）复用同一组变量对齐，
+     不写死 left:0/right:0（那会贴到屏幕边上）。 */
+  --foot-px-l:calc(16px + var(--safe-l));
+  --foot-px-r:calc(16px + var(--safe-r));
   flex:0 0 auto;
-  padding:10px calc(16px + var(--safe-r)) 12px calc(16px + var(--safe-l));
+  padding:10px var(--foot-px-r) 12px var(--foot-px-l);
 }
 
 .card{
@@ -463,6 +474,7 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .gstat-sub .si b.combo{ color:var(--combo); }
 
 /* 计算器：判定玩法 */
+/* 显示卡是弹性项：宽松屏吃掉剩余高度（内容贴底），小屏允许被压缩（min-height:0） */
 .calc-display{
   background:var(--card);
   border:1px solid var(--line);
@@ -470,10 +482,21 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   padding:18px 20px;
   margin-bottom:12px;
   text-align:right;
+  min-height:0;
+  overflow:hidden;
   box-shadow:var(--sh-1), var(--hl);
   transition:border-color .25s ease;
 }
-.calc-expr{ font-size:13px; color:var(--ink-dim); letter-spacing:.3px; }
+/* 计算器页：固定不滚动（真机计算器观感）。显示卡不参与压缩（表达式/大数不裁切、
+ * 按键不跳动），空间不足全部由键盘行高消化。 */
+.pbody.calc-body{ overflow:hidden; flex-shrink:0; }
+/* 净高不足的小屏：指标条与显示卡紧凑化，把高度让给键盘（行高不小于 ~40px） */
+@media (max-height:700px){
+  .calc-body .gstats{ padding:8px 12px; margin-bottom:8px; }
+  .calc-body .calc-display{ padding:12px 18px; }
+  .calc-body .calc-shown{ font-size:32px; }
+}
+.calc-expr{ font-size:13px; line-height:18px; min-height:18px; color:var(--ink-dim); letter-spacing:.3px; }
 .calc-shown{
   font-size:40px; font-weight:800; color:var(--ink); margin-top:6px;
   font-variant-numeric:tabular-nums; letter-spacing:-1px;
@@ -490,6 +513,15 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .judge-btn:active{ transform:scale(.96); }
 .judge-ok{ background:linear-gradient(135deg,#2BB673,#1FA971); }
 .judge-no{ background:linear-gradient(135deg,#E86A6A,#E05252); }
+/* 计算器页脚：键盘纵向可压缩（小屏唯一让高度的部件）；判定时「对/错」覆盖在键盘原位，
+ * 页脚高度全程不变 —— 按 = 前后页面不跳动。 */
+.pfoot.calc-foot{
+  position:relative;
+  display:flex; flex-direction:column;
+  flex:0 1 auto; min-height:0;
+}
+/* 覆盖层左右按页脚内缩量内收，与键盘同宽（绝不贴屏边） */
+.calc-judge{ position:absolute; left:var(--foot-px-l); right:var(--foot-px-r); top:50%; transform:translateY(-50%); }
 
 /* 闹钟：守时玩法 */
 .alarm-display{
@@ -522,28 +554,35 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 }
 .ring-btn:active{ transform:scale(.97); }
 
-/* 日历：扫雷玩法 */
+/* 日历：扫雷玩法（未开口=抬起的日期块，已开口=凹陷平底，表头=浅底日期条） */
 .ms-card{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
   padding:10px;
-  margin-bottom:12px;
+  margin:auto 0; /* 上下 auto：在剩余空间里垂直居中，消除中段空洞（见 fitBoard） */
   box-shadow:var(--sh-1), var(--hl);
 }
 .ms-week{
   display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px;
-  padding:0 0 6px 0;
+  padding:6px 0;
+  margin:0 auto 8px auto; /* 与棋盘同宽居中（见 fitBoard） */
+  border-radius:10px;
+  background:rgba(120,120,140,.10);
 }
-.ms-week span{ text-align:center; font-size:11px; color:var(--ink-dim); }
-.ms-grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px; }
+.ms-week span{ text-align:center; font-size:11px; font-weight:600; color:var(--ink-dim); }
+/* 六/日只做中性加重，不占用语义色（DESIGN §4.5：accent 只给得分，不随意着色） */
+.ms-week span:nth-child(6), .ms-week span:nth-child(7){ color:var(--ink); }
+.ms-grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px; margin:0 auto; }
 .ms-cell{
   position:relative; padding-top:100%;
-  border-radius:8px;
-  background:linear-gradient(135deg,rgba(120,120,140,.28),rgba(120,120,140,.18));
-  transition:transform .12s ease;
+  border-radius:23%; /* 与主屏图标同一套圆角（squircle 观感），随格子大小自适应 */
+  background:linear-gradient(180deg,var(--cell-hi) 0%,var(--cell) 100%);
+  /* 外发丝环 + 环境影 + 顶部内高光 = 抬起可点；box-shadow 不占布局，格子仍是正方形 */
+  box-shadow:0 0 0 1px var(--line), var(--sh-1), var(--hl);
+  transition:transform .12s ease, box-shadow .12s ease;
 }
-.ms-cell:active{ transform:scale(.92); }
+.ms-cell:active{ transform:scale(.92); box-shadow:0 0 0 1px var(--line); }
 .ms-cell > i{
   position:absolute; top:0; left:0; right:0; bottom:0;
   display:flex; align-items:center; justify-content:center;
@@ -552,32 +591,53 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   font-variant-numeric:tabular-nums;
 }
 .ms-cell .dnum{
-  position:absolute; top:2px; left:4px;
-  font-size:9px; font-weight:400; color:var(--ink-dim); opacity:.8;
+  position:absolute; top:3px; left:5px;
+  font-size:10px; font-weight:500; color:var(--ink-dim);
 }
-.ms-cell.rev{ background:rgba(120,120,140,.10); }
+.ms-cell.rev{
+  background:var(--cell-rev);
+  box-shadow:inset 0 1px 3px rgba(16,16,32,.06);
+}
+body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45); }
 .ms-cell.flag > i svg{ width:14px; height:14px; fill:var(--accent); }
-.ms-cell.boom{ background:rgba(224,82,82,.22); }
+.ms-cell.boom{
+  background:rgba(224,82,82,.20);
+  box-shadow:inset 0 0 0 1px rgba(224,82,82,.55), 0 0 0 1px rgba(224,82,82,.35);
+}
 .ms-cell.mine > i svg{ width:14px; height:14px; fill:var(--danger); }
 .ms-n1{ color:#2E7FE8; } .ms-n2{ color:#1FA971; } .ms-n3{ color:#F08A24; }
 .ms-n4{ color:#6A4CE0; } .ms-n5{ color:#E05252; } .ms-n6{ color:#2E9EC4; }
+/* AI 通知条：沿用站内通知条形态（卡面 + 发丝描边 + --r-md，同 .sms-banner），不另造一套 */
 .ms-banner{
-  font-size:13px; color:var(--ink); text-align:center;
-  margin-bottom:10px; min-height:18px;
-}
-.ms-foot{ display:flex; align-items:center; }
-.diff-btn{
-  height:40px; padding:0 14px; border-radius:var(--r-sm);
-  font-size:13px; font-weight:600; color:var(--ink);
+  font-size:13px; line-height:18px; color:var(--ink); text-align:center;
   background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md);
+  padding:8px 12px; margin-bottom:10px;
+}
+/* 净高不足的小屏：指标条/通知条/星期条/状态条紧凑化，把高度还给棋盘 */
+@media (max-height:700px){
+  .cal-body .gstats{ padding:8px 12px; margin-bottom:8px; }
+  .cal-body .ms-banner{ padding:4px 10px; margin-bottom:8px; }
+  .cal-body .ms-week{ padding:3px 0; margin-bottom:6px; }
+  .cal-body .ms-meta{ padding:5px 10px; margin-bottom:8px; }
+  .cal-body .flag-mini{ height:30px; }
+  .ms-foot .diff-btn{ height:42px; } /* 难度按钮在页脚（.pbody 之外），不能用 .cal-body 限定 */
+}
+/* 难度选择：与键盘（.key）/判定按钮（.judge-btn）同一套控件语言 ——
+   等分满宽 + --r-md + 双层投影，选中态复用主 CTA 渐变；不再是散在左边的三个小胶囊 */
+.ms-foot{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:8px; }
+.diff-btn{
+  height:48px; border-radius:var(--r-md);
+  font-size:14px; font-weight:600; color:var(--ink);
+  background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1), var(--hl);
   transition:transform .16s ease;
 }
-.diff-btn + .diff-btn{ margin-left:8px; }
-.diff-btn:active{ transform:scale(.95); }
+.diff-btn:active{ transform:scale(.96); }
 .diff-btn.sel{
   color:#fff; border-color:transparent;
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
 }
 .flag-toggle{
   margin-left:auto;
@@ -593,10 +653,16 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
 }
 
-/* 计算器键盘（v1 还原：用户自己按表达式） */
-.keypad{ display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px; }
+/* 计算器键盘（v1 还原：用户自己按表达式）
+ * 行高上限 64px（宽松屏与 v1 一致），空间不足时随页脚一起被压缩 —— 键盘永远贴底、
+ * 整页不产生滚动。按键高度由行高决定（height:auto + 网格拉伸），不再写死 64px。 */
+.keypad{
+  display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px;
+  grid-auto-rows:minmax(0,64px);
+  flex:1 1 auto; min-height:0;
+}
 .key{
-  height:64px; border-radius:var(--r-md);
+  height:auto; min-height:0; border-radius:var(--r-md);
   font-size:21px; font-weight:600; color:var(--ink);
   background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl);
@@ -606,12 +672,23 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .key.op{ color:#F5854E; font-weight:700; }
 .key.clr{ color:var(--danger); }
 .key.eq{
-  height:64px; font-size:22px;
+  font-size:22px;
   color:#fff; border-color:transparent;
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
   box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
 }
-.calc-feedback{ font-size:13px; text-align:center; margin-top:8px; min-height:18px; color:var(--ink-dim); }
+/* 判定阶段：键盘原位保留占位（不可见、不可点），避免页脚塌陷导致整页跳动 */
+.keypad.keys-hidden{ visibility:hidden; }
+/* 计算器提示：这是「怎么玩 / 现在要做什么」的关键指令，必须一眼看清。
+ * 行高恒定（20px）—— 四个状态切换不改变高度，键盘位置不跳动。 */
+.calc-feedback{
+  margin-top:10px;
+  font-size:14px; line-height:20px; min-height:20px;
+  text-align:center; color:var(--ink);
+}
+.calc-feedback.ask{ font-size:15px; font-weight:700; color:var(--accent); }
+.calc-feedback.ok{ font-weight:700; color:var(--ok); }
+.calc-feedback.no{ font-weight:700; color:var(--danger); }
 .hidden-row{ display:none; }
 
 /* 扫雷第二行：用时 / 剩余雷 / 标旗（v1 还原） */
@@ -660,19 +737,73 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   transition:transform .12s ease;
 }
 .opt:active{ transform:scale(.96); }
+/* 日程（v1 还原）：难度卡用「左标签 + 右取值」（同 .row 语言），记忆列表上卡面，结算用主 CTA */
 .sdiff{
-  display:block; width:100%; text-align:left; padding:13px 14px; margin-bottom:10px;
+  display:flex; align-items:center; width:100%; text-align:left;
+  padding:14px; margin-bottom:10px;
   border-radius:var(--r-md); background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl); transition:transform .14s ease;
 }
 .sdiff:active{ transform:scale(.97); }
-.sdiff b{ display:block; font-size:16px; color:var(--ink); }
-.sdiff span{ display:block; font-size:12px; color:var(--ink-dim); margin-top:3px; }
-.sitem{ display:flex; align-items:center; padding:10px 2px; border-bottom:1px solid var(--line); font-size:14px; color:var(--ink); }
+.sdiff b{ flex:1 1 auto; min-width:0; font-size:16px; font-weight:600; color:var(--ink); }
+.sdiff span{ flex:0 0 auto; margin-left:10px; font-size:12px; color:var(--ink-dim); }
+/* 记忆列表：原来是一排浮在页面上的裸文字，按站内做法收进卡面 */
+.sched-list{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:0 14px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.sitem{
+  display:flex; align-items:center; padding:13px 0;
+  border-bottom:1px solid var(--line); font-size:15px; color:var(--ink);
+}
 .sitem:last-child{ border-bottom:none; }
-.sitem .t{ width:64px; flex:0 0 auto; color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
-.recall-q{ text-align:center; font-size:22px; font-weight:800; margin:12px 0 14px 0; color:var(--ink); }
+.sitem .t{ /* 时间胶囊（accent 语义 = 时间/重点，同 .chip 形态） */
+  flex:0 0 auto; margin-right:12px; padding:3px 8px;
+  font-size:13px; font-weight:700; color:var(--accent);
+  background:rgba(108,76,241,.10); border-radius:8px;
+  font-variant-numeric:tabular-nums;
+}
+.sitem .e{ flex:1 1 auto; min-width:0; }
+/* 阶段标题：800 字重是英雄数字专用（§4.6），标题取 700/19px */
+.recall-q{ text-align:center; font-size:19px; font-weight:700; margin:0 0 12px 0; color:var(--ink); }
 .recall-sub{ text-align:center; font-size:12px; color:var(--ink-dim); margin-bottom:10px; }
+.recall-cd{ /* 记忆倒计时：accent 描边胶囊（同 .chip） */
+  align-self:center; margin:0 auto 12px auto; padding:5px 13px;
+  border:1px solid var(--accent); border-radius:999px;
+  font-size:13px; font-weight:600; color:var(--accent);
+}
+/* 阶段容器：内容在剩余空间里垂直居中（auto 外边距；溢出时自动归零，交内容区滚动），消除中段空洞 */
+.sched-stage{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.sched-block{ display:flex; flex-direction:column; margin:auto 0; }
+/* 有操作区时：内容占住操作区之上的整片空间并在其中居中（auto 外边距溢出自动归零，可滚不裁） */
+.sched-fill{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.sched-act{ margin-top:auto; }
+/* 结算动作：等分满宽两枚（主 CTA 渐变 + 次级卡面），与键盘/判定按钮同一套控件语言 */
+.act-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
+.act-btn{
+  height:52px; border-radius:var(--r-md);
+  font-size:16px; font-weight:700; transition:transform .16s ease;
+}
+.act-btn:active{ transform:scale(.97); }
+.act-btn.primary{
+  color:#fff; border:1px solid transparent;
+  background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
+}
+.act-btn.ghost{
+  color:var(--ink); background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1), var(--hl);
+}
+/* 净高不足的小屏：难度卡/标题/倒计时/列表行紧凑化，让记忆列表尽量一屏看全 */
+@media (max-height:700px){
+  .sdiff{ padding:11px; margin-bottom:8px; }
+  .recall-q{ font-size:17px; margin-bottom:8px; }
+  .recall-cd{ margin-bottom:8px; padding:3px 11px; font-size:12px; }
+  .sched-list{ padding:0 12px; }
+  .sitem{ padding:6px 0; font-size:14px; }
+  .act-btn{ height:46px; }
+}
 .dial-display{ text-align:center; font-size:28px; font-weight:700; min-height:36px; letter-spacing:1px; color:var(--ink); margin:8px 0 2px 0; }
 .dial-status{ text-align:center; font-size:13px; color:var(--ink-dim); min-height:18px; }
 .call-timer{ text-align:center; font-size:36px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums; margin-top:10px; }

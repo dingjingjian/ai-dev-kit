@@ -66,6 +66,10 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
   --app-bg:#F3F3F7;
   --app-nav:#FBFBFD;
   --app-nav-glass:rgba(251,251,253,.92);
+  /* 扫雷面格（日历日格）：未开口=抬起块（双色渐变），已开口=凹陷平底 */
+  --cell-hi:#F7F7FB;
+  --cell:#E7E7EF;
+  --cell-rev:#F1F1F6;
 }
 body[data-mode="dark"]{
   --ink:#F2F1F7;
@@ -79,6 +83,9 @@ body[data-mode="dark"]{
   --app-bg:#121216;
   --app-nav:#15151A;
   --app-nav-glass:rgba(21,21,26,.92);
+  --cell-hi:#33333E;
+  --cell:#2A2A34;
+  --cell-rev:#191920;
 }
 
 /* 壁纸（颗粒 + 多层 mesh + 底部暗角，避免平涂塑料感） */
@@ -379,8 +386,12 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   padding:8px calc(16px + var(--safe-r)) 16px calc(16px + var(--safe-l));
 }
 .pfoot{
+  /* 页内操作区左右内缩量：绝对定位的覆盖层（计算器判定按钮）复用同一组变量对齐，
+     不写死 left:0/right:0（那会贴到屏幕边上）。 */
+  --foot-px-l:calc(16px + var(--safe-l));
+  --foot-px-r:calc(16px + var(--safe-r));
   flex:0 0 auto;
-  padding:10px calc(16px + var(--safe-r)) 12px calc(16px + var(--safe-l));
+  padding:10px var(--foot-px-r) 12px var(--foot-px-l);
 }
 
 .card{
@@ -476,6 +487,7 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .gstat-sub .si b.combo{ color:var(--combo); }
 
 /* 计算器：判定玩法 */
+/* 显示卡是弹性项：宽松屏吃掉剩余高度（内容贴底），小屏允许被压缩（min-height:0） */
 .calc-display{
   background:var(--card);
   border:1px solid var(--line);
@@ -483,10 +495,21 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   padding:18px 20px;
   margin-bottom:12px;
   text-align:right;
+  min-height:0;
+  overflow:hidden;
   box-shadow:var(--sh-1), var(--hl);
   transition:border-color .25s ease;
 }
-.calc-expr{ font-size:13px; color:var(--ink-dim); letter-spacing:.3px; }
+/* 计算器页：固定不滚动（真机计算器观感）。显示卡不参与压缩（表达式/大数不裁切、
+ * 按键不跳动），空间不足全部由键盘行高消化。 */
+.pbody.calc-body{ overflow:hidden; flex-shrink:0; }
+/* 净高不足的小屏：指标条与显示卡紧凑化，把高度让给键盘（行高不小于 ~40px） */
+@media (max-height:700px){
+  .calc-body .gstats{ padding:8px 12px; margin-bottom:8px; }
+  .calc-body .calc-display{ padding:12px 18px; }
+  .calc-body .calc-shown{ font-size:32px; }
+}
+.calc-expr{ font-size:13px; line-height:18px; min-height:18px; color:var(--ink-dim); letter-spacing:.3px; }
 .calc-shown{
   font-size:40px; font-weight:800; color:var(--ink); margin-top:6px;
   font-variant-numeric:tabular-nums; letter-spacing:-1px;
@@ -503,6 +526,15 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .judge-btn:active{ transform:scale(.96); }
 .judge-ok{ background:linear-gradient(135deg,#2BB673,#1FA971); }
 .judge-no{ background:linear-gradient(135deg,#E86A6A,#E05252); }
+/* 计算器页脚：键盘纵向可压缩（小屏唯一让高度的部件）；判定时「对/错」覆盖在键盘原位，
+ * 页脚高度全程不变 —— 按 = 前后页面不跳动。 */
+.pfoot.calc-foot{
+  position:relative;
+  display:flex; flex-direction:column;
+  flex:0 1 auto; min-height:0;
+}
+/* 覆盖层左右按页脚内缩量内收，与键盘同宽（绝不贴屏边） */
+.calc-judge{ position:absolute; left:var(--foot-px-l); right:var(--foot-px-r); top:50%; transform:translateY(-50%); }
 
 /* 闹钟：守时玩法 */
 .alarm-display{
@@ -535,28 +567,35 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 }
 .ring-btn:active{ transform:scale(.97); }
 
-/* 日历：扫雷玩法 */
+/* 日历：扫雷玩法（未开口=抬起的日期块，已开口=凹陷平底，表头=浅底日期条） */
 .ms-card{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
   padding:10px;
-  margin-bottom:12px;
+  margin:auto 0; /* 上下 auto：在剩余空间里垂直居中，消除中段空洞（见 fitBoard） */
   box-shadow:var(--sh-1), var(--hl);
 }
 .ms-week{
   display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px;
-  padding:0 0 6px 0;
+  padding:6px 0;
+  margin:0 auto 8px auto; /* 与棋盘同宽居中（见 fitBoard） */
+  border-radius:10px;
+  background:rgba(120,120,140,.10);
 }
-.ms-week span{ text-align:center; font-size:11px; color:var(--ink-dim); }
-.ms-grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px; }
+.ms-week span{ text-align:center; font-size:11px; font-weight:600; color:var(--ink-dim); }
+/* 六/日只做中性加重，不占用语义色（DESIGN §4.5：accent 只给得分，不随意着色） */
+.ms-week span:nth-child(6), .ms-week span:nth-child(7){ color:var(--ink); }
+.ms-grid{ display:grid; grid-template-columns:repeat(7,1fr); grid-gap:6px; margin:0 auto; }
 .ms-cell{
   position:relative; padding-top:100%;
-  border-radius:8px;
-  background:linear-gradient(135deg,rgba(120,120,140,.28),rgba(120,120,140,.18));
-  transition:transform .12s ease;
+  border-radius:23%; /* 与主屏图标同一套圆角（squircle 观感），随格子大小自适应 */
+  background:linear-gradient(180deg,var(--cell-hi) 0%,var(--cell) 100%);
+  /* 外发丝环 + 环境影 + 顶部内高光 = 抬起可点；box-shadow 不占布局，格子仍是正方形 */
+  box-shadow:0 0 0 1px var(--line), var(--sh-1), var(--hl);
+  transition:transform .12s ease, box-shadow .12s ease;
 }
-.ms-cell:active{ transform:scale(.92); }
+.ms-cell:active{ transform:scale(.92); box-shadow:0 0 0 1px var(--line); }
 .ms-cell > i{
   position:absolute; top:0; left:0; right:0; bottom:0;
   display:flex; align-items:center; justify-content:center;
@@ -565,32 +604,53 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   font-variant-numeric:tabular-nums;
 }
 .ms-cell .dnum{
-  position:absolute; top:2px; left:4px;
-  font-size:9px; font-weight:400; color:var(--ink-dim); opacity:.8;
+  position:absolute; top:3px; left:5px;
+  font-size:10px; font-weight:500; color:var(--ink-dim);
 }
-.ms-cell.rev{ background:rgba(120,120,140,.10); }
+.ms-cell.rev{
+  background:var(--cell-rev);
+  box-shadow:inset 0 1px 3px rgba(16,16,32,.06);
+}
+body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45); }
 .ms-cell.flag > i svg{ width:14px; height:14px; fill:var(--accent); }
-.ms-cell.boom{ background:rgba(224,82,82,.22); }
+.ms-cell.boom{
+  background:rgba(224,82,82,.20);
+  box-shadow:inset 0 0 0 1px rgba(224,82,82,.55), 0 0 0 1px rgba(224,82,82,.35);
+}
 .ms-cell.mine > i svg{ width:14px; height:14px; fill:var(--danger); }
 .ms-n1{ color:#2E7FE8; } .ms-n2{ color:#1FA971; } .ms-n3{ color:#F08A24; }
 .ms-n4{ color:#6A4CE0; } .ms-n5{ color:#E05252; } .ms-n6{ color:#2E9EC4; }
+/* AI 通知条：沿用站内通知条形态（卡面 + 发丝描边 + --r-md，同 .sms-banner），不另造一套 */
 .ms-banner{
-  font-size:13px; color:var(--ink); text-align:center;
-  margin-bottom:10px; min-height:18px;
-}
-.ms-foot{ display:flex; align-items:center; }
-.diff-btn{
-  height:40px; padding:0 14px; border-radius:var(--r-sm);
-  font-size:13px; font-weight:600; color:var(--ink);
+  font-size:13px; line-height:18px; color:var(--ink); text-align:center;
   background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md);
+  padding:8px 12px; margin-bottom:10px;
+}
+/* 净高不足的小屏：指标条/通知条/星期条/状态条紧凑化，把高度还给棋盘 */
+@media (max-height:700px){
+  .cal-body .gstats{ padding:8px 12px; margin-bottom:8px; }
+  .cal-body .ms-banner{ padding:4px 10px; margin-bottom:8px; }
+  .cal-body .ms-week{ padding:3px 0; margin-bottom:6px; }
+  .cal-body .ms-meta{ padding:5px 10px; margin-bottom:8px; }
+  .cal-body .flag-mini{ height:30px; }
+  .ms-foot .diff-btn{ height:42px; } /* 难度按钮在页脚（.pbody 之外），不能用 .cal-body 限定 */
+}
+/* 难度选择：与键盘（.key）/判定按钮（.judge-btn）同一套控件语言 ——
+   等分满宽 + --r-md + 双层投影，选中态复用主 CTA 渐变；不再是散在左边的三个小胶囊 */
+.ms-foot{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:8px; }
+.diff-btn{
+  height:48px; border-radius:var(--r-md);
+  font-size:14px; font-weight:600; color:var(--ink);
+  background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1), var(--hl);
   transition:transform .16s ease;
 }
-.diff-btn + .diff-btn{ margin-left:8px; }
-.diff-btn:active{ transform:scale(.95); }
+.diff-btn:active{ transform:scale(.96); }
 .diff-btn.sel{
   color:#fff; border-color:transparent;
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
 }
 .flag-toggle{
   margin-left:auto;
@@ -606,10 +666,16 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   box-shadow:inset 0 1px 0 rgba(255,255,255,.30);
 }
 
-/* 计算器键盘（v1 还原：用户自己按表达式） */
-.keypad{ display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px; }
+/* 计算器键盘（v1 还原：用户自己按表达式）
+ * 行高上限 64px（宽松屏与 v1 一致），空间不足时随页脚一起被压缩 —— 键盘永远贴底、
+ * 整页不产生滚动。按键高度由行高决定（height:auto + 网格拉伸），不再写死 64px。 */
+.keypad{
+  display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px;
+  grid-auto-rows:minmax(0,64px);
+  flex:1 1 auto; min-height:0;
+}
 .key{
-  height:64px; border-radius:var(--r-md);
+  height:auto; min-height:0; border-radius:var(--r-md);
   font-size:21px; font-weight:600; color:var(--ink);
   background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl);
@@ -619,12 +685,23 @@ body.in-app .w-half + .w-half{ margin-left:0; }
 .key.op{ color:#F5854E; font-weight:700; }
 .key.clr{ color:var(--danger); }
 .key.eq{
-  height:64px; font-size:22px;
+  font-size:22px;
   color:#fff; border-color:transparent;
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
   box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
 }
-.calc-feedback{ font-size:13px; text-align:center; margin-top:8px; min-height:18px; color:var(--ink-dim); }
+/* 判定阶段：键盘原位保留占位（不可见、不可点），避免页脚塌陷导致整页跳动 */
+.keypad.keys-hidden{ visibility:hidden; }
+/* 计算器提示：这是「怎么玩 / 现在要做什么」的关键指令，必须一眼看清。
+ * 行高恒定（20px）—— 四个状态切换不改变高度，键盘位置不跳动。 */
+.calc-feedback{
+  margin-top:10px;
+  font-size:14px; line-height:20px; min-height:20px;
+  text-align:center; color:var(--ink);
+}
+.calc-feedback.ask{ font-size:15px; font-weight:700; color:var(--accent); }
+.calc-feedback.ok{ font-weight:700; color:var(--ok); }
+.calc-feedback.no{ font-weight:700; color:var(--danger); }
 .hidden-row{ display:none; }
 
 /* 扫雷第二行：用时 / 剩余雷 / 标旗（v1 还原） */
@@ -673,19 +750,73 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   transition:transform .12s ease;
 }
 .opt:active{ transform:scale(.96); }
+/* 日程（v1 还原）：难度卡用「左标签 + 右取值」（同 .row 语言），记忆列表上卡面，结算用主 CTA */
 .sdiff{
-  display:block; width:100%; text-align:left; padding:13px 14px; margin-bottom:10px;
+  display:flex; align-items:center; width:100%; text-align:left;
+  padding:14px; margin-bottom:10px;
   border-radius:var(--r-md); background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl); transition:transform .14s ease;
 }
 .sdiff:active{ transform:scale(.97); }
-.sdiff b{ display:block; font-size:16px; color:var(--ink); }
-.sdiff span{ display:block; font-size:12px; color:var(--ink-dim); margin-top:3px; }
-.sitem{ display:flex; align-items:center; padding:10px 2px; border-bottom:1px solid var(--line); font-size:14px; color:var(--ink); }
+.sdiff b{ flex:1 1 auto; min-width:0; font-size:16px; font-weight:600; color:var(--ink); }
+.sdiff span{ flex:0 0 auto; margin-left:10px; font-size:12px; color:var(--ink-dim); }
+/* 记忆列表：原来是一排浮在页面上的裸文字，按站内做法收进卡面 */
+.sched-list{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:0 14px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.sitem{
+  display:flex; align-items:center; padding:13px 0;
+  border-bottom:1px solid var(--line); font-size:15px; color:var(--ink);
+}
 .sitem:last-child{ border-bottom:none; }
-.sitem .t{ width:64px; flex:0 0 auto; color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
-.recall-q{ text-align:center; font-size:22px; font-weight:800; margin:12px 0 14px 0; color:var(--ink); }
+.sitem .t{ /* 时间胶囊（accent 语义 = 时间/重点，同 .chip 形态） */
+  flex:0 0 auto; margin-right:12px; padding:3px 8px;
+  font-size:13px; font-weight:700; color:var(--accent);
+  background:rgba(108,76,241,.10); border-radius:8px;
+  font-variant-numeric:tabular-nums;
+}
+.sitem .e{ flex:1 1 auto; min-width:0; }
+/* 阶段标题：800 字重是英雄数字专用（§4.6），标题取 700/19px */
+.recall-q{ text-align:center; font-size:19px; font-weight:700; margin:0 0 12px 0; color:var(--ink); }
 .recall-sub{ text-align:center; font-size:12px; color:var(--ink-dim); margin-bottom:10px; }
+.recall-cd{ /* 记忆倒计时：accent 描边胶囊（同 .chip） */
+  align-self:center; margin:0 auto 12px auto; padding:5px 13px;
+  border:1px solid var(--accent); border-radius:999px;
+  font-size:13px; font-weight:600; color:var(--accent);
+}
+/* 阶段容器：内容在剩余空间里垂直居中（auto 外边距；溢出时自动归零，交内容区滚动），消除中段空洞 */
+.sched-stage{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.sched-block{ display:flex; flex-direction:column; margin:auto 0; }
+/* 有操作区时：内容占住操作区之上的整片空间并在其中居中（auto 外边距溢出自动归零，可滚不裁） */
+.sched-fill{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
+.sched-act{ margin-top:auto; }
+/* 结算动作：等分满宽两枚（主 CTA 渐变 + 次级卡面），与键盘/判定按钮同一套控件语言 */
+.act-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
+.act-btn{
+  height:52px; border-radius:var(--r-md);
+  font-size:16px; font-weight:700; transition:transform .16s ease;
+}
+.act-btn:active{ transform:scale(.97); }
+.act-btn.primary{
+  color:#fff; border:1px solid transparent;
+  background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
+}
+.act-btn.ghost{
+  color:var(--ink); background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1), var(--hl);
+}
+/* 净高不足的小屏：难度卡/标题/倒计时/列表行紧凑化，让记忆列表尽量一屏看全 */
+@media (max-height:700px){
+  .sdiff{ padding:11px; margin-bottom:8px; }
+  .recall-q{ font-size:17px; margin-bottom:8px; }
+  .recall-cd{ margin-bottom:8px; padding:3px 11px; font-size:12px; }
+  .sched-list{ padding:0 12px; }
+  .sitem{ padding:6px 0; font-size:14px; }
+  .act-btn{ height:46px; }
+}
 .dial-display{ text-align:center; font-size:28px; font-weight:700; min-height:36px; letter-spacing:1px; color:var(--ink); margin:8px 0 2px 0; }
 .dial-status{ text-align:center; font-size:13px; color:var(--ink-dim); min-height:18px; }
 .call-timer{ text-align:center; font-size:36px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums; margin-top:10px; }
@@ -1313,7 +1444,7 @@ JS = r"""
   function buildCalc() {
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>计算器</h1>'));
-    var body = el('div', 'pbody');
+    var body = el('div', 'pbody calc-body');
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -1337,9 +1468,9 @@ JS = r"""
     disp.style.flexDirection = 'column';
     disp.style.justifyContent = 'flex-end';
     v.appendChild(body);
-    var foot = el('div', 'pfoot');
+    var foot = el('div', 'pfoot calc-foot');
     var keypad = el('div', 'keypad');
-    var judgeRow = el('div', 'judge-row hidden-row');
+    var judgeRow = el('div', 'judge-row calc-judge hidden-row');
     var bOk = el('button', 'judge-btn judge-ok', '对');
     var bNo = el('button', 'judge-btn judge-no', '错');
     judgeRow.appendChild(bOk);
@@ -1353,6 +1484,15 @@ JS = r"""
     var display = '0';
     var judging = false;
     var saved = null; /* {shown, correct} */
+    var errored = false; /* Error 态：下次输入整体清空重来（v1 需手动按 C） */
+
+    var fbNode = body.querySelector('.calc-feedback');
+    var GUIDE = '按出你的算式，按 = 看 AI 的结果';
+    /* 提示四态：默认引导（常驻可见，不被按键清空）/ ask「该你判了」/ ok 判对 / no 判错 —— 字重与配色见 CSS */
+    function say(txt, state) {
+      fbNode.textContent = txt;
+      fbNode.className = 'calc-feedback' + (state ? ' ' + state : '');
+    }
 
     function setStat(f, val) {
       var n = stats.querySelector('[data-f="' + f + '"]');
@@ -1371,14 +1511,22 @@ JS = r"""
     }
     function press(k) {
       if (judging) { return; }
-      var fb = body.querySelector('.calc-feedback');
-      fb.textContent = '';
-      if (k === 'C') { expr = ''; display = '0'; paint(); return; }
+      say(GUIDE, '');
+      /* Error 态下再输入（或按 C）：整体清空，从干净状态重新开始 —— 坏表达式不再接着往后长 */
+      if (errored || k === 'C') {
+        expr = '';
+        display = '0';
+        errored = false;
+        disp.style.borderColor = '';
+        if (k === 'C') { paint(); return; }
+      }
       if (k === '=') {
         var t = calcParse(expr);
         if (t === null) {
+          errored = true;
           display = 'Error';
-          fb.textContent = '表达式无效，AI 拒绝背锅';
+          disp.style.borderColor = 'rgba(224,82,82,.7)';
+          say('表达式无效，AI 拒绝背锅', 'no');
           paint();
           return;
         }
@@ -1387,9 +1535,9 @@ JS = r"""
         saved = { shown: shown, correct: t };
         display = calcFmt(shown);
         judging = true;
-        keypad.classList.add('hidden-row');
+        keypad.classList.add('keys-hidden');
         judgeRow.classList.remove('hidden-row');
-        fb.textContent = '这个结果对吗？';
+        say('这个结果对吗？', 'ask');
         paint();
         return;
       }
@@ -1418,10 +1566,9 @@ JS = r"""
       S.highScore = Math.max(S.highScore, S.score);
       statPut('calc', S);
       refresh();
-      var fb = body.querySelector('.calc-feedback');
-      fb.textContent = right
+      say(right
         ? ('✓ 判断正确 +' + gain + (S.streak >= 3 ? '（' + S.streak + ' 连击奖励）' : ''))
-        : '✗ 判断错误 -5，AI 露出无辜脸';
+        : '✗ 判断错误 -5，AI 露出无辜脸', right ? 'ok' : 'no');
       disp.style.borderColor = right ? 'rgba(31,169,113,.7)' : 'rgba(224,82,82,.7)';
       judging = false;
       saved = null;
@@ -1430,9 +1577,9 @@ JS = r"""
         display = '0';
         judging = false;
         judgeRow.classList.add('hidden-row');
-        keypad.classList.remove('hidden-row');
+        keypad.classList.remove('keys-hidden');
         disp.style.borderColor = '';
-        fb.textContent = '按出你的算式，按 = 看 AI 的结果';
+        say(GUIDE, '');
         paint();
       }, right ? 1200 : 1600);
     }
@@ -1579,11 +1726,16 @@ JS = r"""
     var delta = now - alarmState.target;
     var inWin = delta >= -500 && delta <= 500;
     var ringBtn = document.querySelector('.ring-btn');
-    if (inWin && !alarmState.ringing) {
-      alarmState.ringing = true;
-      if (ringBtn) { ringBtn.disabled = false; ringBtn.classList.add('ringing'); }
-    } else if (!inWin && alarmState.ringing) {
-      /* 窗口已过仍未按：自动记一次「晚了」（v1 行为） */
+    if (inWin) {
+      if (!alarmState.ringing) {
+        alarmState.ringing = true;
+        if (ringBtn) { ringBtn.disabled = false; ringBtn.classList.add('ringing'); }
+      }
+    } else if (delta > 500) {
+      /* 窗口已过仍未按：自动记一次「晚了」（v1 行为）。
+         判定用 delta 而不是 alarmState.ringing —— 否则「目标设下时窗口就已过去」
+         （如 :00.6 打开闹钟，目标对齐到已过的 :00）两条分支都不命中：按钮永远按不动、
+         也不会自动判晚，玩家卡死。 */
       if (alarmFinish) { alarmFinish(false, ALARM_TXT.late); }
     }
   }
@@ -1599,7 +1751,10 @@ JS = r"""
     var COLS = 7;
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>日历</h1>'));
-    var body = el('div', 'pbody');
+    var body = el('div', 'pbody cal-body');
+    /* 纵向 flex：棋盘卡 margin 上下 auto，在剩余空间里垂直居中（消除中段空洞） */
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -1619,8 +1774,9 @@ JS = r"""
     meta.appendChild(flagMini);
     body.appendChild(meta);
     var card = el('div', 'ms-card');
-    card.appendChild(el('div', 'ms-week',
-      '<span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>'));
+    var week = el('div', 'ms-week',
+      '<span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>');
+    card.appendChild(week);
     var grid = el('div', 'ms-grid');
     card.appendChild(grid);
     body.appendChild(card);
@@ -1629,6 +1785,7 @@ JS = r"""
     var frow = el('div', 'ms-foot');
     foot.appendChild(frow);
     v.appendChild(foot);
+    var MS_GAP = 6; /* 与 .ms-week / .ms-grid 的 grid-gap 保持一致 */
 
     var S = statGet('cal', { score: 0, highScore: 0, winRate: 0, rounds: 0, fastest: 999 });
     var diff = 'medium';
@@ -1653,6 +1810,31 @@ JS = r"""
       setStat('win', Math.round(S.winRate * 100) + '%');
       setStat('fast', S.fastest < 999 ? mmss(S.fastest) : '--:--');
       setStat('mines', cfg().mines - flags);
+    }
+    /* 日历整屏摆下（真机日历观感，不上下翻页）：格子是正方形（padding-top:100%），
+       所以缩棋盘宽度即等比缩高度。棋盘可用高度可直接算出（内容区高 − 其余各行占高），
+       一次到位、不依赖滚动溢出量。只缩不放：宽屏保持自然尺寸。列宽/表头共用同一宽度，
+       保证星期表头与列对齐。 */
+    function outerH(node) { /* 元素占高（含上下外边距；卡片用 auto 外边距，故不参与相加） */
+      var s = getComputedStyle(node);
+      return node.offsetHeight + parseFloat(s.marginTop) + parseFloat(s.marginBottom);
+    }
+    function fitBoard() {
+      if (body.clientHeight <= 0) { return; } /* 视图尚未上屏（display:none）不测量 */
+      week.style.width = '';
+      grid.style.width = '';
+      var rows = cfg().rows;
+      var natCol = Math.floor((grid.offsetWidth - 6 * MS_GAP) / 7); /* 自然列宽 = 正方形边长 */
+      var bs = getComputedStyle(body);
+      var used = outerH(stats) + outerH(banner) + outerH(meta)
+               + (card.offsetHeight - grid.offsetHeight) /* 卡片边框/内边距/星期条：与棋盘高无关 */
+               + parseFloat(bs.paddingTop) + parseFloat(bs.paddingBottom);
+      var col = Math.floor((body.clientHeight - used - (rows - 1) * MS_GAP) / rows);
+      if (col >= natCol) { return; } /* 装得下：保持自然正方形尺寸 */
+      if (col < 14) { col = 14; } /* 兜底：极小屏不再缩，避免格子消失 */
+      var w = 7 * col + 6 * MS_GAP;
+      week.style.width = w + 'px';
+      grid.style.width = w + 'px';
     }
     function paint(idx) {
       var b = board[idx];
@@ -1705,6 +1887,7 @@ JS = r"""
       banner.textContent = (N === 42 ? CAL_TXT.headerHard : CAL_TXT.header) + ' · 点任意日期开始排雷';
       setStat('time', '00:00');
       refresh();
+      fitBoard(); /* 行数随难度变化 + 提示文案可能折行，重新核算棋盘宽度 */
     }
     function flood(idx) {
       var rows = cfg().rows;
@@ -1747,6 +1930,8 @@ JS = r"""
       statPut('cal', S);
       refresh();
       banner.textContent = CAL_TXT.winTitle + '（+' + gain + '，用时 ' + secs + ' 秒' + (secs < 60 ? '，提速奖励 +10' : '') + '）· ' + CAL_TXT.winMessage;
+      fitBoard(); /* 结算文案更长可能折行：重新核算棋盘宽度 */
+
     }
     function lose(boomIdx) {
       state = 'lost';
@@ -1761,6 +1946,8 @@ JS = r"""
       statPut('cal', S);
       refresh();
       banner.textContent = CAL_TXT.loseTitle + ' · ' + CAL_TXT.loseMessage;
+      fitBoard();
+
     }
     function toggleFlag(idx) {
       if (state === 'won' || state === 'lost') { return; }
@@ -1859,6 +2046,11 @@ JS = r"""
         setStat('time', mmss(s));
       }
     } };
+    /* 进入本页时可见尺寸才有效（视图缓存复用，尺寸可能已变），以及旋屏后重算 */
+    v.onShow = fitBoard;
+    global.addEventListener('resize', function () {
+      if (current === 'calendar') { fitBoard(); }
+    });
     reset();
     return v;
   }
@@ -1918,7 +2110,12 @@ JS = r"""
       setStat('streak', S.streak); setStat('rounds', S.rounds);
       setStat('acc', Math.round(S.accuracy * 100) + '%');
     }
-    function scrollBottom() { body.scrollTop = body.scrollHeight; }
+    /* 滚到底。注意页脚（选项区）高度会变：选项上屏 → 页脚变高 → 内容区变矮，
+       之前滚到的"底部"会被挤下去；故布局变化后必须再贴一次底，并在下一拍补一次。 */
+    function scrollBottom() {
+      body.scrollTop = body.scrollHeight;
+      global.setTimeout(function () { body.scrollTop = body.scrollHeight; }, 0);
+    }
     function addBub(who, text) { chat.appendChild(el('div', 'bub ' + who, text)); scrollBottom(); }
     function aiSay(text, after) {
       var t = el('div', 'bub ai typing', '<i></i><i></i><i></i>');
@@ -1947,6 +2144,7 @@ JS = r"""
           opts.appendChild(b);
         });
         busy = false;
+        scrollBottom(); /* 选项上屏后页脚变高、内容区变矮：必须重新贴底，否则最新一条被截 */
       });
     }
     function answer(k) {
@@ -1985,6 +2183,8 @@ JS = r"""
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>日程</h1>'));
     var body = el('div', 'pbody');
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
     var stats = el('div', 'gstats');
     stats.innerHTML =
       '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
@@ -1994,7 +2194,7 @@ JS = r"""
         '<span class="si">轮次<b data-f="rounds">0</b></span>' +
       '</div>';
     body.appendChild(stats);
-    var stage = el('div');
+    var stage = el('div', 'sched-stage');
     body.appendChild(stage);
     v.appendChild(body);
     v.appendChild(el('div', 'pfoot', '<div class="pfoot-hint">AI 排的日程，AI 自己都记不住</div>'));
@@ -2024,26 +2224,30 @@ JS = r"""
     }
     function showSelect() {
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-sub', '选择难度'));
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '选择难度'));
       [['easy', '简单'], ['medium', '中等'], ['hard', '困难']].forEach(function (d) {
         var cfg = SCHED_DIFF[d[0]];
         var b = el('button', 'sdiff');
         b.innerHTML = '<b>' + d[1] + '</b><span>' + cfg.count + ' 条日程 · ' + cfg.time + ' 秒记忆</span>';
         b.addEventListener('click', function () { curDiff = d[0]; start(d[0]); });
-        stage.appendChild(b);
+        box.appendChild(b);
       });
+      stage.appendChild(box);
     }
     function start(d) {
       items = pick(d); pos = 0; correct = 0; secs = SCHED_DIFF[d].time;
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-q', '记住以下日程'));
-      var cd = el('div', 'recall-sub', secs + ' 秒后开始考验你');
-      stage.appendChild(cd);
-      var list = el('div');
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '记住以下日程'));
+      var cd = el('div', 'recall-cd', secs + ' 秒后开始考验你');
+      box.appendChild(cd);
+      var list = el('div', 'sched-list');
       items.forEach(function (it) {
-        list.appendChild(el('div', 'sitem', '<span class="t">' + it.time + '</span><span>' + it.event + '</span>'));
+        list.appendChild(el('div', 'sitem', '<span class="t">' + it.time + '</span><span class="e">' + it.event + '</span>'));
       });
-      stage.appendChild(list);
+      box.appendChild(list);
+      stage.appendChild(box);
       if (timer) { clearInterval(timer); }
       timer = global.setInterval(function () {
         secs -= 1;
@@ -2054,8 +2258,9 @@ JS = r"""
     function showRecall() {
       var it = items[pos];
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-sub', (pos + 1) + ' / ' + items.length));
-      stage.appendChild(el('div', 'recall-q', it.time + ' 做什么？'));
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-sub', (pos + 1) + ' / ' + items.length));
+      box.appendChild(el('div', 'recall-q', it.time + ' 做什么？'));
       var grid = el('div', 'opt-grid');
       optionsFor(it).forEach(function (txt) {
         var b = el('button', 'opt', txt);
@@ -2066,7 +2271,8 @@ JS = r"""
         });
         grid.appendChild(b);
       });
-      stage.appendChild(grid);
+      box.appendChild(grid);
+      stage.appendChild(box);
     }
     function finish() {
       var gain = correct * 5 + (correct === items.length ? 10 : 0);
@@ -2077,14 +2283,19 @@ JS = r"""
       statPut('schedule', S);
       refresh();
       stage.innerHTML = '';
-      stage.appendChild(el('div', 'recall-q', '记住 ' + correct + ' / ' + items.length + ' 条'));
-      stage.appendChild(el('div', 'recall-sub', '本局 +' + gain + (correct === items.length ? '（全对奖励 +10）' : '')));
-      var again = el('button', 'opt', '再来一次');
-      again.style.marginBottom = '10px';
+      var fill = el('div', 'sched-fill');
+      var box = el('div', 'sched-block');
+      box.appendChild(el('div', 'recall-q', '记住 ' + correct + ' / ' + items.length + ' 条'));
+      box.appendChild(el('div', 'recall-sub', '本局 +' + gain + (correct === items.length ? '（全对奖励 +10）' : '')));
+      fill.appendChild(box);
+      stage.appendChild(fill);
+      var act = el('div', 'act-grid sched-act');
+      var again = el('button', 'act-btn primary', '再来一次');
       again.addEventListener('click', function () { start(curDiff); });
-      var back = el('button', 'opt', '换难度');
+      var back = el('button', 'act-btn ghost', '换难度');
       back.addEventListener('click', showSelect);
-      stage.appendChild(again); stage.appendChild(back);
+      act.appendChild(again); act.appendChild(back);
+      stage.appendChild(act);
     }
     showSelect();
     refresh();

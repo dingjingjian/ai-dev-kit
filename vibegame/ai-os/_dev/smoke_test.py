@@ -154,14 +154,39 @@ def main():
             "!!document.querySelector('.view:not(.hidden) .phead h1') && "
             "document.querySelector('.view:not(.hidden) .phead h1').textContent") == "计算器")
         check("计算器键盘 17 键", pg.evaluate("document.querySelectorAll('.keypad .key').length") == 17)
+        # 计算器是固定页（真机计算器观感）：内容区无滚动条，不可「翻页」
+        fit = pg.evaluate("(function(){var b=document.querySelector('.view:not(.hidden) .pbody');"
+                          "return [b.scrollHeight, b.clientHeight, getComputedStyle(b).overflowY];})()")
+        check("计算器内容区不可滚动", fit[2] == "hidden" and fit[0] <= fit[1] + 1, str(fit))
         for k in ["7", "+", "8"]:
             pg.locator(".keypad .key", has_text=k).first.click()
         pg.wait_for_timeout(150)
         check("输入回显", pg.evaluate("document.querySelector('.calc-expr').textContent") == "7+8")
+        foot_idle = pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .pfoot').getBoundingClientRect().height")
         pg.locator(".keypad .key", has_text="=").first.click()
         pg.wait_for_timeout(250)
-        check("出结果后进入判定（键盘隐藏）", pg.evaluate(
-            "document.querySelector('.keypad').classList.contains('hidden-row')"))
+        check("出结果后进入判定（键盘原位隐藏、露出对/错）", pg.evaluate(
+            "getComputedStyle(document.querySelector('.keypad')).visibility") == "hidden"
+              and not pg.evaluate("document.querySelector('.judge-row').classList.contains('hidden-row')"))
+        foot_judge = pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .pfoot').getBoundingClientRect().height")
+        check("判定阶段页脚不塌陷（按 = 前后不跳动）", abs(foot_judge - foot_idle) <= 1,
+              "%.1f -> %.1f" % (foot_idle, foot_judge))
+        geo = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');"
+            "var j=v.querySelector('.judge-row').getBoundingClientRect();"
+            "var k=v.querySelector('.keypad').getBoundingClientRect();"
+            "return [Math.round(j.left), Math.round(j.right), Math.round(k.left), Math.round(k.right),"
+            "Math.round(document.body.getBoundingClientRect().width)];})()")
+        check("判定按钮与键盘左右对齐、不贴屏边",
+              geo[0] == geo[2] and geo[1] == geo[3] and geo[0] > 0 and geo[1] < geo[4], str(geo))
+        ask = pg.evaluate(
+            "(function(){var f=document.querySelector('.view:not(.hidden) .calc-feedback');"
+            "var s=getComputedStyle(f);return [f.className, s.fontSize, s.fontWeight, s.color];})()")
+        check("判定提示醒目（ask 态 15px / 700 / accent 紫）",
+              "ask" in ask[0] and ask[1] == "15px" and ask[2] in ("700", "bold")
+              and ask[3] == "rgb(108, 76, 241)", str(ask))
         score_before = int(pg.evaluate(
             "document.querySelectorAll('.gstats [data-f=\"score\"]')[0].textContent"))
         pg.click(".view:not(.hidden) .judge-ok")
@@ -174,8 +199,42 @@ def main():
               "%d -> %d" % (score_before, score_after))
         pg.wait_for_timeout(1800)
         check("判定后回到键盘", pg.evaluate(
-            "!document.querySelector('.keypad').classList.contains('hidden-row')"))
+            "getComputedStyle(document.querySelector('.keypad')).visibility") == "visible")
+        check("判定后提示复位为引导态", pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .calc-feedback').className") == "calc-feedback")
         pg.screenshot(path=os.path.join(SHOTS, "v2-calc.png"))
+        # Error 态（除零）：再输入应整体清空、从干净状态重新开始，不必手动按 C
+        for k in ["5", "÷", "0"]:
+            pg.locator(".keypad .key", has_text=k).first.click()
+        pg.locator(".keypad .key", has_text="=").first.click()
+        pg.wait_for_timeout(200)
+        check("除零进 Error 态", pg.evaluate(
+            "document.querySelector('.calc-shown').textContent") == "Error")
+        check("Error 态提示为错误文案（no 态）", pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .calc-feedback').className") == "calc-feedback no")
+        pg.locator(".keypad .key", has_text="7").first.click()
+        pg.wait_for_timeout(150)
+        err = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');"
+            "return [v.querySelector('.calc-expr').textContent, v.querySelector('.calc-shown').textContent,"
+            "v.querySelector('.calc-display').style.borderColor];})()")
+        check("Error 后再输入：清空重来（表达式=7）", err[0] == "7" and err[1] == "7", str(err))
+        check("Error 后再输入：错误描边复位", err[2] == "", str(err))
+        pg.locator(".keypad .key", has_text="C").first.click()
+        pg.wait_for_timeout(150)
+        # 净高不足的小屏（容器/小屏机）：靠键盘行高压缩消化，仍不滚动、键盘仍贴底在屏内
+        pg.set_viewport_size({"width": 360, "height": 640})
+        pg.wait_for_timeout(300)
+        small = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');"
+            "var b=v.querySelector('.pbody');var kp=v.querySelector('.keypad');"
+            "return [b.scrollHeight<=b.clientHeight+1, Math.round(kp.getBoundingClientRect().bottom),"
+            "window.innerHeight, Math.round(kp.querySelector('.key').getBoundingClientRect().height)];})()")
+        check("小屏 360x640 不滚动且键盘贴底在屏内",
+              small[0] and small[1] <= small[2] and small[3] >= 34, str(small))
+        pg.screenshot(path=os.path.join(SHOTS, "v2-calc-small.png"))
+        pg.set_viewport_size({"width": 390, "height": 844})
+        pg.wait_for_timeout(300)
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
         check("返回键回主屏", pg.evaluate("!document.querySelector('.home').classList.contains('hidden')"))
@@ -188,20 +247,41 @@ def main():
         check("倒计时 mm:ss 格式", re.match(r"^\d{2}:\d{2}$", pg.evaluate(
             "document.querySelector('.alarm-cd').textContent")) is not None)
         pg.screenshot(path=os.path.join(SHOTS, "v2-alarm.png"))
-        # 等到响铃窗口内按一次（若窗口先错过被自动判晚，则按「再来一次」重排，最多等 40s）
+        # 死锁回归：若目标在打开时就已过期（倒计时 00:00、按钮禁用），须在 ~100ms 内自动判晚，
+        # 不能一直停在「禁用 + 可见 + 无再来一次」——那样玩家永远按不动（曾在无头环境复现卡死 40s）
+        stall = 0
+        for _ in range(20):
+            st = pg.evaluate(
+                "(function(){var v=document.querySelector('.view:not(.hidden)');"
+                "var r=v.querySelector('.ring-btn');var rt=v.querySelector('.pfoot .judge-btn');"
+                "return [r.disabled, r.style.display, rt.style.display,"
+                "v.querySelector('.alarm-cd').textContent];})()")
+            stall = stall + 1 if (st[0] and st[1] != "none" and st[2] == "none"
+                                  and st[3] == "00:00") else 0
+            if stall >= 3:
+                break
+            pg.wait_for_timeout(100)
+        check("响铃目标过期不致卡死（禁用+可见+无结算不得持续 ≥300ms）", stall < 3, str(st))
+        # 等到响铃窗口内按一次。窗口仅 ±500ms，必须用 wait_for_function 高频轮询（rAF）才不漏；
+        # 选择器一律限定在可见视图内（否则会命中计算器里同样叫 judge-btn 的「对/错」）。
+        # 两个终止态：响铃按钮可用（进窗口）或按钮消失（错过窗口已自动判晚 → 重排下一刻度）。
         rang = False
-        for _ in range(80):
-            st = pg.evaluate("(function(){var r=document.querySelector('.ring-btn');"
-                             "return [r.disabled, r.style.display];})()")
-            if st[1] == "none":  # 已出结果（自动判晚），重开一轮
-                pg.click(".view:not(.hidden) .pfoot .judge-btn")
+        RING = ".view:not(.hidden) .ring-btn"
+        RETRY = ".view:not(.hidden) .pfoot .judge-btn"
+        for _ in range(3):
+            try:
+                pg.wait_for_function(
+                    "(function(){var r=document.querySelector('.view:not(.hidden) .ring-btn');"
+                    "return !r.disabled || r.style.display === 'none';})()", timeout=40000)
+            except Exception:
+                break
+            if pg.evaluate("document.querySelector('.view:not(.hidden) .ring-btn').style.display") == "none":
+                pg.click(RETRY)  # 自动判晚 → 「再来一次」重排下一刻度
                 pg.wait_for_timeout(400)
                 continue
-            if not st[0]:
-                pg.click(".ring-btn")
-                rang = True
-                break
-            pg.wait_for_timeout(400)
+            pg.click(RING)
+            rang = True
+            break
         check("响铃窗口内可按并按下", rang)
         pg.wait_for_timeout(300)
         check("按后记一次尝试", int(pg.evaluate(
@@ -242,6 +322,40 @@ def main():
         pg.wait_for_timeout(300)
         check("简单 5 雷", pg.evaluate(
             "document.querySelectorAll('.ms-meta [data-f=\"mines\"]')[0].textContent") == "5")
+        # 日历整屏摆下、不上下翻页：矮屏时棋盘按可用高度等比缩窄（格子仍为正方形、
+        # 星期表头同宽对齐），宽屏回到自然尺寸。（回归：曾直接溢出 91px 可上下滚动）
+        CAL_JS = ("(function(){var v=document.querySelector('.view:not(.hidden)');"
+                  "var b=v.querySelector('.pbody');var g=v.querySelector('.ms-grid');"
+                  "var wk=v.querySelector('.ms-week');var card=v.querySelector('.ms-card');"
+                  "var cs=v.querySelectorAll('.ms-cell');var last=cs[cs.length-1].getBoundingClientRect();"
+                  "var bb=b.getBoundingClientRect();var c=cs[0].getBoundingClientRect();"
+                  "var st=getComputedStyle(card);"
+                  "var inner=card.clientWidth-parseFloat(st.paddingLeft)-parseFloat(st.paddingRight);"
+                  "var meta=v.querySelector('.ms-meta');var mb=meta.getBoundingClientRect();"
+                  "var cb=card.getBoundingClientRect();var bs=getComputedStyle(b);"
+                  "var above=cb.top-mb.bottom-parseFloat(getComputedStyle(meta).marginBottom);"
+                  "var below=bb.bottom-parseFloat(bs.paddingBottom)-cb.bottom;"
+                  "return [b.scrollHeight-b.clientHeight, Math.round(last.bottom-bb.bottom),"
+                  "Math.round(g.getBoundingClientRect().width), Math.round(wk.getBoundingClientRect().width),"
+                  "Math.round(inner), Math.round(c.width), Math.round(c.height),"
+                  "Math.round(above), Math.round(below)];})()")
+        pg.set_viewport_size({"width": 360, "height": 640})
+        pg.wait_for_timeout(300)
+        pg.locator(".view:not(.hidden) .diff-btn").nth(2).click()  # 困难 6 行最吃高度
+        pg.wait_for_timeout(300)
+        cal = pg.evaluate(CAL_JS)
+        check("矮屏日历整屏摆下（无滚动、末行不被截、棋盘等比缩窄且表头同宽）",
+              cal[0] == 0 and cal[1] <= 1 and cal[2] < cal[4] and cal[2] == cal[3]
+              and abs(cal[5] - cal[6]) <= 1 and cal[5] >= 14, str(cal))
+        pg.set_viewport_size({"width": 390, "height": 844})
+        pg.wait_for_timeout(300)
+        pg.locator(".view:not(.hidden) .diff-btn").nth(1).click()
+        pg.wait_for_timeout(300)
+        cal2 = pg.evaluate(CAL_JS)
+        check("宽屏日历回到自然尺寸（不缩放、无滚动）",
+              cal2[0] == 0 and cal2[2] == cal2[4] and cal2[1] <= 1, str(cal2))
+        check("棋盘卡在剩余空间垂直居中（上下留白相等，无中段空洞）",
+              abs(cal2[7] - cal2[8]) <= 2, str(cal2))
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
@@ -255,18 +369,69 @@ def main():
         check("助手作答记轮次", pg.evaluate(
             "document.querySelectorAll('.view:not(.hidden) .gstats [data-f=\"rounds\"]')[0].textContent") == "1")
         check("助手有玩家气泡", pg.evaluate("!!document.querySelector('.view:not(.hidden) .bub.me')"))
+        # 内容溢出时（用矮视口强制），选项上屏会加高页脚、压矮内容区，聊天必须重新贴底
+        # （回归：滚动位置曾在「选项出现前」设定，导致最新一条被截掉整个页脚增量）
+        pg.set_viewport_size({"width": 390, "height": 480})
+        pg.wait_for_selector(".view:not(.hidden) .opt", timeout=15000)
+        pg.wait_for_timeout(500)
+        stick = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');var b=v.querySelector('.pbody');"
+            "var bs=v.querySelectorAll('.bub');var last=bs[bs.length-1];"
+            "return [b.scrollHeight-b.scrollTop-b.clientHeight,"
+            "Math.round(last.getBoundingClientRect().bottom-b.getBoundingClientRect().bottom),"
+            "b.scrollHeight-b.clientHeight];})()")
+        check("选项上屏后对话仍自动贴底（最新一条不被截）",
+              stick[2] > 0 and stick[0] <= 1 and stick[1] <= 1, str(stick))
+        pg.set_viewport_size({"width": 390, "height": 844})
+        pg.wait_for_timeout(300)
         pg.screenshot(path=os.path.join(SHOTS, "v2-assistant.png"))
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
-        # 日程：选难度→记忆列表
+        # 日程：选难度→记忆→回忆→结算四相（记忆列表上卡面、阶段内容居中、结算动作等分满宽）
+        SCHED_CENTER = ("(function(){var v=document.querySelector('.view:not(.hidden)');"
+                        "var st=v.querySelector('.sched-stage'),blk=v.querySelector('.sched-block');"
+                        "var sb=st.getBoundingClientRect(),xb=blk.getBoundingClientRect();"
+                        "return [Math.round(xb.top-sb.top),Math.round(sb.bottom-xb.bottom)];})()")
         pg.locator('[aria-label="日程"]').first.click()
         pg.wait_for_timeout(400)
         check("日程三档难度", pg.evaluate("document.querySelectorAll('.view:not(.hidden) .sdiff').length") == 3)
+        check("难度卡为「左标签 + 右取值」行式", pg.evaluate(
+            "(function(){var b=document.querySelector('.view:not(.hidden) .sdiff');"
+            "return getComputedStyle(b).display==='flex' &&"
+            " b.querySelector('span').getBoundingClientRect().left>b.querySelector('b').getBoundingClientRect().right;})()"))
+        sel = pg.evaluate(SCHED_CENTER)
+        check("选难度相在剩余空间垂直居中（无中段空洞）", abs(sel[0] - sel[1]) <= 2, str(sel))
         pg.locator(".view:not(.hidden) .sdiff").first.click()
         pg.wait_for_timeout(400)
         check("简单记忆 3 条", pg.evaluate("document.querySelectorAll('.view:not(.hidden) .sitem').length") == 3)
+        check("记忆列表收进卡面（不再是裸文字）", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .sched-list .sitem').length") == 3)
+        memo = pg.evaluate(SCHED_CENTER)
+        check("记忆相垂直居中", abs(memo[0] - memo[1]) <= 2, str(memo))
         pg.screenshot(path=os.path.join(SHOTS, "v2-schedule.png"))
+        # 等倒计时结束 → 回忆相
+        pg.wait_for_selector(".view:not(.hidden) .opt", timeout=15000)
+        pg.wait_for_timeout(200)
+        check("回忆相四选一且居中", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .opt').length") == 4
+              and abs(pg.evaluate(SCHED_CENTER)[0] - pg.evaluate(SCHED_CENTER)[1]) <= 2)
+        # 答完 3 题 → 结算相：动作等分满宽两枚
+        for _ in range(3):
+            pg.locator(".view:not(.hidden) .opt").first.click()
+            pg.wait_for_timeout(250)
+        fin = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');"
+            "var a=v.querySelectorAll('.sched-act .act-btn');var b=v.querySelector('.pbody');"
+            "if(a.length!==2)return [a.length];"
+            "var r0=a[0].getBoundingClientRect(),r1=a[1].getBoundingClientRect();"
+            "var bb=b.getBoundingClientRect();"
+            "var bs=getComputedStyle(b);"
+            "return [a.length,Math.round(r0.width),Math.round(r1.width),"
+            "Math.round(r1.right),Math.round(bb.right-parseFloat(bs.paddingRight)),"
+            "Math.round(r0.height)];})()")
+        check("结算动作等分满宽贴底（主 CTA + 次级卡面）",
+              fin[0] == 2 and abs(fin[1] - fin[2]) <= 1 and fin[3] == fin[4] and fin[5] >= 46, str(fin))
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
