@@ -95,7 +95,9 @@ function initFlyScene(){
   try{
     F=(function(){
       var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+      /* DPR 上限 2：初始不按高 DPR 建最大缓冲；运行时持续掉帧还会降到 1（见 frame） */
+      var dprCap=Math.min(window.devicePixelRatio||1,2);
+      renderer.setPixelRatio(dprCap);
       var scene=new THREE.Scene();
       scene.background=new THREE.Color(0xbfe6fb);
       var camera=new THREE.PerspectiveCamera(62,1,0.01,200);
@@ -222,11 +224,11 @@ function initFlyScene(){
         return new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xff8fae,transparent:true,opacity:.8}));
       }
       /* 飞行中的自己：一颗粉色爱心（"我带着一颗心飞去见它"） */
-      function makePlaneMarker(){
+      function makeHeartMarker(){
         var m=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex(),transparent:true,depthWrite:false}));
         m.scale.set(0.075,0.075,1); return m;
       }
-      var routeObjs={from:null,to:null,line:null,plane:null};
+      var routeObjs={from:null,to:null,line:null,heart:null};
       function clearRoute(){
         for(var k in routeObjs){if(routeObjs[k]){scene.remove(routeObjs[k]);routeObjs[k]=null;}}
       }
@@ -239,6 +241,8 @@ function initFlyScene(){
 
       var animId=null,flyStart=0,flyDur=3200,fromV=null,toV=null,onArrive=null,curAlt=0.22;
       var arrivedRot=null,lastW=0,lastH=0;
+      /* 运行时门禁状态：上下文丢失 / 页面隐藏 / 掉帧降档 */
+      var ctxLost=false,ctxLostCount=0,hiddenAt=0,slowFrames=0,lastFrameAt=0;
 
       function resize(){
         var w=canvas.clientWidth||canvas.offsetWidth||1, h=canvas.clientHeight||canvas.offsetHeight||1;
@@ -246,8 +250,13 @@ function initFlyScene(){
       }
 
       function frame(now){
+        if(ctxLost){animId=null;return;}
         var cw=canvas.clientWidth||1, ch=canvas.clientHeight||1;
         if(cw!==lastW||ch!==lastH)resize();
+        /* 运行时降档：帧间隔 > 34ms（低于约 30fps）连续 45 帧就把 DPR 降到 1，只降一次不抖动 */
+        if(lastFrameAt){if(now-lastFrameAt>34)slowFrames++;else slowFrames=0;}
+        lastFrameAt=now;
+        if(slowFrames>=45&&dprCap>1){dprCap=1;renderer.setPixelRatio(1);slowFrames=0;resize();}
         if(st.flying){
           var t=Math.min(1,(now-flyStart)/flyDur);
           var ease=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
@@ -264,8 +273,8 @@ function initFlyScene(){
           camera.lookAt(fwdP);
           /* 轻微颠簸 */
           camera.position.y+=Math.sin(now*0.012)*0.004;
-          /* 飞机标记位置 */
-          if(routeObjs.plane){routeObjs.plane.position.copy(p.clone().multiplyScalar(R0*1.02));}
+          /* 飞行体（爱心）位置 */
+          if(routeObjs.heart){routeObjs.heart.position.copy(p.clone().multiplyScalar(R0*1.02));}
           /* HUD */
           Q('flyProgress').textContent=Math.round(t*100)+'%';
           if(t<.15)Q('flyStatus').textContent='起飞啦';
@@ -291,14 +300,14 @@ function initFlyScene(){
         onArrive=cb; st.flying=true; st.arrived=false;
         document.body.classList.add('flying');
         document.body.classList.remove('fly-arrived');
-        Q('flyRoute').innerHTML=a.city+' <span class="arrow">✈</span> '+b.city;
+        Q('flyRoute').innerHTML=a.city+' <span class="arrow">💗</span> '+b.city;
         /* 标记 + 航线 */
         clearRoute();
         routeObjs.from=makeMarker(a.lat,a.lon,0x8ad6bd,false);
         routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,true);
         routeObjs.line=makeRouteLine(fromV,toV);
-        routeObjs.plane=makePlaneMarker();
-        scene.add(routeObjs.from); scene.add(routeObjs.to); scene.add(routeObjs.line); scene.add(routeObjs.plane);
+        routeObjs.heart=makeHeartMarker();
+        scene.add(routeObjs.from); scene.add(routeObjs.to); scene.add(routeObjs.line); scene.add(routeObjs.heart);
         flyStart=performance.now();
         if(!animId){resize();animId=requestAnimationFrame(frame);}
       }
@@ -307,9 +316,9 @@ function initFlyScene(){
         var b=CATS[st.flyTo];
         var center=ll2v(b.lat,b.lon,1);
         arrivedRot={camPos:center.clone().multiplyScalar(R0+2.2)};
-        /* 抵达后清除航线和飞机标记，保留目的地标记脉动 */
+        /* 抵达后清除航线和飞行体，保留目的地标记脉动 */
         if(routeObjs.line){scene.remove(routeObjs.line);routeObjs.line=null;}
-        if(routeObjs.plane){scene.remove(routeObjs.plane);routeObjs.plane=null;}
+        if(routeObjs.heart){scene.remove(routeObjs.heart);routeObjs.heart=null;}
         if(routeObjs.from){scene.remove(routeObjs.from);routeObjs.from=null;}
         if(onArrive)onArrive(st.flyTo);
       }
@@ -319,7 +328,7 @@ function initFlyScene(){
         var b=CATS[idx];
         var center=ll2v(b.lat,b.lon,1);
         arrivedRot={camPos:center.clone().multiplyScalar(R0+2.2)};
-        Q('flyRoute').innerHTML='已抵达 <span class="arrow">✈</span> '+b.city;
+        Q('flyRoute').innerHTML='已抵达 <span class="arrow">💗</span> '+b.city;
         Q('flyProgress').textContent='100%';
         /* 只显示目的地标记（粉色爱心） */
         clearRoute();
@@ -329,7 +338,32 @@ function initFlyScene(){
         if(cb)cb(idx);
       }
       function stop(){if(animId){cancelAnimationFrame(animId);animId=null;}st.flying=false;clearRoute();}
-      function start(){if(!animId){resize();animId=requestAnimationFrame(frame);}}
+      function start(){if(!animId&&!ctxLost){resize();animId=requestAnimationFrame(frame);}}
+
+      /* ===== 生命周期门禁：页面隐藏暂停 + WebGL 上下文丢失兜底 ===== */
+      /* 页面不可见时停掉 rAF；恢复时把暂停时长补偿进 flyStart，飞行进度不跳变、不补算大量帧 */
+      document.addEventListener('visibilitychange',function(){
+        if(document.hidden){
+          hiddenAt=performance.now();
+          if(animId){cancelAnimationFrame(animId);animId=null;}
+        }else{
+          if(hiddenAt&&st.flying){flyStart+=(performance.now()-hiddenAt);}
+          hiddenAt=0;lastFrameAt=0;slowFrames=0;
+          if(st.page==='fly'&&!ctxLost&&!animId){resize();animId=requestAnimationFrame(frame);}
+        }
+      });
+      /* 上下文丢失：立即停止渲染，不无限重建；反复丢失（≥2 次）直接进 no-webgl 平铺兜底界面 */
+      canvas.addEventListener('webglcontextlost',function(e){
+        e.preventDefault();
+        ctxLost=true;
+        if(animId){cancelAnimationFrame(animId);animId=null;}
+        if(++ctxLostCount>=2)document.body.classList.add('no-webgl');
+      });
+      canvas.addEventListener('webglcontextrestored',function(){
+        ctxLost=false;lastFrameAt=0;slowFrames=0;
+        if(ctxLostCount>=2)return;
+        if(st.page==='fly'&&!animId){resize();animId=requestAnimationFrame(frame);}
+      });
 
       return {resize:resize,fly:fly,goto:goto,stop:stop,start:start};
     })();
@@ -518,6 +552,7 @@ function bind(){
 function start(){
   loadHearts();
   renderAtlas();
+  setImg(Q('heroImg'),'./assets/tex/hero.webp',function(){});
   bind();
   Q('loader').classList.add('hide');
 }
