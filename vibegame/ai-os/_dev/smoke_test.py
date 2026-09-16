@@ -163,13 +163,13 @@ def main():
         check("出结果后进入判定（键盘隐藏）", pg.evaluate(
             "document.querySelector('.keypad').classList.contains('hidden-row')"))
         score_before = int(pg.evaluate(
-            "document.querySelectorAll('.gstat [data-f=\"score\"]')[0].textContent"))
+            "document.querySelectorAll('.gstats [data-f=\"score\"]')[0].textContent"))
         pg.click(".view:not(.hidden) .judge-ok")
         pg.wait_for_timeout(250)
         check("判定一轮后轮次=1", pg.evaluate(
-            "document.querySelectorAll('.gstat [data-f=\"rounds\"]')[0].textContent") == "1")
+            "document.querySelectorAll('.gstats [data-f=\"rounds\"]')[0].textContent") == "1")
         score_after = int(pg.evaluate(
-            "document.querySelectorAll('.gstat [data-f=\"score\"]')[0].textContent"))
+            "document.querySelectorAll('.gstats [data-f=\"score\"]')[0].textContent"))
         check("判定后分数按规则变化", score_after - score_before in (10, 15) or score_after == 0,
               "%d -> %d" % (score_before, score_after))
         pg.wait_for_timeout(1800)
@@ -205,7 +205,7 @@ def main():
         check("响铃窗口内可按并按下", rang)
         pg.wait_for_timeout(300)
         check("按后记一次尝试", int(pg.evaluate(
-            "document.querySelectorAll('.gstat [data-f=\"tries\"]')[0].textContent")) >= 1)
+            "document.querySelectorAll('.gstats [data-f=\"tries\"]')[0].textContent")) >= 1)
         check("按后出现再来一次", pg.evaluate(
             "document.querySelectorAll('.view:not(.hidden) .pfoot .judge-btn')[0].textContent") == "再来一次")
         pg.click("#keyBack")
@@ -253,7 +253,7 @@ def main():
         pg.locator(".view:not(.hidden) .opt").first.click()
         pg.wait_for_timeout(400)
         check("助手作答记轮次", pg.evaluate(
-            "document.querySelectorAll('.view:not(.hidden) .gstat [data-f=\"rounds\"]')[0].textContent") == "1")
+            "document.querySelectorAll('.view:not(.hidden) .gstats [data-f=\"rounds\"]')[0].textContent") == "1")
         check("助手有玩家气泡", pg.evaluate("!!document.querySelector('.view:not(.hidden) .bub.me')"))
         pg.screenshot(path=os.path.join(SHOTS, "v2-assistant.png"))
         pg.click("#keyBack")

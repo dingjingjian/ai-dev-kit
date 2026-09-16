@@ -13,23 +13,23 @@
     phone: '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>',
     sms: '<svg viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2zm3 5h10v2H7V8zm0 4h7v2H7v-2z"/></svg>',
     camera: '<svg viewBox="0 0 24 24"><path d="M9 3L7.5 5H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
-    gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(45 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(90 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(135 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(180 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(225 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(270 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.6" fill="none" stroke="#fff" stroke-width="3.2"/></svg>'
+    gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
   /* ---------- 应用清单 ---------- */
   var APPS = [
-    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#F5854E', '#E4483F'], sh: 'rgba(228,72,63,.32)', deg: 135 },
-    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], sh: 'rgba(46,127,232,.32)', deg: 120 },
-    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], sh: 'rgba(240,138,30,.32)', deg: 150 },
-    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#39C46F', '#1E9E50'], sh: 'rgba(30,158,80,.32)', deg: 135 },
-    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], sh: 'rgba(106,76,224,.32)', deg: 120 },
-    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], sh: 'rgba(46,158,196,.32)', deg: 150 }
+    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
+    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
+    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
+    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
+    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
+    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 }
   ];
   var DOCK = [
-    { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], sh: 'rgba(30,158,80,.32)', deg: 135 },
-    { id: 'sms',      name: '短信', slogan: '收件箱永远干净',     g: 'sms',    c: ['#4FA3F7', '#2E6FE8'], sh: 'rgba(46,111,232,.32)', deg: 120 },
-    { id: 'camera',   name: '相机', slogan: '只拍得到取景框',     g: 'camera', c: ['#9B7BF7', '#6A4CE0'], sh: 'rgba(106,76,224,.32)', deg: 150 },
-    { id: 'settings', name: '设置', slogan: '壁纸、外观与关于本机', g: 'gear',  c: ['#8E8E96', '#5C5C66'], sh: 'rgba(92,92,102,.32)', deg: 135 }
+    { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
+    { id: 'sms',      name: '短信', slogan: '收件箱永远干净',     g: 'sms',    c: ['#3F8FEA', '#2456C8'], deg: 120 },
+    { id: 'camera',   name: '相机', slogan: '只拍得到取景框',     g: 'camera', c: ['#F06AA8', '#D2387A'], deg: 150 },
+    { id: 'settings', name: '设置', slogan: '壁纸、外观与关于本机', g: 'gear',  c: ['#8E8E96', '#5C5C66'], deg: 135 }
   ];
 
   function findApp(id) {
@@ -52,11 +52,16 @@
 
   /* ---------- 主题 ---------- */
   var WALLS = ['light-mesh', 'light-solid', 'dark-mesh', 'dark-solid'];
+  /* swatch 预览与实际壁纸同色系（不是另一套配色，避免"选了跟看到的不一样"） */
   var WALL_PREVIEW = {
-    'light-mesh': 'linear-gradient(165deg,#EDF2FF 0%,#FBF3EC 100%)',
-    'light-solid': 'linear-gradient(180deg,#F4F6FB 0%,#EEF0F6 100%)',
-    'dark-mesh': 'linear-gradient(165deg,#191B2E 0%,#0E0F18 100%)',
-    'dark-solid': 'linear-gradient(180deg,#121218 0%,#0D0D12 100%)'
+    'light-mesh': 'radial-gradient(circle at 22% 12%, rgba(108,76,241,.38), transparent 55%),' +
+                  'radial-gradient(circle at 84% 26%, rgba(64,150,255,.32), transparent 55%),' +
+                  'linear-gradient(180deg,#EEF2FF 0%,#F5F3FF 100%)',
+    'light-solid': 'linear-gradient(180deg,#F5F7FC 0%,#EDEFF5 100%)',
+    'dark-mesh': 'radial-gradient(circle at 22% 12%, rgba(108,76,241,.60), transparent 55%),' +
+                 'radial-gradient(circle at 84% 26%, rgba(46,127,232,.50), transparent 55%),' +
+                 'linear-gradient(180deg,#1A1C30 0%,#0D0E17 100%)',
+    'dark-solid': 'linear-gradient(180deg,#14141B 0%,#0C0C11 100%)'
   };
   var theme = {
     mode: read('mode', 'light'),
@@ -89,11 +94,10 @@
 
   function iconNode(app, extra) {
     var n = el('div', 'app-icon' + (extra ? ' ' + extra : ''));
-    // 顶部高光 + 同色渐变；同色投影由 --icon-sh 提供
+    // 顶部高光 + 主题渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）
     n.style.backgroundImage =
       'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
       'linear-gradient(' + (app.deg || 135) + 'deg,' + app.c[0] + ',' + app.c[1] + ')';
-    n.style.setProperty('--icon-sh', app.sh || 'rgba(20,20,40,.16)');
     n.innerHTML = GLYPH[app.g];
     return n;
   }
@@ -398,17 +402,26 @@
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">连击</div><div class="v combo" data-f="streak">0</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">连击<b class="combo" data-f="streak">0</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var disp = el('div', 'calc-display');
     disp.appendChild(el('div', 'calc-expr', ''));
     disp.appendChild(el('div', 'calc-shown', '0'));
     body.appendChild(disp);
     body.appendChild(el('div', 'calc-feedback', '按出你的算式，按 = 看 AI 的结果'));
+    /* 内容撑满：显示卡吃掉剩余高度、算式与结果贴其底（真机计算器布局），消除中段空洞 */
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    disp.style.flex = '1 1 auto';
+    disp.style.display = 'flex';
+    disp.style.flexDirection = 'column';
+    disp.style.justifyContent = 'flex-end';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var keypad = el('div', 'keypad');
@@ -561,9 +574,11 @@
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">准时次数</div><div class="v accent" data-f="ontime">0</div></div>' +
-      '<div class="gstat"><div class="k">尝试次数</div><div class="v" data-f="tries">0</div></div>' +
-      '<div class="gstat"><div class="k">准时率</div><div class="v" data-f="rate">0%</div></div>';
+      '<div class="gstat-main"><div class="k">准时次数</div><div class="v accent" data-f="ontime">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">尝试<b data-f="tries">0</b></span>' +
+        '<span class="si">准时率<b data-f="rate">0%</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var disp = el('div', 'alarm-display');
     disp.innerHTML =
@@ -572,6 +587,8 @@
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
       '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
     body.appendChild(disp);
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
+    disp.style.marginTop = 'auto'; disp.style.marginBottom = 'auto';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var ring = el('button', 'ring-btn', '响铃');
@@ -671,10 +688,12 @@
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">胜率</div><div class="v" data-f="win">0%</div></div>' +
-      '<div class="gstat"><div class="k">最快</div><div class="v combo" data-f="fast">--:--</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">胜率<b data-f="win">0%</b></span>' +
+        '<span class="si">最快<b class="combo" data-f="fast">--:--</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var banner = el('div', 'ms-banner', '');
     body.appendChild(banner);
@@ -955,13 +974,18 @@
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">连击</div><div class="v combo" data-f="streak">0</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">连击<b class="combo" data-f="streak">0</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var chat = el('div');
+    chat.style.flex = '1 1 auto'; chat.style.minHeight = '0';
+    chat.style.display = 'flex'; chat.style.flexDirection = 'column';
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(chat);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
@@ -1049,10 +1073,12 @@
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var stage = el('div');
     body.appendChild(stage);
@@ -1166,6 +1192,8 @@
     histCard.appendChild(el('div', 'card-title', '最近通话'));
     var hist = el('div');
     histCard.appendChild(hist);
+    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto';
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(histCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
@@ -1191,7 +1219,7 @@
       if (n.length <= 7) { return n.slice(0, 3) + '-' + n.slice(3); }
       return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7);
     }
-    function paintNum() { disp.textContent = num ? fmt(num) : '请输入号码'; }
+    function paintNum() { disp.textContent = num ? fmt(num) : '请输入号码'; disp.style.color = num ? 'var(--ink)' : 'var(--ink-dim)'; }
     function paintHist() {
       hist.innerHTML = '';
       if (!records.length) { hist.appendChild(el('div', 'conv-prev', '还没有通话记录')); return; }
@@ -1278,7 +1306,8 @@
   /* ---------- 短信（v1 还原）：种子收件箱 + AI 敷衍回复 ---------- */
   function buildSms() {
     var v = el('div', 'view hidden');
-    v.appendChild(el('div', 'phead', '<h1>短信</h1>'));
+    var phead = el('div', 'phead', '<h1>短信</h1>');
+    v.appendChild(phead);
     var body = el('div', 'pbody');
     var list = el('div');
     body.appendChild(list);
@@ -1318,6 +1347,7 @@
     function save() { try { store('sms_messages', JSON.stringify(msgs)); } catch (e) { /* 忽略 */ } }
     function paintList() {
       openConv = null;
+      phead.querySelector('h1').textContent = '短信';
       chat.style.display = 'none';
       list.style.display = '';
       inputRow.style.display = 'none';
@@ -1336,6 +1366,7 @@
     }
     function openChat(sender) {
       openConv = sender;
+      phead.querySelector('h1').textContent = sender;
       list.style.display = 'none';
       chat.style.display = '';
       inputRow.style.display = '';
@@ -1607,7 +1638,7 @@
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(RADAR_LABELS[i], lx, ly);
         ctx.fillStyle = '#F08A24';
-        ctx.fillText(Math.round(F[i]) + '%', lx, ly + 15);
+        ctx.fillText(Math.round(F[i]) + '%', lx, ly + 18);
       }
     }
     function render() {
@@ -1673,12 +1704,15 @@
   var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
-  function showOnly(node) {
+  /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
+  function showOnly(node, isApp) {
     var i, kids = viewRoot.children;
     for (i = 0; i < kids.length; i++) {
       if (kids[i] === node || kids[i] === recentsEl) { continue; }
       kids[i].classList.add('hidden');
     }
+    if (isApp) { document.body.classList.add('on-app'); }
+    else { document.body.classList.remove('on-app'); }
     if (node) {
       node.classList.remove('hidden');
       node.classList.add('entering');
@@ -1698,14 +1732,14 @@
     if (idx >= 0) { stack.splice(idx, 1); }
     stack.push(id);
     current = id;
-    showOnly(views[id]);
+    showOnly(views[id], true);
     if (views[id].onShow) { views[id].onShow(); }
   }
 
   function goHome() {
     closeRecents();
     current = 'home';
-    showOnly(homeView);
+    showOnly(homeView, false);
   }
 
   function goBack() {
@@ -1714,7 +1748,7 @@
     var i = stack.indexOf(current);
     if (i >= 0) { stack.splice(i, 1); }
     current = stack.length ? stack[stack.length - 1] : 'home';
-    showOnly(current === 'home' ? homeView : views[current]);
+    showOnly(current === 'home' ? homeView : views[current], current !== 'home');
   }
 
   /* ---------- 多任务 ---------- */
@@ -1747,7 +1781,7 @@
           // 关掉的是当前应用：切到新的栈顶或主屏，并收起轮播
           current = stack.length ? stack[stack.length - 1] : 'home';
           closeRecents();
-          showOnly(current === 'home' ? homeView : views[current]);
+          showOnly(current === 'home' ? homeView : views[current], current !== 'home');
         } else if (stack.length === 0) {
           renderRecents();
         } else {
@@ -1757,14 +1791,19 @@
       head.appendChild(close);
       card.appendChild(head);
       var bodyPrev = el('div', 'rc-body');
-      bodyPrev.style.background = 'linear-gradient(160deg,' + app.c[0] + '33,' + app.c[1] + '22)';
+      var rcBar = el('div', 'rc-bar');
+      rcBar.style.background = 'linear-gradient(135deg,' + app.c[0] + ',' + app.c[1] + ')';
+      bodyPrev.appendChild(rcBar);
+      bodyPrev.appendChild(el('div', 'rc-mini',
+        '<span class="rc-sk blk"></span><span class="rc-sk w90"></span>' +
+        '<span class="rc-sk w70"></span><span class="rc-sk w50"></span>'));
       card.appendChild(bodyPrev);
       card.addEventListener('click', function () {
         var i = stack.indexOf(id);
         if (i >= 0) { stack.splice(i, 1); }
         stack.push(id);
         closeRecents();
-        showOnly(views[id]);
+        showOnly(views[id], true);
       });
       track.appendChild(card);
     });

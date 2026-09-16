@@ -62,6 +62,10 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
   --surface-glass:rgba(255,255,255,.72);
   --nav:#F7F7FB;
   --nav-glass:rgba(247,247,251,.80);
+  /* 应用页整屏底色：主屏才见壁纸，进入应用后状态栏区 + 内容区 + 底部导航统一铺该底色 */
+  --app-bg:#F3F3F7;
+  --app-nav:#FBFBFD;
+  --app-nav-glass:rgba(251,251,253,.92);
 }
 body[data-mode="dark"]{
   --ink:#F2F1F7;
@@ -72,6 +76,9 @@ body[data-mode="dark"]{
   --surface-glass:rgba(27,27,34,.72);
   --nav:#14141A;
   --nav-glass:rgba(20,20,26,.80);
+  --app-bg:#121216;
+  --app-nav:#15151A;
+  --app-nav-glass:rgba(21,21,26,.92);
 }
 
 /* 壁纸（颗粒 + 多层 mesh + 底部暗角，避免平涂塑料感） */
@@ -128,9 +135,10 @@ svg{ display:block; }
 .statusbar{
   flex:0 0 auto;
   height:var(--safe-top);
-  display:flex; align-items:center; justify-content:space-between;
+  display:flex; align-items:flex-end; justify-content:space-between;
   padding-left:calc(14px + var(--safe-l));
   padding-right:calc(14px + var(--safe-r));
+  padding-bottom:7px;
   color:var(--status-ink);
 }
 .sb-left, .sb-right{ display:flex; align-items:center; }
@@ -152,7 +160,7 @@ svg{ display:block; }
   content:""; position:absolute; top:3px; right:-4px; width:2px; height:5px;
   background:currentColor; border-radius:0 1px 1px 0;
 }
-.sb-batt-fill{ position:absolute; top:1px; left:1px; bottom:1px; width:76%; background:currentColor; border-radius:1px; }
+.sb-batt-fill{ position:absolute; top:1px; left:1px; bottom:1px; width:87%; background:currentColor; border-radius:1px; }
 .sb-batt-txt{ font-size:11px; margin-left:5px; opacity:.85; }
 
 /* ============ 视图容器 ============ */
@@ -160,10 +168,17 @@ svg{ display:block; }
 .view{
   position:absolute; top:0; left:0; right:0; bottom:0;
   display:flex; flex-direction:column;
-  transition:opacity .18s ease;
+  transition:opacity .2s ease, transform .26s cubic-bezier(.2,.75,.25,1);
 }
 .view.hidden{ display:none; }
-.view.entering{ opacity:0; }
+.view.entering{ opacity:0; transform:scale(.965); }
+
+/* ============ 应用页整屏底色（DESIGN.md §4.2） ============
+ * 主屏（.home）透明，透出 body 壁纸；进入任意应用后 body 带 on-app，
+ * 状态栏区与内容区一起铺 --app-bg，底部导航换 --app-nav，壁纸完全让位。 */
+body.on-app .statusbar{ background:var(--app-bg); color:var(--ink); }
+body.on-app #viewRoot{ background:var(--app-bg); }
+body.on-app{ --nav:var(--app-nav); --nav-glass:var(--app-nav-glass); }
 
 /* ============ 主屏（§4.3） ============ */
 .home-body{
@@ -214,8 +229,8 @@ button.widget:active{ opacity:.8; }
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
 .w-analog{
-  flex:0 0 auto; width:40px; height:40px; border-radius:50%;
-  border:1.5px solid #fff; position:relative; opacity:.6; margin-left:10px;
+  flex:0 0 auto; width:64px; height:64px; border-radius:50%;
+  border:2px solid #fff; position:relative; opacity:.6; margin-left:12px;
   box-shadow:inset 0 0 0 1px rgba(255,255,255,.22);
 }
 .w-analog i{
@@ -223,11 +238,11 @@ button.widget:active{ opacity:.8; }
   transform-origin:50% 100%;
   background:#fff; border-radius:2px;
 }
-.w-analog .w-hh{ width:2.5px; height:11px; margin-left:-1.25px; }
-.w-analog .w-mh{ width:2px; height:15px; margin-left:-1px; }
+.w-analog .w-hh{ width:4px; height:18px; margin-left:-2px; }
+.w-analog .w-mh{ width:3px; height:24px; margin-left:-1.5px; }
 .w-analog:after{
   content:""; position:absolute; left:50%; top:50%;
-  width:6px; height:6px; margin-left:-3px; margin-top:-3px;
+  width:10px; height:10px; margin-left:-5px; margin-top:-5px;
   border-radius:50%; background:#FFD666;
 }
 
@@ -256,7 +271,7 @@ body[data-mode="dark"] .widget.w-weather{
 }
 .w-glyphchip svg{ width:14px; height:14px; fill:#2E7FE8; }
 .w-hl{ display:block; font-size:11px; color:var(--ink-dim); margin-top:8px; }
-.w-src{ font-size:10px; color:var(--ink-dim); opacity:.75; margin-top:5px; }
+.w-src{ font-size:10px; color:var(--ink-dim); opacity:.85; margin-top:5px; }
 
 /* 钱包组件：银行卡质感深色卡（顶部sheen+内发丝），假余额，点按打码 */
 .widget.w-wallet{
@@ -278,7 +293,7 @@ body[data-mode="dark"] .widget.w-weather{
   background:rgba(0,0,0,.28); border-radius:1px;
 }
 .w-bal-lbl{ font-size:10px; color:rgba(255,255,255,.6); margin-top:4px; }
-.w-bal{ font-size:30px; font-weight:800; line-height:1.1; color:#fff; letter-spacing:.5px; font-variant-numeric:tabular-nums; }
+.w-bal{ font-size:25px; font-weight:800; line-height:1.1; color:#fff; letter-spacing:.2px; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .w-wrow{ display:flex; align-items:center; justify-content:space-between; margin-top:12px; }
 .w-spend{ font-size:10px; color:rgba(255,255,255,.6); }
 .w-cardno{ font-size:10px; color:rgba(255,255,255,.6); letter-spacing:1px; }
@@ -287,9 +302,9 @@ body[data-mode="dark"] .widget.w-weather{
   flex:0 0 auto;
   display:grid;
   grid-template-columns:repeat(4,1fr);
-  grid-gap:20px 14px;
-  align-content:flex-start;
-  padding:10px 14px 8px 14px;
+  grid-gap:22px 14px;
+  align-content:start;
+  padding:16px 14px 10px 14px;
 }
 .app-tile{
   display:flex; flex-direction:column; align-items:center;
@@ -297,45 +312,65 @@ body[data-mode="dark"] .widget.w-weather{
 }
 .app-tile:active{ transform:scale(.94); }
 .app-icon{
-  width:62px; height:62px; border-radius:22%;
+  width:62px; height:62px; border-radius:23%;
   display:flex; align-items:center; justify-content:center;
-  /* 双层投影：环境+同色主光；内高光/内底影给厚度 */
+  /* 双层投影：环境 + 中性主光（真机图标不用彩色光晕）；内高光/内底影给厚度 */
   box-shadow:
     var(--sh-1),
-    0 8px 18px var(--icon-sh, rgba(20,20,40,.16)),
+    0 6px 14px rgba(20,20,40,.18),
     inset 0 1px 0 rgba(255,255,255,.35),
     inset 0 -1px 0 rgba(0,0,0,.10);
 }
 .app-icon svg{ width:30px; height:30px; fill:#fff; }
-.app-name{ margin-top:8px; font-size:13px; font-weight:500; letter-spacing:.2px; color:var(--ink); }
+.app-name{ margin-top:8px; font-size:12px; font-weight:400; letter-spacing:.2px; color:var(--ink); }
+body[data-mode="dark"] .app-icon{
+  box-shadow:
+    var(--sh-1),
+    0 6px 14px rgba(0,0,0,.52),
+    inset 0 1px 0 rgba(255,255,255,.20),
+    inset 0 -1px 0 rgba(0,0,0,.28);
+}
 
 .dock{
   flex:0 0 auto;
   margin-left:calc(14px + var(--safe-l));
   margin-right:calc(14px + var(--safe-r));
   margin-bottom:10px;
-  display:flex; justify-content:space-around; align-items:center;
+  display:flex; justify-content:space-between; align-items:center;
   background:var(--surface);
   border:1px solid var(--hair);
-  border-radius:var(--r-md);
-  padding:10px 8px;
+  border-radius:28px;
+  padding:12px 22px;
   box-shadow:var(--sh-2), var(--hl);
 }
 @supports ((-webkit-backdrop-filter:blur(14px)) or (backdrop-filter:blur(14px))){
   .dock{ background:var(--surface-glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
 }
-.dock .app-icon{ width:54px; height:54px; }
-.dock .app-icon svg{ width:26px; height:26px; }
+/* Dock 图标与主屏同尺寸（真机 Dock 不缩小图标、不带标签） */
+.dock .app-icon{ width:62px; height:62px; }
+.dock .app-icon svg{ width:30px; height:30px; }
 .dock .app-tile:active .app-icon{ opacity:.75; }
+/* 宿主内嵌：左右净空（48/92）吃掉宽度，Dock 若仍 4×62 必溢出 ——
+ * 改为按格等分、图标用比例盒等比缩放（padding-top:100% 造正方形，Chrome 61 可用）。 */
+body.in-app .dock{ padding:10px 12px; }
+body.in-app .dock .app-tile{ flex:1 1 0; min-width:0; }
+body.in-app .dock .app-icon{ position:relative; width:100%; height:0; padding-top:100%; }
+body.in-app .dock .app-icon svg{
+  position:absolute; left:50%; top:50%;
+  width:52%; height:52%; transform:translate(-50%,-50%);
+}
+/* 半行组件（天气/钱包）在净空下会窄到放不下余额，改为竖排整行 */
+body.in-app .w-row{ display:block; }
+body.in-app .w-half + .w-half{ margin-left:0; }
 
 /* ============ 应用页三段式骨架（§4.4） ============ */
 .phead{
-  flex:0 0 auto; height:48px;
+  flex:0 0 auto; height:54px;
   display:flex; align-items:center; justify-content:center;
   padding-left:calc(8px + var(--safe-l));
   padding-right:calc(8px + var(--safe-r));
 }
-.phead h1{ font-size:17px; font-weight:600; color:var(--ink); }
+.phead h1{ font-size:18px; font-weight:600; color:var(--ink); }
 .pbody{
   flex:1 1 auto; min-height:0;
   overflow-y:auto;
@@ -352,21 +387,22 @@ body[data-mode="dark"] .widget.w-weather{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
-  padding:6px 14px;
+  padding:6px 16px;
   margin-bottom:12px;
 }
-.card-title{ font-size:13px; color:var(--ink-dim); padding:10px 0 2px 0; }
+.card-title{ font-size:13px; color:var(--ink-dim); padding:12px 0 4px 0; }
 
-.row{ display:flex; align-items:center; padding:13px 2px; border-bottom:1px solid var(--line); }
+.row{ display:flex; align-items:center; padding:15px 2px; border-bottom:1px solid var(--line); transition:background-color .14s ease; }
 .row:last-child{ border-bottom:none; }
+.row:active{ background-color:rgba(120,120,140,.10); }
 .row .lbl{ flex:1 1 auto; min-width:0; font-size:15px; color:var(--ink); }
 .row .val{ font-size:13px; color:var(--ink-dim); margin-right:8px; }
-.about-desc{ padding:13px 2px; font-size:13px; line-height:1.5; color:var(--ink-dim); }
+.about-desc{ padding:13px 2px 2px 2px; font-size:13px; line-height:1.5; color:var(--ink-dim); margin-top:8px; }
 
 /* 开关 */
 .switch{
   flex:0 0 auto; width:46px; height:27px; border-radius:14px;
-  background:rgba(120,120,130,.35); position:relative;
+  background:rgba(120,120,130,.30); border:1px solid var(--line); position:relative;
   transition:background .18s ease;
 }
 .switch:after{
@@ -380,11 +416,11 @@ body[data-mode="dark"] .widget.w-weather{
 /* 壁纸选择 */
 .walls{ display:flex; padding:6px 2px 12px 2px; }
 .wall-swatch{
-  width:52px; height:86px; border-radius:var(--r-sm);
+  width:56px; height:92px; border-radius:var(--r-sm);
   margin-right:12px; border:2px solid transparent;
   box-shadow:0 2px 6px rgba(0,0,0,.15);
 }
-.wall-swatch.sel{ border-color:var(--accent); }
+.wall-swatch.sel{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent), 0 2px 8px rgba(108,76,241,.3); }
 
 /* 占位应用页 */
 .ph-wrap{
@@ -414,31 +450,37 @@ body[data-mode="dark"] .widget.w-weather{
 
 /* ============ 游戏页组件（§4.7 二期a） ============ */
 .gstats{
-  display:flex;
+  display:flex; align-items:center;
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
-  padding:10px 4px;
+  padding:12px 14px;
   margin-bottom:12px;
   box-shadow:var(--sh-1), var(--hl);
 }
-.gstat{ flex:1 1 0; min-width:0; text-align:center; }
-.gstat + .gstat{ border-left:1px solid var(--line); }
-.gstat .k{ font-size:10px; color:var(--ink-dim); letter-spacing:.3px; }
-.gstat .v{
-  font-size:18px; font-weight:700; color:var(--ink); margin-top:3px;
+.gstat-main{ flex:0 0 auto; min-width:0; }
+.gstat-main .k{ font-size:10px; color:var(--ink-dim); letter-spacing:.3px; }
+.gstat-main .v{
+  font-size:26px; font-weight:800; color:var(--ink); margin-top:2px; line-height:1.1;
   font-variant-numeric:tabular-nums;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.gstat .v.accent{ color:var(--accent); }
-.gstat .v.combo{ color:var(--combo); }
+.gstat-main .v.accent{ color:var(--accent); }
+.gstat-main .v.combo{ color:var(--combo); }
+.gstat-sub{
+  flex:1 1 auto; min-width:0; display:flex; flex-wrap:wrap;
+  justify-content:flex-end; align-items:baseline; margin-left:14px;
+}
+.gstat-sub .si{ display:inline-flex; align-items:baseline; font-size:11px; color:var(--ink-dim); margin-left:12px; white-space:nowrap; }
+.gstat-sub .si b{ font-weight:700; color:var(--ink); margin-left:4px; font-variant-numeric:tabular-nums; }
+.gstat-sub .si b.accent{ color:var(--accent); }
+.gstat-sub .si b.combo{ color:var(--combo); }
 
 /* 计算器：判定玩法 */
 .calc-display{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
-  padding:16px 18px;
+  padding:18px 20px;
   margin-bottom:12px;
   text-align:right;
   box-shadow:var(--sh-1), var(--hl);
@@ -467,7 +509,7 @@ body[data-mode="dark"] .widget.w-weather{
   background:var(--card);
   border:1px solid var(--line);
   border-radius:var(--r-md);
-  padding:16px 18px;
+  padding:20px 18px;
   margin-bottom:12px;
   text-align:center;
   box-shadow:var(--sh-1), var(--hl);
@@ -480,8 +522,8 @@ body[data-mode="dark"] .widget.w-weather{
   font-variant-numeric:tabular-nums;
 }
 .alarm-cd{
-  font-size:44px; font-weight:800; color:var(--accent); margin-top:6px;
-  font-variant-numeric:tabular-nums; letter-spacing:-1px;
+  font-size:40px; font-weight:800; color:var(--accent); margin-top:8px;
+  font-variant-numeric:tabular-nums; letter-spacing:-1px; transition:color .2s ease;
 }
 .alarm-result{ font-size:13px; color:var(--ink-dim); margin-top:8px; min-height:18px; }
 .ring-btn{
@@ -567,16 +609,17 @@ body[data-mode="dark"] .widget.w-weather{
 /* 计算器键盘（v1 还原：用户自己按表达式） */
 .keypad{ display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px; }
 .key{
-  height:54px; border-radius:var(--r-md);
-  font-size:20px; font-weight:600; color:var(--ink);
+  height:64px; border-radius:var(--r-md);
+  font-size:21px; font-weight:600; color:var(--ink);
   background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl);
   transition:transform .12s ease;
 }
 .key:active{ transform:scale(.93); }
-.key.op{ color:var(--accent); font-weight:700; }
+.key.op{ color:#F5854E; font-weight:700; }
 .key.clr{ color:var(--danger); }
 .key.eq{
+  height:64px; font-size:22px;
   color:#fff; border-color:transparent;
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
   box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
@@ -631,7 +674,7 @@ body[data-mode="dark"] .widget.w-weather{
 }
 .opt:active{ transform:scale(.96); }
 .sdiff{
-  display:block; width:100%; text-align:left; padding:14px; margin-bottom:10px;
+  display:block; width:100%; text-align:left; padding:13px 14px; margin-bottom:10px;
   border-radius:var(--r-md); background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl); transition:transform .14s ease;
 }
@@ -709,10 +752,17 @@ body[data-mode="dark"] .widget.w-weather{
 .cam-badge{ position:absolute; right:10px; bottom:10px; background:rgba(0,0,0,.35); color:#fff; font-size:11px; padding:4px 8px; border-radius:8px; }
 .cam-flash{ position:absolute; top:0; left:0; right:0; bottom:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s ease; }
 .cam-flash.on{ opacity:.9; }
+.cam-side{
+  width:46px; height:46px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; color:var(--ink); background:rgba(120,120,140,.16);
+  transition:transform .12s ease, opacity .12s ease;
+}
+.cam-side:active{ transform:scale(.92); }
 .cam-shutter{
   width:66px; height:66px; border-radius:50%;
   background:#fff; border:4px solid rgba(255,255,255,.55);
-  box-shadow:var(--sh-2), inset 0 0 0 2px rgba(20,20,40,.08);
+  box-shadow:var(--sh-2), inset 0 0 0 2px rgba(20,20,40,.08), inset 0 2px 4px rgba(255,255,255,.7);
   transition:transform .12s ease;
 }
 .cam-shutter:active{ transform:scale(.9); }
@@ -720,7 +770,7 @@ body[data-mode="dark"] .widget.w-weather{
 .cam-top-btn.save{ background:linear-gradient(135deg,#FF6B35,#FF4D6D); }
 .cam-foot{ display:flex; align-items:center; justify-content:space-between; }
 .radar-wrap{ text-align:center; }
-.score-big{ text-align:center; font-size:46px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; line-height:1.1; }
+.score-big{ text-align:center; font-size:40px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; line-height:1.1; margin-bottom:4px; }
 .score-cap{ text-align:center; font-size:12px; color:var(--ink-dim); margin-bottom:8px; }
 .st-cards{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; margin-bottom:12px; }
 .st-card{ background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:12px; box-shadow:var(--sh-1), var(--hl); }
@@ -744,11 +794,13 @@ body[data-mode="dark"] .widget.w-weather{
 .modal-ok{ background:linear-gradient(135deg,#E86A6A,#E05252); color:#fff; }
 
 /* ============ 多任务轮播（§3） ============ */
+/* 遮罩只铺内容区（不含状态栏与底部金刚键）：金刚键在多任务下必须仍可按（DESIGN §3） */
 .recents{
   position:absolute; top:0; left:0; right:0; bottom:0;
   z-index:30;
-  background:rgba(10,10,16,.42);
+  background:rgba(10,10,16,.55);
   display:flex; align-items:center;
+  -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
 }
 .recents.hidden{ display:none; }
 .recents-track{
@@ -764,7 +816,7 @@ body[data-mode="dark"] .widget.w-weather{
   border:1px solid var(--line);
   display:flex; flex-direction:column;
   overflow:hidden;
-  box-shadow:0 12px 28px rgba(0,0,0,.28);
+  box-shadow:0 16px 36px rgba(0,0,0,.34), 0 2px 6px rgba(0,0,0,.18);
 }
 .rc-head{ display:flex; align-items:center; padding:10px 10px 8px 10px; }
 .rc-head .app-icon{ width:30px; height:30px; border-radius:24%; box-shadow:none; }
@@ -772,7 +824,19 @@ body[data-mode="dark"] .widget.w-weather{
 .rc-name{ flex:1 1 auto; min-width:0; margin-left:8px; font-size:13px; font-weight:600; color:var(--ink); }
 .rc-close{ width:26px; height:26px; display:flex; align-items:center; justify-content:center; color:var(--ink-dim); }
 .rc-close svg{ width:14px; height:14px; fill:currentColor; }
-.rc-body{ flex:1 1 auto; min-height:0; margin:0 10px 10px 10px; border-radius:12px; opacity:.9; }
+/* 卡片缩略：应用主题色标题条 + 骨架内容（不截图，成本低但不再是一块空色） */
+.rc-body{
+  flex:1 1 auto; min-height:0; margin:0 10px 10px 10px; border-radius:12px;
+  background:var(--card); border:1px solid var(--line);
+  overflow:hidden; display:flex; flex-direction:column;
+}
+.rc-bar{ flex:0 0 auto; height:34px; }
+.rc-mini{ flex:1 1 auto; min-height:0; padding:12px 12px 4px 12px; }
+.rc-sk{ display:block; height:9px; border-radius:5px; background:rgba(120,120,140,.20); margin-bottom:9px; }
+.rc-sk.blk{ height:56px; border-radius:10px; }
+.rc-sk.w90{ width:90%; }
+.rc-sk.w70{ width:70%; }
+.rc-sk.w50{ width:50%; }
 .rc-empty{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; opacity:.85; }
 
 /* ============ 底部三大金刚键（§3） ============ */
@@ -791,9 +855,9 @@ body[data-mode="dark"] .widget.w-weather{
 .syskey{
   width:72px; height:48px;
   display:flex; align-items:center; justify-content:center;
-  color:var(--ink);
+  color:var(--ink); transition:transform .12s ease, opacity .12s ease;
 }
-.syskey:active{ opacity:.55; }
+.syskey:active{ opacity:.55; transform:scale(.9); }
 .syskey svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 """
 
@@ -863,23 +927,23 @@ JS = r"""
     phone: '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>',
     sms: '<svg viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2zm3 5h10v2H7V8zm0 4h7v2H7v-2z"/></svg>',
     camera: '<svg viewBox="0 0 24 24"><path d="M9 3L7.5 5H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
-    gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(45 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(90 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(135 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(180 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(225 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(270 12 12)"/><rect x="10.7" y="1.8" width="2.6" height="4.4" rx="1.2" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.6" fill="none" stroke="#fff" stroke-width="3.2"/></svg>'
+    gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
   /* ---------- 应用清单 ---------- */
   var APPS = [
-    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#F5854E', '#E4483F'], sh: 'rgba(228,72,63,.32)', deg: 135 },
-    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], sh: 'rgba(46,127,232,.32)', deg: 120 },
-    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], sh: 'rgba(240,138,30,.32)', deg: 150 },
-    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#39C46F', '#1E9E50'], sh: 'rgba(30,158,80,.32)', deg: 135 },
-    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], sh: 'rgba(106,76,224,.32)', deg: 120 },
-    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], sh: 'rgba(46,158,196,.32)', deg: 150 }
+    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
+    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
+    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
+    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
+    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
+    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 }
   ];
   var DOCK = [
-    { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], sh: 'rgba(30,158,80,.32)', deg: 135 },
-    { id: 'sms',      name: '短信', slogan: '收件箱永远干净',     g: 'sms',    c: ['#4FA3F7', '#2E6FE8'], sh: 'rgba(46,111,232,.32)', deg: 120 },
-    { id: 'camera',   name: '相机', slogan: '只拍得到取景框',     g: 'camera', c: ['#9B7BF7', '#6A4CE0'], sh: 'rgba(106,76,224,.32)', deg: 150 },
-    { id: 'settings', name: '设置', slogan: '壁纸、外观与关于本机', g: 'gear',  c: ['#8E8E96', '#5C5C66'], sh: 'rgba(92,92,102,.32)', deg: 135 }
+    { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
+    { id: 'sms',      name: '短信', slogan: '收件箱永远干净',     g: 'sms',    c: ['#3F8FEA', '#2456C8'], deg: 120 },
+    { id: 'camera',   name: '相机', slogan: '只拍得到取景框',     g: 'camera', c: ['#F06AA8', '#D2387A'], deg: 150 },
+    { id: 'settings', name: '设置', slogan: '壁纸、外观与关于本机', g: 'gear',  c: ['#8E8E96', '#5C5C66'], deg: 135 }
   ];
 
   function findApp(id) {
@@ -902,11 +966,16 @@ JS = r"""
 
   /* ---------- 主题 ---------- */
   var WALLS = ['light-mesh', 'light-solid', 'dark-mesh', 'dark-solid'];
+  /* swatch 预览与实际壁纸同色系（不是另一套配色，避免"选了跟看到的不一样"） */
   var WALL_PREVIEW = {
-    'light-mesh': 'linear-gradient(165deg,#EDF2FF 0%,#FBF3EC 100%)',
-    'light-solid': 'linear-gradient(180deg,#F4F6FB 0%,#EEF0F6 100%)',
-    'dark-mesh': 'linear-gradient(165deg,#191B2E 0%,#0E0F18 100%)',
-    'dark-solid': 'linear-gradient(180deg,#121218 0%,#0D0D12 100%)'
+    'light-mesh': 'radial-gradient(circle at 22% 12%, rgba(108,76,241,.38), transparent 55%),' +
+                  'radial-gradient(circle at 84% 26%, rgba(64,150,255,.32), transparent 55%),' +
+                  'linear-gradient(180deg,#EEF2FF 0%,#F5F3FF 100%)',
+    'light-solid': 'linear-gradient(180deg,#F5F7FC 0%,#EDEFF5 100%)',
+    'dark-mesh': 'radial-gradient(circle at 22% 12%, rgba(108,76,241,.60), transparent 55%),' +
+                 'radial-gradient(circle at 84% 26%, rgba(46,127,232,.50), transparent 55%),' +
+                 'linear-gradient(180deg,#1A1C30 0%,#0D0E17 100%)',
+    'dark-solid': 'linear-gradient(180deg,#14141B 0%,#0C0C11 100%)'
   };
   var theme = {
     mode: read('mode', 'light'),
@@ -939,11 +1008,10 @@ JS = r"""
 
   function iconNode(app, extra) {
     var n = el('div', 'app-icon' + (extra ? ' ' + extra : ''));
-    // 顶部高光 + 同色渐变；同色投影由 --icon-sh 提供
+    // 顶部高光 + 主题渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）
     n.style.backgroundImage =
       'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
       'linear-gradient(' + (app.deg || 135) + 'deg,' + app.c[0] + ',' + app.c[1] + ')';
-    n.style.setProperty('--icon-sh', app.sh || 'rgba(20,20,40,.16)');
     n.innerHTML = GLYPH[app.g];
     return n;
   }
@@ -1248,17 +1316,26 @@ JS = r"""
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">连击</div><div class="v combo" data-f="streak">0</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">连击<b class="combo" data-f="streak">0</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var disp = el('div', 'calc-display');
     disp.appendChild(el('div', 'calc-expr', ''));
     disp.appendChild(el('div', 'calc-shown', '0'));
     body.appendChild(disp);
     body.appendChild(el('div', 'calc-feedback', '按出你的算式，按 = 看 AI 的结果'));
+    /* 内容撑满：显示卡吃掉剩余高度、算式与结果贴其底（真机计算器布局），消除中段空洞 */
+    body.style.display = 'flex';
+    body.style.flexDirection = 'column';
+    disp.style.flex = '1 1 auto';
+    disp.style.display = 'flex';
+    disp.style.flexDirection = 'column';
+    disp.style.justifyContent = 'flex-end';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var keypad = el('div', 'keypad');
@@ -1411,9 +1488,11 @@ JS = r"""
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">准时次数</div><div class="v accent" data-f="ontime">0</div></div>' +
-      '<div class="gstat"><div class="k">尝试次数</div><div class="v" data-f="tries">0</div></div>' +
-      '<div class="gstat"><div class="k">准时率</div><div class="v" data-f="rate">0%</div></div>';
+      '<div class="gstat-main"><div class="k">准时次数</div><div class="v accent" data-f="ontime">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">尝试<b data-f="tries">0</b></span>' +
+        '<span class="si">准时率<b data-f="rate">0%</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var disp = el('div', 'alarm-display');
     disp.innerHTML =
@@ -1422,6 +1501,8 @@ JS = r"""
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
       '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
     body.appendChild(disp);
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
+    disp.style.marginTop = 'auto'; disp.style.marginBottom = 'auto';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var ring = el('button', 'ring-btn', '响铃');
@@ -1521,10 +1602,12 @@ JS = r"""
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">胜率</div><div class="v" data-f="win">0%</div></div>' +
-      '<div class="gstat"><div class="k">最快</div><div class="v combo" data-f="fast">--:--</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">胜率<b data-f="win">0%</b></span>' +
+        '<span class="si">最快<b class="combo" data-f="fast">--:--</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var banner = el('div', 'ms-banner', '');
     body.appendChild(banner);
@@ -1805,13 +1888,18 @@ JS = r"""
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">连击</div><div class="v combo" data-f="streak">0</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">连击<b class="combo" data-f="streak">0</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var chat = el('div');
+    chat.style.flex = '1 1 auto'; chat.style.minHeight = '0';
+    chat.style.display = 'flex'; chat.style.flexDirection = 'column';
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(chat);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
@@ -1899,10 +1987,12 @@ JS = r"""
     var body = el('div', 'pbody');
     var stats = el('div', 'gstats');
     stats.innerHTML =
-      '<div class="gstat"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
-      '<div class="gstat"><div class="k">最高分</div><div class="v" data-f="best">0</div></div>' +
-      '<div class="gstat"><div class="k">准确率</div><div class="v" data-f="acc">0%</div></div>' +
-      '<div class="gstat"><div class="k">轮次</div><div class="v" data-f="rounds">0</div></div>';
+      '<div class="gstat-main"><div class="k">分数</div><div class="v accent" data-f="score">0</div></div>' +
+      '<div class="gstat-sub">' +
+        '<span class="si">最高<b data-f="best">0</b></span>' +
+        '<span class="si">准确率<b data-f="acc">0%</b></span>' +
+        '<span class="si">轮次<b data-f="rounds">0</b></span>' +
+      '</div>';
     body.appendChild(stats);
     var stage = el('div');
     body.appendChild(stage);
@@ -2016,6 +2106,8 @@ JS = r"""
     histCard.appendChild(el('div', 'card-title', '最近通话'));
     var hist = el('div');
     histCard.appendChild(hist);
+    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto';
+    body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(histCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
@@ -2041,7 +2133,7 @@ JS = r"""
       if (n.length <= 7) { return n.slice(0, 3) + '-' + n.slice(3); }
       return n.slice(0, 3) + '-' + n.slice(3, 7) + '-' + n.slice(7);
     }
-    function paintNum() { disp.textContent = num ? fmt(num) : '请输入号码'; }
+    function paintNum() { disp.textContent = num ? fmt(num) : '请输入号码'; disp.style.color = num ? 'var(--ink)' : 'var(--ink-dim)'; }
     function paintHist() {
       hist.innerHTML = '';
       if (!records.length) { hist.appendChild(el('div', 'conv-prev', '还没有通话记录')); return; }
@@ -2128,7 +2220,8 @@ JS = r"""
   /* ---------- 短信（v1 还原）：种子收件箱 + AI 敷衍回复 ---------- */
   function buildSms() {
     var v = el('div', 'view hidden');
-    v.appendChild(el('div', 'phead', '<h1>短信</h1>'));
+    var phead = el('div', 'phead', '<h1>短信</h1>');
+    v.appendChild(phead);
     var body = el('div', 'pbody');
     var list = el('div');
     body.appendChild(list);
@@ -2168,6 +2261,7 @@ JS = r"""
     function save() { try { store('sms_messages', JSON.stringify(msgs)); } catch (e) { /* 忽略 */ } }
     function paintList() {
       openConv = null;
+      phead.querySelector('h1').textContent = '短信';
       chat.style.display = 'none';
       list.style.display = '';
       inputRow.style.display = 'none';
@@ -2186,6 +2280,7 @@ JS = r"""
     }
     function openChat(sender) {
       openConv = sender;
+      phead.querySelector('h1').textContent = sender;
       list.style.display = 'none';
       chat.style.display = '';
       inputRow.style.display = '';
@@ -2457,7 +2552,7 @@ JS = r"""
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(RADAR_LABELS[i], lx, ly);
         ctx.fillStyle = '#F08A24';
-        ctx.fillText(Math.round(F[i]) + '%', lx, ly + 15);
+        ctx.fillText(Math.round(F[i]) + '%', lx, ly + 18);
       }
     }
     function render() {
@@ -2523,12 +2618,15 @@ JS = r"""
   var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
-  function showOnly(node) {
+  /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
+  function showOnly(node, isApp) {
     var i, kids = viewRoot.children;
     for (i = 0; i < kids.length; i++) {
       if (kids[i] === node || kids[i] === recentsEl) { continue; }
       kids[i].classList.add('hidden');
     }
+    if (isApp) { document.body.classList.add('on-app'); }
+    else { document.body.classList.remove('on-app'); }
     if (node) {
       node.classList.remove('hidden');
       node.classList.add('entering');
@@ -2548,14 +2646,14 @@ JS = r"""
     if (idx >= 0) { stack.splice(idx, 1); }
     stack.push(id);
     current = id;
-    showOnly(views[id]);
+    showOnly(views[id], true);
     if (views[id].onShow) { views[id].onShow(); }
   }
 
   function goHome() {
     closeRecents();
     current = 'home';
-    showOnly(homeView);
+    showOnly(homeView, false);
   }
 
   function goBack() {
@@ -2564,7 +2662,7 @@ JS = r"""
     var i = stack.indexOf(current);
     if (i >= 0) { stack.splice(i, 1); }
     current = stack.length ? stack[stack.length - 1] : 'home';
-    showOnly(current === 'home' ? homeView : views[current]);
+    showOnly(current === 'home' ? homeView : views[current], current !== 'home');
   }
 
   /* ---------- 多任务 ---------- */
@@ -2597,7 +2695,7 @@ JS = r"""
           // 关掉的是当前应用：切到新的栈顶或主屏，并收起轮播
           current = stack.length ? stack[stack.length - 1] : 'home';
           closeRecents();
-          showOnly(current === 'home' ? homeView : views[current]);
+          showOnly(current === 'home' ? homeView : views[current], current !== 'home');
         } else if (stack.length === 0) {
           renderRecents();
         } else {
@@ -2607,14 +2705,19 @@ JS = r"""
       head.appendChild(close);
       card.appendChild(head);
       var bodyPrev = el('div', 'rc-body');
-      bodyPrev.style.background = 'linear-gradient(160deg,' + app.c[0] + '33,' + app.c[1] + '22)';
+      var rcBar = el('div', 'rc-bar');
+      rcBar.style.background = 'linear-gradient(135deg,' + app.c[0] + ',' + app.c[1] + ')';
+      bodyPrev.appendChild(rcBar);
+      bodyPrev.appendChild(el('div', 'rc-mini',
+        '<span class="rc-sk blk"></span><span class="rc-sk w90"></span>' +
+        '<span class="rc-sk w70"></span><span class="rc-sk w50"></span>'));
       card.appendChild(bodyPrev);
       card.addEventListener('click', function () {
         var i = stack.indexOf(id);
         if (i >= 0) { stack.splice(i, 1); }
         stack.push(id);
         closeRecents();
-        showOnly(views[id]);
+        showOnly(views[id], true);
       });
       track.appendChild(card);
     });
