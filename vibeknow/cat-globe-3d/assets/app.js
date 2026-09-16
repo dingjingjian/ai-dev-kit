@@ -97,7 +97,7 @@ function initFlyScene(){
       var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,alpha:true});
       renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
       var scene=new THREE.Scene();
-      scene.background=new THREE.Color(0xb8d4e8);
+      scene.background=new THREE.Color(0xbfe6fb);
       var camera=new THREE.PerspectiveCamera(62,1,0.01,200);
       var R0=1.6;
 
@@ -124,29 +124,29 @@ function initFlyScene(){
       );
       scene.add(earth);
       /* 云层 */
-      var cloudsMat = new THREE.MeshBasicMaterial({transparent:true, opacity:.55, depthWrite:false});
+      var cloudsMat = new THREE.MeshBasicMaterial({transparent:true, opacity:.62, depthWrite:false});
       loadTexFromData(typeof CLOUDS_TEX_URI!=='undefined'?CLOUDS_TEX_URI:null, function(t){ if(t){cloudsMat.map=t; cloudsMat.needsUpdate=true;} });
       var clouds = new THREE.Mesh(
         new THREE.SphereGeometry(R0*1.012,48,32),
         cloudsMat
       );
       scene.add(clouds);
-      /* 大气 */
+      /* 大气（粉色柔光，配合可爱风 UI） */
       var atmo=new THREE.Mesh(
         new THREE.SphereGeometry(R0*1.06,48,32),
-        new THREE.MeshBasicMaterial({color:0x88ccee,transparent:true,opacity:.12,side:THREE.BackSide,depthWrite:false})
+        new THREE.MeshBasicMaterial({color:0xffc9dd,transparent:true,opacity:.14,side:THREE.BackSide,depthWrite:false})
       );
       scene.add(atmo);
       /* 光（sun 在 frame 里跟随相机，确保地球朝相机面始终被照亮，不出现黑黑夜半球） */
       var sun=new THREE.DirectionalLight(0xffffff,1.0); sun.position.set(5,3,5); scene.add(sun);
       scene.add(new THREE.AmbientLight(0xffffff,1.4));
-      /* 星空天球 */
+      /* 星空天球：天蓝 → 奶油粉的梦幻渐变 + 大小不一的柔和星点 */
       var skyC=document.createElement('canvas'); skyC.width=512; skyC.height=512;
       var sctx=skyC.getContext('2d');
       var sg=sctx.createLinearGradient(0,0,0,512);
-      sg.addColorStop(0,'#6a9ac4'); sg.addColorStop(.4,'#9ac4e0'); sg.addColorStop(.7,'#c8e0ec'); sg.addColorStop(1,'#e8f0f4');
+      sg.addColorStop(0,'#a9dcf5'); sg.addColorStop(.38,'#cfe9fa'); sg.addColorStop(.72,'#ffe8f1'); sg.addColorStop(1,'#fff6ec');
       sctx.fillStyle=sg; sctx.fillRect(0,0,512,512);
-      for(var k=0;k<400;k++){var x=Math.random()*512,y=Math.random()*256;sctx.fillStyle='rgba(255,255,255,'+(Math.random()*.6+.2)+')';sctx.fillRect(x,y,1,1);}
+      for(var k=0;k<520;k++){var x=Math.random()*512,y=Math.random()*256;var sz=Math.random()<.14?2:1;sctx.fillStyle='rgba(255,255,255,'+(Math.random()*.6+.2)+')';sctx.fillRect(x,y,sz,sz);}
       var skyTex=new THREE.CanvasTexture(skyC);
       var sky=new THREE.Mesh(new THREE.SphereGeometry(80,32,16),new THREE.MeshBasicMaterial({map:skyTex,side:THREE.BackSide,depthWrite:false}));
       scene.add(sky);
@@ -165,28 +165,66 @@ function initFlyScene(){
         return a.clone().multiplyScalar(Math.cos(th)).add(rel.multiplyScalar(Math.sin(th)));
       }
 
-      /* 标记点（出发地绿 / 目的地橙红） */
-      function makeMarker(lat,lon,color){
+      /* 心形贴图（出发/目的地标记用，Canvas 程序化生成，零图片资源） */
+      var heartTexCache=null;
+      function heartTex(){
+        if(heartTexCache)return heartTexCache;
+        var hc=document.createElement('canvas'); hc.width=hc.height=64;
+        var hx=hc.getContext('2d');
+        hx.fillStyle='#ff5f8f';
+        hx.beginPath();
+        hx.moveTo(32,55);
+        hx.bezierCurveTo(5,35,5,13,20,11);
+        hx.bezierCurveTo(27,10,31,15,32,21);
+        hx.bezierCurveTo(33,15,37,10,44,11);
+        hx.bezierCurveTo(59,13,59,35,32,55);
+        hx.closePath(); hx.fill();
+        hx.fillStyle='rgba(255,255,255,.55)';
+        hx.beginPath(); hx.ellipse(23,23,5,3.4,-0.5,0,Math.PI*2); hx.fill();
+        heartTexCache=new THREE.CanvasTexture(hc);
+        return heartTexCache;
+      }
+      /* 柔光贴图：径向渐变圆形光晕（Sprite 不带 map 会渲染成实心方块，必须用贴图压圆） */
+      var glowTexCache=null;
+      function glowTex(){
+        if(glowTexCache)return glowTexCache;
+        var gc=document.createElement('canvas'); gc.width=gc.height=64;
+        var gx=gc.getContext('2d');
+        var gg=gx.createRadialGradient(32,32,0,32,32,32);
+        gg.addColorStop(0,'rgba(255,255,255,1)');
+        gg.addColorStop(.42,'rgba(255,255,255,.42)');
+        gg.addColorStop(1,'rgba(255,255,255,0)');
+        gx.fillStyle=gg; gx.fillRect(0,0,64,64);
+        glowTexCache=new THREE.CanvasTexture(gc);
+        return glowTexCache;
+      }
+      /* 标记点（出发地薄荷绿小圆点 / 目的地粉色爱心，isHeart 切换形状） */
+      function makeMarker(lat,lon,color,isHeart){
         var pos=ll2v(lat,lon,R0*1.01);
         var g=new THREE.Group();
-        var dot=new THREE.Mesh(new THREE.SphereGeometry(0.024,12,8),new THREE.MeshBasicMaterial({color:color}));
-        dot.position.copy(pos); g.add(dot);
-        var glow=new THREE.Sprite(new THREE.SpriteMaterial({color:color,transparent:true,opacity:.6,blending:THREE.AdditiveBlending,depthWrite:false}));
+        var shape;
+        if(isHeart){
+          shape=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex(),transparent:true,depthWrite:false}));
+          shape.scale.set(0.11,0.11,1);
+        }else{
+          shape=new THREE.Mesh(new THREE.SphereGeometry(0.024,12,8),new THREE.MeshBasicMaterial({color:color}));
+        }
+        shape.position.copy(pos); g.add(shape);
+        var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex(),color:color,transparent:true,opacity:.6,blending:THREE.AdditiveBlending,depthWrite:false}));
         glow.scale.set(0.16,0.16,1); glow.position.copy(pos); g.add(glow);
         g.userData.glow=glow; return g;
       }
-      /* 大圆航线弧线 */
+      /* 大圆航线弧线（粉色虚线感，与 UI 主色一致） */
       function makeRouteLine(av,bv){
         var pts=[];
         for(var i=0;i<=72;i++){pts.push(slerp(av,bv,i/72).multiplyScalar(R0*1.018));}
         var geo=new THREE.BufferGeometry().setFromPoints(pts);
-        return new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xe8755a,transparent:true,opacity:.75}));
+        return new THREE.Line(geo,new THREE.LineBasicMaterial({color:0xff8fae,transparent:true,opacity:.8}));
       }
-      /* 飞机当前位置标记 */
+      /* 飞行中的自己：一颗粉色爱心（"我带着一颗心飞去见它"） */
       function makePlaneMarker(){
-        var m=new THREE.Mesh(new THREE.SphereGeometry(0.02,10,6),new THREE.MeshBasicMaterial({color:0xffffff}));
-        var glow=new THREE.Sprite(new THREE.SpriteMaterial({color:0xffffff,transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false}));
-        glow.scale.set(0.11,0.11,1); m.add(glow); return m;
+        var m=new THREE.Sprite(new THREE.SpriteMaterial({map:heartTex(),transparent:true,depthWrite:false}));
+        m.scale.set(0.075,0.075,1); return m;
       }
       var routeObjs={from:null,to:null,line:null,plane:null};
       function clearRoute(){
@@ -230,9 +268,9 @@ function initFlyScene(){
           if(routeObjs.plane){routeObjs.plane.position.copy(p.clone().multiplyScalar(R0*1.02));}
           /* HUD */
           Q('flyProgress').textContent=Math.round(t*100)+'%';
-          if(t<.15)Q('flyStatus').textContent='起飞';
-          else if(t>.85)Q('flyStatus').textContent='降落';
-          else Q('flyStatus').textContent='巡航中';
+          if(t<.15)Q('flyStatus').textContent='起飞啦';
+          else if(t>.85)Q('flyStatus').textContent='降落中';
+          else Q('flyStatus').textContent='飞行中';
           if(t>=1){st.flying=false;document.body.classList.remove('flying');arrive();}
         } else if(arrivedRot){
           camera.position.copy(arrivedRot.camPos);
@@ -256,8 +294,8 @@ function initFlyScene(){
         Q('flyRoute').innerHTML=a.city+' <span class="arrow">✈</span> '+b.city;
         /* 标记 + 航线 */
         clearRoute();
-        routeObjs.from=makeMarker(a.lat,a.lon,0x44cc66);
-        routeObjs.to=makeMarker(b.lat,b.lon,0xe8755a);
+        routeObjs.from=makeMarker(a.lat,a.lon,0x8ad6bd,false);
+        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,true);
         routeObjs.line=makeRouteLine(fromV,toV);
         routeObjs.plane=makePlaneMarker();
         scene.add(routeObjs.from); scene.add(routeObjs.to); scene.add(routeObjs.line); scene.add(routeObjs.plane);
@@ -283,9 +321,9 @@ function initFlyScene(){
         arrivedRot={camPos:center.clone().multiplyScalar(R0+2.2)};
         Q('flyRoute').innerHTML='已抵达 <span class="arrow">✈</span> '+b.city;
         Q('flyProgress').textContent='100%';
-        /* 只显示目的地标记 */
+        /* 只显示目的地标记（粉色爱心） */
         clearRoute();
-        routeObjs.to=makeMarker(b.lat,b.lon,0xe8755a);
+        routeObjs.to=makeMarker(b.lat,b.lon,0xff8fae,true);
         scene.add(routeObjs.to);
         if(!animId){resize();animId=requestAnimationFrame(frame);}
         if(cb)cb(idx);
@@ -326,7 +364,7 @@ function showCatPanel(i){
   setImg(img,cat.img,function(){img.style.display='none';});
   img.style.display='';
   document.body.classList.add('fly-arrived');
-  Q('flyStatus').textContent='已到达 · '+cat.city;
+  Q('flyStatus').textContent='已抵达 · '+cat.city+' 🐾';
   updateFlyHud();
 }
 function updateFlyHud(){

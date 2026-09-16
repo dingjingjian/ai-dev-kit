@@ -2,7 +2,18 @@
 
 > `#vibeknow` 人文知识。参照 `jurassic-park-3d` 的多页框架与 Three.js 地球组件，将交互从「园区游览 app」重构为「世界猫咪图鉴 → 心动 → 飞去见小猫 → 爱猫基因解析」。核心创新：地区切换用**飞机第一视角沿地球表面飞行动画**，而非地球转动定位相机。
 
-零构建、双击即开的离线前端项目。所有主视觉图片预留占位，提示词见 `docs/`，交生图模型生成后覆盖同名文件即可。
+零构建、双击即开的离线前端项目。所有主视觉图片预留占位，生图规范与提示词见 `docs/`，交生图模型生成后覆盖同名文件即可。
+
+## 视觉风格
+
+治愈系**糖果奶油可爱风**，全部由 CSS 变量驱动，换肤只需改一处。
+
+- **设计 token 唯一真源**：`index.html` 的 `:root` —— 底色 `--bg` 奶油粉、主色 `--accent` 草莓牛奶粉、辅助马卡龙色 `--peach/--mint/--butter`、圆角 `--r/--r-sm/--r-lg/--r-pill`、贴纸阴影 `--shadow/--shadow-lg`、圆体标题栈 `--round`、猫爪水印 `--paw`
+- **可爱化手法**：奶油粉底 + 手账点阵纹；大圆角贴纸卡（底边实色描边 + 粉色柔光）；胶囊按钮配 `🐾/💗/🧬/🏠` 图标（CSS 伪元素注入，不受 JS 文案覆盖影响）；心动按钮粉色泡泡 + 弹跳；特征胶囊马卡龙交替配色；基因卡顶部彩虹条；呼吸猫爪 loading
+- **装饰元素零图片**：猫爪水印与缺图占位取自 `:root` 的 `--paw`（CSS 内联 SVG）；飞行页航线、爱心标记、星空天球由 Three.js Canvas 程序化绘制。**不要**把这些换成图片
+- **动效**：`pawBreathe`（占位爪印）/ `pawHop`（loading）/ `heartPop`（心动），并在 `@media (prefers-reduced-motion:reduce)` 下关闭
+- **兼容性**：本次可爱化未引入超出基线的新特性（渐变、动画、SVG data URI、`:nth-child` 均在 Chrome 61 内），`backdrop-filter` 同步补了 `-webkit-` 前缀
+- **图片风格必须与 UI 同源**：Q 版可爱卡通插画，规范见 [`docs/生图规范.md`](docs/生图规范.md)
 
 ## 交互流程
 
@@ -62,11 +73,13 @@
 
 | 图位 | 路径 | 规格 | 说明 |
 |------|------|------|------|
-| 猫咪品种图 ×24 | `assets/cats/<slug>.webp` | 512×512 方图 | 提示词在 `cats.js` 的 `prompt` 字段，详见 `docs/猫咪图片素材需求.md` |
-| hero 横幅 | `assets/tex/hero.webp` | 1200×480 | 详见 `docs/场景配图需求.md` |
-| 地球/云层贴图 | `assets/earth-tex.js` | base64 内联 | 真实地形贴图（复用 earth-3d 的 earth.jpg/clouds.png），base64 内联规避 `file://` WebGL CORS |
+| 猫咪品种图 ×24 | `assets/cats/<slug>.webp` | 512×512 方图 | 可爱插画风，提示词在 `cats.js` 的 `prompt` 字段（含统一风格锚点，可整条投喂），详见 `docs/猫咪图片素材需求.md` |
+| hero 横幅 | `assets/tex/hero.webp` | 1200×480 | 可爱插画风，详见 `docs/场景配图需求.md` |
+| 地球/云层贴图 | `assets/earth-tex.js` | base64 内联 | 真实地形贴图（复用 earth-3d 的 earth.jpg/clouds.png），base64 内联规避 `file://` WebGL CORS。卡通地球贴图为可选项，见 `docs/场景配图需求.md` |
 
-缺图时逐级回退：猫咪卡片显示虚线圆占位，hero 回退 CSS 渐变。生成图片后覆盖同名文件即生效，无需改代码。
+**风格规范（唯一真源）**：`docs/生图规范.md` —— 定义风格锚点后缀、负面提示词、配色、出图参数、替换流程与自检清单。任何新增图位都先读它。
+
+缺图时逐级回退：猫咪卡片显示呼吸跳动的粉色猫爪占位（CSS 内联 SVG），hero 回退奶油粉渐变 + 猫爪水印。生成图片后覆盖同名文件即生效，无需改代码。
 
 **关于地球纹理**：复用 earth-3d 的真实地球贴图（earth.jpg + clouds.png），转为 base64 data URI 内联到 `assets/earth-tex.js`（约 1MB），规避 `file://` 协议下 WebGL 拒绝跨域图片的 CORS 限制。`assets/earth-tex.js` 由贴图文件生成，勿手动编辑。
 
@@ -93,7 +106,7 @@ cat-globe-3d/
 │   ├── three.min.js        Three.js 本地副本
 │   ├── cats/               24 张猫咪图（占位，待生图）
 │   └── tex/                场景纹理（hero 占位）
-├── docs/                   图片需求与生成说明
+├── docs/                   生图规范 + 猫咪/场景配图需求
 └── xiaohongshu/            小红书参赛素材（预留）
 ```
 
