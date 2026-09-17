@@ -253,7 +253,7 @@ def main():
         for _ in range(20):
             st = pg.evaluate(
                 "(function(){var v=document.querySelector('.view:not(.hidden)');"
-                "var r=v.querySelector('.ring-btn');var rt=v.querySelector('.pfoot .judge-btn');"
+                "var r=v.querySelector('.ring-btn');var rt=v.querySelector('.pfoot .alarm-retry');"
                 "return [r.disabled, r.style.display, rt.style.display,"
                 "v.querySelector('.alarm-cd').textContent];})()")
             stall = stall + 1 if (st[0] and st[1] != "none" and st[2] == "none"
@@ -267,7 +267,7 @@ def main():
         # 两个终止态：响铃按钮可用（进窗口）或按钮消失（错过窗口已自动判晚 → 重排下一刻度）。
         rang = False
         RING = ".view:not(.hidden) .ring-btn"
-        RETRY = ".view:not(.hidden) .pfoot .judge-btn"
+        RETRY = ".view:not(.hidden) .pfoot .alarm-retry"
         for _ in range(3):
             try:
                 pg.wait_for_function(
@@ -287,7 +287,7 @@ def main():
         check("按后记一次尝试", int(pg.evaluate(
             "document.querySelectorAll('.gstats [data-f=\"tries\"]')[0].textContent")) >= 1)
         check("按后出现再来一次", pg.evaluate(
-            "document.querySelectorAll('.view:not(.hidden) .pfoot .judge-btn')[0].textContent") == "再来一次")
+            "document.querySelectorAll('.view:not(.hidden) .pfoot .alarm-retry')[0].textContent") == "再来一次")
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 

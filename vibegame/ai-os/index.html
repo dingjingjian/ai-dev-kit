@@ -574,6 +574,11 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   transition:transform .16s ease;
 }
 .ring-btn:active{ transform:scale(.97); }
+/* 闹钟「再来一次」：复用响铃按钮的全宽盒子语言，绿色渐变区分语义（积极重试） */
+.alarm-retry{
+  background:linear-gradient(135deg,#2BB673,#1FA971);
+  box-shadow:var(--sh-1), 0 8px 18px rgba(43,182,115,.32), inset 0 1px 0 rgba(255,255,255,.30);
+}
 
 /* 日历：扫雷玩法（未开口=抬起的日期块，已开口=凹陷平底，表头=浅底日期条） */
 .ms-card{
@@ -817,30 +822,58 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   .sitem{ padding:6px 0; font-size:14px; }
   .act-btn{ height:46px; }
 }
-.dial-display{ text-align:center; font-size:28px; font-weight:700; min-height:36px; letter-spacing:1px; color:var(--ink); margin:8px 0 2px 0; }
+.dial-display{ text-align:center; font-size:30px; font-weight:600; min-height:40px; letter-spacing:2px; color:var(--ink); margin:10px 0 2px 0; font-variant-numeric:tabular-nums; }
 .dial-status{ text-align:center; font-size:13px; color:var(--ink-dim); min-height:18px; }
 .call-timer{ text-align:center; font-size:36px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums; margin-top:10px; }
 .call-ended-msg{ font-size:13px; color:var(--ink-dim); text-align:center; line-height:1.6; margin-top:12px; }
-.dial-pad{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:12px; justify-items:center; }
+.dial-pad{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:4px; justify-items:center; }
 .dkey{
-  width:58px; height:58px; border-radius:50%;
+  width:48px; height:48px; border-radius:50%;
   background:var(--card); border:1px solid var(--line);
-  font-size:22px; font-weight:600; color:var(--ink);
+  font-size:19px; font-weight:600; color:var(--ink);
   box-shadow:var(--sh-1), var(--hl);
   transition:transform .12s ease;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
 }
+.dkey .dkey-sub{ font-size:7px; font-weight:500; color:var(--ink-dim); letter-spacing:1px; margin-top:1px; }
 .dkey:active{ transform:scale(.92); }
+/* 操作行：三等分格，通讯录左 / 拨打居中 / 删除右 */
+.dial-actions{ display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; justify-items:center; margin-top:6px; }
+.dial-del{
+  width:40px; height:40px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; color:var(--ink); background:rgba(120,120,140,.16);
+  transition:transform .12s ease;
+}
+.dial-del:active{ transform:scale(.92); }
 .call-btn{
-  width:64px; height:64px; border-radius:50%; margin:10px auto 0 auto;
+  width:50px; height:50px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
   background:linear-gradient(135deg,#34C46F,#1E9E50);
-  box-shadow:var(--sh-1), 0 8px 18px rgba(30,158,80,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  box-shadow:var(--sh-1), 0 4px 12px rgba(30,158,80,.28), inset 0 1px 0 rgba(255,255,255,.3);
+  transition:transform .12s ease;
 }
-.call-btn svg{ width:26px; height:26px; fill:#fff; }
-.call-btn.hangup{ background:linear-gradient(135deg,#E86A6A,#E05252); box-shadow:var(--sh-1), 0 8px 18px rgba(224,82,82,.35); }
+.call-btn:active{ transform:scale(.94); }
+.call-btn svg{ width:22px; height:22px; fill:#fff; }
+.call-btn.hangup{ background:linear-gradient(135deg,#E86A6A,#E05252); box-shadow:var(--sh-1), 0 4px 12px rgba(224,82,82,.28); }
+.dial-del svg{ width:18px; height:18px; fill:var(--ink); }
 .hist-row{ display:flex; align-items:center; width:100%; padding:10px 2px; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); text-align:left; }
 .hist-row:last-child{ border-bottom:none; }
+.hist-row .hist-ico{ flex:0 0 auto; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(120,120,140,.14); margin-right:10px; }
+.hist-row .hist-ico svg{ width:15px; height:15px; fill:var(--ink-dim); }
 .hist-row .ht{ margin-left:auto; font-size:11px; color:var(--ink-dim); }
+/* 通讯录全屏视图 */
+.contacts-view{ position:absolute; top:0; left:0; right:0; bottom:0; z-index:30; background:var(--app-bg); display:flex; flex-direction:column; }
+.contacts-head{ flex:0 0 auto; height:54px; display:flex; align-items:center; padding-left:calc(10px + var(--safe-l)); padding-right:calc(16px + var(--safe-r)); }
+.contacts-back{ width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--ink); margin-right:10px; }
+.contacts-head h1{ font-size:18px; font-weight:600; color:var(--ink); }
+.contacts-list{ overflow-y:auto; flex:1 1 auto; min-height:0; padding:4px calc(16px + var(--safe-r)) 16px calc(16px + var(--safe-l)); }
+.contact-row{ display:flex; align-items:center; width:100%; padding:12px 4px; border-bottom:1px solid var(--line); text-align:left; }
+.contact-row:last-child{ border-bottom:none; }
+.contact-row:active{ background:rgba(120,120,140,.08); }
+.contact-ava{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#8F7BF7,#6A4CE0); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; margin-right:12px; }
+.contact-name{ font-size:15px; font-weight:600; color:var(--ink); }
+.contact-num{ font-size:12px; color:var(--ink-dim); margin-top:2px; }
 .sms-banner{
   font-size:12px; color:var(--ink-dim); text-align:center;
   background:var(--card); border:1px solid var(--line);

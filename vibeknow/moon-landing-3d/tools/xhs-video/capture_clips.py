@@ -172,6 +172,44 @@ INIT = r"""
 })();
 """
 
+# ---- 取景修正：给「镜头拉得太开」的相位加距离上限 ----
+# 由 _probe_cam.py 实测标定（见那里的注释：为什么必须量、为什么不用改应用源码）。
+# mission.js 里 parkOrbit/tli 距离 5200、transit 是整个地月系统尺度，
+# 而飞行器本体只有几十单位 —— 不夹的话这几段就是纯黑空场。
+# 数值是量出来的，不是猜的（前景占比对距离极其敏感，差一档就从有变无）：
+#     parkOrbit  40->5.8%   80->0%        transit  80->9.7%   140->0%
+#     tli       140->16.3% 340->1.8%      rendez.  140->10.8% 340->0.6%
+#     descent   110->8.0%  原镜头->1.1%
+# 一律取「实测有值」的那一档，不在两档之间插值 —— 这条曲线很陡，
+# 插值出来的数很可能正好落在断崖的错误一侧。
+# 反向证据：approach 拉近反而变差（60->3.7%，原镜头->8.3%），
+# landed 各档无差别（都是 12.2%）—— 这两处**不干预**。
+CAM_MAXD = {"parkOrbit": 40, "tli": 140, "transit": 80,
+            "rendezvous": 140, "docked": 140, "descent": 110}
+
+WRAP_CAM_JS = r"""
+(CFG) => {
+  var ms = window.__MISSION;
+  if (ms.__origDirect) { ms.__MAXD = CFG; return; }
+  ms.__MAXD = CFG;
+  ms.__origDirect = ms.directCamera;
+  ms.directCamera = function (cam, dt) {
+    ms.__origDirect.call(this, cam, dt);
+    var st = this.state;
+    var md = ms.__MAXD[st.phase];
+    if (!md) return;
+    // transit 原本把目标锁在「地月连线中点」，只压距离等于对着虚空拉近 ——
+    // 必须同时把目标点改回飞行器本体。
+    if (st.phase === 'transit') {
+      var nx = Math.sin(st.tiltVis), ny = Math.cos(st.tiltVis);
+      cam.targetX = st.x + nx * st.focus * st.scale;
+      cam.targetY = st.y + ny * st.focus * st.scale;
+    }
+    if (cam.distance > md) cam.distance = md;
+  };
+}
+"""
+
 HIDE_HUD = """
 #btn-show,#btn-explode,#btn-launch,#btn-var1,#btn-var2,#btn-ignite,#btn-warp,
 #btn-sound,#telemetry,#mission-tag,#phase-text,#countdown,#variant-bar,#desc-box,
@@ -223,8 +261,55 @@ def shot(page):
     raise last
 
 
+def score_pool(cd, pool):
+    """批量打分并缓存。5700 帧现算一次要 7 分半，缓存后重选只要几秒。"""
+    cache = cd / "_scores.json"
+    if "--rescore" not in sys.argv and cache.exists():
+        try:
+            d = json.loads(cache.read_text(encoding="utf-8"))
+            if len(d.get("items", [])) == len(pool):
+                return [(x[1], x[2]) for x in d["items"]]
+        except Exception:
+            pass
+    import numpy as np
+    from PIL import Image
+    items = []
+    for p in pool:
+        a = np.asarray(Image.open(str(p)).convert("L"), dtype=np.float32)
+        std = round(float(a.std()), 3)
+        edge = round(float((np.abs(np.diff(a, axis=1)) > 18).mean() * 100), 3)
+        items.append([p.name, std, edge])
+    cache.write_text(json.dumps({"items": items}, ensure_ascii=False), encoding="utf-8")
+    return [(x[1], x[2]) for x in items]
+
+
+def select_informative(cd, pool, want):
+    """先排除没画面的帧，再在剩下的帧里按时序均匀抽。
+
+    为什么有两道规则：
+      ①绝对门槛 —— 实测平坦帧是「整块连续区间」（某相位从头到尾没东西），
+        只有绝对门槛能把这种区间整个剔掉；纯按排名取前 N 是剔不干净的，
+        因为坏帧重的时候连前 N 里也全是坏帧。
+      ②均匀稀释 —— 保留时序覆盖，让镜头从头到尾都在讲同一件事。
+    不够时按得分从高到低补齐，并把缺口如实打进日志，不悄悄降级。
+    """
+    if len(pool) <= want or "--uniform" in sys.argv:
+        return list(range(len(pool)))
+    sc = score_pool(cd, pool)
+    info = [i for i, (s, e) in enumerate(sc) if s >= 6.0 or e >= 0.6]
+    if len(info) >= want:
+        sel = sorted({info[round(k * (len(info) - 1) / (want - 1))] for k in range(want)})
+        return sel
+    rest = sorted((i for i in range(len(pool)) if i not in set(info)),
+                  key=lambda i: -(sc[i][0] + 2.0 * sc[i][1]))
+    sel = sorted(set(info + rest[:want - len(info)]))
+    log("  !! %s 有画面帧只有 %d < 需要 %d，缺口 %d 帧按最优补"
+        % (cd.name, len(info), want, want - len(info)))
+    return sel
+
+
 def emit_all():
-    """候选池 → 各章素材帧（按 TARGET 均匀抽稀）。
+    """候选池 → 各章素材帧（按 TARGET 选帧）。
 
     不依赖浏览器，可以单独跑：素材采集和抽稀落成本来就是两件事。
     上一次跑到第 5500 帧时截图超时崩掉，因为抽稀被焊在采集流程尾部，
@@ -239,10 +324,7 @@ def emit_all():
             log("!! %s 候选为空" % chap); continue
         want = TARGET[chap]
         d = CLIPS / chap; d.mkdir(parents=True, exist_ok=True)
-        if n <= want:
-            sel = list(range(n))
-        else:
-            sel = sorted({round(k * (n - 1) / (want - 1)) for k in range(want)})
+        sel = select_informative(cd, pool, want)
         for j, si in enumerate(sel):
             save_shot(d / ("f%05d.jpg" % j), pool[si].read_bytes())
         (d / "meta.json").write_text(json.dumps(
@@ -275,6 +357,12 @@ def main():
     survey = "--survey" in sys.argv
     emit_only = "--emit-only" in sys.argv
     land_only = "--land-only" in sys.argv
+    keep_cand = "--keep-cand" in sys.argv
+    only = set()
+    if "--only" in sys.argv:
+        i = sys.argv.index("--only")
+        if i + 1 < len(sys.argv):
+            only = {x for x in sys.argv[i + 1].split(",") if x}
 
     if emit_only:                       # 只做抽稀落盘，不碰浏览器
         emit_all()
@@ -314,6 +402,12 @@ def main():
         log("hooks ready: %s" % ok)
         if not ok:
             log("!! 钩子未就位，终止"); browser.close(); return
+
+        if "--no-cam" in sys.argv:
+            log("camera: 不干预（原镜头）")
+        else:
+            page.evaluate(WRAP_CAM_JS, CAM_MAXD)
+            log("camera: 已套距离上限 %s" % json.dumps(CAM_MAXD, sort_keys=True))
 
         page.add_style_tag(content=HIDE_HUD)
         time.sleep(1.2)

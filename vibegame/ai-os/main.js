@@ -602,14 +602,14 @@
       '<div class="alarm-now" data-f="now">--:--:--</div>' +
       '<div class="alarm-row"><span class="k">目标时间</span><span class="v" data-f="target">--:--:--</span></div>' +
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
-      '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
+      '<div class="alarm-result" data-f="res">闹钟将在设定时间响铃，响了就按下去</div>';
     body.appendChild(disp);
     body.style.display = 'flex'; body.style.flexDirection = 'column';
     disp.style.marginTop = 'auto'; disp.style.marginBottom = 'auto';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var ring = el('button', 'ring-btn', '响铃');
-    var retryBtn = el('button', 'judge-btn judge-ok', '再来一次');
+    var retryBtn = el('button', 'ring-btn alarm-retry', '再来一次');
     retryBtn.style.display = 'none';
     foot.appendChild(ring);
     foot.appendChild(retryBtn);
@@ -631,7 +631,7 @@
       alarmState.result = null;
       alarmState.done = false;
       disp.querySelector('[data-f="target"]').textContent = alarmHMS(new Date(alarmState.target));
-      disp.querySelector('[data-f="res"]').textContent = '闹钟将在整 30 秒响，响的时候按下去';
+      disp.querySelector('[data-f="res"]').textContent = '闹钟将在设定时间响铃，响了就按下去';
       ring.style.display = '';
       retryBtn.style.display = 'none';
       ring.disabled = true;
@@ -1285,20 +1285,51 @@
     histCard.appendChild(el('div', 'card-title', '最近通话'));
     var hist = el('div');
     histCard.appendChild(hist);
-    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto';
+    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto'; histCard.style.minHeight = '120px';
     body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(histCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var pad = el('div', 'dial-pad');
-    var actRow = el('div', 'cam-foot');
-    actRow.style.marginTop = '10px';
-    var delBtn = el('button', 'cam-side', '⌫');
+    var actRow = el('div', 'dial-actions');
+    var contactsBtn = el('button', 'dial-del', '<svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z"/></svg>');
     var callBtn = el('button', 'call-btn', '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>');
-    var ghost = el('span', '', '');
-    actRow.appendChild(delBtn); actRow.appendChild(callBtn); actRow.appendChild(ghost);
+    var delBtn = el('button', 'dial-del', '⌫');
+    actRow.appendChild(contactsBtn); actRow.appendChild(callBtn); actRow.appendChild(delBtn);
     foot.appendChild(pad); foot.appendChild(actRow);
     v.appendChild(foot);
+    /* 通讯录全屏视图 */
+    var CONTACTS = [
+      { name: 'AI 助理', num: '10086' },
+      { name: '妈妈', num: '13800138000' },
+      { name: '老板', num: '13911112222' },
+      { name: '外卖小哥', num: '15600001111' },
+      { name: '前女友', num: '18888888888' },
+      { name: '快递员', num: '13333334444' },
+      { name: '客服小美', num: '4001234567' },
+      { name: '自己', num: '10000' }
+    ];
+    var contactsView = el('div', 'contacts-view');
+    contactsView.style.display = 'none';
+    var cHead = el('div', 'contacts-head');
+    var cBack = el('button', 'contacts-back', '‹');
+    cHead.appendChild(cBack);
+    cHead.appendChild(el('span', '', '<h1 style="font-size:18px;font-weight:600;color:var(--ink);">通讯录</h1>'));
+    contactsView.appendChild(cHead);
+    var contactsList = el('div', 'contacts-list');
+    CONTACTS.forEach(function (c) {
+      var row = el('button', 'contact-row');
+      row.innerHTML = '<span class="contact-ava">' + c.name.charAt(0) + '</span>' +
+        '<div><div class="contact-name">' + c.name + '</div><div class="contact-num">' + fmt(c.num) + '</div></div>';
+      row.addEventListener('click', function () {
+        contactsView.style.display = 'none';
+        if (inCall) { return; }
+        num = c.num; paintNum(); startCall();
+      });
+      contactsList.appendChild(row);
+    });
+    contactsView.appendChild(contactsList);
+    v.appendChild(contactsView);
 
     var num = ''; var inCall = false; var phase = 'idle'; var secs = 0;
     var tDial = null, tDur = null, tEnd = null;
@@ -1316,9 +1347,10 @@
     function paintHist() {
       hist.innerHTML = '';
       if (!records.length) { hist.appendChild(el('div', 'conv-prev', '还没有通话记录')); return; }
+      var hIco = '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>';
       records.forEach(function (r) {
         var b = el('button', 'hist-row');
-        b.innerHTML = '<span>' + fmt(r.number) + '</span><span class="ht">' + r.time + '</span>';
+        b.innerHTML = '<span class="hist-ico">' + hIco + '</span><span>' + fmt(r.number) + '</span><span class="ht">' + r.time + '</span>';
         b.addEventListener('click', function () { if (!inCall) { num = r.number; paintNum(); startCall(); } });
         hist.appendChild(b);
       });
@@ -1374,8 +1406,11 @@
       callBtn.innerHTML = hangupIcon();
       tDial = global.setTimeout(connect, 3000 + Math.random() * 5000);
     }
+    var KEY_SUB = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].forEach(function (k) {
-      var b = el('button', 'dkey', k);
+      var b = el('button', 'dkey');
+      if (KEY_SUB[k]) { b.innerHTML = k + '<span class="dkey-sub">' + KEY_SUB[k] + '</span>'; }
+      else { b.textContent = k; }
       b.addEventListener('click', function () {
         if (inCall) { return; }
         if (num.length < 11) { num += k; paintNum(); }
@@ -1386,12 +1421,17 @@
       if (inCall) { return; }
       num = num.slice(0, -1); paintNum();
     });
+    contactsBtn.addEventListener('click', function () {
+      if (inCall) { return; }
+      contactsView.style.display = '';
+    });
+    cBack.addEventListener('click', function () { contactsView.style.display = 'none'; });
     callBtn.addEventListener('click', function () {
       if (!inCall) { startCall(); return; }
       if (phase === 'ended') { resetCallUi(); return; }
       endCall(true);
     });
-    v.onShow = function () { clearCallTimers(); if (inCall) { resetCallUi(); } };
+    v.onShow = function () { clearCallTimers(); contactsView.style.display = 'none'; if (inCall) { resetCallUi(); } };
     paintHist();
     return v;
   }
@@ -1634,11 +1674,10 @@
     var recs = el('div');
     recCard.appendChild(recs);
     body.appendChild(recCard);
-    v.appendChild(body);
-    var foot = el('div', 'pfoot');
     var resetAll = el('button', 'act-btn danger', '重置全部数据');
-    foot.appendChild(resetAll);
-    v.appendChild(foot);
+    resetAll.style.marginTop = '14px';
+    body.appendChild(resetAll);
+    v.appendChild(body);
     var modalHost = el('div', 'modal-mask');
     modalHost.style.display = 'none';
     v.appendChild(modalHost);

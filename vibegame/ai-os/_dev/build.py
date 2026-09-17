@@ -587,6 +587,11 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   transition:transform .16s ease;
 }
 .ring-btn:active{ transform:scale(.97); }
+/* 闹钟「再来一次」：复用响铃按钮的全宽盒子语言，绿色渐变区分语义（积极重试） */
+.alarm-retry{
+  background:linear-gradient(135deg,#2BB673,#1FA971);
+  box-shadow:var(--sh-1), 0 8px 18px rgba(43,182,115,.32), inset 0 1px 0 rgba(255,255,255,.30);
+}
 
 /* 日历：扫雷玩法（未开口=抬起的日期块，已开口=凹陷平底，表头=浅底日期条） */
 .ms-card{
@@ -830,30 +835,58 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   .sitem{ padding:6px 0; font-size:14px; }
   .act-btn{ height:46px; }
 }
-.dial-display{ text-align:center; font-size:28px; font-weight:700; min-height:36px; letter-spacing:1px; color:var(--ink); margin:8px 0 2px 0; }
+.dial-display{ text-align:center; font-size:30px; font-weight:600; min-height:40px; letter-spacing:2px; color:var(--ink); margin:10px 0 2px 0; font-variant-numeric:tabular-nums; }
 .dial-status{ text-align:center; font-size:13px; color:var(--ink-dim); min-height:18px; }
 .call-timer{ text-align:center; font-size:36px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums; margin-top:10px; }
 .call-ended-msg{ font-size:13px; color:var(--ink-dim); text-align:center; line-height:1.6; margin-top:12px; }
-.dial-pad{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:12px; justify-items:center; }
+.dial-pad{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:4px; justify-items:center; }
 .dkey{
-  width:58px; height:58px; border-radius:50%;
+  width:48px; height:48px; border-radius:50%;
   background:var(--card); border:1px solid var(--line);
-  font-size:22px; font-weight:600; color:var(--ink);
+  font-size:19px; font-weight:600; color:var(--ink);
   box-shadow:var(--sh-1), var(--hl);
   transition:transform .12s ease;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
 }
+.dkey .dkey-sub{ font-size:7px; font-weight:500; color:var(--ink-dim); letter-spacing:1px; margin-top:1px; }
 .dkey:active{ transform:scale(.92); }
+/* 操作行：三等分格，通讯录左 / 拨打居中 / 删除右 */
+.dial-actions{ display:grid; grid-template-columns:1fr 1fr 1fr; align-items:center; justify-items:center; margin-top:6px; }
+.dial-del{
+  width:40px; height:40px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; color:var(--ink); background:rgba(120,120,140,.16);
+  transition:transform .12s ease;
+}
+.dial-del:active{ transform:scale(.92); }
 .call-btn{
-  width:64px; height:64px; border-radius:50%; margin:10px auto 0 auto;
+  width:50px; height:50px; border-radius:50%;
   display:flex; align-items:center; justify-content:center;
   background:linear-gradient(135deg,#34C46F,#1E9E50);
-  box-shadow:var(--sh-1), 0 8px 18px rgba(30,158,80,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  box-shadow:var(--sh-1), 0 4px 12px rgba(30,158,80,.28), inset 0 1px 0 rgba(255,255,255,.3);
+  transition:transform .12s ease;
 }
-.call-btn svg{ width:26px; height:26px; fill:#fff; }
-.call-btn.hangup{ background:linear-gradient(135deg,#E86A6A,#E05252); box-shadow:var(--sh-1), 0 8px 18px rgba(224,82,82,.35); }
+.call-btn:active{ transform:scale(.94); }
+.call-btn svg{ width:22px; height:22px; fill:#fff; }
+.call-btn.hangup{ background:linear-gradient(135deg,#E86A6A,#E05252); box-shadow:var(--sh-1), 0 4px 12px rgba(224,82,82,.28); }
+.dial-del svg{ width:18px; height:18px; fill:var(--ink); }
 .hist-row{ display:flex; align-items:center; width:100%; padding:10px 2px; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); text-align:left; }
 .hist-row:last-child{ border-bottom:none; }
+.hist-row .hist-ico{ flex:0 0 auto; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(120,120,140,.14); margin-right:10px; }
+.hist-row .hist-ico svg{ width:15px; height:15px; fill:var(--ink-dim); }
 .hist-row .ht{ margin-left:auto; font-size:11px; color:var(--ink-dim); }
+/* 通讯录全屏视图 */
+.contacts-view{ position:absolute; top:0; left:0; right:0; bottom:0; z-index:30; background:var(--app-bg); display:flex; flex-direction:column; }
+.contacts-head{ flex:0 0 auto; height:54px; display:flex; align-items:center; padding-left:calc(10px + var(--safe-l)); padding-right:calc(16px + var(--safe-r)); }
+.contacts-back{ width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:22px; color:var(--ink); margin-right:10px; }
+.contacts-head h1{ font-size:18px; font-weight:600; color:var(--ink); }
+.contacts-list{ overflow-y:auto; flex:1 1 auto; min-height:0; padding:4px calc(16px + var(--safe-r)) 16px calc(16px + var(--safe-l)); }
+.contact-row{ display:flex; align-items:center; width:100%; padding:12px 4px; border-bottom:1px solid var(--line); text-align:left; }
+.contact-row:last-child{ border-bottom:none; }
+.contact-row:active{ background:rgba(120,120,140,.08); }
+.contact-ava{ flex:0 0 auto; width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#8F7BF7,#6A4CE0); color:#fff; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; margin-right:12px; }
+.contact-name{ font-size:15px; font-weight:600; color:var(--ink); }
+.contact-num{ font-size:12px; color:var(--ink-dim); margin-top:2px; }
 .sms-banner{
   font-size:12px; color:var(--ink-dim); text-align:center;
   background:var(--card); border:1px solid var(--line);
@@ -1661,14 +1694,14 @@ JS = r"""
       '<div class="alarm-now" data-f="now">--:--:--</div>' +
       '<div class="alarm-row"><span class="k">目标时间</span><span class="v" data-f="target">--:--:--</span></div>' +
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
-      '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
+      '<div class="alarm-result" data-f="res">闹钟将在设定时间响铃，响了就按下去</div>';
     body.appendChild(disp);
     body.style.display = 'flex'; body.style.flexDirection = 'column';
     disp.style.marginTop = 'auto'; disp.style.marginBottom = 'auto';
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var ring = el('button', 'ring-btn', '响铃');
-    var retryBtn = el('button', 'judge-btn judge-ok', '再来一次');
+    var retryBtn = el('button', 'ring-btn alarm-retry', '再来一次');
     retryBtn.style.display = 'none';
     foot.appendChild(ring);
     foot.appendChild(retryBtn);
@@ -1690,7 +1723,7 @@ JS = r"""
       alarmState.result = null;
       alarmState.done = false;
       disp.querySelector('[data-f="target"]').textContent = alarmHMS(new Date(alarmState.target));
-      disp.querySelector('[data-f="res"]').textContent = '闹钟将在整 30 秒响，响的时候按下去';
+      disp.querySelector('[data-f="res"]').textContent = '闹钟将在设定时间响铃，响了就按下去';
       ring.style.display = '';
       retryBtn.style.display = 'none';
       ring.disabled = true;
@@ -2344,20 +2377,51 @@ JS = r"""
     histCard.appendChild(el('div', 'card-title', '最近通话'));
     var hist = el('div');
     histCard.appendChild(hist);
-    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto';
+    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto'; histCard.style.minHeight = '120px';
     body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(histCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var pad = el('div', 'dial-pad');
-    var actRow = el('div', 'cam-foot');
-    actRow.style.marginTop = '10px';
-    var delBtn = el('button', 'cam-side', '⌫');
+    var actRow = el('div', 'dial-actions');
+    var contactsBtn = el('button', 'dial-del', '<svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z"/></svg>');
     var callBtn = el('button', 'call-btn', '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>');
-    var ghost = el('span', '', '');
-    actRow.appendChild(delBtn); actRow.appendChild(callBtn); actRow.appendChild(ghost);
+    var delBtn = el('button', 'dial-del', '⌫');
+    actRow.appendChild(contactsBtn); actRow.appendChild(callBtn); actRow.appendChild(delBtn);
     foot.appendChild(pad); foot.appendChild(actRow);
     v.appendChild(foot);
+    /* 通讯录全屏视图 */
+    var CONTACTS = [
+      { name: 'AI 助理', num: '10086' },
+      { name: '妈妈', num: '13800138000' },
+      { name: '老板', num: '13911112222' },
+      { name: '外卖小哥', num: '15600001111' },
+      { name: '前女友', num: '18888888888' },
+      { name: '快递员', num: '13333334444' },
+      { name: '客服小美', num: '4001234567' },
+      { name: '自己', num: '10000' }
+    ];
+    var contactsView = el('div', 'contacts-view');
+    contactsView.style.display = 'none';
+    var cHead = el('div', 'contacts-head');
+    var cBack = el('button', 'contacts-back', '‹');
+    cHead.appendChild(cBack);
+    cHead.appendChild(el('span', '', '<h1 style="font-size:18px;font-weight:600;color:var(--ink);">通讯录</h1>'));
+    contactsView.appendChild(cHead);
+    var contactsList = el('div', 'contacts-list');
+    CONTACTS.forEach(function (c) {
+      var row = el('button', 'contact-row');
+      row.innerHTML = '<span class="contact-ava">' + c.name.charAt(0) + '</span>' +
+        '<div><div class="contact-name">' + c.name + '</div><div class="contact-num">' + fmt(c.num) + '</div></div>';
+      row.addEventListener('click', function () {
+        contactsView.style.display = 'none';
+        if (inCall) { return; }
+        num = c.num; paintNum(); startCall();
+      });
+      contactsList.appendChild(row);
+    });
+    contactsView.appendChild(contactsList);
+    v.appendChild(contactsView);
 
     var num = ''; var inCall = false; var phase = 'idle'; var secs = 0;
     var tDial = null, tDur = null, tEnd = null;
@@ -2375,9 +2439,10 @@ JS = r"""
     function paintHist() {
       hist.innerHTML = '';
       if (!records.length) { hist.appendChild(el('div', 'conv-prev', '还没有通话记录')); return; }
+      var hIco = '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>';
       records.forEach(function (r) {
         var b = el('button', 'hist-row');
-        b.innerHTML = '<span>' + fmt(r.number) + '</span><span class="ht">' + r.time + '</span>';
+        b.innerHTML = '<span class="hist-ico">' + hIco + '</span><span>' + fmt(r.number) + '</span><span class="ht">' + r.time + '</span>';
         b.addEventListener('click', function () { if (!inCall) { num = r.number; paintNum(); startCall(); } });
         hist.appendChild(b);
       });
@@ -2433,8 +2498,11 @@ JS = r"""
       callBtn.innerHTML = hangupIcon();
       tDial = global.setTimeout(connect, 3000 + Math.random() * 5000);
     }
+    var KEY_SUB = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].forEach(function (k) {
-      var b = el('button', 'dkey', k);
+      var b = el('button', 'dkey');
+      if (KEY_SUB[k]) { b.innerHTML = k + '<span class="dkey-sub">' + KEY_SUB[k] + '</span>'; }
+      else { b.textContent = k; }
       b.addEventListener('click', function () {
         if (inCall) { return; }
         if (num.length < 11) { num += k; paintNum(); }
@@ -2445,12 +2513,17 @@ JS = r"""
       if (inCall) { return; }
       num = num.slice(0, -1); paintNum();
     });
+    contactsBtn.addEventListener('click', function () {
+      if (inCall) { return; }
+      contactsView.style.display = '';
+    });
+    cBack.addEventListener('click', function () { contactsView.style.display = 'none'; });
     callBtn.addEventListener('click', function () {
       if (!inCall) { startCall(); return; }
       if (phase === 'ended') { resetCallUi(); return; }
       endCall(true);
     });
-    v.onShow = function () { clearCallTimers(); if (inCall) { resetCallUi(); } };
+    v.onShow = function () { clearCallTimers(); contactsView.style.display = 'none'; if (inCall) { resetCallUi(); } };
     paintHist();
     return v;
   }
@@ -2693,11 +2766,10 @@ JS = r"""
     var recs = el('div');
     recCard.appendChild(recs);
     body.appendChild(recCard);
-    v.appendChild(body);
-    var foot = el('div', 'pfoot');
     var resetAll = el('button', 'act-btn danger', '重置全部数据');
-    foot.appendChild(resetAll);
-    v.appendChild(foot);
+    resetAll.style.marginTop = '14px';
+    body.appendChild(resetAll);
+    v.appendChild(body);
     var modalHost = el('div', 'modal-mask');
     modalHost.style.display = 'none';
     v.appendChild(modalHost);
