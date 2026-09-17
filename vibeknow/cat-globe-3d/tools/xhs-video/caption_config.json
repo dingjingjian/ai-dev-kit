@@ -1,0 +1,66 @@
+{
+  "_说明": "cat-globe-3d 小红书宣传片字幕+解说配置。路径相对本文件所在目录。时间轴按 2026-09-16 实测成片（51.3s 版）对齐：0-0.3 加载 / 0.3-2.8 热身 / 2.8-6.5 图鉴扫动 / 6.5-12.8 逐个心动 / 12.9 起飞行页 / 42.2 起基因页。",
+  "base_video": "../../xiaohongshu/cat-globe-3d-demo.mp4",
+  "output": "../../xiaohongshu/cat-globe-3d-demo-字幕解说版.mp4",
+  "voice": "zh-CN-XiaoxiaoNeural",
+  "pad_seconds": 65,
+  "style": {
+    "theme": "scrim",
+    "title_size": 64,
+    "title_tracking": 6,
+    "sub_size": 32,
+    "sub_tracking": 3,
+    "title_color": "#FFF7F2",
+    "sub_color": "#FFC9D8",
+    "line_color": "#FF8FAE",
+    "scrim_color": "#2E1420",
+    "rise_px": 16,
+    "fade_in": 0.45,
+    "fade_out": 0.32,
+    "card_y": 0
+  },
+  "cues": [
+    {
+      "start": 1.0,
+      "end": 6.9,
+      "title": "一本会飞的世界猫咪图鉴",
+      "subtitle": "五大洲的小可爱，都住在这里",
+      "narration": "一本会飞的世界猫咪图鉴，五大洲的小可爱都住在这里。"
+    },
+    {
+      "start": 6.9,
+      "end": 12.6,
+      "title": "心动哪只，就飞去见它",
+      "subtitle": "点一下爱心，把它悄悄收进心里",
+      "narration": "看到心动的小猫，点一下爱心，把它悄悄收进心里。"
+    },
+    {
+      "start": 13.0,
+      "end": 20.5,
+      "title": "坐上小飞机，真的飞过去",
+      "subtitle": "爱心第一视角，穿过云层去找它",
+      "narration": "然后真的出发，坐上小飞机，沿着航线穿过云层去见它。"
+    },
+    {
+      "start": 20.5,
+      "end": 31.5,
+      "title": "一座城，一只猫",
+      "subtitle": "落地就是它的家乡，听它讲小故事",
+      "narration": "落地的地方，就是它的家乡。每一只猫，都有自己的名字和小故事。"
+    },
+    {
+      "start": 31.5,
+      "end": 41.8,
+      "title": "为了小猫，飞遍全球",
+      "subtitle": "每一次抵达，都值得",
+      "narration": "为了一只小猫飞遍全球，每一次抵达，都值得。"
+    },
+    {
+      "start": 42.4,
+      "end": 50.5,
+      "title": "你的爱猫基因报告",
+      "subtitle": "一张雷达图，看懂你偏爱什么",
+      "narration": "最后，会生成一份你的爱猫基因报告，看懂自己偏爱什么样的猫。"
+    }
+  ]
+}

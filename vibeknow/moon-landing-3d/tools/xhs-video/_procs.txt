@@ -1,0 +1,22 @@
+﻿REAL pid=8652 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --no-startup-window
+REAL pid=25180 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=crashpad-handler "--user-data-dir=C:\Users\dingj\AppData\Local\Microsoft\Edge\User Data" /
+REAL pid=20668 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=gpu-process --gpu-preferences=WAAAAAAAAADgAAAEAAAAAAAAAAAAAGAAQAAAAAAAAAADAAAAAAAAADgAAAAA
+REAL pid=19372 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=network.mojom.NetworkService --lang=zh-CN --service-sandbox-typ
+REAL pid=24036 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=storage.mojom.StorageService --lang=zh-CN --service-sandbox-typ
+REAL pid=14100 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=16236 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=24176 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=6772 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=15516 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=edge_search_indexer.mojom.SearchIndexerInterfaceBroker --lang=z
+REAL pid=26948 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=audio.mojom.AudioService --lang=zh-CN --service-sandbox-type=au
+REAL pid=23764 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=video_capture.mojom.VideoCaptureService --lang=zh-CN --service-
+REAL pid=21380 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=2088 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=30692 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=utility --utility-sub-type=PooledProcess2 --lang=zh-CN --service-sandbox-type=utility --vi
+REAL pid=29044 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=4180 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+REAL pid=18640 "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" --type=renderer --pdf-upsell-enabled --video-capture-use-gpu-memory-buffer --lang=zh-CN --js-flag
+PY pid=15408 "C:\Users\dingj\.workbuddy\binaries\python\envs\blender-mcp\Scripts\python.exe"  "C:\Users\dingj\.workbuddy\binaries\python\envs\blender-mcp\Scripts\blender-mcp
+PY pid=8396 "C:\Users\dingj\.workbuddy\binaries\python\envs\blender-mcp\Scripts\python.exe"  "C:\Users\dingj\.workbuddy\binaries\python\envs\blender-mcp\Scripts\blender-mcp
+PY pid=22256 "C:\Users\dingj\AppData\Local\uv\cache\archive-v0\htNbZfVNmeBevllv\Scripts\python.exe" "C:\Users\dingj\AppData\Local\uv\cache\archive-v0\htNbZfVNmeBevllv\Script
+PY pid=31272 "C:\Users\dingj\AppData\Roaming\uv\python\cpython-3.12-windows-x86_64-none\python.exe" "C:\Users\dingj\AppData\Local\uv\cache\archive-v0\htNbZfVNmeBevllv\Script

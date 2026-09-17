@@ -44,10 +44,16 @@ release/
 # 技能真源见 .skill/demo-video-recorder/；项目实例由各项目的 caption_config.json 驱动
 **/xhs-video/.work/
 **/xhs-video/preview/
-**/xhs-video/*.mp4
-**/xhs-video/*.png
-**/xhs-video/*.jpg
-**/xhs-video/*.ttf
+# 工作目录（整目录忽略，含其中的 jpg/json 等中间产物）
+**/xhs-video/clips_old_*/
+**/xhs-video/_cand/
+# 产物媒体（递归匹配顶层与任意子目录）
+**/xhs-video/**/*.mp4
+**/xhs-video/**/*.png
+**/xhs-video/**/*.jpg
+**/xhs-video/**/*.jpeg
+**/xhs-video/**/*.ttf
+**/xhs-video/**/*.webp
 
 # _dev working dirs: ignore generated artifacts (previews/caches), keep build scripts tracked
 **/_dev/**/*.png

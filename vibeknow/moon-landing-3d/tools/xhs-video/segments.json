@@ -1,0 +1,292 @@
+[
+ {
+  "chap": "03-launch1",
+  "phase": "prelaunch",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 10,
+  "d0": 0,
+  "drive": 91
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "ignition",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 91,
+  "drive": 3
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "burn1",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 94,
+  "drive": 251
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "sep",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 345,
+  "drive": 3
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "burn2",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 348,
+  "drive": 344
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "sep2",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 692,
+  "drive": 3
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "burn3",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 695,
+  "drive": 336
+ },
+ {
+  "chap": "03-launch1",
+  "phase": "parkOrbit",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 1031,
+  "drive": 60
+ },
+ {
+  "chap": "04-transit",
+  "phase": "tli",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 1091,
+  "drive": 70
+ },
+ {
+  "chap": "04-transit",
+  "phase": "transit",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 1,
+  "d0": 1161,
+  "drive": 1261
+ },
+ {
+  "chap": "04-transit",
+  "phase": "loi",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2422,
+  "drive": 121
+ },
+ {
+  "chap": "04-transit",
+  "phase": "lunarOrbit",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2543,
+  "drive": 91
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "transition",
+  "segment": 1,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2634,
+  "drive": 31
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "ignition",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2665,
+  "drive": 6
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "burn1",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2671,
+  "drive": 251
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "sep",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2922,
+  "drive": 3
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "burn2",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 2925,
+  "drive": 345
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "sep2",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 3270,
+  "drive": 3
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "burn3",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 3273,
+  "drive": 336
+ },
+ {
+  "chap": "05-launch2",
+  "phase": "parkOrbit",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 3609,
+  "drive": 61
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "tli",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 3670,
+  "drive": 71
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "transit",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 3741,
+  "drive": 420
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "loi",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 4161,
+  "drive": 120
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "lunarOrbit",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 4281,
+  "drive": 90
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "rendezvous",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 1,
+  "d0": 4371,
+  "drive": 315
+ },
+ {
+  "chap": "06-rendez",
+  "phase": "docked",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 1,
+  "d0": 4686,
+  "drive": 210
+ },
+ {
+  "chap": "07-descent",
+  "phase": "descent",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 4896,
+  "drive": 180
+ },
+ {
+  "chap": "07-descent",
+  "phase": "approach",
+  "segment": 2,
+  "i0": 0,
+  "i1": 0,
+  "warp": 3,
+  "d0": 5076,
+  "drive": 120
+ },
+ {
+  "chap": "08-land",
+  "phase": "landed",
+  "segment": 2,
+  "i0": 0,
+  "i1": 190,
+  "warp": 1,
+  "d0": 5196,
+  "drive": 190
+ }
+]

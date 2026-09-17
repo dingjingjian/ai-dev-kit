@@ -5,6 +5,27 @@ var R=1.6;
 var LS_KEY='catglobe.hearts';
 var st={page:'atlas',hearts:[],flyIdx:0,flying:false,flyFrom:-1,flyTo:-1,arrived:false};
 
+/* ===== 演示模式（?demo）：录宣传片用，默认关闭，不影响真实使用 =====
+   让 app 自己跑完整流程（图鉴扫动 → 逐个心动 → 飞行见猫 → 基因解析），
+   录屏时无需任何手动点击/滑动。可用参数：
+     ?demo            开启演示
+     ?pick=7,22,0,18,23   演示心动的猫咪下标（默认一条跨五大洲的航线）
+     ?warm=2          演示开始前静置热身秒数（等贴图/着色器就绪，防开头掉帧）
+     ?loop            基因页结束后回到图鉴页重来
+   节奏常量在下面 DEMO_* 处集中调整。 */
+var QP=(typeof URLSearchParams==='function'&&location.search)?new URLSearchParams(location.search):null;
+var DEMO=!!(QP&&QP.has('demo'));
+var DEMO_LOOP=!!(QP&&QP.has('loop'));
+var DEMO_PICK=(QP&&QP.get('pick')?QP.get('pick'):'7,22,0,18,23').split(',').map(Number)
+  .filter(function(i){return i>=0&&i<CATS.length;});
+var DEMO_WARM_MS=(QP?Math.max(0,parseInt(QP.get('warm'),10)||0):0)*1000;
+var DEMO_SCAN_MS=2200;    /* 图鉴页整页扫动单程时长 */
+var DEMO_GENE_SCAN_MS=3600;
+var DEMO_HEART_MS=450;    /* 每次心动之间的间隔 */
+var DEMO_CARD_MS=520;     /* 滚到目标卡片的时长 */
+var DEMO_CAT_MS=2800;     /* 每只小猫面板停留时长 */
+var demoTimer=null,demoDone=false;
+
 /* ===== 存档 ===== */
 function loadHearts(){
   try{var s=localStorage.getItem(LS_KEY);if(s){var a=JSON.parse(s);if(Array.isArray(a))st.hearts=a.filter(function(i){return i>=0&&i<CATS.length;});}}catch(e){}
@@ -504,6 +525,7 @@ function showCatPanel(i){
   document.body.classList.add('fly-arrived');
   Q('flyStatus').textContent='已抵达 · '+cat.city+' 🐾';
   updateFlyHud();
+  demoScheduleNext();
 }
 function updateFlyHud(){
   var n=st.hearts.length;
@@ -634,6 +656,92 @@ function geneBars(count,labelMap,order,total){
   return html||'<div class="empty">暂无数据</div>';
 }
 
+/* ===== 演示模式驱动 ===== */
+var demoAt=0;
+function demoMark(name){try{console.log('DEMO '+name+' '+((performance.now()-demoAt)/1000).toFixed(2));}catch(e){}}
+/* 平滑滚动（easeInOutQuad），录屏时比瞬时跳转自然，也不会有惯性回弹 */
+function demoSmoothScroll(el,to,dur,cb){
+  if(!el){cb&&cb();return;}
+  var max=Math.max(0,el.scrollHeight-el.clientHeight);
+  to=Math.max(0,Math.min(to,max));
+  var from=el.scrollTop, t0=performance.now();
+  if(Math.abs(to-from)<2||dur<=0){el.scrollTop=to;cb&&cb();return;}
+  (function step(now){
+    var t=Math.min(1,(now-t0)/dur);
+    var e=t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+    el.scrollTop=from+(to-from)*e;
+    if(t<1)requestAnimationFrame(step); else cb&&cb();
+  })(t0);
+}
+/* 整页扫动：先到底，停一拍，再回顶 —— 内容比一屏高时不会漏掉下半页 */
+function demoScan(el,dur,cb){
+  if(!el){cb&&cb();return;}
+  var max=Math.max(0,el.scrollHeight-el.clientHeight);
+  if(max<8){cb&&cb();return;}
+  demoSmoothScroll(el,max,dur,function(){
+    setTimeout(function(){demoSmoothScroll(el,0,Math.round(dur*0.7),cb);},500);
+  });
+}
+/* 滚到某张猫咪卡片再心动，让「点爱心」这个动作真的出现在画面里 */
+function demoHeartOne(k,cb){
+  if(k>=DEMO_PICK.length){cb&&cb();return;}
+  var i=DEMO_PICK[k];
+  var card=document.querySelector('.cat-card[data-i="'+i+'"]');
+  var sc=Q('atlasScroll');
+  if(card&&sc){
+    var r=card.getBoundingClientRect(), sr=sc.getBoundingClientRect();
+    var target=sc.scrollTop+(r.top-sr.top)-sc.clientHeight*0.28;
+    demoSmoothScroll(sc,target,DEMO_CARD_MS,function(){
+      toggleHeart(i);
+      setTimeout(function(){demoHeartOne(k+1,cb);},DEMO_HEART_MS);
+    });
+  }else{
+    toggleHeart(i);
+    setTimeout(function(){demoHeartOne(k+1,cb);},DEMO_HEART_MS);
+  }
+}
+/* 抵达某只小猫后：还有下一只就飞过去，飞完了去基因页 */
+function demoScheduleNext(){
+  if(!DEMO||demoDone)return;
+  if(demoTimer)clearTimeout(demoTimer);
+  demoTimer=setTimeout(function(){
+    if(st.flyIdx>=st.hearts.length-1){demoToGene();return;}
+    demoMark('fly-next->'+(st.flyIdx+1));
+    flyNext();
+  },DEMO_CAT_MS);
+}
+function demoToGene(){
+  demoMark('gene');
+  var b=Q('flyGeneBtn'); if(b)b.click();
+  setTimeout(function(){
+    demoScan(Q('geneScroll'),DEMO_GENE_SCAN_MS,function(){
+      demoMark('gene-done');
+      if(DEMO_LOOP){
+        setTimeout(function(){
+          demoTimer=setTimeout(function(){demoDone=false;demoRun();},1500);
+        },1200);
+      }else{demoDone=true;}
+    });
+  },700);
+}
+function demoRun(){
+  demoAt=performance.now();
+  demoDone=false;
+  demoMark('atlas');
+  /* 清掉历史心动，保证每次录制起点一致 */
+  setAllHearts(false);
+  demoScan(Q('atlasScroll'),DEMO_SCAN_MS,function(){
+    demoHeartOne(0,function(){
+      demoMark('hearted');
+      setTimeout(function(){
+        var b=Q('startFlyBtn');
+        demoMark('fly');
+        if(b&&!b.disabled)b.click();
+      },800);
+    });
+  });
+}
+
 /* ===== 事件绑定 ===== */
 function bind(){
   var grid=Q('atlasGrid');
@@ -666,6 +774,7 @@ function start(){
   setImg(Q('heroImg'),'./assets/tex/hero.webp',function(){});
   bind();
   Q('loader').classList.add('hide');
+  if(DEMO)setTimeout(demoRun,DEMO_WARM_MS);
 }
 start();
 })();

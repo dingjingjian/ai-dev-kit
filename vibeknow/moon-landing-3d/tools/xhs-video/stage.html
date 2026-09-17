@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>奔月 · 合成舞台</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; width: 1080px; height: 1920px;
+    background: #05070c; overflow: hidden;
+  }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #05070c; }
+
+  /* 素材层：cover 铺满，Ken Burns 的推近/平移由 render_frame.js 写 transform */
+  #shot {
+    position: absolute; left: 0; top: 0; width: 1080px; height: 1920px;
+    object-fit: cover; object-position: 50% 50%;
+    transform-origin: 50% 50%; z-index: 0;
+  }
+
+  /* 片头/片尾大字的衬底：随文字一起淡入（透明度由渲染代码跟着文字走） */
+  #bigScrim {
+    position: absolute; left: 0; right: 0; top: 300px; height: 1000px; z-index: 1;
+    opacity: 0; pointer-events: none;
+    background: linear-gradient(to bottom,
+      rgba(4,7,13,0) 0px, rgba(4,7,13,.72) 220px,
+      rgba(4,7,13,.92) 420px, rgba(4,7,13,.92) 700px,
+      rgba(4,7,13,.55) 900px, rgba(4,7,13,0) 1000px);
+  }
+
+  /* 平台安全区：底部渐隐到页面底色，让最下若干像素成为纯色空白。
+     停靠点一律写 px —— 百分比停靠点是相对元素自身高度解析的，
+     拿 268px 的元素按 1920 折算会让实心段从 120px 缩成 16px。 */
+  #safe {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 268px; z-index: 2;
+    pointer-events: none;
+    background: linear-gradient(to top,
+      #05070c 0px, #05070c 120px,
+      rgba(5,7,12,.94) 162px, rgba(5,7,12,.55) 232px, rgba(5,7,12,0) 268px);
+  }
+
+  /* 文字通用：紧贴笔画的暗色描边是可读性不变量 ——
+     至少一层 RGB<=40 且模糊<=4px（此处 0 0 3px rgba(0,0,0,.92)），
+     笔画边缘的「底」就是描边色，对比度约 12:1，与背景多亮无关。 */
+  .txt {
+    color: #fff;
+    text-shadow: 0 0 3px rgba(0,0,0,.92), 0 0 9px rgba(0,0,0,.55), 0 2px 18px rgba(0,0,0,.85);
+    font-family: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  }
+
+  #label {
+    position: absolute; left: 72px; top: 132px; z-index: 3;
+    font-size: 40px; font-weight: 600; letter-spacing: .22em;
+    color: #cfe4ff; opacity: 0;
+  }
+
+  #sub {
+    position: absolute; left: 72px; right: 72px; bottom: 300px; z-index: 3;
+    font-size: 50px; line-height: 1.62; font-weight: 500; opacity: 0;
+    text-align: left;
+  }
+  #sub .sg { display: inline-block; }
+
+  /* 说明性小字逐行托底：暗底随文字宽度收边，而不是压成一个方块 */
+  .tsl {
+    background: rgba(3,6,13,.93);
+    -webkit-box-decoration-break: clone; box-decoration-break: clone;
+    padding: .06em .28em;
+  }
+
+  #big {
+    position: absolute; left: 72px; right: 72px; top: 560px; z-index: 3;
+    font-size: 116px; line-height: 1.42; font-weight: 700; opacity: 0;
+    letter-spacing: .04em; text-align: center;
+  }
+  #big .tsl { padding: .10em .30em; }
+
+  #bar {
+    position: absolute; left: 72px; right: 72px; top: 96px; height: 6px;
+    z-index: 4; background: rgba(255,255,255,.18); border-radius: 3px; overflow: hidden;
+  }
+  #barFill { height: 100%; width: 0%; background: #7fb4ff; }
+
+  #fade { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px;
+          z-index: 9; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <img id="shot" alt="">
+    <div id="bigScrim"></div>
+    <div id="safe"></div>
+    <div id="label" class="txt"></div>
+    <div id="sub" class="txt"></div>
+    <div id="big" class="txt"></div>
+    <div id="bar"><div id="barFill"></div></div>
+    <div id="fade"></div>
+  </div>
+
+  <!-- 剪辑表是唯一真源，必须先于渲染函数加载 -->
+  <script src="timeline.js"></script>
+  <script src="render_frame.js"></script>
+</body>
+</html>
