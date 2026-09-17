@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>今天我的心情</title>
+<style>
+:root {
+  /* ---------- 主题（配色）：默认「深夜」 ----------
+   * 样式规则一律引用这组变量、不写死颜色；其余主题在下方
+   * html[data-theme="..."] 里整组覆盖。main.js 把当前模式写到
+   * <html data-theme>（「跟随系统」先解析成 dark / light 再写）。 */
+  --bg: #0d1117;
+  --card: #161b22;
+  --card-2: #1c2330;
+  --card-trans: rgba(22, 27, 34, 0);
+  --border: #2a323d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --faint: #6e7a86;
+  --cell: #1b222c;
+  /* 六种心情色 */
+  --m1: #ff8c42;  --m1-deep: #f66a0a;  /* 兴奋 橙 */
+  --m2: #3fb950;  --m2-deep: #2ea043;  /* 开心 绿 */
+  --m3: #58a6ff;  --m3-deep: #1f6feb;  /* 平静 蓝 */
+  --m4: #d29922;  --m4-deep: #bb8009;  /* 一般 黄 */
+  --m5: #bc8cff;  --m5-deep: #8957ff;  /* 难过 紫 */
+  --m6: #f85149;  --m6-deep: #da3633;  /* 愤怒 红 */
+  --m1-grad: linear-gradient(135deg, #ff8c42, #f66a0a);
+  --m2-grad: linear-gradient(135deg, #3fb950, #2ea043);
+  --m3-grad: linear-gradient(135deg, #58a6ff, #1f6feb);
+  --m4-grad: linear-gradient(135deg, #d29922, #bb8009);
+  --m5-grad: linear-gradient(135deg, #bc8cff, #8957ff);
+  --m6-grad: linear-gradient(135deg, #f85149, #da3633);
+  --m-ink: #ffffff;
+  --punch-bg: rgba(255, 255, 255, 0.08);
+  --punch-border: rgba(255, 255, 255, 0.18);
+  --today-grad: linear-gradient(135deg, #14324a 0%, #123a2e 55%, #0f2c22 100%);
+  --today-border: rgba(88, 166, 255, 0.25);
+  --today-glow: rgba(88, 166, 255, 0.25);
+  --today-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  --on-card-dim: rgba(230, 237, 243, 0.62);
+  --topbar: rgba(13, 17, 23, 0.92);
+  --topbar-blur: rgba(13, 17, 23, 0.72);
+  --sheet: rgba(22, 27, 34, 0.92);
+  --overlay: rgba(2, 6, 12, 0.65);
+  --toast-bg: #2a323d;
+  --danger-bg: rgba(218, 54, 51, 0.15);
+  --danger-ink: #f85149;
+  --danger-border: rgba(218, 54, 51, 0.4);
+  --scheme: dark;
+  --radius: 14px;
+  --top-gap: 50px;
+  --safe-top: calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-l: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-r: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+
+/* ---------- 主题覆盖层 ---------- */
+html[data-theme="light"] {
+  --bg: #f2f4f7;
+  --card: #ffffff;
+  --card-2: #edf1f6;
+  --card-trans: rgba(255, 255, 255, 0);
+  --border: #d5dce5;
+  --text: #1b2129;
+  --muted: #66707c;
+  --faint: #8b949e;
+  --cell: #e2e8ef;
+  --m1: #db6d28;  --m1-deep: #bc4c00;
+  --m2: #2da44e;  --m2-deep: #1a7f37;
+  --m3: #2f81f7;  --m3-deep: #1f6feb;
+  --m4: #bf8700;  --m4-deep: #9a6700;
+  --m5: #8250df;  --m5-deep: #6639ba;
+  --m6: #d12421;  --m6-deep: #b3261e;
+  --m1-grad: linear-gradient(135deg, #db6d28, #bc4c00);
+  --m2-grad: linear-gradient(135deg, #2da44e, #1a7f37);
+  --m3-grad: linear-gradient(135deg, #2f81f7, #1f6feb);
+  --m4-grad: linear-gradient(135deg, #bf8700, #9a6700);
+  --m5-grad: linear-gradient(135deg, #8250df, #6639ba);
+  --m6-grad: linear-gradient(135deg, #d12421, #b3261e);
+  --m-ink: #ffffff;
+  --punch-bg: rgba(255, 255, 255, 0.62);
+  --punch-border: rgba(27, 33, 41, 0.16);
+  --today-grad: linear-gradient(135deg, #e6f0fc 0%, #dce8f6 55%, #d3e1f0 100%);
+  --today-border: rgba(47, 129, 247, 0.28);
+  --today-glow: rgba(47, 129, 247, 0.2);
+  --today-shadow: 0 8px 22px rgba(23, 36, 51, 0.1);
+  --on-card-dim: rgba(18, 31, 51, 0.66);
+  --topbar: rgba(242, 244, 247, 0.92);
+  --topbar-blur: rgba(242, 244, 247, 0.75);
+  --sheet: rgba(255, 255, 255, 0.95);
+  --overlay: rgba(28, 36, 48, 0.42);
+  --toast-bg: #ffffff;
+  --danger-bg: rgba(207, 52, 48, 0.1);
+  --danger-ink: #b3261e;
+  --danger-border: rgba(207, 52, 48, 0.35);
+  --scheme: light;
+}
+html[data-theme="sepia"] {
+  --bg: #f6f0e4;
+  --card: #fffaf0;
+  --card-2: #f1e8d6;
+  --card-trans: rgba(255, 250, 240, 0);
+  --border: #e0d3ba;
+  --text: #3d3428;
+  --muted: #8a7c66;
+  --faint: #a1937c;
+  --cell: #e8dfcd;
+  --m1: #d9705c;  --m1-deep: #bf4f3e;
+  --m2: #4f8a5b;  --m2-deep: #2f7d4f;
+  --m3: #4a7cb8;  --m3-deep: #2f5f99;
+  --m4: #b8860b;  --m4-deep: #8a6508;
+  --m5: #8b6bb1;  --m5-deep: #6b4f91;
+  --m6: #c25a4a;  --m6-deep: #a83c2d;
+  --m1-grad: linear-gradient(135deg, #d9705c, #bf4f3e);
+  --m2-grad: linear-gradient(135deg, #4f8a5b, #2f7d4f);
+  --m3-grad: linear-gradient(135deg, #4a7cb8, #2f5f99);
+  --m4-grad: linear-gradient(135deg, #b8860b, #8a6508);
+  --m5-grad: linear-gradient(135deg, #8b6bb1, #6b4f91);
+  --m6-grad: linear-gradient(135deg, #c25a4a, #a83c2d);
+  --m-ink: #ffffff;
+  --punch-bg: rgba(255, 255, 255, 0.55);
+  --punch-border: rgba(61, 52, 40, 0.18);
+  --today-grad: linear-gradient(135deg, #f3e7cd 0%, #e9efd9 55%, #e3ecd4 100%);
+  --today-border: rgba(74, 124, 184, 0.28);
+  --today-glow: rgba(74, 124, 184, 0.2);
+  --today-shadow: 0 8px 22px rgba(83, 66, 38, 0.12);
+  --on-card-dim: rgba(58, 52, 40, 0.68);
+  --topbar: rgba(246, 240, 228, 0.92);
+  --topbar-blur: rgba(246, 240, 228, 0.75);
+  --sheet: rgba(255, 250, 240, 0.96);
+  --overlay: rgba(60, 48, 30, 0.38);
+  --toast-bg: #fffaf0;
+  --danger-bg: rgba(191, 79, 62, 0.12);
+  --danger-ink: #a83c2d;
+  --danger-border: rgba(191, 79, 62, 0.38);
+  --scheme: light;
+}
+html[data-theme="mint"] {
+  --bg: #eef6f4;
+  --card: #ffffff;
+  --card-2: #e3f0ed;
+  --card-trans: rgba(255, 255, 255, 0);
+  --border: #cfe3de;
+  --text: #12312c;
+  --muted: #5c7a75;
+  --faint: #7d9994;
+  --cell: #dfecea;
+  --m1: #e0883a;  --m1-deep: #c26a12;
+  --m2: #2fa26b;  --m2-deep: #12855a;
+  --m3: #3b8db8;  --m3-deep: #1f6f99;
+  --m4: #c26a12;  --m4-deep: #9a5208;
+  --m5: #8b6bb1;  --m5-deep: #6b4f91;
+  --m6: #e0554b;  --m6-deep: #c8403a;
+  --m1-grad: linear-gradient(135deg, #e0883a, #c26a12);
+  --m2-grad: linear-gradient(135deg, #2fa26b, #12855a);
+  --m3-grad: linear-gradient(135deg, #3b8db8, #1f6f99);
+  --m4-grad: linear-gradient(135deg, #c26a12, #9a5208);
+  --m5-grad: linear-gradient(135deg, #8b6bb1, #6b4f91);
+  --m6-grad: linear-gradient(135deg, #e0554b, #c8403a);
+  --m-ink: #ffffff;
+  --punch-bg: rgba(255, 255, 255, 0.62);
+  --punch-border: rgba(18, 49, 44, 0.16);
+  --today-grad: linear-gradient(135deg, #d9f2ea 0%, #d3efe3 55%, #cdeadf 100%);
+  --today-border: rgba(59, 141, 184, 0.3);
+  --today-glow: rgba(59, 141, 184, 0.22);
+  --today-shadow: 0 8px 22px rgba(13, 59, 47, 0.12);
+  --on-card-dim: rgba(13, 59, 47, 0.66);
+  --topbar: rgba(238, 246, 244, 0.92);
+  --topbar-blur: rgba(238, 246, 244, 0.75);
+  --sheet: rgba(255, 255, 255, 0.96);
+  --overlay: rgba(18, 49, 44, 0.4);
+  --toast-bg: #ffffff;
+  --danger-bg: rgba(207, 60, 54, 0.1);
+  --danger-ink: #b3322b;
+  --danger-border: rgba(207, 60, 54, 0.35);
+  --scheme: light;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+  min-height: var(--app-height, 100vh);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+/* ---------- 顶栏 ---------- */
+.topwrap {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: var(--safe-top);
+  background: var(--topbar);
+  border-bottom: 1px solid var(--border);
+}
+@supports ((-webkit-backdrop-filter: blur(20px)) or (backdrop-filter: blur(20px))) {
+  .topwrap {
+    background: var(--topbar-blur);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+.topbar {
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 14px;
+}
+.topbar h1 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:active { background: var(--card-2); color: var(--text); }
+
+.page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 14px 14px 32px;
+  padding-bottom: calc(32px + var(--safe-bottom));
+}
+
+/* ---------- 今日卡片 ---------- */
+.today-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 22px 20px 20px;
+  background: var(--today-grad);
+  border: 1px solid var(--today-border);
+  box-shadow: var(--today-shadow);
+}
+.today-card::after {
+  content: "";
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--today-glow) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+}
+.today-date {
+  font-size: 13px;
+  color: var(--on-card-dim);
+  letter-spacing: 1px;
+}
+.today-verdict {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.3;
+  min-height: 34px;
+}
+.today-verdict .mood-emoji { font-size: 28px; vertical-align: -2px; margin-right: 4px; }
+.today-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--on-card-dim);
+  min-height: 16px;
+}
+/* 五个心情按钮 */
+.punch-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+.punch-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  padding: 14px 4px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, color 0.15s ease;
+  background: var(--punch-bg);
+  color: var(--muted);
+  border-color: var(--punch-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.punch-btn:active { transform: scale(0.94); }
+.punch-btn + .punch-btn { margin-left: 6px; }
+.punch-btn .emoji { font-size: 22px; line-height: 1; }
+.punch-btn .label { font-size: 12px; }
+.punch-btn.pm1 { color: var(--m1); }
+.punch-btn.pm2 { color: var(--m2); }
+.punch-btn.pm3 { color: var(--m3); }
+.punch-btn.pm4 { color: var(--m4); }
+.punch-btn.pm5 { color: var(--m5); }
+.punch-btn.pm6 { color: var(--m6); }
+.punch-btn.pm1.on { background: var(--m1-grad); color: var(--m-ink); border-color: transparent; }
+.punch-btn.pm2.on { background: var(--m2-grad); color: var(--m-ink); border-color: transparent; }
+.punch-btn.pm3.on { background: var(--m3-grad); color: var(--m-ink); border-color: transparent; }
+.punch-btn.pm4.on { background: var(--m4-grad); color: var(--m-ink); border-color: transparent; }
+.punch-btn.pm5.on { background: var(--m5-grad); color: var(--m-ink); border-color: transparent; }
+.punch-btn.pm6.on { background: var(--m6-grad); color: var(--m-ink); border-color: transparent; }
+.edit-today {
+  margin-top: 12px;
+  text-align: center;
+}
+.edit-today button {
+  background: none;
+  border: none;
+  color: var(--on-card-dim);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* ---------- 统计 ---------- */
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.stat {
+  width: calc(50% - 5px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+.stat:nth-child(odd) { margin-right: 10px; }
+.stat-num {
+  font-size: 21px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.stat-num .unit { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.stat-num .dash { font-size: 15px; font-weight: 500; color: var(--muted); }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: 0.5px; }
+.stat.good .stat-num { color: var(--m1); }
+.stat.bad .stat-num { color: var(--m5); }
+
+/* ---------- 热力图 ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 14px 12px;
+  margin-top: 4px;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 2px 12px;
+}
+.hm-head { display: flex; align-items: center; }
+.hm-head .t { flex: 1; min-width: 0; }
+.hm-nav { display: flex; flex-shrink: 0; }
+.hm-nav-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card-2);
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.2s ease, color 0.2s ease;
+}
+.hm-nav-btn + .hm-nav-btn { margin-left: 6px; }
+.hm-nav-btn:active { transform: scale(0.92); color: var(--text); }
+.hm-nav-btn.is-off { opacity: 0.3; pointer-events: none; }
+.hm-nav-btn svg { width: 16px; height: 16px; display: block; }
+
+.hm-wrap { position: relative; flex: 1; min-width: 0; }
+.hm-wrap::before,
+.hm-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.hm-wrap::before { left: 0; background: linear-gradient(90deg, var(--card), var(--card-trans)); }
+.hm-wrap::after { right: 0; background: linear-gradient(270deg, var(--card), var(--card-trans)); }
+.hm-wrap.show-left::before { opacity: 1; }
+.hm-wrap.show-right::after { opacity: 1; }
+
+.hm-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+  scrollbar-width: none;
+}
+.hm-scroll::-webkit-scrollbar { display: none; }
+.hm-inner { display: inline-block; }
+.hm-months {
+  display: flex;
+  height: 14px;
+}
+.hm-month {
+  width: 14px;
+  flex: none;
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: visible;
+}
+.hm-body { display: flex; }
+.hm-days {
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+  flex: none;
+  margin-right: 2px;
+  padding-top: 17px;
+}
+.hm-day {
+  height: 14px;
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--muted);
+}
+.hm-weeks { display: flex; margin-top: 3px; }
+.hm-week {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 14px;
+}
+.hm-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--cell);
+  margin-bottom: 2px;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.hm-cell.lv1 { background: var(--m1); }
+.hm-cell.lv2 { background: var(--m2); }
+.hm-cell.lv3 { background: var(--m3); }
+.hm-cell.lv4 { background: var(--m4); }
+.hm-cell.lv5 { background: var(--m5); }
+.hm-cell.lv6 { background: var(--m6); }
+.hm-cell.today { outline: 1.5px solid var(--text); outline-offset: 1px; }
+.hm-cell.future { opacity: 0.35; cursor: default; }
+.hm-cell:not(.future):active { transform: scale(0.78); }
+.hm-legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.hm-legend .sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-left: 6px;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+.hm-legend .item { margin-left: 8px; }
+
+/* ---------- 弹层 ---------- */
+.overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: var(--overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 20;
+}
+.overlay.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  max-height: calc(var(--app-height, 100vh) - 40px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px 24px;
+  padding-bottom: calc(24px + var(--safe-bottom));
+  transform: translateY(105%);
+  transition: transform 0.24s ease;
+  z-index: 21;
+}
+@supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+  .sheet {
+    background: var(--sheet);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+.sheet.show { transform: translateY(0); }
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 0 auto 14px;
+}
+.sheet-title { font-size: 16px; font-weight: 700; }
+.sheet-status {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sheet-status b { color: var(--text); }
+/* 心情选择网格 */
+.pick-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.pick-btn {
+  width: calc(33.333% - 8px);
+  margin: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 4px;
+  font-size: 14px;
+  font-weight: 700;
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.15s ease, color 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.pick-btn:active { transform: scale(0.96); }
+.pick-btn .emoji { font-size: 24px; line-height: 1; }
+.pick-btn .label { font-size: 12px; }
+.pick-btn.pm1 { color: var(--m1); }
+.pick-btn.pm2 { color: var(--m2); }
+.pick-btn.pm3 { color: var(--m3); }
+.pick-btn.pm4 { color: var(--m4); }
+.pick-btn.pm5 { color: var(--m5); }
+.pick-btn.pm6 { color: var(--m6); }
+.pick-btn.pm1.on { background: var(--m1-grad); color: var(--m-ink); border-color: transparent; }
+.pick-btn.pm2.on { background: var(--m2-grad); color: var(--m-ink); border-color: transparent; }
+.pick-btn.pm3.on { background: var(--m3-grad); color: var(--m-ink); border-color: transparent; }
+.pick-btn.pm4.on { background: var(--m4-grad); color: var(--m-ink); border-color: transparent; }
+.pick-btn.pm5.on { background: var(--m5-grad); color: var(--m-ink); border-color: transparent; }
+.pick-btn.pm6.on { background: var(--m6-grad); color: var(--m-ink); border-color: transparent; }
+.sheet-actions { display: flex; margin-top: 18px; }
+.btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:active { transform: scale(0.97); }
+.btn + .btn { margin-left: 10px; }
+.btn-primary { background: var(--m2-grad); color: var(--m-ink); }
+.btn-ghost { background: var(--card-2); color: var(--text); border: 1px solid var(--border); }
+.btn-danger { background: var(--danger-bg); color: var(--danger-ink); border: 1px solid var(--danger-border); }
+/* ---------- 居中确认框 ---------- */
+.dialog {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  width: calc(100% - 56px);
+  max-width: 320px;
+  z-index: 22;
+  padding: 20px 20px 16px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.94);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.dialog.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) scale(1); }
+.dialog-title { font-size: 16px; font-weight: 700; }
+.dialog-text { margin-top: 8px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.dialog-actions { display: flex; margin-top: 18px; }
+.settings-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+.settings-section h3 { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 1px; margin-bottom: 10px; }
+
+/* ---------- 设置：主题选择 ---------- */
+.theme-grid { display: flex; flex-wrap: wrap; margin: -5px; }
+.theme-chip {
+  width: calc(50% - 10px);
+  margin: 5px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.08s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.theme-chip:active { transform: scale(0.97); }
+.theme-chip.on {
+  border-color: var(--m2);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--m2);
+}
+.theme-dots { display: flex; flex: none; margin-right: 9px; }
+.theme-dots i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1px solid rgba(128, 128, 128, 0.4);
+}
+.theme-dots i + i { margin-left: -4px; }
+.theme-name { flex: 1; min-width: 0; }
+.theme-tick { flex: none; margin-left: 5px; font-size: 12px; color: var(--m2); opacity: 0; }
+.theme-chip.on .theme-tick { opacity: 1; }
+.theme-hint { margin-top: 10px; font-size: 11px; line-height: 1.6; color: var(--muted); }
+
+/* ---------- 数据弹层 ---------- */
+.data-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.data-text {
+  width: 100%;
+  min-height: 200px;
+  margin-top: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+  color-scheme: var(--scheme);
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 72px;
+  bottom: calc(72px + var(--safe-bottom));
+  transform: translateX(-50%) translateY(20px);
+  background: var(--toast-bg);
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 30;
+  max-width: 82%;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.footer-note {
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+  margin-top: 20px;
+}
+</style>
+</head>
+<body>
+<div class="topwrap">
+  <div class="topbar">
+    <h1>今天我的心情</h1>
+    <button class="icon-btn" id="btnSettings" aria-label="设置">&#9881;</button>
+  </div>
+</div>
+
+<div class="page">
+  <div class="today-card">
+    <div class="today-date" id="todayDate"></div>
+    <div class="today-verdict" id="todayVerdict"></div>
+    <div class="today-sub" id="todaySub"></div>
+    <div class="punch-row" id="punchRow"></div>
+    <div class="edit-today" id="editToday"><button id="btnEditToday">撤销今天的记录</button></div>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+
+  <div class="card">
+    <div class="card-title hm-head">
+      <span class="t">近半年心情热力图</span>
+      <span class="hm-nav" id="hmNav">
+        <button class="hm-nav-btn" id="hmPrev" aria-label="看更早的周">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+        <button class="hm-nav-btn" id="hmNext" aria-label="看更近的周">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+        </button>
+      </span>
+    </div>
+    <div class="hm-body">
+      <div class="hm-days" id="hmDays"></div>
+      <div class="hm-wrap" id="hmWrap">
+        <div class="hm-scroll" id="hmScroll">
+          <div class="hm-inner">
+            <div class="hm-months" id="hmMonths"></div>
+            <div class="hm-weeks" id="hmWeeks"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="hm-legend" id="hmLegend"></div>
+  </div>
+
+  <div class="footer-note">数据仅保存在本机浏览器 · 点格子可修改历史</div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+
+<div class="sheet" id="daySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="dayTitle"></div>
+  <div class="sheet-status" id="dayStatus"></div>
+  <div class="pick-grid" id="pickGrid"></div>
+  <div class="sheet-actions">
+    <button class="btn btn-danger" id="btnDayClear">清除记录</button>
+    <button class="btn btn-ghost" id="btnDayCancel">关闭</button>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">设置</div>
+  <div class="sheet-status">每天记一种心情，颜色即心情。数据仅存在本机。</div>
+  <div class="settings-section">
+    <h3>主题</h3>
+    <div class="theme-grid" id="themeGrid"></div>
+    <div class="theme-hint">「跟随系统」随手机的深色 / 浅色模式自动切换。选择只存在本机，下次打开自动沿用。</div>
+  </div>
+  <div class="settings-section">
+    <h3>数据管理</h3>
+    <div class="sheet-actions" style="margin-top:0">
+      <button class="btn btn-ghost" id="btnExport">导出备份</button>
+      <button class="btn btn-ghost" id="btnImport">导入备份</button>
+      <button class="btn btn-danger" id="btnClear">清空数据</button>
+    </div>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="btnSetCancel">关闭</button>
+  </div>
+</div>
+
+<div class="sheet" id="dataSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="dataTitle"></div>
+  <div class="data-hint" id="dataHint"></div>
+  <textarea class="data-text" id="dataText" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="btnDataCancel">关闭</button>
+    <button class="btn btn-primary" id="btnDataConfirm"></button>
+  </div>
+</div>
+
+<div class="dialog" id="clearDialog">
+  <div class="dialog-title">清空全部心情记录？</div>
+  <div class="dialog-text" id="clearHint"></div>
+  <div class="dialog-actions">
+    <button class="btn btn-ghost" id="btnClearCancel">取消</button>
+    <button class="btn btn-danger" id="btnClearConfirm">确认清空</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="./main.js"></script>
+</body>
+</html>
