@@ -1,30 +1,26 @@
 (function () {
   'use strict';
 
-  /* ---------- 存储 ---------- */
-  var KEY_RECORDS = 'owt_records_v1';
-  var KEY_SETTINGS = 'owt_settings_v1';
+  /* ---------- 存储 ----------
+   * v2：只记准不准时 —— { 'YYYY-MM-DD': { ok: true|false } }
+   * v1（历史）：{ 'YYYY-MM-DD': { in: 'HH:MM', out: 'HH:MM' } }，首次打开时迁移。
+   */
+  var KEY_RECORDS = 'owt_records_v2';
+  var KEY_RECORDS_V1 = 'owt_records_v1';
+  var KEY_SETTINGS_V1 = 'owt_settings_v1';
 
-  var DEFAULT_SETTINGS = { start: '09:00', end: '18:00', grace: 0 };
-
-  function loadJSON(key, fallback) {
+  function loadJSON(key) {
     try {
       var raw = localStorage.getItem(key);
-      if (!raw) return fallback;
+      if (!raw) return null;
       return JSON.parse(raw);
     } catch (e) {
-      return fallback;
+      return null;
     }
   }
   function saveJSON(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
   }
-
-  var settings = loadJSON(KEY_SETTINGS, null) || DEFAULT_SETTINGS;
-  if (typeof settings.start !== 'string') settings.start = DEFAULT_SETTINGS.start;
-  if (typeof settings.end !== 'string') settings.end = DEFAULT_SETTINGS.end;
-  if (typeof settings.grace !== 'number') settings.grace = DEFAULT_SETTINGS.grace;
-  var records = loadJSON(KEY_RECORDS, {}) || {};
 
   /* ---------- 日期工具 ---------- */
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
@@ -37,73 +33,94 @@
   }
   function todayKey() { return dateKey(new Date()); }
   function toMin(hhmm) {
-    if (!hhmm) return null;
+    if (typeof hhmm !== 'string') return null;
     var p = hhmm.split(':');
     var h = Number(p[0]), m = Number(p[1]);
     if (isNaN(h) || isNaN(m)) return null;
     return h * 60 + m;
   }
-  function nowHHMM() {
-    var d = new Date();
-    return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
-  }
   var WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  function fmtDur(min) {
-    if (min < 60) return min + ' 分钟';
-    var h = Math.floor(min / 60), m = min % 60;
-    return m === 0 ? h + ' 小时' : h + ' 小时 ' + m + ' 分';
+
+  /* ---------- 记录归一化 ----------
+   * 兼容三种来源：v2 结构、v1 结构（记时间）、旧版导出的备份 JSON。
+   * v1 没有「准不准时」的显式标记，只能按标准下班时间（默认 18:00）折算。
+   */
+  var LEGACY_END = '18:00';
+
+  function normalizeRecords(raw, limit) {
+    var out = {};
+    if (!raw || typeof raw !== 'object') return out;
+    if (typeof limit !== 'number') limit = toMin(LEGACY_END);
+    for (var k in raw) {
+      if (!raw.hasOwnProperty(k)) continue;
+      var v = raw[k];
+      if (!v) continue;
+      if (typeof v.ok === 'boolean') { out[k] = { ok: v.ok }; continue; }
+      var outMin = toMin(v.out);          /* v1 结构 */
+      if (outMin === null) continue;      /* 旧版只打了上班卡 → 不算完成，不迁移 */
+      out[k] = { ok: outMin <= limit };
+    }
+    return out;
+  }
+
+  function migrateV1() {
+    var old = loadJSON(KEY_RECORDS_V1);
+    if (!old) return null;
+    var s = loadJSON(KEY_SETTINGS_V1);
+    var limit = toMin(LEGACY_END);
+    if (s && typeof s.end === 'string') {
+      var m = toMin(s.end);
+      if (m !== null) limit = m + (typeof s.grace === 'number' ? s.grace : 0);
+    }
+    return normalizeRecords(old, limit);
+  }
+
+  var records = loadJSON(KEY_RECORDS);
+  if (records) {
+    records = normalizeRecords(records);
+  } else {
+    var migrated = migrateV1();
+    if (migrated) {
+      records = migrated;
+      saveJSON(KEY_RECORDS, records);
+    } else {
+      records = {};
+    }
   }
 
   /* ---------- 状态判定 ----------
-   * 0 未打卡 | 1 仅上班卡 | 2 提前(≥15m) | 3 准时
-   * 4 加班<30m | 5 <1h | 6 <2h | 7 ≥2h
+   * 0 未打卡 | 1 准时下班 | 2 加班
    */
-  function dayLevel(key) {
+  function dayState(key) {
     var r = records[key];
-    if (!r || (!r.in && !r.out)) return 0;
-    var outMin = toMin(r.out);
-    if (outMin === null) return 1;
-    var limit = toMin(settings.end) + (settings.grace || 0);
-    var diff = outMin - limit;
-    if (diff <= -15) return 2;
-    if (diff <= 0) return 3;
-    if (diff <= 30) return 4;
-    if (diff <= 60) return 5;
-    if (diff <= 120) return 6;
-    return 7;
+    if (!r) return 0;
+    return r.ok ? 1 : 2;
+  }
+  function stateText(st) {
+    if (st === 1) return '准时下班';
+    if (st === 2) return '加班';
+    return '未打卡';
   }
 
   function dayVerdict(key) {
-    var r = records[key];
-    if (!r || (!r.in && !r.out)) {
-      return { html: '还没有打卡', sub: '点击下方按钮，记录今天吧', cls: '' };
+    var st = dayState(key);
+    if (st === 0) {
+      return { html: '今天还没打卡', sub: '下班时点一下，只记准不准时', cls: '' };
     }
-    var outMin = toMin(r.out);
-    if (outMin === null) {
-      var inMin = toMin(r.in);
-      return {
-        html: '上班卡已打 <span class="accent">' + r.in + '</span>',
-        sub: '下班时记得回来打卡' + (inMin !== null && inMin > toMin(settings.start) + (settings.grace || 0) ? ' · 今早迟到了 ' + fmtDur(inMin - toMin(settings.start)) : ''),
-        cls: ''
-      };
+    if (st === 1) {
+      return { html: '<span class="accent">今天准时下班！</span>', sub: '已记下，点热力图格子可以改', cls: 'good' };
     }
-    var limit = toMin(settings.end) + (settings.grace || 0);
-    var diff = outMin - limit;
-    if (diff <= -15) {
-      return { html: '<span class="accent">提前 ' + fmtDur(-diff) + ' 溜了</span>', sub: '下班 ' + r.out + ' · 标准 ' + settings.end, cls: 'good' };
-    }
-    if (diff <= 0) {
-      return { html: '<span class="accent">今天准时下班！</span>', sub: '下班 ' + r.out + ' · 标准 ' + settings.end + (settings.grace ? '(宽限' + settings.grace + '分)' : ''), cls: 'good' };
-    }
-    return { html: '<span class="warn">加班 ' + fmtDur(diff) + '</span>', sub: '下班 ' + r.out + ' · 标准 ' + settings.end + (settings.grace ? '(宽限' + settings.grace + '分)' : ''), cls: 'bad' };
+    return { html: '<span class="warn">今天加班了</span>', sub: '辛苦了，明天争取准时走', cls: 'bad' };
   }
 
   /* ---------- DOM ---------- */
   function $(id) { return document.getElementById(id); }
   var elDate = $('todayDate'), elVerdict = $('todayVerdict'), elSub = $('todaySub');
-  var btnIn = $('btnIn'), btnOut = $('btnOut');
+  var btnOntime = $('btnOntime'), btnOvertime = $('btnOvertime'), btnEditToday = $('btnEditToday');
+  var editToday = $('editToday');
   var overlay = $('overlay');
   var daySheet = $('daySheet'), setSheet = $('setSheet'), dataSheet = $('dataSheet');
+  var clearDialog = $('clearDialog');
   var toastEl = $('toast');
   var toastTimer = null;
 
@@ -117,6 +134,93 @@
     if (navigator.vibrate) { try { navigator.vibrate(8); } catch (e) {} }
   }
 
+  /* ---------- 主题（配色） ----------
+   * 主题模式存 localStorage（owt_theme_v1），解析后的实际配色写到
+   * <html data-theme>（dark / light / sepia / mint），CSS 只认 data-theme；
+   * data-theme-mode 保留原始选择（含 auto），供设置面板高亮用。
+   * 老内核不认 prefers-color-scheme：两个媒体查询都不匹配时退回默认「深夜」。
+   */
+  var KEY_THEME = 'owt_theme_v1';
+  var THEMES = [
+    { mode: 'auto',  name: '跟随系统', meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fd05c'] },
+    { mode: 'dark',  name: '深夜',     meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fd05c'] },
+    { mode: 'light', name: '明亮',     meta: '#f2f4f7', dots: ['#f2f4f7', '#ffffff', '#2da44e'] },
+    { mode: 'sepia', name: '暖阳纸张', meta: '#f6f0e4', dots: ['#f6f0e4', '#fffaf0', '#4f8a5b'] },
+    { mode: 'mint',  name: '薄荷',     meta: '#eef6f4', dots: ['#eef6f4', '#ffffff', '#2fa26b'] }
+  ];
+  var DEFAULT_THEME = 'dark';
+  var themeMode = DEFAULT_THEME;
+  var mqDark = null, mqLight = null;
+  try {
+    if (window.matchMedia) {
+      mqDark = window.matchMedia('(prefers-color-scheme: dark)');
+      mqLight = window.matchMedia('(prefers-color-scheme: light)');
+    }
+  } catch (e) { mqDark = null; mqLight = null; }
+
+  function themeMeta(mode) {
+    for (var i = 0; i < THEMES.length; i++) {
+      if (THEMES[i].mode === mode) return THEMES[i];
+    }
+    return THEMES[1];
+  }
+  function systemTheme() {
+    if (mqDark && mqDark.matches) return 'dark';
+    if (mqLight && mqLight.matches) return 'light';
+    return DEFAULT_THEME;
+  }
+  function applyTheme(mode) {
+    if (typeof mode !== 'string' || themeMeta(mode).mode !== mode) mode = DEFAULT_THEME;
+    themeMode = mode;
+    var resolved = mode === 'auto' ? systemTheme() : mode;
+    var root = document.documentElement;
+    root.setAttribute('data-theme', resolved);
+    root.setAttribute('data-theme-mode', mode);
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', themeMeta(resolved).meta);
+    renderThemePicker();
+  }
+  function renderThemePicker() {
+    var grid = $('themeGrid');
+    if (!grid) return;
+    var html = '';
+    for (var i = 0; i < THEMES.length; i++) {
+      var t = THEMES[i];
+      var on = t.mode === themeMode;
+      html += '<button type="button" class="theme-chip' + (on ? ' on' : '') + '" data-mode="' + t.mode +
+        '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+        '<span class="theme-dots"><i style="background:' + t.dots[0] + '"></i>' +
+        '<i style="background:' + t.dots[1] + '"></i>' +
+        '<i style="background:' + t.dots[2] + '"></i></span>' +
+        '<span class="theme-name">' + t.name + '</span>' +
+        '<span class="theme-tick">&#10003;</span></button>';
+    }
+    grid.innerHTML = html;
+  }
+  function themeChipOf(node) {
+    while (node && node !== document) {
+      if (node.className && String(node.className).indexOf('theme-chip') >= 0) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+  $('themeGrid').addEventListener('click', function (ev) {
+    var chip = themeChipOf(ev.target);
+    if (!chip) return;
+    var mode = chip.getAttribute('data-mode');
+    if (mode === themeMode) return;
+    saveJSON(KEY_THEME, mode);
+    applyTheme(mode);
+    buzz();
+  });
+  if (mqDark) {
+    var onSystemThemeChange = function () { if (themeMode === 'auto') applyTheme('auto'); };
+    /* Chrome 61 只有 addListener；新内核用 addEventListener */
+    if (mqDark.addEventListener) mqDark.addEventListener('change', onSystemThemeChange);
+    else if (mqDark.addListener) mqDark.addListener(onSystemThemeChange);
+  }
+  applyTheme(loadJSON(KEY_THEME) || DEFAULT_THEME);
+
   /* ---------- 渲染：今日卡片 ---------- */
   function renderToday() {
     var key = todayKey();
@@ -126,80 +230,61 @@
     elVerdict.innerHTML = v.html;
     elSub.textContent = v.sub;
 
-    var r = records[key] || {};
-    if (r.in) {
-      btnIn.className = 'punch-btn punch-in done';
-      btnIn.innerHTML = '上班 ' + r.in + '<small>点击更新为当前时间</small>';
-    } else {
-      btnIn.className = 'punch-btn punch-in';
-      btnIn.textContent = '上班打卡';
-    }
-    if (r.out) {
-      btnOut.className = 'punch-btn punch-out done';
-      btnOut.innerHTML = '下班 ' + r.out + '<small>点击更新为当前时间</small>';
-    } else {
-      btnOut.className = 'punch-btn punch-out';
-      btnOut.textContent = '下班打卡';
-    }
+    var st = dayState(key);
+    /* 再点一次同状态＝取消，点另一个＝改判 */
+    btnOntime.className = 'punch-btn punch-ok' + (st === 1 ? ' on' : '');
+    btnOvertime.className = 'punch-btn punch-ot' + (st === 2 ? ' on' : '');
+    editToday.style.display = st === 0 ? 'none' : '';    /* 没打卡就整行收起，不留半截空隙 */
   }
 
-  function punch(field) {
+  function punch(ok) {
     var key = todayKey();
-    var t = nowHHMM();
-    var r = records[key] || {};
-    if (r[field] && !window.confirm('已记录为 ' + r[field] + '，要更新为 ' + t + ' 吗？')) return;
-    r[field] = t;
-    records[key] = r;
+    if (records[key] && records[key].ok === ok) return;   /* 已是该状态，重复点不写库、不清数据 */
+    records[key] = { ok: ok };
     saveJSON(KEY_RECORDS, records);
     buzz();
-    toast(field === 'in' ? '上班打卡 ' + t : '下班打卡 ' + t);
+    toast(ok ? '记下了：今天准时下班' : '记下了：今天加班');
     renderAll();
   }
-  btnIn.addEventListener('click', function () { punch('in'); });
-  btnOut.addEventListener('click', function () { punch('out'); });
-  $('btnEditToday').addEventListener('click', function () { openDaySheet(todayKey()); });
+  btnOntime.addEventListener('click', function () { punch(true); });
+  btnOvertime.addEventListener('click', function () { punch(false); });
+  btnEditToday.addEventListener('click', function () {
+    var key = todayKey();
+    delete records[key];
+    saveJSON(KEY_RECORDS, records);
+    toast('已撤销今天的打卡');
+    renderAll();
+  });
 
   /* ---------- 渲染：统计 ---------- */
-  function isWorkday(d) { var w = d.getDay(); return w >= 1 && w <= 5; }
-
   function monthStats() {
     var now = new Date();
     var prefix = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-';
-    var ontime = 0, total = 0, outSum = 0, otMin = 0;
+    var ontime = 0, total = 0;
     for (var key in records) {
       if (!records.hasOwnProperty(key) || key.indexOf(prefix) !== 0) continue;
-      var outMin = toMin(records[key].out);
-      if (outMin === null) continue;
       total++;
-      outSum += outMin;
-      var diff = outMin - (toMin(settings.end) + (settings.grace || 0));
-      if (diff <= 0) ontime++; else otMin += diff;
+      if (records[key].ok) ontime++;
     }
     return {
       rate: total ? Math.round(ontime * 100 / total) : null,
-      avg: total ? Math.round(outSum / total) : null,
-      otMin: otMin
+      ontime: ontime,
+      overtime: total - ontime
     };
   }
 
+  /* 连续准时：按「已打卡的记录」连续计算 —— 不区分工作日 / 休息日。
+   * 没打卡的日子直接跳过，于是放假不打断，调休上班、周末加班都自然计入。 */
   function ontimeStreak() {
+    var keys = [], k;
+    for (k in records) {
+      if (records.hasOwnProperty(k)) keys.push(k);
+    }
+    keys.sort();                                   /* 'YYYY-MM-DD' 字典序即日期序 */
     var streak = 0;
-    var d = new Date();
-    for (var i = 0; i < 400; i++) {
-      if (!isWorkday(d)) { d.setDate(d.getDate() - 1); continue; }
-      var key = dateKey(d);
-      var r = records[key];
-      var outMin = r ? toMin(r.out) : null;
-      if (outMin === null) {
-        if (i === 0) { d.setDate(d.getDate() - 1); continue; } /* 今天还没打下班卡，不断连 */
-        break;
-      }
-      if (outMin <= toMin(settings.end) + (settings.grace || 0)) {
-        streak++;
-        d.setDate(d.getDate() - 1);
-      } else {
-        break;
-      }
+    for (var i = keys.length - 1; i >= 0; i--) {
+      if (!records[keys[i]].ok) break;
+      streak++;
     }
     return streak;
   }
@@ -207,12 +292,14 @@
   function renderStats() {
     var ms = monthStats();
     var streak = ontimeStreak();
-    var avgStr = ms.avg === null ? '—' : pad2(Math.floor(ms.avg / 60)) + ':' + pad2(ms.avg % 60);
+    var rate = ms.rate === null
+      ? '<span class="dash">—</span>'
+      : ms.rate + '<span class="unit">%</span>';
     var html = '';
     html += '<div class="stat good"><div class="stat-num">' + streak + '<span class="unit">天</span></div><div class="stat-label">连续准时下班</div></div>';
-    html += '<div class="stat' + (ms.rate !== null && ms.rate < 50 ? ' bad' : ' good') + '"><div class="stat-num">' + (ms.rate === null ? '—' : ms.rate + '<span class="unit">%</span>') + '</div><div class="stat-label">本月准时率</div></div>';
-    html += '<div class="stat"><div class="stat-num">' + avgStr + '</div><div class="stat-label">本月平均下班</div></div>';
-    html += '<div class="stat' + (ms.otMin > 0 ? ' bad' : '') + '"><div class="stat-num">' + (ms.otMin ? fmtDur(ms.otMin) : '0') + '</div><div class="stat-label">本月累计加班</div></div>';
+    html += '<div class="stat' + (ms.rate !== null && ms.rate < 50 ? ' bad' : ' good') + '"><div class="stat-num">' + rate + '</div><div class="stat-label">本月准时率</div></div>';
+    html += '<div class="stat"><div class="stat-num">' + (ms.ontime + ms.overtime) + '<span class="unit">天</span></div><div class="stat-label">本月打卡</div></div>';
+    html += '<div class="stat' + (ms.overtime > 0 ? ' bad' : '') + '"><div class="stat-num">' + ms.overtime + '<span class="unit">天</span></div><div class="stat-label">本月加班</div></div>';
     $('statsRow').innerHTML = html;
   }
 
@@ -262,7 +349,7 @@
         var key = dateKey(date);
         var cell = document.createElement('div');
         var future = date.getTime() > today.getTime();
-        cell.className = 'hm-cell lv' + dayLevel(key) + (key === tKey ? ' today' : '') + (future ? ' future' : '');
+        cell.className = 'hm-cell lv' + dayState(key) + (key === tKey ? ' today' : '') + (future ? ' future' : '');
         cell.setAttribute('data-key', key);
         if (!future) {
           (function (k) {
@@ -275,12 +362,59 @@
     }
   }
 
-  function scrollHeatmapRight() {
-    var sc = $('hmScroll');
-    sc.scrollLeft = sc.scrollWidth;
+  /* ---------- 热力图左右翻页 ----------
+   * 26 周在窄屏放不下（360px 屏溢出 ~84px），故给滚动区配一对翻页按钮：
+   * 一次翻一屏（留一列作上下文），两端置灰，两侧渐隐提示还有内容。
+   */
+  var hmScroll = $('hmScroll'), hmWrap = $('hmWrap'), hmNav = $('hmNav');
+  var hmPrev = $('hmPrev'), hmNext = $('hmNext');
+  var WEEK_W = 14;                                          /* 一列宽：格子 12 + 间距 2 */
+  var SMOOTH_SCROLL = 'scrollBehavior' in document.documentElement.style;
+
+  function hmMax() { return hmScroll.scrollWidth - hmScroll.clientWidth; }
+
+  function hmStep() {
+    var perPage = Math.floor(hmScroll.clientWidth / WEEK_W); /* 一屏放得下几周 */
+    return Math.max(WEEK_W, (perPage - 1) * WEEK_W);         /* 少翻一列，留点上下文 */
   }
 
-  /* ---------- 弹层：日期编辑 ---------- */
+  function hmScrollTo(left) {
+    var max = hmMax();
+    if (left < 0) left = 0;
+    if (left > max) left = max;
+    if (SMOOTH_SCROLL) {
+      hmScroll.scrollTo({ left: left, behavior: 'smooth' });
+    } else {
+      hmScroll.scrollLeft = left;
+    }
+  }
+
+  function updateHmNav() {
+    var max = hmMax();
+    var canPage = max > 2;
+    hmNav.style.display = canPage ? '' : 'none';             /* 放得下就不显示翻页按钮 */
+    hmWrap.classList.toggle('show-left', canPage && hmScroll.scrollLeft > 2);
+    hmWrap.classList.toggle('show-right', canPage && hmScroll.scrollLeft < max - 2);
+    hmPrev.classList.toggle('is-off', !canPage || hmScroll.scrollLeft <= 2);
+    hmNext.classList.toggle('is-off', !canPage || hmScroll.scrollLeft >= max - 2);
+  }
+
+  function scrollHeatmapRight() {
+    hmScroll.scrollLeft = hmScroll.scrollWidth;              /* 默认停在最新的一周 */
+    updateHmNav();
+  }
+
+  hmPrev.addEventListener('click', function () { hmScrollTo(hmScroll.scrollLeft - hmStep()); });
+  hmNext.addEventListener('click', function () { hmScrollTo(hmScroll.scrollLeft + hmStep()); });
+
+  var hmNavTick = false;
+  hmScroll.addEventListener('scroll', function () {
+    if (hmNavTick) return;
+    hmNavTick = true;
+    window.requestAnimationFrame(function () { hmNavTick = false; updateHmNav(); });
+  }, { passive: true });
+
+  /* ---------- 弹层：某天的状态 ---------- */
   var editingKey = null;
 
   function openSheet(sheet) {
@@ -292,72 +426,45 @@
     daySheet.classList.remove('show');
     setSheet.classList.remove('show');
     dataSheet.classList.remove('show');
+    clearDialog.classList.remove('show');
   }
 
   function openDaySheet(key) {
     editingKey = key;
     var d = parseKey(key);
     $('dayTitle').textContent = key + ' · ' + WEEKDAYS[d.getDay()];
-    var r = records[key] || {};
-    $('inpIn').value = r.in || '';
-    $('inpOut').value = r.out || '';
-    var v = dayVerdict(key);
-    var tmp = document.createElement('div');
-    tmp.innerHTML = v.html;
-    $('dayStatus').innerHTML = '状态：<b>' + tmp.textContent + '</b>' + (v.sub ? ' · ' + v.sub : '');
+    var st = dayState(key);
+    $('dayStatus').innerHTML = '当前状态：<b>' + stateText(st) + '</b>';
+    $('btnPickOk').className = 'pick-btn pick-ok' + (st === 1 ? ' on' : '');
+    $('btnPickOt').className = 'pick-btn pick-ot' + (st === 2 ? ' on' : '');
+    $('btnDayClear').style.display = st === 0 ? 'none' : '';
     openSheet(daySheet);
   }
 
-  $('btnDaySave').addEventListener('click', function () {
-    var inVal = $('inpIn').value, outVal = $('inpOut').value;
-    if (inVal && outVal && toMin(outVal) <= toMin(inVal)) {
-      toast('下班时间需要晚于上班时间');
-      return;
-    }
-    if (!inVal && !outVal) {
-      delete records[editingKey];
-    } else {
-      records[editingKey] = {};
-      if (inVal) records[editingKey].in = inVal;
-      if (outVal) records[editingKey].out = outVal;
-    }
+  function setDay(key, st) {
+    if (!key) return;
+    records[key] = { ok: st === 1 };
     saveJSON(KEY_RECORDS, records);
     buzz();
     closeSheets();
-    toast('已保存 ' + editingKey);
+    toast(key === todayKey() ? '已记为' + stateText(st) : '已保存 ' + key);
     renderAll();
-  });
-  $('btnDayDelete').addEventListener('click', function () {
-    if (!records[editingKey]) { closeSheets(); return; }
-    if (!window.confirm('删除 ' + editingKey + ' 的打卡记录？')) return;
+  }
+
+  $('btnPickOk').addEventListener('click', function () { setDay(editingKey, 1); });
+  $('btnPickOt').addEventListener('click', function () { setDay(editingKey, 2); });
+  $('btnDayClear').addEventListener('click', function () {
+    if (!editingKey) { closeSheets(); return; }
     delete records[editingKey];
     saveJSON(KEY_RECORDS, records);
     closeSheets();
-    toast('已删除');
+    toast('已清除 ' + editingKey);
     renderAll();
   });
   $('btnDayCancel').addEventListener('click', closeSheets);
 
   /* ---------- 弹层：设置 ---------- */
-  $('btnSettings').addEventListener('click', function () {
-    $('setStart').value = settings.start;
-    $('setEnd').value = settings.end;
-    $('setGrace').value = settings.grace;
-    openSheet(setSheet);
-  });
-  $('btnSetSave').addEventListener('click', function () {
-    var s = $('setStart').value, e = $('setEnd').value;
-    var g = parseInt($('setGrace').value, 10);
-    if (!s || !e) { toast('请填写标准上下班时间'); return; }
-    if (toMin(e) <= toMin(s)) { toast('下班时间需要晚于上班时间'); return; }
-    settings.start = s;
-    settings.end = e;
-    settings.grace = isNaN(g) || g < 0 ? 0 : Math.min(g, 720);
-    saveJSON(KEY_SETTINGS, settings);
-    closeSheets();
-    toast('设置已保存');
-    renderAll();
-  });
+  $('btnSettings').addEventListener('click', function () { openSheet(setSheet); });
   $('btnSetCancel').addEventListener('click', closeSheets);
   overlay.addEventListener('click', closeSheets);
 
@@ -374,22 +481,20 @@
   function openDataSheet(mode) {
     dataMode = mode;
     if (mode === 'export') {
-      var payload = { settings: settings, records: records, exportedAt: new Date().toISOString() };
+      var payload = { records: records, exportedAt: new Date().toISOString() };
       $('dataTitle').textContent = '导出备份';
       dataHint.textContent = '长按下方文本全选，再复制保存到备忘录 / 笔记本。';
       dataTextarea.value = JSON.stringify(payload, null, 2);
       dataTextarea.readOnly = true;
       $('btnDataConfirm').textContent = '全选';
       $('btnDataConfirm').className = 'btn btn-ghost';
-      $('btnDataConfirm').style.display = '';
     } else {
       $('dataTitle').textContent = '导入备份';
-      dataHint.textContent = '将之前导出的 JSON 粘贴到下方，点「确认导入」。';
+      dataHint.textContent = '将之前导出的 JSON 粘贴到下方，点「确认导入」。旧版（记时间）的备份也能导入。';
       dataTextarea.value = '';
       dataTextarea.readOnly = false;
       $('btnDataConfirm').textContent = '确认导入';
       $('btnDataConfirm').className = 'btn btn-primary';
-      $('btnDataConfirm').style.display = '';
     }
     openSheet(dataSheet);
     setTimeout(function () { dataTextarea.focus(); }, 260);
@@ -411,17 +516,11 @@
     }
     /* import */
     var raw = dataTextarea.value;
-    if (!raw.trim()) { toast('请先粘贴 JSON'); return; }
+    if (!raw.replace(/\s/g, '')) { toast('请先粘贴 JSON'); return; }
     try {
       var data = JSON.parse(raw);
       if (!data || typeof data.records !== 'object') throw new Error('bad');
-      records = data.records || {};
-      if (data.settings) {
-        settings.start = data.settings.start || settings.start;
-        settings.end = data.settings.end || settings.end;
-        settings.grace = typeof data.settings.grace === 'number' ? data.settings.grace : settings.grace;
-        saveJSON(KEY_SETTINGS, settings);
-      }
+      records = normalizeRecords(data.records);
       saveJSON(KEY_RECORDS, records);
       closeSheets();
       toast('导入成功');
@@ -432,8 +531,27 @@
   });
   $('btnDataCancel').addEventListener('click', closeSheets);
 
+  /* 清空＝独立的页内确认框。
+   * 不用 window.confirm：容器 iframe 未开 allow-modals 时它不弹窗、静默返回 false，
+   * 表现为「点了没反应」。也不用「再点一次」那种轻确认——两次点击之间没有阻断，
+   * 误触连点就删光了，且不可恢复。 */
+  function countRecords() {
+    var n = 0;
+    for (var k in records) { if (records.hasOwnProperty(k)) n++; }
+    return n;
+  }
   $('btnClear').addEventListener('click', function () {
-    if (!window.confirm('确定清空全部打卡记录？此操作不可恢复。')) return;
+    var n = countRecords();
+    if (n === 0) { toast('本机还没有打卡记录'); return; }
+    $('clearHint').textContent = '共 ' + n + ' 条记录会被永久删除，无法恢复。';
+    setSheet.classList.remove('show');     /* 收起设置面板，只留确认框 */
+    openSheet(clearDialog);
+  });
+  $('btnClearCancel').addEventListener('click', function () {
+    clearDialog.classList.remove('show');
+    setSheet.classList.add('show');        /* 取消＝退回设置面板 */
+  });
+  $('btnClearConfirm').addEventListener('click', function () {
     records = {};
     saveJSON(KEY_RECORDS, records);
     closeSheets();
@@ -445,7 +563,10 @@
   function setAppHeight() {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
   }
-  window.addEventListener('resize', setAppHeight);
+  window.addEventListener('resize', function () {
+    setAppHeight();
+    updateHmNav();                                           /* 屏宽变了，一屏周数也变了 */
+  });
   setAppHeight();
 
   /* ---------- 启动 ---------- */
@@ -453,7 +574,7 @@
     renderToday();
     renderStats();
     renderHeatmap();
+    scrollHeatmapRight();                                    /* 每次重绘都停在最新一周 */
   }
   renderAll();
-  scrollHeatmapRight();
 })();

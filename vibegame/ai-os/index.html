@@ -737,16 +737,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   transition:transform .12s ease;
 }
 .opt:active{ transform:scale(.96); }
-/* 日程（v1 还原）：难度卡用「左标签 + 右取值」（同 .row 语言），记忆列表上卡面，结算用主 CTA */
-.sdiff{
-  display:flex; align-items:center; width:100%; text-align:left;
-  padding:14px; margin-bottom:10px;
-  border-radius:var(--r-md); background:var(--card); border:1px solid var(--line);
-  box-shadow:var(--sh-1), var(--hl); transition:transform .14s ease;
-}
-.sdiff:active{ transform:scale(.97); }
-.sdiff b{ flex:1 1 auto; min-width:0; font-size:16px; font-weight:600; color:var(--ink); }
-.sdiff span{ flex:0 0 auto; margin-left:10px; font-size:12px; color:var(--ink-dim); }
+/* 日程（v1 还原）：难度选择/选项/结算动作全部下移页脚（同日历/助手/闹钟，统一页脚操作区语言），记忆列表上卡面 */
 /* 记忆列表：原来是一排浮在页面上的裸文字，按站内做法收进卡面 */
 .sched-list{
   background:var(--card); border:1px solid var(--line);
@@ -776,9 +767,6 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 /* 阶段容器：内容在剩余空间里垂直居中（auto 外边距；溢出时自动归零，交内容区滚动），消除中段空洞 */
 .sched-stage{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
 .sched-block{ display:flex; flex-direction:column; margin:auto 0; }
-/* 有操作区时：内容占住操作区之上的整片空间并在其中居中（auto 外边距溢出自动归零，可滚不裁） */
-.sched-fill{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
-.sched-act{ margin-top:auto; }
 /* 结算动作：等分满宽两枚（主 CTA 渐变 + 次级卡面），与键盘/判定按钮同一套控件语言 */
 .act-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
 .act-btn{
@@ -797,7 +785,6 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 }
 /* 净高不足的小屏：难度卡/标题/倒计时/列表行紧凑化，让记忆列表尽量一屏看全 */
 @media (max-height:700px){
-  .sdiff{ padding:11px; margin-bottom:8px; }
   .recall-q{ font-size:17px; margin-bottom:8px; }
   .recall-cd{ margin-bottom:8px; padding:3px 11px; font-size:12px; }
   .sched-list{ padding:0 12px; }

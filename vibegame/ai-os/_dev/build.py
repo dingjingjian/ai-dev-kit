@@ -750,16 +750,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   transition:transform .12s ease;
 }
 .opt:active{ transform:scale(.96); }
-/* 日程（v1 还原）：难度卡用「左标签 + 右取值」（同 .row 语言），记忆列表上卡面，结算用主 CTA */
-.sdiff{
-  display:flex; align-items:center; width:100%; text-align:left;
-  padding:14px; margin-bottom:10px;
-  border-radius:var(--r-md); background:var(--card); border:1px solid var(--line);
-  box-shadow:var(--sh-1), var(--hl); transition:transform .14s ease;
-}
-.sdiff:active{ transform:scale(.97); }
-.sdiff b{ flex:1 1 auto; min-width:0; font-size:16px; font-weight:600; color:var(--ink); }
-.sdiff span{ flex:0 0 auto; margin-left:10px; font-size:12px; color:var(--ink-dim); }
+/* 日程（v1 还原）：难度选择/选项/结算动作全部下移页脚（同日历/助手/闹钟，统一页脚操作区语言），记忆列表上卡面 */
 /* 记忆列表：原来是一排浮在页面上的裸文字，按站内做法收进卡面 */
 .sched-list{
   background:var(--card); border:1px solid var(--line);
@@ -789,9 +780,6 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 /* 阶段容器：内容在剩余空间里垂直居中（auto 外边距；溢出时自动归零，交内容区滚动），消除中段空洞 */
 .sched-stage{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
 .sched-block{ display:flex; flex-direction:column; margin:auto 0; }
-/* 有操作区时：内容占住操作区之上的整片空间并在其中居中（auto 外边距溢出自动归零，可滚不裁） */
-.sched-fill{ display:flex; flex-direction:column; flex:1 1 auto; min-height:0; }
-.sched-act{ margin-top:auto; }
 /* 结算动作：等分满宽两枚（主 CTA 渐变 + 次级卡面），与键盘/判定按钮同一套控件语言 */
 .act-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
 .act-btn{
@@ -810,7 +798,6 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 }
 /* 净高不足的小屏：难度卡/标题/倒计时/列表行紧凑化，让记忆列表尽量一屏看全 */
 @media (max-height:700px){
-  .sdiff{ padding:11px; margin-bottom:8px; }
   .recall-q{ font-size:17px; margin-bottom:8px; }
   .recall-cd{ margin-bottom:8px; padding:3px 11px; font-size:12px; }
   .sched-list{ padding:0 12px; }
@@ -2197,7 +2184,8 @@ JS = r"""
     var stage = el('div', 'sched-stage');
     body.appendChild(stage);
     v.appendChild(body);
-    v.appendChild(el('div', 'pfoot', '<div class="pfoot-hint">AI 排的日程，AI 自己都记不住</div>'));
+    var foot = el('div', 'pfoot');
+    v.appendChild(foot);
 
     var S = statGet('schedule', { score: 0, highScore: 0, accuracy: 0, rounds: 0 });
     var items = []; var pos = 0; var correct = 0; var secs = 0; var timer = null; var curDiff = 'medium';
@@ -2226,14 +2214,16 @@ JS = r"""
       stage.innerHTML = '';
       var box = el('div', 'sched-block');
       box.appendChild(el('div', 'recall-q', '选择难度'));
-      [['easy', '简单'], ['medium', '中等'], ['hard', '困难']].forEach(function (d) {
-        var cfg = SCHED_DIFF[d[0]];
-        var b = el('button', 'sdiff');
-        b.innerHTML = '<b>' + d[1] + '</b><span>' + cfg.count + ' 条日程 · ' + cfg.time + ' 秒记忆</span>';
-        b.addEventListener('click', function () { curDiff = d[0]; start(d[0]); });
-        box.appendChild(b);
-      });
+      box.appendChild(el('div', 'recall-sub', '记住日程 → 回忆考验，看看你比 AI 强多少'));
       stage.appendChild(box);
+      foot.innerHTML = '';
+      var frow = el('div', 'ms-foot');
+      [['easy', '简单'], ['medium', '中等'], ['hard', '困难']].forEach(function (d) {
+        var b = el('button', 'diff-btn' + (curDiff === d[0] ? ' sel' : ''), d[1]);
+        b.addEventListener('click', function () { curDiff = d[0]; start(d[0]); });
+        frow.appendChild(b);
+      });
+      foot.appendChild(frow);
     }
     function start(d) {
       items = pick(d); pos = 0; correct = 0; secs = SCHED_DIFF[d].time;
@@ -2248,6 +2238,7 @@ JS = r"""
       });
       box.appendChild(list);
       stage.appendChild(box);
+      foot.innerHTML = '<div class="pfoot-hint">AI 排的日程，AI 自己都记不住</div>';
       if (timer) { clearInterval(timer); }
       timer = global.setInterval(function () {
         secs -= 1;
@@ -2261,6 +2252,8 @@ JS = r"""
       var box = el('div', 'sched-block');
       box.appendChild(el('div', 'recall-sub', (pos + 1) + ' / ' + items.length));
       box.appendChild(el('div', 'recall-q', it.time + ' 做什么？'));
+      stage.appendChild(box);
+      foot.innerHTML = '';
       var grid = el('div', 'opt-grid');
       optionsFor(it).forEach(function (txt) {
         var b = el('button', 'opt', txt);
@@ -2271,8 +2264,7 @@ JS = r"""
         });
         grid.appendChild(b);
       });
-      box.appendChild(grid);
-      stage.appendChild(box);
+      foot.appendChild(grid);
     }
     function finish() {
       var gain = correct * 5 + (correct === items.length ? 10 : 0);
@@ -2283,19 +2275,18 @@ JS = r"""
       statPut('schedule', S);
       refresh();
       stage.innerHTML = '';
-      var fill = el('div', 'sched-fill');
       var box = el('div', 'sched-block');
       box.appendChild(el('div', 'recall-q', '记住 ' + correct + ' / ' + items.length + ' 条'));
       box.appendChild(el('div', 'recall-sub', '本局 +' + gain + (correct === items.length ? '（全对奖励 +10）' : '')));
-      fill.appendChild(box);
-      stage.appendChild(fill);
-      var act = el('div', 'act-grid sched-act');
+      stage.appendChild(box);
+      foot.innerHTML = '';
+      var act = el('div', 'act-grid');
       var again = el('button', 'act-btn primary', '再来一次');
       again.addEventListener('click', function () { start(curDiff); });
       var back = el('button', 'act-btn ghost', '换难度');
       back.addEventListener('click', showSelect);
       act.appendChild(again); act.appendChild(back);
-      stage.appendChild(act);
+      foot.appendChild(act);
     }
     showSelect();
     refresh();
