@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<title>今天我准时下班了吗？</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --card: #161b22;
+  --card-2: #1c2330;
+  --border: #2a323d;
+  --text: #e6edf3;
+  --muted: #8b949e;
+  --green: #26a641;
+  --green-deep: #0e5c2e;
+  --blue: #2c5a8a;
+  --yellow: #d3a527;
+  --orange: #e8871e;
+  --red: #e5534b;
+  --red-deep: #b02e2e;
+  --cell: #1b222c;
+  --radius: 14px;
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-l: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-r: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; touch-action: manipulation; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  min-height: 100vh;
+  min-height: var(--app-height, 100vh);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-font-smoothing: antialiased;
+  padding-left: var(--safe-l);
+  padding-right: var(--safe-r);
+}
+
+/* ---------- 顶栏（吸顶 + 顶部安全区） ---------- */
+.topwrap {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  padding-top: var(--safe-top);
+  background: rgba(13, 17, 23, 0.92);
+  border-bottom: 1px solid var(--border);
+}
+@supports ((-webkit-backdrop-filter: blur(20px)) or (backdrop-filter: blur(20px))) {
+  .topwrap {
+    background: rgba(13, 17, 23, 0.72);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+.topbar {
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 14px;
+}
+.topbar h1 {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:active { background: var(--card-2); color: var(--text); }
+
+.page {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 14px 14px 32px;
+  padding-bottom: calc(32px + var(--safe-bottom));
+}
+
+/* ---------- 今日卡片 ---------- */
+.today-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+  padding: 22px 20px 20px;
+  background: linear-gradient(135deg, #14324a 0%, #123a2e 55%, #0f2c22 100%);
+  border: 1px solid rgba(38, 166, 65, 0.25);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.today-card::after {
+  content: "";
+  position: absolute;
+  top: -60px;
+  right: -60px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(38, 166, 65, 0.25) 0%, rgba(38, 166, 65, 0) 70%);
+  pointer-events: none;
+}
+.today-date {
+  font-size: 13px;
+  color: rgba(230, 237, 243, 0.75);
+  letter-spacing: 1px;
+}
+.today-verdict {
+  margin-top: 8px;
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1.3;
+  min-height: 34px;
+}
+.today-verdict .accent { color: #3fd05c; }
+.today-verdict .warn { color: #f0a13c; }
+.today-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: rgba(230, 237, 243, 0.6);
+  min-height: 16px;
+}
+.punch-row {
+  display: flex;
+  margin-top: 18px;
+}
+.punch-btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.08s ease;
+  color: #06210f;
+}
+.punch-btn:active { transform: scale(0.96); }
+.punch-btn + .punch-btn { margin-left: 10px; }
+.punch-in { background: linear-gradient(135deg, #3fb950, #2ea043); }
+.punch-out { background: linear-gradient(135deg, #e6edf3, #b9c4cf); }
+.punch-btn.done {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(230, 237, 243, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.punch-btn.done small { display: block; font-size: 11px; font-weight: 400; margin-top: 2px; opacity: 0.75; }
+.edit-today {
+  margin-top: 12px;
+  text-align: center;
+}
+.edit-today button {
+  background: none;
+  border: none;
+  color: rgba(230, 237, 243, 0.55);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+/* ---------- 统计 ---------- */
+.stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+.stat {
+  width: calc(50% - 5px);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  margin-bottom: 10px;
+}
+.stat:nth-child(odd) { margin-right: 10px; }
+.stat-num {
+  font-size: 21px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.stat-num .unit { font-size: 12px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; letter-spacing: 0.5px; }
+.stat.good .stat-num { color: #3fd05c; }
+.stat.bad .stat-num { color: #f0a13c; }
+
+/* ---------- 热力图 ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 14px 12px;
+  margin-top: 4px;
+}
+.card-title {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0 2px 12px;
+}
+.hm-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+.hm-inner { display: inline-block; }
+.hm-months {
+  display: flex;
+  margin-left: 22px;
+  height: 14px;
+}
+.hm-month {
+  width: 14px;
+  flex: none;
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: visible;
+}
+.hm-body { display: flex; margin-top: 3px; }
+.hm-days {
+  display: flex;
+  flex-direction: column;
+  width: 20px;
+  flex: none;
+  margin-right: 2px;
+}
+.hm-day {
+  height: 14px;
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--muted);
+}
+.hm-weeks { display: flex; }
+.hm-week {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  width: 14px;
+}
+.hm-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--cell);
+  margin-bottom: 2px;
+  cursor: pointer;
+}
+.hm-cell.lv1 { background: var(--blue); }
+.hm-cell.lv2 { background: var(--green-deep); }
+.hm-cell.lv3 { background: var(--green); }
+.hm-cell.lv4 { background: var(--yellow); }
+.hm-cell.lv5 { background: var(--orange); }
+.hm-cell.lv6 { background: var(--red); }
+.hm-cell.lv7 { background: var(--red-deep); }
+.hm-cell.today { outline: 1.5px solid #e6edf3; outline-offset: 1px; }
+.hm-cell.future { opacity: 0.35; cursor: default; }
+.hm-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.hm-legend .sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-left: 6px;
+  margin-right: 3px;
+  vertical-align: -1px;
+}
+.hm-legend .item { margin-left: 8px; }
+
+/* ---------- 弹层 ---------- */
+.overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(2, 6, 12, 0.65);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 20;
+}
+.overlay.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 18px 18px 0 0;
+  padding: 18px 18px 24px;
+  padding-bottom: calc(24px + var(--safe-bottom));
+  transform: translateY(105%);
+  transition: transform 0.24s ease;
+  z-index: 21;
+}
+@supports ((-webkit-backdrop-filter: blur(12px)) or (backdrop-filter: blur(12px))) {
+  .sheet {
+    background: rgba(22, 27, 34, 0.92);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+  }
+}
+.sheet.show { transform: translateY(0); }
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 0 auto 14px;
+}
+.sheet-title { font-size: 16px; font-weight: 700; }
+.sheet-status {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.sheet-status b { color: var(--text); }
+.field-row { display: flex; margin-top: 16px; }
+.field {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.field + .field { margin-left: 10px; }
+.field label {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.field input {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  color-scheme: dark;
+}
+.field input::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+.sheet-actions { display: flex; margin-top: 18px; }
+.btn {
+  flex: 1;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 8px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.btn:active { transform: scale(0.97); }
+.btn + .btn { margin-left: 10px; }
+.btn-primary { background: linear-gradient(135deg, #3fb950, #2ea043); color: #06210f; }
+.btn-ghost { background: var(--card-2); color: var(--text); border: 1px solid var(--border); }
+.btn-danger { background: rgba(218, 54, 51, 0.15); color: #f85149; border: 1px solid rgba(218, 54, 51, 0.4); }
+.settings-section { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 16px; }
+.settings-section h3 { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 1px; margin-bottom: 10px; }
+
+/* ---------- 数据弹层（导出 / 导入文本） ---------- */
+.data-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.data-text {
+  width: 100%;
+  min-height: 200px;
+  margin-top: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 12px;
+  font-family: "SF Mono", Menlo, Consolas, monospace;
+  line-height: 1.55;
+  resize: vertical;
+  outline: none;
+  color-scheme: dark;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ---------- Toast ---------- */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 72px;
+  bottom: calc(72px + var(--safe-bottom));
+  transform: translateX(-50%) translateY(20px);
+  background: #2a323d;
+  color: var(--text);
+  font-size: 13px;
+  padding: 10px 18px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  z-index: 30;
+  max-width: 82%;
+  text-align: center;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.footer-note {
+  text-align: center;
+  font-size: 11px;
+  color: #525c66;
+  margin-top: 22px;
+  letter-spacing: 0.5px;
+}
+</style>
+</head>
+<body>
+<div class="topwrap">
+  <div class="topbar">
+    <h1>今天我准时下班了吗？</h1>
+    <button class="icon-btn" id="btnSettings" aria-label="设置">&#9881;</button>
+  </div>
+</div>
+
+<div class="page">
+  <div class="today-card">
+    <div class="today-date" id="todayDate"></div>
+    <div class="today-verdict" id="todayVerdict"></div>
+    <div class="today-sub" id="todaySub"></div>
+    <div class="punch-row">
+      <button class="punch-btn punch-in" id="btnIn">上班打卡</button>
+      <button class="punch-btn punch-out" id="btnOut">下班打卡</button>
+    </div>
+    <div class="edit-today"><button id="btnEditToday">补记 / 修改今天</button></div>
+  </div>
+
+  <div class="stats-row" id="statsRow"></div>
+
+  <div class="card">
+    <div class="card-title">近半年打卡热力图</div>
+    <div class="hm-scroll" id="hmScroll">
+      <div class="hm-inner">
+        <div class="hm-months" id="hmMonths"></div>
+        <div class="hm-body">
+          <div class="hm-days" id="hmDays"></div>
+          <div class="hm-weeks" id="hmWeeks"></div>
+        </div>
+      </div>
+    </div>
+    <div class="hm-legend">
+      <span class="item"><i class="sw" style="background:var(--cell)"></i>未打卡</span>
+      <span class="item"><i class="sw" style="background:var(--blue)"></i>缺下班卡</span>
+      <span class="item"><i class="sw" style="background:var(--green)"></i>准时</span>
+      <span class="item"><i class="sw" style="background:var(--yellow)"></i>&lt;30m</span>
+      <span class="item"><i class="sw" style="background:var(--orange)"></i>&lt;1h</span>
+      <span class="item"><i class="sw" style="background:var(--red)"></i>&lt;2h</span>
+      <span class="item"><i class="sw" style="background:var(--red-deep)"></i>2h+</span>
+    </div>
+  </div>
+
+  <div class="footer-note">数据仅保存在本机浏览器 · 点格子可补记 / 修改</div>
+</div>
+
+<div class="overlay" id="overlay"></div>
+
+<div class="sheet" id="daySheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="dayTitle"></div>
+  <div class="sheet-status" id="dayStatus"></div>
+  <div class="field-row">
+    <div class="field">
+      <label>上班时间</label>
+      <input type="time" id="inpIn">
+    </div>
+    <div class="field">
+      <label>下班时间</label>
+      <input type="time" id="inpOut">
+    </div>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn btn-danger" id="btnDayDelete">删除</button>
+    <button class="btn btn-ghost" id="btnDayCancel">取消</button>
+    <button class="btn btn-primary" id="btnDaySave">保存</button>
+  </div>
+</div>
+
+<div class="sheet" id="setSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title">设置</div>
+  <div class="field-row">
+    <div class="field">
+      <label>标准上班</label>
+      <input type="time" id="setStart">
+    </div>
+    <div class="field">
+      <label>标准下班</label>
+      <input type="time" id="setEnd">
+    </div>
+    <div class="field">
+      <label>宽限(分钟)</label>
+      <input type="number" id="setGrace" min="0" max="120" step="5" inputmode="numeric">
+    </div>
+  </div>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="btnSetCancel">取消</button>
+    <button class="btn btn-primary" id="btnSetSave">保存</button>
+  </div>
+  <div class="settings-section">
+    <h3>数据管理</h3>
+    <div class="sheet-actions" style="margin-top:0">
+      <button class="btn btn-ghost" id="btnExport">导出备份</button>
+      <button class="btn btn-ghost" id="btnImport">导入备份</button>
+      <button class="btn btn-danger" id="btnClear">清空数据</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="dataSheet">
+  <div class="sheet-handle"></div>
+  <div class="sheet-title" id="dataTitle"></div>
+  <div class="data-hint" id="dataHint"></div>
+  <textarea class="data-text" id="dataText" autocapitalize="off" autocorrect="off" spellcheck="false"></textarea>
+  <div class="sheet-actions">
+    <button class="btn btn-ghost" id="btnDataCancel">关闭</button>
+    <button class="btn btn-primary" id="btnDataConfirm"></button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="./main.js"></script>
+</body>
+</html>
