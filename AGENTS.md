@@ -13,6 +13,7 @@
 | 项目 | 目录 | 说明 |
 |------|------|------|
 | 准时下班打卡 | `vibetool/offwork-heatmap/` | 浏览器端上下班打卡工具，GitHub 式热力图展示每日准时/加班状态，含连续准时与月度统计，localStorage 本地存储 |
+| 心情日记 | `vibetool/mood-diary/` | 浏览器端心情记录工具，五种心情颜色一键打卡，GitHub 式热力图回看半年情绪，含连续好心情与月度统计，localStorage 本地存储 |
 | 拼豆设计工具 | `vibetool/perler-bead-designer/` | 浏览器端拼豆图案设计工具，行业标准色卡、多种钉板形状、用料统计、图纸导出 |
 | 像素画编辑器 | `vibetool/pixel-art-editor/` | 浏览器端像素画绘制工具，支持多种画笔、图层、撤销重做、导出 PNG |
 | Word 转 Markdown | `vibetool/word-to-md/` | Word 文档转 Markdown 格式工具 |

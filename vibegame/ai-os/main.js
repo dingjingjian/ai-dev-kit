@@ -1272,21 +1272,24 @@
 
   /* ---------- 电话（v1 还原）：拨号盘 + 通话状态机 + 通话记录 ---------- */
   function buildPhone() {
-    var v = el('div', 'view hidden');
+    var v = el('div', 'view phone-view hidden');
     v.appendChild(el('div', 'phead', '<h1>电话</h1>'));
-    var body = el('div', 'pbody');
+    var body = el('div', 'pbody phone-body');
+    /* 顶部读数区：拨号回显 / 状态 / 通话计时 / 结束文案。
+     * idle 时贴在内容区顶部；通话中整块在剩余空间里垂直居中。 */
+    var top = el('div', 'phone-top');
     var disp = el('div', 'dial-display', '请输入号码');
     var status = el('div', 'dial-status', '');
     var timerEl = el('div', 'call-timer', '');
     timerEl.style.display = 'none';
     var endMsg = el('div', 'call-ended-msg', '');
-    body.appendChild(disp); body.appendChild(status); body.appendChild(timerEl); body.appendChild(endMsg);
-    var histCard = el('div', 'card');
+    top.appendChild(disp); top.appendChild(status); top.appendChild(timerEl); top.appendChild(endMsg);
+    body.appendChild(top);
+    /* 最近通话卡：卡面内嵌独立的滚动容器（全页唯一滚动条） */
+    var histCard = el('div', 'card hist-card');
     histCard.appendChild(el('div', 'card-title', '最近通话'));
-    var hist = el('div');
+    var hist = el('div', 'hist-scroll');
     histCard.appendChild(hist);
-    histCard.style.flex = '1 1 auto'; histCard.style.overflowY = 'auto'; histCard.style.minHeight = '120px';
-    body.style.display = 'flex'; body.style.flexDirection = 'column';
     body.appendChild(histCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
@@ -1296,7 +1299,12 @@
     var callBtn = el('button', 'call-btn', '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>');
     var delBtn = el('button', 'dial-del', '⌫');
     actRow.appendChild(contactsBtn); actRow.appendChild(callBtn); actRow.appendChild(delBtn);
-    foot.appendChild(pad); foot.appendChild(actRow);
+    /* 通话结束态：拨号行整行让位给满宽「完成」主 CTA（同日程/日历结算动作的控件语言），
+     * 不再把两个字塞进 50px 圆钮里（那既挤又和红色挂断语义打架）。 */
+    var doneRow = el('div', 'phone-done');
+    var doneBtn = el('button', 'act-btn primary', '完成');
+    doneRow.appendChild(doneBtn);
+    foot.appendChild(pad); foot.appendChild(actRow); foot.appendChild(doneRow);
     v.appendChild(foot);
     /* 通讯录全屏视图 */
     var CONTACTS = [
@@ -1361,7 +1369,13 @@
       if (tDur) { clearInterval(tDur); tDur = null; }
     }
     function phoneIcon() { return '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>'; }
-    function hangupIcon() { return '<svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.1.2-4.5.7v3.1c0 .4-.2.7-.5.9-.9.5-1.8 1.1-2.6 1.9-.4.4-1 .4-1.4 0L1 14.1c-.4-.4-.4-1 0-1.4C3.4 10.3 7.4 8.7 12 8.7s8.6 1.6 11 4c.4.4.4 1 0 1.4l-2 2c-.4.4-1 .4-1.4 0-.8-.8-1.7-1.4-2.6-1.9-.3-.2-.5-.5-.5-.9V9.7C15.1 9.2 13.6 9 12 9z" transform="rotate(135 12 12)"/></svg>'; }
+    /* 挂断：Material call_end（听筒朝下的 ∩ 形），与上方的 .call（Material call）同一套图标语言。
+     * 原来给一条本来就已经「朝下」的听筒路径又叠了 rotate(135°)，被转成一块斜着的碎块。 */
+    function hangupIcon() { return '<svg viewBox="0 0 24 24"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>'; }
+    /* 通话态开关：拨号后收起键盘与通话记录（CSS 侧 .phone-view.in-call 联动） */
+    function setCallMode(on) {
+      if (on) { v.classList.add('in-call'); } else { v.classList.remove('in-call'); }
+    }
     function connect() {
       phase = 'connected';
       status.textContent = CALL_TXT.connected;
@@ -1385,15 +1399,17 @@
       records = records.slice(0, 5);
       try { store('phone_records', JSON.stringify(records)); } catch (e) { /* 忽略 */ }
       paintHist();
-      callBtn.innerHTML = '<span style="color:#fff;font-size:14px;font-weight:700;">完成</span>';
+      v.classList.add('is-ended');
     }
     function resetCallUi() {
       inCall = false; phase = 'idle';
       status.textContent = ''; endMsg.textContent = '';
       timerEl.style.display = 'none';
-      disp.textContent = num ? fmt(num) : '请输入号码';
+      paintNum();
       callBtn.classList.remove('hangup');
       callBtn.innerHTML = phoneIcon();
+      v.classList.remove('is-ended');
+      setCallMode(false);
     }
     function startCall() {
       if (!num || inCall) { return; }
@@ -1404,6 +1420,8 @@
       disp.textContent = fmt(num);
       callBtn.classList.add('hangup');
       callBtn.innerHTML = hangupIcon();
+      v.classList.remove('is-ended');
+      setCallMode(true);
       tDial = global.setTimeout(connect, 3000 + Math.random() * 5000);
     }
     var KEY_SUB = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
@@ -1426,12 +1444,9 @@
       contactsView.style.display = '';
     });
     cBack.addEventListener('click', function () { contactsView.style.display = 'none'; });
-    callBtn.addEventListener('click', function () {
-      if (!inCall) { startCall(); return; }
-      if (phase === 'ended') { resetCallUi(); return; }
-      endCall(true);
-    });
-    v.onShow = function () { clearCallTimers(); contactsView.style.display = 'none'; if (inCall) { resetCallUi(); } };
+    callBtn.addEventListener('click', function () { if (!inCall) { startCall(); return; } endCall(true); });
+    doneBtn.addEventListener('click', function () { resetCallUi(); });
+    v.onShow = function () { clearCallTimers(); contactsView.style.display = 'none'; setCallMode(false); if (inCall) { resetCallUi(); } };
     paintHist();
     return v;
   }

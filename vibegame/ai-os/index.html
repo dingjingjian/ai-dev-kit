@@ -749,7 +749,9 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 }
 
 /* ============ 二期b 组件：聊天/选项/日程/拨号/短信/相机/统计（v1 还原） ============ */
-.bub{ max-width:80%; padding:10px 12px; border-radius:14px; font-size:14px; line-height:1.45; margin-bottom:10px; }
+/* overflow-wrap：用户可能发出长串不可断行内容（URL / 连续英文数字），
+ * 默认只在空格断行会把气泡撑破、文字溢出卡面，这里允许必要时断词。 */
+.bub{ max-width:80%; padding:10px 12px; border-radius:14px; font-size:14px; line-height:1.45; margin-bottom:10px; overflow-wrap:break-word; }
 .bub.ai{ background:var(--card); border:1px solid var(--line); border-top-left-radius:4px; color:var(--ink); }
 .bub.me{ background:linear-gradient(135deg,#8F7BF7,#6A4CE0); color:#fff; margin-left:auto; border-top-right-radius:4px; }
 .typing i{ display:inline-block; width:5px; height:5px; border-radius:50%; background:var(--ink-dim); margin-right:4px; animation:blink 1s ease-in-out infinite alternate; }
@@ -826,6 +828,8 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .dial-status{ text-align:center; font-size:13px; color:var(--ink-dim); min-height:18px; }
 .call-timer{ text-align:center; font-size:36px; font-weight:800; color:var(--ok); font-variant-numeric:tabular-nums; margin-top:10px; }
 .call-ended-msg{ font-size:13px; color:var(--ink-dim); text-align:center; line-height:1.6; margin-top:12px; }
+/* 空文案不占位（否则 idle 与通话态都白留 12px 外边距，居中会被顶偏） */
+.call-ended-msg:empty{ display:none; }
 .dial-pad{ display:grid; grid-template-columns:repeat(3,1fr); grid-gap:4px; justify-items:center; }
 .dkey{
   width:48px; height:48px; border-radius:50%;
@@ -856,12 +860,33 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .call-btn:active{ transform:scale(.94); }
 .call-btn svg{ width:22px; height:22px; fill:#fff; }
 .call-btn.hangup{ background:linear-gradient(135deg,#E86A6A,#E05252); box-shadow:var(--sh-1), 0 4px 12px rgba(224,82,82,.28); }
+/* 挂断用 Material call_end（宽扁 ∩ 形），同 viewBox 下比绿色听筒「显小」，
+ * 单独放大一档，让两枚圆钮的图元视觉重量持平。 */
+.call-btn.hangup svg{ width:24px; height:24px; }
 .dial-del svg{ width:18px; height:18px; fill:var(--ink); }
 .hist-row{ display:flex; align-items:center; width:100%; padding:10px 2px; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); text-align:left; }
 .hist-row:last-child{ border-bottom:none; }
 .hist-row .hist-ico{ flex:0 0 auto; width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(120,120,140,.14); margin-right:10px; }
 .hist-row .hist-ico svg{ width:15px; height:15px; fill:var(--ink-dim); }
 .hist-row .ht{ margin-left:auto; font-size:11px; color:var(--ink-dim); }
+/* 电话页版式：内容区整页不滚（overflow:hidden），高度全部交给「最近通话」列表，
+ * 全程只有这一条滚动条 —— 杜绝 .pbody 与内层列表嵌套产生的多重滚动条。 */
+.pbody.phone-body{ overflow:hidden; display:flex; flex-direction:column; }
+.phone-top{ flex:0 0 auto; display:flex; flex-direction:column; }
+.hist-card{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.hist-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
+/* 通话中（拨打 / 接通 / 已结束）：隐藏拨号键盘与通话记录，
+ * 号码·状态·计时在内容区剩余空间里垂直居中（真机通话页观感）。
+ * 两侧按钮用 visibility（而非 display）隐藏，保住三列网格，
+ * 挂断键继续落在中列、与 idle 态同一位置，不左右跳。 */
+.phone-view.in-call .phone-top{ flex:1 1 auto; min-height:0; justify-content:center; }
+.phone-view.in-call .hist-card{ display:none; }
+.phone-view.in-call .dial-pad{ display:none; }
+.phone-view.in-call .dial-del{ visibility:hidden; }
+/* 通话结束（ended）：拨号行整行换成满宽「完成」主 CTA */
+.phone-done{ display:none; }
+.phone-view.is-ended .phone-done{ display:block; }
+.phone-view.is-ended .dial-actions{ display:none; }
 /* 通讯录全屏视图 */
 .contacts-view{ position:absolute; top:0; left:0; right:0; bottom:0; z-index:30; background:var(--app-bg); display:flex; flex-direction:column; }
 .contacts-head{ flex:0 0 auto; height:54px; display:flex; align-items:center; padding-left:calc(10px + var(--safe-l)); padding-right:calc(16px + var(--safe-r)); }
@@ -888,8 +913,12 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   font-size:15px; font-weight:700; margin-right:10px;
 }
 .conv-mid{ flex:1 1 auto; min-width:0; }
-.conv-name{ font-size:14px; font-weight:600; color:var(--ink); }
-.conv-prev{ font-size:12px; color:var(--ink-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* 会话行「名称 + 摘要」必须各自成块：两者若留在行内（inline），
+ * ①text-overflow:ellipsis / overflow:hidden 对行内盒无效 → 摘要不截断，长短信直接横向冲出屏幕；
+ * ②两段行内文字排在同一条行盒里 → 摘要紧跟名字、换行后压到右侧时间戳上。
+ * 故显式 display:block 并各自补隐藏+省略号，摘要恒定单行截断。 */
+.conv-name{ display:block; font-size:14px; font-weight:600; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conv-prev{ display:block; font-size:12px; color:var(--ink-dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .conv-time{ flex:0 0 auto; font-size:11px; color:var(--ink-dim); margin-left:8px; }
 .conv-unread{ flex:0 0 auto; width:8px; height:8px; border-radius:50%; background:var(--accent); margin-left:6px; }
 .sms-input-row{ display:flex; align-items:center; }

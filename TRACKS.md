@@ -31,11 +31,12 @@ ai-dev-kit/
 
 补充一条：**服务端与脚本类项目也归 `#vibetool`**。AI 网关、日报、截图这类项目的主价值同样是"把一件事办成"，只是使用者不是普通用户而是自己或团队；不另设内部目录，避免同一分类被拆成两处。
 
-## #vibetool　实用工具（11）
+## #vibetool　实用工具（12）
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
 | 准时下班打卡 | `vibetool/offwork-heatmap/` | 上下班打卡 + GitHub 式热力图看每日准时情况 | 均未 |
+| 心情日记 | `vibetool/mood-diary/` | 每天一种颜色记心情，GitHub 式热力图回看半年情绪 | 均未 |
 | 拼豆设计工具 | `vibetool/perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 笔记就绪 · 未打包 |
 | 像素画编辑器 | `vibetool/pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 笔记就绪 · 未打包 |
 | Word 转 Markdown | `vibetool/word-to-md/` | 浏览器端 .docx 转 Markdown | 均未 |
