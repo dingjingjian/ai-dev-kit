@@ -598,7 +598,8 @@
     body.appendChild(stats);
     var disp = el('div', 'alarm-display');
     disp.innerHTML =
-      '<div class="alarm-row"><span class="k">当前时间</span><span class="v" data-f="now">--:--:--</span></div>' +
+      '<div class="a-clock" data-f="clock"><i class="a-hh"></i><i class="a-mh"></i></div>' +
+      '<div class="alarm-now" data-f="now">--:--:--</div>' +
       '<div class="alarm-row"><span class="k">目标时间</span><span class="v" data-f="target">--:--:--</span></div>' +
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
       '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
@@ -671,6 +672,14 @@
     var now = Date.now();
     var nowNode = alarmView.querySelector('[data-f="now"]');
     if (nowNode) { nowNode.textContent = alarmHMS(new Date(now)); }
+    var clock = alarmView.querySelector('[data-f="clock"]');
+    if (clock) {
+      var d = new Date(now);
+      var hh = clock.querySelector('.a-hh');
+      var mh = clock.querySelector('.a-mh');
+      if (hh) { hh.style.transform = 'rotate(' + ((d.getHours() % 12) * 30 + d.getMinutes() * 0.5) + 'deg)'; }
+      if (mh) { mh.style.transform = 'rotate(' + (d.getMinutes() * 6) + 'deg)'; }
+    }
     var cd = alarmView.querySelector('[data-f="cd"]');
     var rem = Math.max(0, Math.ceil((alarmState.target - now) / 1000));
     if (cd) {
@@ -1627,8 +1636,7 @@
     body.appendChild(recCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
-    var resetAll = el('button', 'opt', '重置全部数据');
-    resetAll.style.color = 'var(--danger)';
+    var resetAll = el('button', 'act-btn danger', '重置全部数据');
     foot.appendChild(resetAll);
     v.appendChild(foot);
     var modalHost = el('div', 'modal-mask');

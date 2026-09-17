@@ -546,9 +546,30 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   text-align:center;
   box-shadow:var(--sh-1), var(--hl);
 }
+/* 模拟表盘：当前时间用时钟呈现（复用主屏 .w-analog 的指针语言，放大 + 配色适配白卡） */
+.a-clock{
+  width:120px; height:120px; border-radius:50%;
+  border:2px solid var(--line); position:relative; margin:0 auto 6px auto;
+  box-shadow:var(--sh-1), inset 0 0 0 1px rgba(0,0,0,.04);
+}
+.a-clock i{
+  position:absolute; left:50%; bottom:50%;
+  transform-origin:50% 100%;
+  background:var(--ink); border-radius:2px;
+}
+.a-clock .a-hh{ width:5px; height:32px; margin-left:-2.5px; }
+.a-clock .a-mh{ width:3px; height:44px; margin-left:-1.5px; }
+.a-clock:after{
+  content:""; position:absolute; left:50%; top:50%;
+  width:8px; height:8px; margin-left:-4px; margin-top:-4px;
+  border-radius:50%; background:var(--accent);
+}
+.alarm-now{
+  font-size:15px; font-weight:600; color:var(--ink-dim); text-align:center;
+  font-variant-numeric:tabular-nums; margin-bottom:4px;
+}
 .alarm-row{ display:flex; align-items:baseline; justify-content:center; margin-top:10px; }
 .alarm-row .k{ font-size:12px; color:var(--ink-dim); margin-right:10px; }
-.alarm-row .k{ margin-right:10px; }
 .alarm-row .v{
   font-size:22px; font-weight:700; color:var(--ink);
   font-variant-numeric:tabular-nums;
@@ -783,7 +804,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 /* 结算动作：等分满宽两枚（主 CTA 渐变 + 次级卡面），与键盘/判定按钮同一套控件语言 */
 .act-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
 .act-btn{
-  height:52px; border-radius:var(--r-md);
+  width:100%; height:52px; border-radius:var(--r-md);
   font-size:16px; font-weight:700; transition:transform .16s ease;
 }
 .act-btn:active{ transform:scale(.97); }
@@ -795,6 +816,11 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .act-btn.ghost{
   color:var(--ink); background:var(--card); border:1px solid var(--line);
   box-shadow:var(--sh-1), var(--hl);
+}
+.act-btn.danger{
+  color:#fff; border:1px solid transparent;
+  background:linear-gradient(135deg,#E86A6A,#E05252);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
 }
 /* 净高不足的小屏：难度卡/标题/倒计时/列表行紧凑化，让记忆列表尽量一屏看全 */
 @media (max-height:700px){
@@ -900,7 +926,8 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .rec-mini svg{ width:16px; height:16px; fill:#fff; }
 .rec-name{ flex:1 1 auto; min-width:0; font-size:14px; font-weight:600; color:var(--ink); }
 .rec-val{ font-size:12px; color:var(--ink-dim); margin-right:8px; }
-.rec-reset{ font-size:12px; color:var(--danger); border:1px solid var(--danger); border-radius:999px; padding:4px 10px; }
+.rec-reset{ font-size:12px; font-weight:600; color:var(--danger); background:rgba(224,82,82,.10); border:none; border-radius:var(--r-sm); padding:5px 10px; transition:transform .12s ease; }
+.rec-reset:active{ transform:scale(.94); }
 .modal-mask{ position:absolute; top:0; left:0; right:0; bottom:0; z-index:40; background:rgba(10,10,16,.5); display:flex; align-items:center; justify-content:center; }
 .modal{ width:280px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-lg); padding:18px; text-align:center; box-shadow:var(--sh-2); }
 .modal h3{ font-size:16px; color:var(--ink); }
@@ -1630,7 +1657,8 @@ JS = r"""
     body.appendChild(stats);
     var disp = el('div', 'alarm-display');
     disp.innerHTML =
-      '<div class="alarm-row"><span class="k">当前时间</span><span class="v" data-f="now">--:--:--</span></div>' +
+      '<div class="a-clock" data-f="clock"><i class="a-hh"></i><i class="a-mh"></i></div>' +
+      '<div class="alarm-now" data-f="now">--:--:--</div>' +
       '<div class="alarm-row"><span class="k">目标时间</span><span class="v" data-f="target">--:--:--</span></div>' +
       '<div class="alarm-cd" data-f="cd">--:--</div>' +
       '<div class="alarm-result" data-f="res">闹钟将在整 30 秒响，响的时候按下去</div>';
@@ -1703,6 +1731,14 @@ JS = r"""
     var now = Date.now();
     var nowNode = alarmView.querySelector('[data-f="now"]');
     if (nowNode) { nowNode.textContent = alarmHMS(new Date(now)); }
+    var clock = alarmView.querySelector('[data-f="clock"]');
+    if (clock) {
+      var d = new Date(now);
+      var hh = clock.querySelector('.a-hh');
+      var mh = clock.querySelector('.a-mh');
+      if (hh) { hh.style.transform = 'rotate(' + ((d.getHours() % 12) * 30 + d.getMinutes() * 0.5) + 'deg)'; }
+      if (mh) { mh.style.transform = 'rotate(' + (d.getMinutes() * 6) + 'deg)'; }
+    }
     var cd = alarmView.querySelector('[data-f="cd"]');
     var rem = Math.max(0, Math.ceil((alarmState.target - now) / 1000));
     if (cd) {
@@ -2659,8 +2695,7 @@ JS = r"""
     body.appendChild(recCard);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
-    var resetAll = el('button', 'opt', '重置全部数据');
-    resetAll.style.color = 'var(--danger)';
+    var resetAll = el('button', 'act-btn danger', '重置全部数据');
     foot.appendChild(resetAll);
     v.appendChild(foot);
     var modalHost = el('div', 'modal-mask');
