@@ -168,6 +168,13 @@ def main():
                           "var w=window.innerWidth;return [t.left,t.right,s.left,s.right,w];})()")
         check("状态栏真机布局：时间居左、图标居右", box[1] < box[2] and box[0] < box[4] * 0.35
               and box[3] > box[4] * 0.65, str(box))
+        # 无宿主（纯浏览器 / 模拟器未注入）时自绘状态栏必须可见——真机观感靠它
+        check("无宿主时自绘状态栏可见", pg.evaluate(
+            "getComputedStyle(document.querySelector('.statusbar')).visibility") == "visible")
+        # 预留带高度必须有普通值兜底：--safe-top 是链式 calc(var() env())，
+        # 任一段失效会让 height 整条 computed-value 失效并回退 auto（≈24px，内容顶到最上面）
+        check("无宿主时预留带 = 50px（普通值兜底生效）", pg.evaluate(
+            "Math.round(document.querySelector('.statusbar').getBoundingClientRect().height)") == 50)
         # 顶部预留带内左右净空无按钮
         n_btn_top = pg.evaluate("document.querySelectorAll('.statusbar button, .phead button').length")
         check("顶部带/页头无按钮", n_btn_top == 0, str(n_btn_top))
@@ -175,6 +182,23 @@ def main():
         check("主屏 6 图标", pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 6)
         check("Dock 4 图标且无标签", pg.evaluate("document.querySelectorAll('.dock .app-tile').length") == 4
               and pg.evaluate("document.querySelectorAll('.dock .app-name').length") == 0)
+        # 容器视口比纯浏览器矮，主屏剩余空间被吃满时只剩这条外边距，必须留够
+        check("Dock 与金刚键栏之间留白 ≥24px", pg.evaluate(
+            "Math.round(parseFloat(getComputedStyle(document.querySelector('.dock')).marginBottom))") >= 24)
+        # 底部安全区（容器注入 / 真机 Home Indicator）不得挤压金刚键：栏高必须 = 52px + 安全区。
+        # 回归：旧写法 height:52px + padding-bottom:safe，在 border-box 下把内容盒压成 52-safe，
+        # 48px 的键居中后向上溢出到栏顶之上、上方毫无空间 —— 纯浏览器 --safe-bottom=0 时看不出，
+        # 一进容器（注入安全区）就露馅。
+        pg.evaluate("document.documentElement.style.setProperty('--safe-area-inset-bottom','34px')")
+        pg.wait_for_timeout(200)
+        safe = pg.evaluate(
+            "(function(){var n=document.querySelector('.sysnav').getBoundingClientRect();"
+            "var k=document.querySelector('.syskey').getBoundingClientRect();"
+            "return [Math.round(n.height),Math.round(k.top-n.top),Math.round(n.bottom-k.bottom)];})()")
+        check("底部安全区不挤压金刚键（栏高 52+34，键上方有空间）",
+              safe[0] == 86 and safe[1] >= 2 and safe[2] >= 34, str(safe))
+        pg.evaluate("document.documentElement.style.setProperty('--safe-area-inset-bottom','0px')")
+        pg.wait_for_timeout(150)
         # 质感 pass
         check("壁纸含颗粒层", "data:image/svg" in pg.evaluate(
             "getComputedStyle(document.body).backgroundImage"))
@@ -632,6 +656,14 @@ def main():
         pg.click("#keyRecents")
         pg.wait_for_timeout(200)
         check("清空后多任务空态", "暂无最近应用" in pg.inner_text(".recents"))
+        # 空态下点遮罩也必须能关闭（回归：关闭判据原为白名单 target，只认 recentsEl /
+        # .recents-track；空态里撑满遮罩的 .rc-empty 不在名单内，点哪儿都关不掉）
+        pg.click(".rc-empty")
+        pg.wait_for_timeout(200)
+        check("空态下点遮罩可关闭", pg.evaluate(
+            "document.querySelector('.recents').classList.contains('hidden')"))
+        pg.click("#keyRecents")
+        pg.wait_for_timeout(200)
         pg.click("#keyBack")
         pg.wait_for_timeout(200)
         check("空态下返回关闭遮罩", pg.evaluate("document.querySelector('.recents').classList.contains('hidden')"))
@@ -651,11 +683,29 @@ def main():
         check("返回出栈到主屏", pg.evaluate(
             "!document.querySelector('.home').classList.contains('hidden')"))
 
-        # in-app 净空 + 无容器时的存储降级通道（能力清单 §2.4：浏览器存储只作兼容兜底）
+        # in-app 布局必须与纯浏览器直开一致：宿主按钮只在顶部导航行，内容区 / Dock 不得内缩
+        # （回归：曾把 48/92 净空套到所有贴边栏 —— 半行组件被拆成两行、Dock 图标被挤扁、
+        #  应用页左右各留大片空白，与 index.html 直开时明显不一致）
         pg.goto(url + "?inapp=1")
         wait_home(pg)
-        check("in-app 注入左右净空", pg.evaluate(
-            "getComputedStyle(document.body).getPropertyValue('--safe-l').trim()") == "48px")
+        check("in-app 左右净空为 0（内容区不额外内缩）", pg.evaluate(
+            "getComputedStyle(document.body).getPropertyValue('--safe-l').trim()") == "0px"
+              and pg.evaluate(
+            "getComputedStyle(document.body).getPropertyValue('--safe-r').trim()") == "0px")
+        check("in-app Dock 仍贴边 14px、图标同主屏 62px", pg.evaluate(
+            "Math.round(parseFloat(getComputedStyle(document.querySelector('.dock')).marginLeft))") == 14
+              and pg.evaluate(
+            "Math.round(document.querySelector('.dock .app-icon').getBoundingClientRect().width)") == 62)
+        check("in-app 半行组件仍并排（天气/钱包不拆两行）", pg.evaluate(
+            "getComputedStyle(document.querySelector('.w-row')).display") == "flex")
+        pg.locator('[aria-label="计算器"]').first.click()
+        pg.wait_for_timeout(400)
+        check("in-app 应用页左右不内缩（pbody 左右各 16px）", pg.evaluate(
+            "(function(){var s=getComputedStyle(document.querySelector('.view:not(.hidden) .pbody'));"
+            "return [Math.round(parseFloat(s.paddingLeft)),Math.round(parseFloat(s.paddingRight))];})()")
+              == [16, 16])
+        pg.click("#keyBack")
+        pg.wait_for_timeout(300)
         check("无容器时退回 localStorage 降级通道", pg.evaluate("AIOS.storeBackend()") == "local")
         check("降级通道按 aios_ 前缀落盘",
               pg.evaluate("localStorage.getItem('aios_wmask')") is not None)
@@ -668,6 +718,13 @@ def main():
         wait_home(p2)
         check("注入容器后走容器 Storage 通道", p2.evaluate("AIOS.storeBackend()") == "xhs")
         check("容器环境识别为 in-app", p2.evaluate("document.body.classList.contains('in-app')"))
+        # 宿主已自带真实状态栏与顶部导航条：自绘状态栏必须隐藏，否则屏幕叠出「两层状态栏」
+        check("in-app 隐藏自绘状态栏（不叠两层状态栏）", p2.evaluate(
+            "getComputedStyle(document.querySelector('.statusbar')).visibility") == "hidden")
+        # 隐藏用 visibility（非 display）；且 in-app 要把带子加高到 70px —— 宿主顶栏压在带内，
+        # 必须让顶栏之下仍有明显留白（50px 时几乎被顶栏占满，看起来"顶部没留白"）
+        check("in-app 预留带 ≥70px（宿主顶栏之下仍有留白）", p2.evaluate(
+            "Math.round(document.querySelector('.statusbar').getBoundingClientRect().height)") >= 70)
         check("启动水合读取全部键", p2.evaluate(
             "window.__xhsCalls.filter(function(c){return c.indexOf('getStorage:')===0;}).length") == 6)
         check("降级通道既有数据迁移进容器",
