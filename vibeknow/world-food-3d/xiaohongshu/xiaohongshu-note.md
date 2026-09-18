@@ -1,4 +1,4 @@
-# 小红书宣传笔记
+# 不出家门就能吃遍全世界的小馆🌍
 
 > 配图：`xiaohongshu-cover.png`（3:4，2048×2736）
 > 用途：小红书笔记发布，文案与配图一一对应。
@@ -51,7 +51,7 @@
 
 ## 话题标签
 
-#小红书vibecoding大赛  #vibeknow  #vibecoding  #小红书小工具  #REDSkill  #buildwithqwen  #happyqwensday  #世界美食  #干饭人的日常  #治愈系  #环球旅行  #宝藏小馆  #美食推荐  #周末去哪吃  #不出远门过周末
+#小红书vibecoding大赛  #vibeknow  #vibecoding  #小红书小工具  #世界美食  #干饭人的日常  #美食推荐
 
 ---
 
