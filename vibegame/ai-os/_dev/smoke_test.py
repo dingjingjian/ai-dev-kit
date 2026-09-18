@@ -45,6 +45,64 @@ def check(name, cond, extra=""):
         FAIL.append(name)
 
 
+def wait_home(pg, timeout=8000):
+    """等开机动画结束（#bootScreen 被移除）再断言主屏，不用固定 sleep 抢跑。"""
+    pg.wait_for_selector("#bootScreen", state="detached", timeout=timeout)
+    pg.wait_for_timeout(250)
+
+
+def fake_container(build_version=9462004, launch="sync", seed_wmask=None):
+    """注入假容器 window.xhs（能力清单 §3.6 版本判断 / §3.7 Storage）。
+
+    launch: 'sync' 同步带 launchOptions / 'async' 只给异步 getLaunchOptions / 'none' 两者都没有。
+    缓存只落在 localStorage.__fake_xhs_store，调用日志记到 window.__xhsCalls，
+    供「容器通道是否生效 / 版本门槛 / 降级通道→容器迁移」断言使用。
+    """
+    lo = ("{ miniToolEnv: { buildVersion: %d } }" % build_version) if launch == "sync" else "null"
+    has_async = "true" if launch == "async" else "false"
+    seed = ""
+    if seed_wmask is not None:
+        seed = ("try { localStorage.setItem('aios_wmask', '%s'); } catch (e) {}" % seed_wmask)
+    return """
+(function () {
+  var BK = '__fake_xhs_store';
+  var calls = window.__xhsCalls = [];
+  var storage = {};
+  try { storage = JSON.parse(localStorage.getItem(BK) || '{}') || {}; } catch (e) { storage = {}; }
+  function persist() { try { localStorage.setItem(BK, JSON.stringify(storage)); } catch (e) {} }
+  var BV = %d;
+  window.__fakeXhsStorage = storage;
+  // 只在首次加载播种：复现「降级通道已有数据、容器里没有」的升级迁移场景
+  if (localStorage.getItem(BK) === null) { %s }
+  var api = {
+    setStorage: function (o) {
+      calls.push('setStorage:' + o.key);
+      storage[o.key] = o.data; persist();
+      if (o.success) { o.success({ errMsg: 'setStorage:ok' }); }
+    },
+    getStorage: function (o) {
+      calls.push('getStorage:' + o.key);
+      if (Object.prototype.hasOwnProperty.call(storage, o.key)) {
+        o.success({ errMsg: 'getStorage:ok', data: storage[o.key] });
+      } else { o.fail({ errMsg: 'getStorage:fail' }); }
+    },
+    getStorageInfo: function (o) {
+      calls.push('getStorageInfo');
+      if (o.success) {
+        o.success({ errMsg: 'getStorageInfo:ok', keys: Object.keys(storage),
+                    currentSize: 2, limitSize: 10240 });
+      }
+    }
+  };
+  var HAS_ASYNC = %s;
+  if (HAS_ASYNC) {
+    api.getLaunchOptions = function () { return Promise.resolve({ miniToolEnv: { buildVersion: BV } }); };
+  }
+  window.xhs = { launchOptions: %s, miniTool: api };
+})();
+""" % (build_version, seed, has_async, lo)
+
+
 BANNED_JS = ["?.", "??", ".flat(", "replaceAll(", "fromEntries", "matchAll",
              "trimStart", "trimEnd", "||=", "&&=", "??=", "at(", "structuredClone"]
 # 'at(' 易误报（如 charAt(），单独用词边界
@@ -76,19 +134,29 @@ def scan_baseline():
 def main():
     os.makedirs(SHOTS, exist_ok=True)
     scan_baseline()
+    url = "file:///" + os.path.join(ROOT, "index.html").replace("\\", "/")
 
     with sync_playwright() as p:
         b = p.chromium.launch(executable_path=CHROME) if CHROME else p.chromium.launch()
+
+        def new_page(init_script=None):
+            """独立上下文（存储互不串味），可预注入容器环境。"""
+            c = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2,
+                              is_mobile=True, has_touch=True)
+            page = c.new_page()
+            if init_script:
+                page.add_init_script(init_script)
+            return page
+
         ctx = b.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2,
                             is_mobile=True, has_touch=True)
         pg = ctx.new_page()
         errors = []
         pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         pg.on("pageerror", lambda e: errors.append(str(e)))
-        pg.goto("file:///" + os.path.join(ROOT, "index.html").replace("\\", "/"))
+        pg.goto(url)
         # 开机启动屏约 1.8s + 淡出 .42s；等其移除后再断言主屏
-        pg.wait_for_selector("#bootScreen", state="detached", timeout=6000)
-        pg.wait_for_timeout(300)
+        wait_home(pg)
 
         check("无 console/page 错误", len(errors) == 0, "; ".join(errors[:3]))
         topgap = pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--top-gap').trim()")
@@ -134,7 +202,7 @@ def main():
         check("钱包点按打码", pg.evaluate(
             "document.querySelector('.w-bal').textContent") == "￥ -****")
         pg.reload()
-        pg.wait_for_timeout(900)
+        wait_home(pg)
         check("打码状态持久化", pg.evaluate(
             "document.querySelector('.w-bal').textContent") == "￥ -****")
         pg.click(".w-wallet")
@@ -397,14 +465,19 @@ def main():
                         "return [Math.round(xb.top-sb.top),Math.round(sb.bottom-xb.bottom)];})()")
         pg.locator('[aria-label="日程"]').first.click()
         pg.wait_for_timeout(400)
-        check("日程三档难度", pg.evaluate("document.querySelectorAll('.view:not(.hidden) .sdiff').length") == 3)
-        check("难度卡为「左标签 + 右取值」行式", pg.evaluate(
-            "(function(){var b=document.querySelector('.view:not(.hidden) .sdiff');"
-            "return getComputedStyle(b).display==='flex' &&"
-            " b.querySelector('span').getBoundingClientRect().left>b.querySelector('b').getBoundingClientRect().right;})()"))
+        check("日程三档难度", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .ms-foot .diff-btn').length") == 3)
+        # 难度选择复用日历的三段等分满宽控件（DESIGN §4.4 控件语言，非散在左侧的小胶囊）
+        check("难度为等分满宽三段控件且默认中等选中", pg.evaluate(
+            "(function(){var a=document.querySelectorAll('.view:not(.hidden) .ms-foot .diff-btn');"
+            "if(a.length!==3)return false;"
+            "var w=Math.round(a[0].getBoundingClientRect().width);"
+            "var eq=Math.abs(w-Math.round(a[1].getBoundingClientRect().width))<=1&&"
+            "Math.abs(w-Math.round(a[2].getBoundingClientRect().width))<=1;"
+            "return eq&&getComputedStyle(a[0].parentNode).display==='grid'&&a[1].classList.contains('sel');})()"))
         sel = pg.evaluate(SCHED_CENTER)
         check("选难度相在剩余空间垂直居中（无中段空洞）", abs(sel[0] - sel[1]) <= 2, str(sel))
-        pg.locator(".view:not(.hidden) .sdiff").first.click()
+        pg.locator(".view:not(.hidden) .ms-foot .diff-btn").first.click()
         pg.wait_for_timeout(400)
         check("简单记忆 3 条", pg.evaluate("document.querySelectorAll('.view:not(.hidden) .sitem').length") == 3)
         check("记忆列表收进卡面（不再是裸文字）", pg.evaluate(
@@ -424,7 +497,7 @@ def main():
             pg.wait_for_timeout(250)
         fin = pg.evaluate(
             "(function(){var v=document.querySelector('.view:not(.hidden)');"
-            "var a=v.querySelectorAll('.sched-act .act-btn');var b=v.querySelector('.pbody');"
+            "var a=v.querySelectorAll('.act-grid .act-btn');var b=v.querySelector('.pbody');"
             "if(a.length!==2)return [a.length];"
             "var r0=a[0].getBoundingClientRect(),r1=a[1].getBoundingClientRect();"
             "var bb=b.getBoundingClientRect();"
@@ -522,7 +595,7 @@ def main():
 
         # 重置会话（最近任务不持久化，reload 即空栈），保证后续计数确定
         pg.reload()
-        pg.wait_for_timeout(900)
+        wait_home(pg)
 
         # 多任务：开两个应用（中间回主屏）→ 轮播两张卡
         pg.click("#keyHome")
@@ -578,12 +651,65 @@ def main():
         check("返回出栈到主屏", pg.evaluate(
             "!document.querySelector('.home').classList.contains('hidden')"))
 
-        # in-app 净空
-        pg.goto("file:///" + os.path.join(ROOT, "index.html").replace("\\", "/") + "?inapp=1")
-        pg.wait_for_timeout(800)
+        # in-app 净空 + 无容器时的存储降级通道（能力清单 §2.4：浏览器存储只作兼容兜底）
+        pg.goto(url + "?inapp=1")
+        wait_home(pg)
         check("in-app 注入左右净空", pg.evaluate(
             "getComputedStyle(document.body).getPropertyValue('--safe-l').trim()") == "48px")
+        check("无容器时退回 localStorage 降级通道", pg.evaluate("AIOS.storeBackend()") == "local")
+        check("降级通道按 aios_ 前缀落盘",
+              pg.evaluate("localStorage.getItem('aios_wmask')") is not None)
+        check("关于本机标注降级通道", "降级" in pg.evaluate("AIOS.storeSummary()"))
         pg.screenshot(path=os.path.join(SHOTS, "v2-inapp.png"))
+
+        # ---------- 存储：容器 Storage JS API 优先（§3.6 版本判断 / §3.7 Storage） ----------
+        p2 = new_page(fake_container(seed_wmask="1"))
+        p2.goto(url)
+        wait_home(p2)
+        check("注入容器后走容器 Storage 通道", p2.evaluate("AIOS.storeBackend()") == "xhs")
+        check("容器环境识别为 in-app", p2.evaluate("document.body.classList.contains('in-app')"))
+        check("启动水合读取全部键", p2.evaluate(
+            "window.__xhsCalls.filter(function(c){return c.indexOf('getStorage:')===0;}).length") == 6)
+        check("降级通道既有数据迁移进容器",
+              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "1"
+              and p2.evaluate("window.__xhsCalls.indexOf('setStorage:aios_wmask')") >= 0)
+        check("迁移后的值被读取（钱包按存档打码）",
+              p2.evaluate("document.querySelector('.w-bal').textContent") == "￥ -****")
+        check("容器用量来自 getStorageInfo", "KB" in p2.evaluate("AIOS.storeSummary()"))
+        check("主题也写入容器", p2.evaluate("window.__fakeXhsStorage['aios_wall']") == "light-mesh")
+        p2.click(".w-wallet")
+        p2.wait_for_timeout(300)
+        check("写操作双通道落盘",
+              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "0"
+              and p2.evaluate("localStorage.getItem('aios_wmask')") == "0")
+        p2.close()
+
+        # 版本门槛：buildVersion 末 3 位是编译序号，不得参与比较
+        p3 = new_page(fake_container(build_version=9460001))   # 客户端 9.46.0，边界命中
+        p3.goto(url)
+        wait_home(p3)
+        check("客户端 9.46.0 边界值走容器通道", p3.evaluate("AIOS.storeBackend()") == "xhs")
+        p3.close()
+
+        p4 = new_page(fake_container(build_version=9459001))   # 客户端 9.45.9，低于门槛
+        p4.goto(url)
+        wait_home(p4)
+        check("客户端 9.45.9 不启用容器 Storage", p4.evaluate("AIOS.storeBackend()") == "local"
+              and "setStorage:" not in p4.evaluate("window.__xhsCalls.join(',')"))
+        p4.close()
+
+        # 版本号来源：同步 launchOptions 缺失时回退异步 getLaunchOptions（§3.6）
+        p5 = new_page(fake_container(build_version=9465000, launch="async"))
+        p5.goto(url)
+        wait_home(p5)
+        check("launchOptions 缺失时异步取版本仍走容器通道", p5.evaluate("AIOS.storeBackend()") == "xhs")
+        p5.close()
+
+        p6 = new_page(fake_container(launch="none"))
+        p6.goto(url)
+        wait_home(p6)
+        check("版本号两条路都取不到按不支持处理", p6.evaluate("AIOS.storeBackend()") == "local")
+        p6.close()
 
         b.close()
 

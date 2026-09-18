@@ -20,6 +20,10 @@
 | 网站截图 | `vibetool/screenshot/` | 多网站批量截图采集，自动处理懒加载/Cloudflare/字体 |
 | AI 新闻日报 | `vibetool/ai-news/` | AI 领域新闻采集、整理、飞书写入与 HTML 日报生成 |
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 |
+| 准时下班打卡 | `vibetool/offwork-heatmap/` | 浏览器端上下班打卡工具，GitHub 式热力图展示每日准时/加班状态，含连续准时与月度统计 |
+| 心情日记 | `vibetool/mood-diary/` | 浏览器端心情记录工具，五种心情颜色一键打卡，GitHub 式热力图回看半年情绪 |
+| 图表图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查图鉴，卡片真实渲染缩略图 + 详情页含介绍/主题配色/AI 提示词/适用场景，块内点选 5 套主题整站换色 |
+| UI/UX 风格画廊 | `vibetool/uiux-style-gallery/` | 67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器 |
 
 ### #vibegame　互动游戏
 
@@ -29,12 +33,20 @@
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风拼豆填色网页小游戏，纯前端单文件，逐格填豆拼图过关 |
 | 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜，拼成即点亮 |
 | AI 计算器 | `vibegame/ai-calculator/` | 仿真计算器，随机产生计算错误，判断对错得分，锻炼心算验算 |
-| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟，React 构建，含旧版安卓适配层 |
+| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API |
 | 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM |
+| 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF） |
+| 核战危机 DEFCON | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 |
+| 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球穿越太阳系，被行星吸走或撞毁即失败、飞出太阳系即胜利 |
+| 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈判断，60 回合做到全球巨企 |
+| 倒车入库 | `vibegame/reverse-parking/` | 第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分 |
 
 ### #vibeart　数字艺术
 
-暂无项目。不硬凑——补位方案见 `TRACKS.md`。
+| 项目 | 目录 | 说明 |
+|------|------|------|
+| 泰坦尼克号 | `vibeart/Titanic/` | 照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，可旋转观赏的 3D 船模 |
+| 郑和宝船 | `vibeart/zhenghe-treasure-ship/` | Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏 |
 
 ### #vibeknow　人文知识
 
@@ -47,6 +59,10 @@
 | 分子结构 | `vibeknow/molecule/` | 分子空间构型可视化（含构建/打包/校验脚本） |
 | 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数可视化工具，浏览器端绘制函数图像 |
 | 火箭发射 | `vibeknow/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时，含构建/打包/校验脚本 |
+| 为了小猫我飞遍全球 | `vibeknow/cat-globe-3d/` | 世界猫咪图鉴（24 种 / 5 大洲），飞机第一视角沿地球大圆航线飞行去见小猫，生成爱猫基因解析 |
+| 世界美食大百科 | `vibeknow/world-food-3d/` | 复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍 |
+| 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） |
+| 侏罗纪公园 3D | `vibeknow/jurassic-park-3d/` | 侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地 |
 
 ## 快速开始
 

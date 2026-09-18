@@ -156,7 +156,14 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
   - 不用 `aspect-ratio` / `inset` / `min|max|clamp()` / 逻辑属性 / `dvh` 作为唯一实现；`backdrop-filter` 必有实色兜底。
   - 多行截断用 `-webkit-box` 套件并保证失效仍可用。
 - **禁用能力**：不联网（无 fetch/外链/外字体）、无 Worker/SW、无 `window.open`/`prompt`、无剪贴板/ geolocation / 传感器、无 eval、无 iframe、无 blob 下载。相机用 `getUserMedia`（手势触发）或降级为模拟取景框。
-- **存储**：`localStorage`，key 前缀 `aios_`。
+- **存储**（对照容器能力清单 §2.4 / §3.6 / §3.7）：
+  - **容器 Storage JS API 优先**：客户端 ≥ **9.46.0** 且 `window.xhs.miniTool.setStorage/getStorage` 可用时，走 `setStorage` / `getStorage` / `getStorageInfo`；`localStorage`（前缀 `aios_`）**只作低版本客户端的降级通道**。
+  - **版本判断**：`buildVersion` 末 3 位是编译序号，比较前先 `Math.floor(buildVersion / 1000)`；`window.xhs` / `launchOptions` / `miniToolEnv` **逐级判空**，同步取不到再异步 `getLaunchOptions()` 兜底，两条路都失败按「不支持」处理。
+  - **回调而非 Promise**：容器端能力统一走 `success` / `fail` 回调（Promise 版在旧容器上不可靠），并加超时兜底——容器异常时退回降级通道，绝不阻塞启动；**写失败（返回 `false` / `fail`）不得视为已持久化**。
+  - **水合式同步读写**：容器 API 是异步的，启动时把全部 `aios_*` 键一次性读进内存缓存（与 1.8s 开机动画并行），此后业务代码读写仍是同步的，不改调用点。
+  - **迁移与一致性**：读时以容器值为准、写时**两条通道都写**，两侧缺哪边补哪边，客户端升级/降级都不丢数据；`localStorage` 读写一律吞异常（容器不保证其可用与持久）。
+  - 设置页「关于本机」显示当前缓存通道与用量（容器通道取 `getStorageInfo` 的 `currentSize / limitSize`，单位 KB）。
+  - 容量约束：单 key ≤ 1 MB，全部缓存 ≤ 10 MB。本项目存档均为小体量文本：`aios_stats` / `aios_mode` / `aios_wall` / `aios_wmask` 为定长小值，`aios_phone_records` 硬上限 5 条，`aios_sms_messages` 只随人工输入增长——超出上限时容器写入返回失败，已被容忍（降级通道仍有值），不会崩页面。
 - **性能**：zip ≤ 2MiB 建议线；单条 Base64 解码 ≤ 1MiB（壁纸用 CSS 渐变而非位图，天然达标）；不引入 WebGL。
 - **自检**：`_dev/smoke_test.py` 扫描产物不含超基线语法 token、不含禁用 API 字符串； playwright 无头跑导航栈与安全区变量断言。
 
@@ -164,9 +171,9 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
 
 ## 6. 工程与打包
 
-- `_dev/build.py` 单源 → 根 `index.html`（内联 CSS/JS 或同目录两文件，zip 内相对引用）。
-- `_dev/build_zip.py` 打小红书规范 zip（入口 `index.html`，资源全在内）。
-- 交付前跑 `.skill/minitool-zip-builder/scripts/audit_artifact.py`（或 .mjs）审计，错误清零。
+- `_dev/build.py` 单源 → 根 `index.html`（内联 CSS）+ 根 `main.js`（zip 内相对引用）。
+- `_dev/build_zip.py` 打小红书规范 zip：**先跑前置门禁**（脚本外置 / 无内联事件 / 无 `eval` / 无外部资源 / 安全区写法 / 禁用能力零命中 / **存储通道与版本判断**），不合规直接拒绝打包；再构建 `dist/` 并把 **`dist` 的内容**（而非目录本身）压成 `ai-os.zip`，保证 `index.html` 位于 zip 根。
+- 交付前跑 `.skill/minitool-zip-builder/scripts/audit_artifact.py`（或 .mjs）审计，错误清零；zip 与 `dist/` 均被根 `.gitignore` 忽略（`*.zip` / `dist/`），不入库。
 - 截图回归：playwright 390×844 移动视口逐页截图入 `_dev/_shots/`（临时，不入库）。
 
 ---
@@ -176,7 +183,7 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
 - **Phase 1（外壳与导航）**：✅ 已完成。单源工程骨架、安全区/净空、状态栏、主屏+Dock+小组件、底部三大金刚键、应用栈、多任务轮播、设置（壁纸/深色/关于本机）、主题与质感 token。
 - **Phase 2a（代表游戏）**：✅ 已完成。计算器（对错判定）、闹钟（守时）、日历（扫雷）按 §4.7 落地，含 `aios_stats` 统计存储。
 - **Phase 2b（其余应用）**：✅ 已完成。助手、日程、电话、短信、相机、统计按 §4.8 以 v1 逆向还原，v1 数据与恶搞文案已进单源。
-- **Phase 3（打包与审计）**：待做。build_zip、audit、兼容扫描、截图回归、README 更新（物料状态表同步）。
+- **Phase 3（打包与审计）**：✅ 已完成。`_dev/build_zip.py`（前置门禁 + dist + `ai-os.zip`，48 KB）、`audit_artifact.py` 审计 PASS（0 warning）、兼容扫描与截图回归纳入 `_dev/smoke_test.py`（含容器存储通道用例），README / DESIGN 同步；`_dev/smoke_test.py` 一并修掉三处历史漂移（`.rc-clear` 的 flex `gap` 基线违规、日程用例的选择器停在上版 UI、reload 断言抢在 1.8s 开机屏前执行）。
 - **Phase 4（真机精细度）**：✅ 已完成（先于 Phase 3 落地）。应用页整屏底色与状态栏沉浸、内容撑满去中段空洞、主屏网格改 `start`、图标配色去重与中性投影、Dock 圆角 28px/等距/与主屏同尺寸、状态栏内容下移、钱包窄卡折行修复、多任务卡片缩略图、视图切换 `scale+opacity` 动效、相机侧键补样式、壁纸 swatch 预览对齐实际壁纸。
 
 > 分期范围以用户确认为准；若要求一次到位，则 Phase 1+2 合并执行。
@@ -185,12 +192,15 @@ body.in-app{ --safe-l:48px; --safe-r:92px; }
 
 ## 8. 验收清单
 
-- [ ] 顶部预留带 = `--top-gap` + safe-top；左右净空内无可见/可交互元素；无顶部返回钮。
-- [ ] 底部三大金刚键可用：返回逐层出栈、主页回主屏、多任务轮播恢复/关闭；多任务遮罩不挡金刚键。
-- [ ] 默认浅色壁纸、无文字辉光、状态栏时间居左/图标居右、Dock 无标签。
-- [ ] **进入任意应用后壁纸不再透出**（状态栏区/内容区/底部导航铺 `--app-bg`），回主屏恢复壁纸。
-- [ ] 主屏/计算器/助手等页无半屏空洞；操作区贴底；空态有引导；窄卡数字（钱包余额）不折行。
-- [ ] 语义色统一；指标条主次分明。
-- [ ] 产物 ES2017/Chrome61：无超基线 JS 语法、CSS 基线+增强、禁用 API 零命中。
-- [ ] zip 审计通过、体积达标；playwright 截图回归通过。
-- [ ] v1 完整保留于 `archive/v1/`，git 可追溯。
+- [x] 顶部预留带 = `--top-gap` + safe-top；左右净空内无可见/可交互元素；无顶部返回钮。
+- [x] 底部三大金刚键可用：返回逐层出栈、主页回主屏、多任务轮播恢复/关闭；多任务遮罩不挡金刚键。
+- [x] 默认浅色壁纸、无文字辉光、状态栏时间居左/图标居右、Dock 无标签。
+- [x] **进入任意应用后壁纸不再透出**（状态栏区/内容区/底部导航铺 `--app-bg`），回主屏恢复壁纸。
+- [x] 主屏/计算器/助手等页无半屏空洞；操作区贴底；空态有引导；窄卡数字（钱包余额）不折行。
+- [x] 语义色统一；指标条主次分明。
+- [x] 产物 ES2017/Chrome61：无超基线 JS 语法、CSS 基线+增强、禁用 API 零命中。
+- [x] **存储合规**：容器 Storage JS API 优先、`localStorage` 仅降级；版本门槛（忽略末 3 位 / 逐级判空 / 异步兜底 / 取不到即不支持）；写失败可容忍；降级通道与容器通道双向迁移一致；key 前缀 `aios_`。
+- [x] zip 审计通过（`PASS: 2 file(s), 0 warning(s)`，48 KB）、`index.html` 位于 zip 根；playwright 自检 ALL PASS。
+- [x] v1 完整保留于 `archive/v1/`，git 可追溯。
+
+> 说明：以上为**静态 + 无头浏览器（Chromium 390×844）自动化**结论；**真机（iOS / Android WebView 61 基线机）未实测**，容器端 Storage 的真实读写与用量以真机日志为准。

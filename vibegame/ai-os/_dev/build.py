@@ -1072,10 +1072,10 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   border-radius:19px;
   background:#5A5A6E;
   color:#fff; font-size:13px; font-weight:600; letter-spacing:.2px;
-  display:inline-flex; align-items:center; gap:6px;
+  display:inline-flex; align-items:center; /* flex 间距用 margin（Chrome 61 基线，不用 gap） */
   box-shadow:0 4px 12px rgba(0,0,0,.30), 0 1px 2px rgba(0,0,0,.20);
 }
-.rc-clear svg{ width:14px; height:14px; fill:none; stroke:currentColor; }
+.rc-clear svg{ width:14px; height:14px; margin-right:6px; fill:none; stroke:currentColor; }
 
 /* ============ 底部三大金刚键（§3） ============ */
 .sysnav{
@@ -1232,15 +1232,153 @@ JS = r"""
     return null;
   }
 
-  /* ---------- 存储（localStorage，前缀 aios_） ---------- */
-  function store(key, val) {
-    try { global.localStorage.setItem('aios_' + key, val); } catch (e) { /* 忽略 */ }
-  }
-  function read(key, dft) {
+  /* ---------- 存储层（小红书容器能力清单 §2.4 数据存储 / §3.6 版本判断 / §3.7 Storage） ----------
+   * 容器 Storage JS API 优先（客户端 ≥ 9.46.0），localStorage 只作降级兼容；
+   * 两条通道都写、读时以容器值为准，客户端升级/降级都不会丢数据。
+   * 容器 API 是异步的，故启动时一次性水合进内存缓存（storeCache），此后读写全同步。 */
+  var STORE_PREFIX = 'aios_';
+  var STORAGE_MIN_CLIENT_VERSION = 9460;   /* 客户端 9.46.0（buildVersion 末 3 位为编译序号，需忽略） */
+  var STORE_KEYS = ['mode', 'wall', 'wmask', 'stats', 'phone_records', 'sms_messages'];
+
+  var storeCache = {};        /* 短 key -> 字符串值 */
+  var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
+  var storeUsage = null;      /* { currentSize, limitSize }，单位 KB（getStorageInfo） */
+
+  function miniToolApi() {
     try {
-      var v = global.localStorage.getItem('aios_' + key);
-      return v === null ? dft : v;
-    } catch (e) { return dft; }
+      var xhs = global.xhs;
+      return (xhs && xhs.miniTool) || null;
+    } catch (e) { return null; }
+  }
+
+  /* 9462004 -> 9.46.2 -> 9462：末 3 位编译序号必须先抹掉 */
+  function readBuildVersion(launchOptions) {
+    var env = launchOptions && launchOptions.miniToolEnv;
+    return Number(env && env.buildVersion) || 0;
+  }
+  function clientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
+
+  /* 版本号：先同步取（逐级判空），取不到再异步兜底；两条路都失败按「不支持」处理 */
+  function getBuildVersion(cb) {
+    var sync = 0;
+    try { sync = readBuildVersion(global.xhs && global.xhs.launchOptions); } catch (e) { sync = 0; }
+    if (sync) { cb(sync); return; }
+    var api = miniToolApi();
+    if (!api || typeof api.getLaunchOptions !== 'function') { cb(0); return; }
+    var done = false;
+    function finish(v) { if (done) { return; } done = true; cb(v); }
+    try {
+      var ret = api.getLaunchOptions();
+      if (ret && typeof ret.then === 'function') {
+        ret.then(function (lo) { finish(readBuildVersion(lo)); }, function () { finish(0); });
+      } else {
+        finish(readBuildVersion(ret));
+      }
+    } catch (e) { finish(0); }
+  }
+
+  /* 容器端能力统一走 success/fail 回调（Promise 版在旧容器上不可靠），并加超时兜底：
+   * 容器异常时宁可退回降级通道，也不能把启动流程挂住。
+   * 写入失败以 false 记（§3.7：调用方必须处理「写失败」）。 */
+  function xhsCall(apiName, payload, cb) {
+    var api = miniToolApi();
+    if (!api || typeof api[apiName] !== 'function') { cb(false, null); return; }
+    var done = false;
+    var timer = global.setTimeout(function () { finish(false, null); }, 800);
+    function finish(ok, res) {
+      if (done) { return; }
+      done = true;
+      global.clearTimeout(timer);
+      cb(ok, res);
+    }
+    payload.success = function (res) { finish(res !== false, res); };
+    payload.fail = function () { finish(false, null); };
+    try { api[apiName](payload); } catch (e) { finish(false, null); }
+  }
+
+  /* 降级通道：浏览器自带存储不保证可用/持续有效（§2.4），读写一律吞异常 */
+  function localGet(key) {
+    try { return global.localStorage.getItem(STORE_PREFIX + key); } catch (e) { return null; }
+  }
+  function localSet(key, val) {
+    try { global.localStorage.setItem(STORE_PREFIX + key, val); } catch (e) { /* 容忍失败 */ }
+  }
+
+  /* 启动水合：容器 Storage 优先、localStorage 兜底，两侧缺哪边补哪边（升级/降级一致性）。
+   * 容器不可用或版本不足时只用降级通道，流程照常继续。 */
+  function hydrateStore(cb) {
+    var i, lv;
+    for (i = 0; i < STORE_KEYS.length; i++) {
+      lv = localGet(STORE_KEYS[i]);
+      if (lv !== null) { storeCache[STORE_KEYS[i]] = lv; }
+    }
+    getBuildVersion(function (bv) {
+      var api = miniToolApi();
+      var usable = clientVersion(bv) >= STORAGE_MIN_CLIENT_VERSION && api &&
+                   typeof api.getStorage === 'function' && typeof api.setStorage === 'function';
+      if (!usable) { storeBackend = 'local'; cb(); return; }
+      storeBackend = 'xhs';
+      var toLocal = [], toXhs = [], idx = 0;
+      function next() {
+        if (idx >= STORE_KEYS.length) { flush(); return; }
+        var key = STORE_KEYS[idx];
+        idx++;
+        xhsCall('getStorage', { key: STORE_PREFIX + key }, function (got, res) {
+          var data = (got && res) ? res.data : null;
+          if (data !== undefined && data !== null) {
+            storeCache[key] = (typeof data === 'string') ? data : JSON.stringify(data);
+            if (localGet(key) === null) { toLocal.push(key); }  /* 容器有、降级通道没有：补下去 */
+          } else if (storeCache[key] !== undefined) {
+            toXhs.push(key);                                    /* 降级通道有、容器没有：迁上来 */
+          }
+          next();
+        });
+      }
+      next();
+      function flush() {
+        var n;
+        for (n = 0; n < toLocal.length; n++) { localSet(toLocal[n], storeCache[toLocal[n]]); }
+        var j = 0;
+        (function step() {
+          if (j >= toXhs.length) { usage(); return; }
+          var key = toXhs[j];
+          j++;
+          xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function () { step(); });
+        })();
+      }
+      function usage() {
+        xhsCall('getStorageInfo', {}, function (got, res) {
+          if (got && res && typeof res.currentSize !== 'undefined') {
+            storeUsage = { currentSize: res.currentSize, limitSize: res.limitSize };
+          }
+          cb();
+        });
+      }
+    });
+  }
+
+  /* 写入：内存 + 降级通道镜像 + 容器通道（容器写失败由降级通道兜住） */
+  function store(key, val) {
+    var s = String(val);
+    storeCache[key] = s;
+    localSet(key, s);
+    if (storeBackend === 'xhs') {
+      xhsCall('setStorage', { key: STORE_PREFIX + key, data: s }, function () { /* 降级通道已兜底 */ });
+    }
+  }
+  /* 读取：走内存缓存（启动水合已完成），无值返回默认值 */
+  function read(key, dft) {
+    var v = storeCache[key];
+    return (v === undefined || v === null) ? dft : v;
+  }
+
+  /* 关于本机展示：当前缓存通道与用量（仅容器通道提供用量） */
+  function storeSummary() {
+    if (storeBackend !== 'xhs') { return 'localStorage（降级）'; }
+    if (storeUsage && typeof storeUsage.currentSize !== 'undefined') {
+      return '容器 Storage · ' + storeUsage.currentSize + ' / ' + (storeUsage.limitSize || 10240) + ' KB';
+    }
+    return '容器 Storage';
   }
 
   /* ---------- 主题 ---------- */
@@ -1257,11 +1395,15 @@ JS = r"""
     'dark-solid': 'linear-gradient(180deg,#14141B 0%,#0C0C11 100%)'
   };
   var WALL_NAME = { 'light-mesh':'渐变', 'light-solid':'纯色', 'dark-mesh':'夜色渐变', 'dark-solid':'夜色纯色' };
-  var theme = {
-    mode: read('mode', 'light'),
-    wall: read('wall', 'light-mesh')
-  };
-  if (WALLS.indexOf(theme.wall) < 0) { theme.wall = 'light-mesh'; }
+  /* 主题值来自存储：启动水合完成后由 loadTheme() 回填，水合前先用默认值 */
+  var theme = { mode: 'light', wall: 'light-mesh' };
+
+  function loadTheme() {
+    theme.mode = read('mode', 'light');
+    theme.wall = read('wall', 'light-mesh');
+    if (WALLS.indexOf(theme.wall) < 0) { theme.wall = 'light-mesh'; }
+    if (theme.mode !== 'dark') { theme.mode = 'light'; }
+  }
 
   function applyTheme() {
     document.body.setAttribute('data-mode', theme.mode);
@@ -1471,6 +1613,7 @@ JS = r"""
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">人工智能 OS</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">' + ABOUT_TXT.version + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI-1（模拟）</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">本地缓存</span><span class="val">' + storeSummary() + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品方</span><span class="val">' + ABOUT_TXT.title + '</span>'));
     body.appendChild(cardAbout);
     body.appendChild(toast);
@@ -3288,24 +3431,33 @@ JS = r"""
   }
 
   /* ---------- 启动 ---------- */
+  /* 存储水合与开机动画并行：容器端能力慢也不会拖长开机时间。
+   * 主题必须等水合完成再套用，否则默认值会把已保存的壁纸/深色设置盖掉。 */
   function init() {
     detectInApp();
-    applyTheme();
-    runBoot(function () {
-      buildHome();
-      buildRecents();
-      tick();
-      global.setInterval(tick, 1000);
-      // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
-      global.setInterval(function () {
-        alarmTick();
-        if (calView) { calView.tick(); }
-      }, 100);
-      document.getElementById('keyBack').addEventListener('click', goBack);
-      document.getElementById('keyHome').addEventListener('click', goHome);
-      document.getElementById('keyRecents').addEventListener('click', function () {
-        if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
-      });
+    var pending = 2;
+    function ready() {
+      pending--;
+      if (pending === 0) { startUI(); }
+    }
+    hydrateStore(function () { loadTheme(); applyTheme(); ready(); });
+    runBoot(ready);
+  }
+
+  function startUI() {
+    buildHome();
+    buildRecents();
+    tick();
+    global.setInterval(tick, 1000);
+    // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
+    global.setInterval(function () {
+      alarmTick();
+      if (calView) { calView.tick(); }
+    }, 100);
+    document.getElementById('keyBack').addEventListener('click', goBack);
+    document.getElementById('keyHome').addEventListener('click', goHome);
+    document.getElementById('keyRecents').addEventListener('click', function () {
+      if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
     });
   }
 
@@ -3315,7 +3467,10 @@ JS = r"""
     init();
   }
 
-  global.AIOS = { openApp: openApp, goHome: goHome, goBack: goBack, theme: theme };
+  global.AIOS = { openApp: openApp, goHome: goHome, goBack: goBack, theme: theme,
+                  storeBackend: function () { return storeBackend; },
+                  storeSummary: storeSummary,
+                  hydrateStore: hydrateStore };
 })(window);
 """
 
