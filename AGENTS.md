@@ -22,6 +22,7 @@
 | 网站截图 | `vibetool/screenshot/` | 多网站批量截图采集，自动处理懒加载/Cloudflare/字体，分类输出 |
 | AI 新闻日报 | `vibetool/ai-news/` | AI 领域新闻采集、整理、飞书写入与 HTML 日报生成 |
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 |
+| 图表图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查图鉴，卡片真实渲染缩略图 + 详情页含介绍/主题配色/AI 提示词/适用场景，块内点选 5 套主题（含暗色）整站换色，本地外置 echarts.min.js 离线可用 |
 
 ### #vibegame　互动游戏
 
