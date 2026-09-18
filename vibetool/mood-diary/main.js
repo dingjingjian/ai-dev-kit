@@ -21,7 +21,7 @@
   }
 
   /* ---------- 存储 ----------
-   * { 'YYYY-MM-DD': { m: 1-5 } }
+   * { 'YYYY-MM-DD': { m: 1-6 } }
    */
   var KEY_RECORDS = 'md_records_v1';
   var KEY_THEME = 'md_theme_v1';
@@ -70,7 +70,7 @@
   records = records ? normalizeRecords(records) : {};
 
   /* ---------- 状态判定 ----------
-   * 0 未记录 | 1-5 对应五种心情
+   * 0 未记录 | 1-6 对应六种心情
    */
   function dayState(key) {
     var r = records[key];
@@ -85,19 +85,15 @@
   function dayVerdict(key) {
     var st = dayState(key);
     if (st === 0) {
-      return { html: '今天还没记心情', sub: '点一下今天的心情，只记颜色不记事', cls: '' };
+      return { text: '还没记录', sub: '点下面的圆点，只记颜色不记事' };
     }
-    var m = moodOf(st);
-    return {
-      html: '<span class="mood-emoji">' + m.emoji + '</span>' + m.name,
-      sub: '已记下，点热力图格子可以改',
-      cls: st <= 2 ? 'good' : (st >= 4 ? 'bad' : '')
-    };
+    return { text: moodOf(st).name, sub: '已记下 · 点日历上的圆点可以改' };
   }
 
   /* ---------- DOM ---------- */
   function $(id) { return document.getElementById(id); }
   var elDate = $('todayDate'), elVerdict = $('todayVerdict'), elSub = $('todaySub');
+  var elHeroSub = $('heroSub'), elFace = $('todayFace');
   var punchRow = $('punchRow');
   var btnEditToday = $('btnEditToday');
   var editToday = $('editToday');
@@ -119,11 +115,12 @@
 
   /* ---------- 主题（配色） ---------- */
   var THEMES = [
-    { mode: 'auto',  name: '跟随系统', meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fb950'] },
-    { mode: 'dark',  name: '深夜',     meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fb950'] },
-    { mode: 'light', name: '明亮',     meta: '#f2f4f7', dots: ['#f2f4f7', '#ffffff', '#2da44e'] },
-    { mode: 'sepia', name: '暖阳纸张', meta: '#f6f0e4', dots: ['#f6f0e4', '#fffaf0', '#4f8a5b'] },
-    { mode: 'mint',  name: '薄荷',     meta: '#eef6f4', dots: ['#eef6f4', '#ffffff', '#2fa26b'] }
+    { mode: 'auto',  name: '跟随系统', meta: '#0d1117', dots: ['#0d1117', '#33204a', '#bc8cff'] },
+    { mode: 'dark',  name: '深夜',     meta: '#0d1117', dots: ['#0d1117', '#33204a', '#bc8cff'] },
+    { mode: 'light', name: '明亮',     meta: '#f2f4f7', dots: ['#f2f4f7', '#f0e4fc', '#8250df'] },
+    { mode: 'sepia', name: '暖阳纸张', meta: '#f6f0e4', dots: ['#f6f0e4', '#f2e3cd', '#8b6bb1'] },
+    { mode: 'mint',  name: '薄荷',     meta: '#eef6f4', dots: ['#eef6f4', '#e0eaf7', '#3b8db8'] },
+    { mode: 'sakura', name: '樱粉',    meta: '#fdf3f5', dots: ['#fdf3f5', '#fbe0e8', '#c65f89'] }
   ];
   var DEFAULT_THEME = 'auto';
   var themeMode = DEFAULT_THEME;
@@ -204,16 +201,36 @@
       '<span class="label">' + mood.name + '</span></button>';
   }
 
-  /* ---------- 渲染：今日卡片 ---------- */
+  /* ---------- 渲染：今日情绪（大圆面 + 圆点轮盘） ---------- */
   function renderToday() {
     var key = todayKey();
     var now = new Date();
-    elDate.textContent = key + ' · ' + WEEKDAYS[now.getDay()];
+    elDate.textContent = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日 · ' + WEEKDAYS[now.getDay()];
+    var st = dayState(key);
     var v = dayVerdict(key);
-    elVerdict.innerHTML = v.html;
+    elVerdict.textContent = v.text;
+    elVerdict.className = 'today-verdict' + (st ? ' vm' + st : '');
     elSub.textContent = v.sub;
 
-    var st = dayState(key);
+    /* 圆面与页头小字是后加的节点：版本错配时缺失也只是少显示这两处，
+     * 不能在 renderAll 途中抛异常、把后面的日历一起带没。 */
+    if (elFace) {
+      if (st) {
+        elFace.className = 'today-face fm' + st;
+        elFace.innerHTML = '<span class="face-emoji">' + moodOf(st).emoji + '</span>';
+      } else {
+        elFace.className = 'today-face is-empty';
+        elFace.innerHTML = '<span class="face-q">?</span>';
+      }
+    }
+
+    var days = countRecords();
+    if (elHeroSub) {
+      elHeroSub.textContent = days
+        ? '已经记录 ' + days + ' 天 · 连续好心情 ' + goodStreak() + ' 天'
+        : '每天一个颜色，不用写字，半年后回看会很有意思';
+    }
+
     var html = '';
     for (var i = 0; i < MOODS.length; i++) {
       html += moodButtonHTML(MOODS[i], st === MOODS[i].id, 'punch-btn');
@@ -249,19 +266,27 @@
     renderAll();
   });
 
-  /* ---------- 渲染：统计 ---------- */
-  function monthStats() {
-    var now = new Date();
-    var prefix = now.getFullYear() + '-' + pad2(now.getMonth() + 1) + '-';
-    var counts = [0, 0, 0, 0, 0, 0, 0];   /* 索引 1-6 对应心情 */
-    var total = 0;
+  /* ---------- 统计 ---------- */
+  function monthPrefix(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-'; }
+
+  /* 某个月（按 'YYYY-MM-' 前缀）六种心情各多少天，索引 1-6 对应心情 */
+  function monthCounts(prefix) {
+    var counts = [0, 0, 0, 0, 0, 0, 0];
     for (var key in records) {
       if (!records.hasOwnProperty(key) || key.indexOf(prefix) !== 0) continue;
-      total++;
       counts[records[key].m]++;
     }
+    return counts;
+  }
+  function sumCounts(counts) {
+    var n = 0;
+    for (var i = 1; i < counts.length; i++) n += counts[i];
+    return n;
+  }
+  function monthStats() {
+    var counts = monthCounts(monthPrefix(new Date()));
     return {
-      total: total,
+      total: sumCounts(counts),
       happy: counts[1] + counts[2] + counts[3],   /* 兴奋 + 开心 + 平静 */
       sad: counts[5] + counts[6],                  /* 难过 + 愤怒 */
       counts: counts
@@ -283,6 +308,7 @@
     return streak;
   }
 
+  /* 四项数字横排（仪表行）：标签短于一格宽，不换行 */
   function renderStats() {
     var ms = monthStats();
     var streak = goodStreak();
@@ -291,10 +317,52 @@
       : Math.round(ms.happy * 100 / ms.total) + '<span class="unit">%</span>';
     var html = '';
     html += '<div class="stat good"><div class="stat-num">' + streak + '<span class="unit">天</span></div><div class="stat-label">连续好心情</div></div>';
-    html += '<div class="stat good"><div class="stat-num">' + rate + '</div><div class="stat-label">本月好心情率</div></div>';
+    html += '<div class="stat good"><div class="stat-num">' + rate + '</div><div class="stat-label">好心情率</div></div>';
     html += '<div class="stat"><div class="stat-num">' + ms.total + '<span class="unit">天</span></div><div class="stat-label">本月记录</div></div>';
-    html += '<div class="stat' + (ms.sad > 0 ? ' bad' : '') + '"><div class="stat-num">' + ms.sad + '<span class="unit">天</span></div><div class="stat-label">本月低落天</div></div>';
+    html += '<div class="stat' + (ms.sad > 0 ? ' bad' : '') + '"><div class="stat-num">' + ms.sad + '<span class="unit">天</span></div><div class="stat-label">本月低落</div></div>';
     $('statsRow').innerHTML = html;
+  }
+
+  /* ---------- 渲染：横向堆积图（本月心情构成） ----------
+   * 一段一色，宽度按天数分配：CSS 里 flex-basis 为 0，这里只改写 flex-grow，
+   * 于是「天数的比例」直接变成「宽度比例」，段间固定 4px 间隔露出卡片底色。 */
+  function stackHTML(counts) {
+    var html = '';
+    for (var i = 0; i < MOODS.length; i++) {
+      var c = counts[MOODS[i].id];
+      if (!c) continue;
+      html += '<span class="stack-seg s' + MOODS[i].id + '" style="flex-grow:' + c + '"></span>';
+    }
+    return html;
+  }
+
+  function renderMix() {
+    var bar = $('mixBar'), legend = $('mixLegend'), note = $('mixTotal');
+    /* 结构缺失（页面与脚本版本错配，例如浏览器还缓存着旧 main.js）时
+     * 只跳过本卡，不能让异常打断 renderAll 里后面的日历渲染。 */
+    if (!bar || !legend || !note) return;
+
+    var counts = monthCounts(monthPrefix(new Date()));
+    var total = sumCounts(counts);
+    note.textContent = total ? '本月 ' + total + ' 天' : '本月暂无记录';
+
+    if (total === 0) {
+      bar.className = 'stack is-empty';
+      bar.innerHTML = '<span class="stack-empty">本月还没有记录</span>';
+      legend.innerHTML = '';
+      return;
+    }
+
+    bar.className = 'stack';
+    bar.innerHTML = stackHTML(counts);
+    var lh = '';
+    for (var i = 0; i < MOODS.length; i++) {
+      var c = counts[MOODS[i].id];
+      lh += '<span class="lg' + (c ? '' : ' is-off') + '">' +
+        '<i style="background:var(--m' + MOODS[i].id + ')"></i>' + MOODS[i].name +
+        '<b>' + c + '天 · ' + Math.round(c * 100 / total) + '%</b></span>';
+    }
+    legend.innerHTML = lh;
   }
 
   /* ---------- 渲染：热力图 ---------- */
@@ -341,7 +409,7 @@
         var key = dateKey(date);
         var cell = document.createElement('div');
         var future = date.getTime() > today.getTime();
-        cell.className = 'hm-cell lv' + dayState(key) + (key === tKey ? ' today' : '') + (future ? ' future' : '');
+        cell.className = 'hm-cell lv' + dayState(key) + (key === tKey ? ' is-today' : '') + (future ? ' future' : '');
         cell.setAttribute('data-key', key);
         if (!future) {
           (function (k) {
@@ -573,6 +641,7 @@
   function renderAll() {
     renderToday();
     renderStats();
+    renderMix();
     renderHeatmap();
     scrollHeatmapRight();
   }
