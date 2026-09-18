@@ -61,7 +61,12 @@ def process_gap_rule(m):
         else:
             margin_prop = "margin-left"
         # 选择器：取第一个（逗号分隔时只取第一个，但本项目无此情况）
-        selector = raw_selector.strip()
+        # 注意：rule_re 无法处理 @keyframes / @media / @supports 等嵌套块，
+        # 内层规则匹配完后，外层 at-rule 的闭合花括号会粘到下一个选择器开头
+        # （形如 "}\n.d15 .b"）。若原样写进兜底规则，就会生成游离的 "}"，
+        # 导致其后的规则被 CSS 解析器整条吞掉（视图上表现为元素间距消失）。
+        # 故生成兜底规则前先剥掉前导的 "}"。
+        selector = re.sub(r"^[\s}]+", "", raw_selector).strip()
         # 生成子元素 margin 规则（> * + * = 非首子元素）
         flex_margin_rules.append(
             "%s > * + *{ %s:%s; }" % (selector, margin_prop, gap_val)
