@@ -36,8 +36,27 @@ body[data-mode="dark"]{
   --hl:inset 0 1px 0 rgba(255,255,255,.08);
   --hair:rgba(255,255,255,.10);
 }
-/* 宿主内嵌：左右给小红书自带按钮预留净空 */
-body.in-app{ --safe-l:48px; --safe-r:92px; }
+/* 宿主内嵌：小红书自带按钮（返回 / 分享 / 更多）只位于**顶部导航行**，
+ * 纵向由 --safe-top 预留带让开即可；容器在内容区与底部 Dock **没有**侧边按钮，
+ * 故左右净空一律为 0 —— 不再让内容区 / Dock / 页脚内缩。
+ * （历史教训：把 48/92 套到所有贴边栏，会让主屏半行组件被拆成两行、
+ *  Dock 图标被压扁挤到一起、每个应用页左右各留出大片空白，与纯浏览器渲染严重不一致。） */
+body.in-app{ --safe-l:0px; --safe-r:0px;
+  /* 宿主顶栏（返回 / 分享 / 更多）就压在这条预留带里：纯 50px 时几乎被它占满，
+   * 带子下方只剩十几像素，看起来像「顶部没留白、内容顶到宿主顶栏上」。
+   * in-app 加大到 70px —— 宿主顶栏之下仍留出明显空白。
+   * 注意必须在 body 上**重新声明 --safe-top**：自定义属性在声明它的元素上求值，
+   * 只覆盖 --top-gap 不会让 :root 上的 --safe-top 重算。 */
+  --top-gap:70px;
+  --safe-top:calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+}
+/* 宿主带真实状态栏 + 顶部导航条（返回 / 分享 / 更多）：in-app 时隐藏自绘状态栏。
+ * 不自绘的原因：宿主已画一层真实状态栏，本应用再画一层会在屏幕上叠出「两层状态栏」，
+ * 且自绘状态栏与宿主顶部按钮同处一行、互相挤占。
+ * 用 visibility 而非 display —— 保住 --safe-top 预留带高度，宿主顶栏按钮与内容区之间仍有留白。
+ * 纯浏览器 / PC 模拟器无宿主状态栏时照常显示（真机观感靠它）。 */
+/* 高度同样给普通值兜底：即使 --safe-top 链失效，in-app 也要保住 70px 预留带。 */
+body.in-app .statusbar{ visibility:hidden; height:70px; height:var(--safe-top); }
 
 /* ============ 主题 token（默认浅色，DESIGN.md §4.2） ============ */
 :root{
@@ -128,6 +147,10 @@ svg{ display:block; }
  * 净空与顶部带内依然禁止任何可交互元素。 */
 .statusbar{
   flex:0 0 auto;
+  /* 基线普通值在前、变量在后（css-compatibility.md §4）：--safe-top 是链式
+   * calc(var() env()) 自定义属性，一旦其中任一段失效，height 会整条 computed-value
+   * 失效并回退成 auto（≈24px）——预留带就塌了，内容顶到宿主顶栏上。前置 50px 兜底。 */
+  height:50px;
   height:var(--safe-top);
   display:flex; align-items:flex-end; justify-content:space-between;
   padding-left:calc(14px + var(--safe-l));
@@ -329,7 +352,9 @@ body[data-mode="dark"] .app-icon{
   flex:0 0 auto;
   margin-left:calc(14px + var(--safe-l));
   margin-right:calc(14px + var(--safe-r));
-  margin-bottom:10px;
+  /* 与底部金刚键栏之间必须有明确留白：容器视口比纯浏览器矮，主屏内容把剩余空间吃满时，
+   * 只剩这条外边距 —— 10px 时 Dock 看起来是"贴在"金刚键栏上。 */
+  margin-bottom:24px;
   display:flex; justify-content:space-between; align-items:center;
   background:var(--surface);
   border:1px solid var(--hair);
@@ -344,18 +369,6 @@ body[data-mode="dark"] .app-icon{
 .dock .app-icon{ width:62px; height:62px; }
 .dock .app-icon svg{ width:30px; height:30px; }
 .dock .app-tile:active .app-icon{ opacity:.75; }
-/* 宿主内嵌：左右净空（48/92）吃掉宽度，Dock 若仍 4×62 必溢出 ——
- * 改为按格等分、图标用比例盒等比缩放（padding-top:100% 造正方形，Chrome 61 可用）。 */
-body.in-app .dock{ padding:10px 12px; }
-body.in-app .dock .app-tile{ flex:1 1 0; min-width:0; }
-body.in-app .dock .app-icon{ position:relative; width:100%; height:0; padding-top:100%; }
-body.in-app .dock .app-icon svg{
-  position:absolute; left:50%; top:50%;
-  width:52%; height:52%; transform:translate(-50%,-50%);
-}
-/* 半行组件（天气/钱包）在净空下会窄到放不下余额，改为竖排整行 */
-body.in-app .w-row{ display:block; }
-body.in-app .w-half + .w-half{ margin-left:0; }
 
 /* ============ 应用页三段式骨架（§4.4） ============ */
 .phead{
@@ -1068,8 +1081,13 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .sysnav{
   flex:0 0 auto;
   display:flex; justify-content:space-around; align-items:center;
+  /* 基线 52px（普通值在前）；安全区必须加在 52px **之外**，不能靠 padding 吃掉固定高度。
+   * box-sizing:border-box 下 height:52px + padding-bottom:safe 会把内容盒压成 52-safe，
+   * 48px 的键居中后向上溢出 —— 容器/真机一注入底部安全区，金刚键就"被挤到栏顶、
+   * 上方没有任何空间"（纯浏览器 --safe-bottom=0 时看不出来）。 */
   height:52px;
   padding-bottom:var(--safe-bottom);
+  height:calc(52px + var(--safe-bottom));
   background:var(--nav);
   border-top:1px solid var(--line);
   box-shadow:var(--hl);

@@ -2087,11 +2087,15 @@
   /* ---------- 多任务 ---------- */
   function buildRecents() {
     recentsEl = el('div', 'recents hidden');
-    // 点击遮罩空白处（遮罩本身或卡片轨道空白）关闭面板；卡片/按钮各自 stopPropagation 或命中自身
+    // 点击遮罩空白处关闭面板。判定用「不在卡片内即关闭」，而非白名单 target：
+    // 白名单（recentsEl / .recents-track）漏掉了空态 —— 清空全部任务后 renderRecents()
+    // 只塞一个 .rc-empty，它是 flex:1 1 auto、撑满整个遮罩，点哪儿命中的都是它，
+    // 于是面板永远关不掉。卡片有自己的 click（恢复应用）、清理按钮已 stopPropagation，
+    // 故只需排除卡片与按钮两种目标。
     recentsEl.addEventListener('click', function (ev) {
-      if (ev.target === recentsEl || ev.target.classList.contains('recents-track')) {
-        closeRecents();
-      }
+      var t = ev.target;
+      if (t && t.closest && (t.closest('.rc-card') || t.closest('.rc-clear'))) { return; }
+      closeRecents();
     });
     viewRoot.appendChild(recentsEl);
   }

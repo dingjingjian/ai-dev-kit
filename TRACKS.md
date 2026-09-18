@@ -35,10 +35,10 @@ ai-dev-kit/
 
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
-| 准时下班打卡 | `vibetool/offwork-heatmap/` | 上下班打卡 + GitHub 式热力图看每日准时情况 | 均未 |
+| 准时下班打卡 | `vibetool/offwork-heatmap/` | 上下班打卡 + GitHub 式热力图看每日准时情况 | 已发布 |
 | 心情日记 | `vibetool/mood-diary/` | 每天一种颜色记心情，GitHub 式热力图回看半年情绪 | 均未 |
-| 拼豆设计工具 | `vibetool/perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 笔记就绪 · 未打包 |
-| 像素画编辑器 | `vibetool/pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 笔记就绪 · 未打包 |
+| 拼豆设计工具 | `vibetool/perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 已发布 |
+| 像素画编辑器 | `vibetool/pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 已发布 |
 | Word 转 Markdown | `vibetool/word-to-md/` | 浏览器端 .docx 转 Markdown | 均未 |
 | 密码管理器 | `vibetool/password-manager/` | AES 加密本地密码库，Web + Electron 双模式 | 自用 · 不投稿 |
 | AI 网关 | `vibetool/ai_gateway/` | 本地 LLM API 统一网关，智能体只需配置一次 | 自用 · 不投稿 |
@@ -56,13 +56,13 @@ ai-dev-kit/
 |------|------|-----------|----------|
 | 拼豆城市 | `vibegame/perler-city/` | 拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政 | 完整（zip + 海报） |
 | 拼豆游戏 | `vibegame/perler-bead-game/` | 国风纹样逐格填豆，拼成即过关（已含导出图纸） | 完整（zip + 图） |
-| 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸） | 完整（zip）· 缺笔记 |
+| 中秋拼豆坊 | `vibegame/perler-mid-autumn/` | 中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸） | 已发布 |
 | 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF） | 完整（zip + 导出闭环冒烟过） |
-| AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 笔记就绪 · 未打包 |
-| 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM | 开发完成 · 待投稿物料 |
-| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API | 完整（`ai-os.zip` 48KB · 自检 ALL PASS）· 缺图标/笔记 |
+| AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 已发布 |
+| 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM | 已发布 |
+| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API | 已发布 |
 | 倒车入库 | `vibegame/reverse-parking/` | 第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分 | 设计就绪 · 待落地 |
-| 核战危机 | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 | 竖屏移动端 · 可玩（headless 115 项过，待打包） |
+| 核战危机 | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 | 已发布 |
 | 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利 | 可玩（headless 16 项过，待物料） |
 | 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企 | 修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过 |
 
@@ -87,10 +87,10 @@ ai-dev-kit/
 |------|------|-----------|----------|
 | 3D 地球科普 | `vibeknow/earth-3d/` | 昼夜交替、四季成因、月相、地球内部结构 | 完整（zip + 物料） |
 | 世界美食大百科 | `vibeknow/world-food-3d/` | 复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍 | 笔记就绪 · 未打包 |
-| 为了小猫我飞遍全球 | `vibeknow/cat-globe-3d/` | 世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析 | 已打包 · 缺图缺笔记 |
+| 为了小猫我飞遍全球 | `vibeknow/cat-globe-3d/` | 世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析 | 已发布 |
 | 太阳系 3D | `vibeknow/solar-system-3d/` | 行星轨道、土星环、点击追踪天体 | 完整（zip + 物料） |
 | 3D 火箭发射 | `vibeknow/rocket-launch-3d/` | 发射/拆解双模式，实时遥测 | 完整（zip + 物料） |
-| 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） | 均未 |
+| 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） | 已发布 |
 | 3D 月球科普 | `vibeknow/moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
 | 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
 | 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已打包 · 缺笔记 |
