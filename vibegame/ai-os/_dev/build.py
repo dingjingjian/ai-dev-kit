@@ -421,17 +421,31 @@ body.in-app .w-half + .w-half{ margin-left:0; }
   border-radius:50%; background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.25);
   transition:left .18s ease;
 }
-.switch.on{ background:var(--ok); }
+.switch.on{ background:var(--accent); }
 .switch.on:after{ left:21px; }
 
 /* 壁纸选择 */
 .walls{ display:flex; padding:6px 2px 12px 2px; }
+.wall-item{ display:flex; flex-direction:column; align-items:center; margin-right:14px; }
 .wall-swatch{
   width:56px; height:92px; border-radius:var(--r-sm);
-  margin-right:12px; border:2px solid transparent;
+  border:2px solid transparent;
   box-shadow:0 2px 6px rgba(0,0,0,.15);
 }
 .wall-swatch.sel{ border-color:var(--accent); box-shadow:0 0 0 2px var(--accent), 0 2px 8px rgba(108,76,241,.3); }
+.wall-name{ font-size:11px; color:var(--ink-dim); margin-top:7px; }
+/* 设置项点击后的恶搞提示（行内 toast，贴 pbody 底部始终可见） */
+.set-toast{
+  position:sticky; bottom:8px; z-index:5;
+  margin:0 2px; padding:0 14px; border-radius:var(--r-md);
+  background:var(--accent); color:#fff; font-size:13px; line-height:1.5;
+  box-shadow:0 4px 14px rgba(108,76,241,.30);
+  max-height:0; opacity:0; overflow:hidden;
+  transition:max-height .22s ease, opacity .22s ease, padding .22s ease;
+}
+.set-toast.show{ max-height:80px; opacity:1; padding:11px 14px; }
+/* 设置项行尾箭头 */
+.row .arrow{ font-size:15px; color:var(--ink-dim); margin-right:2px; }
 
 /* 占位应用页 */
 .ph-wrap{
@@ -974,7 +988,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .cam-shutter:active{ transform:scale(.9); }
 .cam-top-btn{ padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; color:#fff; background:rgba(120,120,140,.35); }
 .cam-top-btn.save{ background:linear-gradient(135deg,#FF6B35,#FF4D6D); }
-.cam-foot{ display:flex; align-items:center; justify-content:space-between; }
+.cam-foot{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
 .radar-wrap{ text-align:center; }
 .score-big{ text-align:center; font-size:40px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; line-height:1.1; margin-bottom:4px; }
 .score-cap{ text-align:center; font-size:12px; color:var(--ink-dim); margin-bottom:8px; }
@@ -1006,7 +1020,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   position:absolute; top:0; left:0; right:0; bottom:0;
   z-index:30;
   background:rgba(10,10,16,.55);
-  display:flex; align-items:center;
+  display:flex; flex-direction:column; justify-content:center; align-items:stretch;
   -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
 }
 .recents.hidden{ display:none; }
@@ -1045,6 +1059,23 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .rc-sk.w70{ width:70%; }
 .rc-sk.w50{ width:50%; }
 .rc-empty{ flex:1 1 auto; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; opacity:.85; }
+/* 一键清理工具栏：卡片轨道下方居中；pointer-events:none 让空白处点击穿透到遮罩 */
+.rc-toolbar{
+  flex:0 0 auto;
+  display:flex; justify-content:center;
+  margin-top:20px;
+  pointer-events:none;
+}
+.rc-clear{
+  pointer-events:auto;
+  height:38px; padding:0 18px;
+  border-radius:19px;
+  background:#5A5A6E;
+  color:#fff; font-size:13px; font-weight:600; letter-spacing:.2px;
+  display:inline-flex; align-items:center; gap:6px;
+  box-shadow:0 4px 12px rgba(0,0,0,.30), 0 1px 2px rgba(0,0,0,.20);
+}
+.rc-clear svg{ width:14px; height:14px; fill:none; stroke:currentColor; }
 
 /* ============ 底部三大金刚键（§3） ============ */
 .sysnav{
@@ -1184,6 +1215,7 @@ JS = r"""
                  'linear-gradient(180deg,#1A1C30 0%,#0D0E17 100%)',
     'dark-solid': 'linear-gradient(180deg,#14141B 0%,#0C0C11 100%)'
   };
+  var WALL_NAME = { 'light-mesh':'渐变', 'light-solid':'纯色', 'dark-mesh':'夜色渐变', 'dark-solid':'夜色纯色' };
   var theme = {
     mode: read('mode', 'light'),
     wall: read('wall', 'light-mesh')
@@ -1326,6 +1358,7 @@ JS = r"""
     cardWall.appendChild(el('div', 'card-title', '壁纸'));
     var walls = el('div', 'walls');
     WALLS.forEach(function (w) {
+      var item = el('div', 'wall-item');
       var s = el('button', 'wall-swatch');
       s.style.background = WALL_PREVIEW[w];
       s.setAttribute('data-wall', w);
@@ -1335,7 +1368,9 @@ JS = r"""
         theme.mode = (w.indexOf('dark') === 0) ? 'dark' : 'light';
         applyTheme();
       });
-      walls.appendChild(s);
+      item.appendChild(s);
+      item.appendChild(el('div', 'wall-name', WALL_NAME[w]));
+      walls.appendChild(item);
     });
     cardWall.appendChild(walls);
     body.appendChild(cardWall);
@@ -1354,17 +1389,52 @@ JS = r"""
     cardLook.appendChild(rowDark);
     body.appendChild(cardLook);
 
+    /* 通用 / 声音与触感（v1 还原）：点击弹恶搞提示，文案取自 v1 */
+    var SET_TIPS = {
+      wifi: "连上了，但没完全连上。就像 AI 的智商，看起来在线，实际……嗯。",
+      bluetooth: "蓝牙？不存在的，这是红牙。因为连上就火大！",
+      notifications: "通知？这里只有惊吓，没有通知。准备好被吓一跳吧！",
+      sounds: "声音？这个 AI 只会心跳声，咚咚咚，像不像你的初恋？",
+      haptics: "触感？这个功能会让手机抖一抖，就像紧张时的你一样。"
+    };
+    var toast = el('div', 'set-toast');
+    var toastTimer = null;
+    function showTip(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      if (toastTimer) { global.clearTimeout(toastTimer); }
+      toastTimer = global.setTimeout(function () { toast.classList.remove('show'); }, 2800);
+    }
+    function tipRow(label, key) {
+      var r = el('div', 'row');
+      r.appendChild(el('span', 'lbl', label));
+      r.appendChild(el('span', 'arrow', '›'));
+      r.addEventListener('click', function () { showTip(SET_TIPS[key]); });
+      return r;
+    }
+    var cardGen = el('div', 'card');
+    cardGen.appendChild(el('div', 'card-title', '通用'));
+    cardGen.appendChild(tipRow('Wi-Fi', 'wifi'));
+    cardGen.appendChild(tipRow('蓝牙', 'bluetooth'));
+    cardGen.appendChild(tipRow('通知', 'notifications'));
+    body.appendChild(cardGen);
+
+    var cardSound = el('div', 'card');
+    cardSound.appendChild(el('div', 'card-title', '声音与触感'));
+    cardSound.appendChild(tipRow('声音', 'sounds'));
+    cardSound.appendChild(tipRow('触感', 'haptics'));
+    body.appendChild(cardSound);
+
     var cardAbout = el('div', 'card');
     cardAbout.appendChild(el('div', 'card-title', '关于本机'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">人工智能 OS</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">v2.0</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">' + ABOUT_TXT.version + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI-1（模拟）</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品</span><span class="val">' + ABOUT_TXT.title + '</span>'));
-    cardAbout.appendChild(el('div', 'row about-desc', ABOUT_TXT.description));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品方</span><span class="val">' + ABOUT_TXT.title + '</span>'));
     body.appendChild(cardAbout);
+    body.appendChild(toast);
 
     v.appendChild(body);
-    v.appendChild(el('div', 'pfoot', '<div class="pfoot-hint">壁纸与外观选择会保存在本机</div>'));
 
     views.settings = v;
     viewRoot.appendChild(v);
@@ -2153,7 +2223,7 @@ JS = r"""
   var CALL_TXT = {callEnded1:"通话结束——对方说了一句听不懂的话就挂了，人工智能翻译模块正在加载中……（预计加载时间：∞）",callEnded2:"恭喜！对方居然听懂了——但您说的什么来着？",dialing:"正在拨打...",connected:"对方已接听",ended:"通话结束"};
   var ALARM_TXT = {onTime:"你比我准时",late:"你和我一样睡过啦？",retry:"再来一次"};
   var CAL_TXT = {header:"本月由 AI 重新排期，共 35 天",headerHard:"本月由 AI 重新排期，共 42 天",loseTitle:"踩中了 AI 埋的加班雷",loseMessage:"本月白干。",winTitle:"本月平安度过",winMessage:"AI 的加班阴谋破产。",restart:"重新排期",nextMonth:"下一月"};
-  var ABOUT_TXT = {title:"人工智能科技 出品",description:"本产品名为人工智能，实则全靠人工。AI 负责假装工作，你负责干实事。",version:"v1.0"};
+  var ABOUT_TXT = {title:"人工智能Ding🥕",description:"本机名为人工智能，实则全靠人工。AI 负责假装工作，你负责替它干活。",version:"v2.0"};
   var CAM_GRAD = ["linear-gradient(135deg, #667eea 0%, #764ba2 100%)","linear-gradient(135deg, #f093fb 0%, #f5576c 100%)","linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)","linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)","linear-gradient(135deg, #fa709a 0%, #fee140 100%)","linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)","linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)","linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)","linear-gradient(135deg, #cd9cf2 0%, #f6f3ff 100%)","linear-gradient(135deg, #fddb92 0%, #d1fdff 100%)"];
   var CAM_COLORS = ["#fff","#ffd700","#ff6b6b","#4ecdc4","#45b7d1","#96ceb4","#ffeaa7","#dfe6e9"];
   var RADAR_LABELS = ["计算力","知识量","记忆力","排雷力","守时度","连击力"];
@@ -2697,14 +2767,17 @@ JS = r"""
     cancelBtn.style.display = 'none';
     var saveBtn = el('button', 'cam-top-btn save', '保存');
     saveBtn.style.display = 'none';
-    var leftBox = el('div'); leftBox.appendChild(cancelBtn);
-    var rightBox = el('div'); rightBox.appendChild(saveBtn);
+    var leftBox = el('div');
+    leftBox.style.display = 'flex'; leftBox.style.justifyContent = 'flex-start'; leftBox.style.alignItems = 'center';
+    leftBox.appendChild(cancelBtn);
+    var rightBox = el('div');
+    rightBox.style.display = 'flex'; rightBox.style.justifyContent = 'flex-end'; rightBox.style.alignItems = 'center';
     var shutter = el('button', 'cam-shutter', '');
     var flashBtn = el('button', 'cam-side', '⚡');
-    flashBtn.style.marginRight = '14px';
+    rightBox.appendChild(saveBtn); rightBox.appendChild(flashBtn);
     var mid = el('div');
-    mid.style.display = 'flex'; mid.style.alignItems = 'center';
-    mid.appendChild(flashBtn); mid.appendChild(shutter);
+    mid.style.display = 'flex'; mid.style.justifyContent = 'center'; mid.style.alignItems = 'center';
+    mid.appendChild(shutter);
     frow.appendChild(leftBox); frow.appendChild(mid); frow.appendChild(rightBox);
     foot.appendChild(frow);
     v.appendChild(foot);
@@ -2765,6 +2838,7 @@ JS = r"""
         photo = genScene(); preview = true;
         cancelBtn.style.display = ''; saveBtn.style.display = '';
         shutter.style.visibility = 'hidden';
+        flashBtn.style.display = 'none';
         paintScene();
       }, 300);
     });
@@ -2772,6 +2846,7 @@ JS = r"""
       preview = false; photo = null;
       cancelBtn.style.display = 'none'; saveBtn.style.display = 'none';
       shutter.style.visibility = '';
+      flashBtn.style.display = '';
       liveScene = genScene(); paintScene();
     });
     saveBtn.addEventListener('click', function () {
@@ -3021,6 +3096,12 @@ JS = r"""
   /* ---------- 多任务 ---------- */
   function buildRecents() {
     recentsEl = el('div', 'recents hidden');
+    // 点击遮罩空白处（遮罩本身或卡片轨道空白）关闭面板；卡片/按钮各自 stopPropagation 或命中自身
+    recentsEl.addEventListener('click', function (ev) {
+      if (ev.target === recentsEl || ev.target.classList.contains('recents-track')) {
+        closeRecents();
+      }
+    });
     viewRoot.appendChild(recentsEl);
   }
 
@@ -3030,6 +3111,17 @@ JS = r"""
       recentsEl.appendChild(el('div', 'rc-empty', '暂无最近应用'));
       return;
     }
+    // 一键清理工具栏（仅有任务时显示，置于卡片轨道下方居中）
+    var toolbar = el('div', 'rc-toolbar');
+    var clearBtn = el('button', 'rc-clear', '<svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>一键清理');
+    clearBtn.addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      stack.length = 0;
+      current = 'home';
+      closeRecents();
+      showOnly(homeView, false);
+    });
+    toolbar.appendChild(clearBtn);
     var track = el('div', 'recents-track');
     // 最近优先：从栈顶往栈底排
     var order = stack.slice().reverse();
@@ -3075,6 +3167,7 @@ JS = r"""
       track.appendChild(card);
     });
     recentsEl.appendChild(track);
+    recentsEl.appendChild(toolbar);
   }
 
   function openRecents() {
