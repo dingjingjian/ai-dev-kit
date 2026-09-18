@@ -86,7 +86,9 @@ def main():
         pg.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
         pg.on("pageerror", lambda e: errors.append(str(e)))
         pg.goto("file:///" + os.path.join(ROOT, "index.html").replace("\\", "/"))
-        pg.wait_for_timeout(1200)
+        # 开机启动屏约 1.8s + 淡出 .42s；等其移除后再断言主屏
+        pg.wait_for_selector("#bootScreen", state="detached", timeout=6000)
+        pg.wait_for_timeout(300)
 
         check("无 console/page 错误", len(errors) == 0, "; ".join(errors[:3]))
         topgap = pg.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--top-gap').trim()")

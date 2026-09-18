@@ -1097,6 +1097,38 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 }
 .syskey:active{ opacity:.55; transform:scale(.9); }
 .syskey svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ============ 开机启动屏（§4.9） ============
+ * 打开应用时全屏覆盖，约 1.8s 开机动画后淡出进入主屏；不可跳过。
+ * JS 就绪前默认显示（HTML 默认无 .done），避免白屏。 */
+#bootScreen{
+  position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:
+    var(--grain),
+    radial-gradient(circle at 18% 12%, rgba(108,76,241,.30), transparent 46%),
+    radial-gradient(circle at 84% 18%, rgba(64,150,255,.22), transparent 48%),
+    radial-gradient(circle at 70% 92%, rgba(180,140,255,.16), transparent 52%),
+    linear-gradient(180deg,#1A1C30 0%,#0D0E17 100%);
+  color:#F2F1F7;
+  opacity:1; transition:opacity .42s ease;
+}
+#bootScreen.done{ opacity:0; }
+.boot-logo{
+  width:88px; height:88px; border-radius:24%;
+  background:linear-gradient(135deg,#6C4CF1 0%,#4A2FD0 100%);
+  display:flex; align-items:center; justify-content:center;
+  font-size:34px; font-weight:800; color:#fff; letter-spacing:1px;
+  box-shadow:0 12px 32px rgba(108,76,241,.45), inset 0 1px 0 rgba(255,255,255,.30);
+}
+.boot-title{ margin-top:22px; font-size:20px; font-weight:600; letter-spacing:.5px; color:#fff; }
+.boot-bar{
+  margin-top:30px; width:180px; height:4px; border-radius:2px;
+  background:rgba(255,255,255,.16); overflow:hidden;
+}
+.boot-bar-fill{ height:100%; width:0%; border-radius:2px; background:linear-gradient(90deg,#6C4CF1,#8E7BFF); }
+.boot-tip{ margin-top:14px; font-size:12px; color:rgba(242,241,247,.72); letter-spacing:.3px; min-height:16px; }
+.boot-foot{ position:absolute; bottom:calc(28px + var(--safe-bottom)); left:0; right:0; text-align:center; font-size:11px; color:rgba(242,241,247,.5); letter-spacing:.3px; }
 """
 
 # ---------------------------------------------------------------------------
@@ -1114,6 +1146,15 @@ HTML_HEAD = r"""<!DOCTYPE html>
 HTML_TAIL = r"""</style>
 </head>
 <body data-mode="light" data-wall="light-mesh">
+
+  <!-- 开机启动屏：约 1.8s 开机动画，不可跳过；JS 就绪前默认显示，避免白屏 -->
+  <div id="bootScreen">
+    <div class="boot-logo">AI</div>
+    <div class="boot-title">人工智能OS</div>
+    <div class="boot-bar"><div class="boot-bar-fill" id="bootFill"></div></div>
+    <div class="boot-tip" id="bootTip">正在启动...</div>
+    <div class="boot-foot">v2.0 · 人工智能科技 出品</div>
+  </div>
 
   <!-- 状态栏：真机布局，时间居左、状态图标居右；纯展示无交互，
        左右内容收在净空内（padding 含 --safe-l/--safe-r） -->
@@ -3213,23 +3254,58 @@ JS = r"""
     if (inApp) { document.body.classList.add('in-app'); }
   }
 
+  /* ---------- 开机启动屏 ---------- */
+  function runBoot(onDone) {
+    var screen = document.getElementById('bootScreen');
+    var fill = document.getElementById('bootFill');
+    var tip = document.getElementById('bootTip');
+    if (!screen || !fill || !tip) { onDone(); return; }
+    var TIPS = ['正在启动...', '正在加载模块...', '正在校准 AI 假装引擎...', '即将进入系统...'];
+    var DURATION = 1800;
+    var start = 0;
+    function step(ts) {
+      if (!start) { start = ts; }
+      var p = (ts - start) / DURATION;
+      if (p > 1) { p = 1; }
+      fill.style.width = (p * 100) + '%';
+      var ti = Math.floor(p * TIPS.length);
+      if (ti >= TIPS.length) { ti = TIPS.length - 1; }
+      tip.textContent = TIPS[ti];
+      if (p < 1) { global.requestAnimationFrame(step); return; }
+      screen.classList.add('done');
+      var removed = false;
+      function finish() {
+        if (removed) { return; }
+        removed = true;
+        screen.removeEventListener('transitionend', finish);
+        if (screen.parentNode) { screen.parentNode.removeChild(screen); }
+        onDone();
+      }
+      screen.addEventListener('transitionend', finish);
+      global.setTimeout(finish, 460);
+    }
+    global.requestAnimationFrame(step);
+  }
+
   /* ---------- 启动 ---------- */
   function init() {
     detectInApp();
-    buildHome();
-    buildRecents();
     applyTheme();
-    tick();
-    global.setInterval(tick, 1000);
-    // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
-    global.setInterval(function () {
-      alarmTick();
-      if (calView) { calView.tick(); }
-    }, 100);
-    document.getElementById('keyBack').addEventListener('click', goBack);
-    document.getElementById('keyHome').addEventListener('click', goHome);
-    document.getElementById('keyRecents').addEventListener('click', function () {
-      if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
+    runBoot(function () {
+      buildHome();
+      buildRecents();
+      tick();
+      global.setInterval(tick, 1000);
+      // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
+      global.setInterval(function () {
+        alarmTick();
+        if (calView) { calView.tick(); }
+      }, 100);
+      document.getElementById('keyBack').addEventListener('click', goBack);
+      document.getElementById('keyHome').addEventListener('click', goHome);
+      document.getElementById('keyRecents').addEventListener('click', function () {
+        if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
+      });
     });
   }
 

@@ -2061,23 +2061,58 @@
     if (inApp) { document.body.classList.add('in-app'); }
   }
 
+  /* ---------- 开机启动屏 ---------- */
+  function runBoot(onDone) {
+    var screen = document.getElementById('bootScreen');
+    var fill = document.getElementById('bootFill');
+    var tip = document.getElementById('bootTip');
+    if (!screen || !fill || !tip) { onDone(); return; }
+    var TIPS = ['正在启动...', '正在加载模块...', '正在校准 AI 假装引擎...', '即将进入系统...'];
+    var DURATION = 1800;
+    var start = 0;
+    function step(ts) {
+      if (!start) { start = ts; }
+      var p = (ts - start) / DURATION;
+      if (p > 1) { p = 1; }
+      fill.style.width = (p * 100) + '%';
+      var ti = Math.floor(p * TIPS.length);
+      if (ti >= TIPS.length) { ti = TIPS.length - 1; }
+      tip.textContent = TIPS[ti];
+      if (p < 1) { global.requestAnimationFrame(step); return; }
+      screen.classList.add('done');
+      var removed = false;
+      function finish() {
+        if (removed) { return; }
+        removed = true;
+        screen.removeEventListener('transitionend', finish);
+        if (screen.parentNode) { screen.parentNode.removeChild(screen); }
+        onDone();
+      }
+      screen.addEventListener('transitionend', finish);
+      global.setTimeout(finish, 460);
+    }
+    global.requestAnimationFrame(step);
+  }
+
   /* ---------- 启动 ---------- */
   function init() {
     detectInApp();
-    buildHome();
-    buildRecents();
     applyTheme();
-    tick();
-    global.setInterval(tick, 1000);
-    // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
-    global.setInterval(function () {
-      alarmTick();
-      if (calView) { calView.tick(); }
-    }, 100);
-    document.getElementById('keyBack').addEventListener('click', goBack);
-    document.getElementById('keyHome').addEventListener('click', goHome);
-    document.getElementById('keyRecents').addEventListener('click', function () {
-      if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
+    runBoot(function () {
+      buildHome();
+      buildRecents();
+      tick();
+      global.setInterval(tick, 1000);
+      // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
+      global.setInterval(function () {
+        alarmTick();
+        if (calView) { calView.tick(); }
+      }, 100);
+      document.getElementById('keyBack').addEventListener('click', goBack);
+      document.getElementById('keyHome').addEventListener('click', goHome);
+      document.getElementById('keyRecents').addEventListener('click', function () {
+        if (recentsEl.classList.contains('hidden')) { openRecents(); } else { closeRecents(); }
+      });
     });
   }
 
