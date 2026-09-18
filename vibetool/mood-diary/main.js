@@ -20,23 +20,116 @@
     return null;
   }
 
-  /* ---------- 存储 ----------
+  /* ---------- 存储（小红书小工具容器 §2.4 / §3.6 / §3.7） ----------
    * { 'YYYY-MM-DD': { m: 1-6 } }
+   *
+   * 容器推荐用 Storage JS API（window.xhs.miniTool.setStorage / getStorage / ...），
+   * 客户端 ≥ 9.46.0 且注入 SDK 时启用；低版本降级到 localStorage（容器不保证其可用，
+   * 须容忍失败 / 数据缺失）。从低版本升级到高版本时，自动把 localStorage 旧数据
+   * 迁移到 Storage JS API 并清理 localStorage。
+   * 参考：https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s2-4
    */
   var KEY_RECORDS = 'md_records_v1';
   var KEY_THEME = 'md_theme_v1';
+  var STORAGE_MIN_CLIENT_VERSION = 9460; /* 客户端 9.46.0 */
 
-  function loadJSON(key) {
-    try {
-      var raw = localStorage.getItem(key);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch (e) {
-      return null;
-    }
+  function readBuildVersion(launchOptions) {
+    var miniToolEnv = launchOptions && launchOptions.miniToolEnv;
+    return Number(miniToolEnv && miniToolEnv.buildVersion) || 0;
   }
-  function saveJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  function getClientVersion(buildVersion) {
+    return Math.floor(buildVersion / 1000); /* 末 3 位为编译序号，忽略 */
+  }
+  function isClientVersionAtLeast(buildVersion, minimum) {
+    return getClientVersion(buildVersion) >= minimum;
+  }
+  function getBuildVersion() {
+    var xhs = window.xhs;
+    var syncBV = readBuildVersion(xhs && xhs.launchOptions);
+    if (syncBV) return Promise.resolve(syncBV);
+    var miniTool = xhs && xhs.miniTool;
+    if (!miniTool || typeof miniTool.getLaunchOptions !== 'function') return Promise.resolve(0);
+    return miniTool.getLaunchOptions().then(
+      function (lo) { return readBuildVersion(lo); },
+      function () { return 0; }
+    );
+  }
+
+  /* Storage JS API 是否可用（结果缓存，整生命周期只判一次） */
+  var _storageApiCache = null;
+  function storageApiAvailable() {
+    if (_storageApiCache) return _storageApiCache;
+    _storageApiCache = getBuildVersion().then(function (bv) {
+      var miniTool = window.xhs && window.xhs.miniTool;
+      return isClientVersionAtLeast(bv, STORAGE_MIN_CLIENT_VERSION)
+        && !!miniTool
+        && typeof miniTool.setStorage === 'function'
+        && typeof miniTool.getStorage === 'function';
+    });
+    return _storageApiCache;
+  }
+
+  /* 异步读：优先 Storage JS API，降级 localStorage；任一异常都返回 null */
+  function storageGet(key) {
+    return storageApiAvailable().then(function (ok) {
+      if (ok) {
+        return window.xhs.miniTool.getStorage({ key: key }).then(
+          function (res) { return res && res.data; },
+          function () { return null; }
+        );
+      }
+      try {
+        var raw = localStorage.getItem(key);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    });
+  }
+
+  /* 异步写：优先 Storage JS API，降级 localStorage；返回是否成功 */
+  function storageSet(key, data) {
+    return storageApiAvailable().then(function (ok) {
+      if (ok) {
+        return window.xhs.miniTool.setStorage({ key: key, data: data }).then(
+          function () { return true; },
+          function () { return false; }
+        );
+      }
+      try {
+        localStorage.setItem(key, JSON.stringify(data));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    });
+  }
+
+  /* 迁移：Storage JS API 可用时，把 localStorage 里的旧数据搬到 Storage JS API，
+   * 搬完清理 localStorage；Storage JS API 里已有数据则不覆盖（避免回写覆盖新数据）。 */
+  function migrateLegacyStorage(key) {
+    return storageApiAvailable().then(function (ok) {
+      if (!ok) return;
+      var legacyRaw = null;
+      try { legacyRaw = localStorage.getItem(key); } catch (e) { return; }
+      if (!legacyRaw) return;
+      var parsed = null;
+      try { parsed = JSON.parse(legacyRaw); } catch (e) {
+        try { localStorage.removeItem(key); } catch (e2) {}
+        return;
+      }
+      return window.xhs.miniTool.getStorage({ key: key }).then(
+        function (existing) {
+          if (existing && existing.data != null) return;
+          return window.xhs.miniTool.setStorage({ key: key, data: parsed }).then(
+            function () { try { localStorage.removeItem(key); } catch (e) {} },
+            function () {}
+          );
+        },
+        function () {}
+      );
+    });
   }
 
   /* ---------- 日期工具 ---------- */
@@ -66,8 +159,7 @@
     return out;
   }
 
-  var records = loadJSON(KEY_RECORDS);
-  records = records ? normalizeRecords(records) : {};
+  var records = {}; /* 启动时由 boot() 异步加载后填充 */
 
   /* ---------- 状态判定 ----------
    * 0 未记录 | 1-6 对应六种心情
@@ -183,7 +275,7 @@
     if (!chip) return;
     var mode = chip.getAttribute('data-mode');
     if (mode === themeMode) return;
-    saveJSON(KEY_THEME, mode);
+    storageSet(KEY_THEME, mode);
     applyTheme(mode);
     buzz();
   });
@@ -192,7 +284,6 @@
     if (mqDark.addEventListener) mqDark.addEventListener('change', onSystemThemeChange);
     else if (mqDark.addListener) mqDark.addListener(onSystemThemeChange);
   }
-  applyTheme(loadJSON(KEY_THEME) || DEFAULT_THEME);
 
   /* ---------- 渲染：心情按钮（今日卡片 + 弹层共用） ---------- */
   function moodButtonHTML(mood, pressed, cls) {
@@ -253,7 +344,7 @@
     var key = todayKey();
     if (records[key] && records[key].m === moodId) return;
     records[key] = { m: moodId };
-    saveJSON(KEY_RECORDS, records);
+    storageSet(KEY_RECORDS, records);
     buzz();
     toast('记下了：今天' + stateText(moodId));
     renderAll();
@@ -261,7 +352,7 @@
   btnEditToday.addEventListener('click', function () {
     var key = todayKey();
     delete records[key];
-    saveJSON(KEY_RECORDS, records);
+    storageSet(KEY_RECORDS, records);
     toast('已撤销今天的记录');
     renderAll();
   });
@@ -523,7 +614,7 @@
   function setDay(key, moodId) {
     if (!key) return;
     records[key] = { m: moodId };
-    saveJSON(KEY_RECORDS, records);
+    storageSet(KEY_RECORDS, records);
     buzz();
     closeSheets();
     toast(key === todayKey() ? '已记为' + stateText(moodId) : '已保存 ' + key);
@@ -533,7 +624,7 @@
   $('btnDayClear').addEventListener('click', function () {
     if (!editingKey) { closeSheets(); return; }
     delete records[editingKey];
-    saveJSON(KEY_RECORDS, records);
+    storageSet(KEY_RECORDS, records);
     closeSheets();
     toast('已清除 ' + editingKey);
     renderAll();
@@ -592,7 +683,7 @@
       var data = JSON.parse(raw);
       if (!data || typeof data.records !== 'object') throw new Error('bad');
       records = normalizeRecords(data.records);
-      saveJSON(KEY_RECORDS, records);
+      storageSet(KEY_RECORDS, records);
       closeSheets();
       toast('导入成功');
       renderAll();
@@ -621,7 +712,7 @@
   });
   $('btnClearConfirm').addEventListener('click', function () {
     records = {};
-    saveJSON(KEY_RECORDS, records);
+    storageSet(KEY_RECORDS, records);
     closeSheets();
     toast('已清空');
     renderAll();
@@ -645,5 +736,22 @@
     renderHeatmap();
     scrollHeatmapRight();
   }
-  renderAll();
+
+  /* ---------- 启动：异步加载存储后渲染 ----------
+   * Storage JS API 为异步，启动时先迁移 localStorage 旧数据到 Storage JS API，
+   * 再加载 records 与 theme，最后 renderAll。加载期间 records 为空、主题为默认。 */
+  function boot() {
+    migrateLegacyStorage(KEY_RECORDS).then(function () {
+      return migrateLegacyStorage(KEY_THEME);
+    }).then(function () {
+      return storageGet(KEY_RECORDS);
+    }).then(function (recData) {
+      records = recData ? normalizeRecords(recData) : {};
+      return storageGet(KEY_THEME);
+    }).then(function (themeLoaded) {
+      applyTheme(themeLoaded || DEFAULT_THEME);
+      renderAll();
+    });
+  }
+  boot();
 })();

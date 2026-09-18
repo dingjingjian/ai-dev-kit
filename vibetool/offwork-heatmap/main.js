@@ -1,25 +1,110 @@
 (function () {
   'use strict';
 
-  /* ---------- 存储 ----------
+  /* ---------- 存储（小红书 Storage JS API 双轨，§3.6 / §3.7）----------
    * v2：只记准不准时 —— { 'YYYY-MM-DD': { ok: true|false } }
    * v1（历史）：{ 'YYYY-MM-DD': { in: 'HH:MM', out: 'HH:MM' } }，首次打开时迁移。
+   *
+   * 客户端 ≥ 9.46.0 走 window.xhs.miniTool 端能力（推荐，持久化有保障）；
+   * 低版本降级到 localStorage（容器不保证其持久性，仅作兼容）。
+   * 升级到端能力后，把 localStorage 旧数据搬到端能力并清掉本地。
+   * 所有写入返回 Promise<boolean>，调用方须处理 false（§3.7 要求）。
    */
   var KEY_RECORDS = 'owt_records_v2';
   var KEY_RECORDS_V1 = 'owt_records_v1';
   var KEY_SETTINGS_V1 = 'owt_settings_v1';
+  var KEY_THEME = 'owt_theme_v1';
+  var STORAGE_MIN_CLIENT_VERSION = 9460; /* 客户端 9.46.0 */
+  var useNativeStorage = false;
 
-  function loadJSON(key) {
+  /* §3.6 客户端版本判断：buildVersion 末 3 位是编译序号，须忽略 */
+  function readBuildVersion(launchOptions) {
+    var env = launchOptions && launchOptions.miniToolEnv;
+    return Number(env && env.buildVersion) || 0;
+  }
+  function getSyncBuildVersion() {
+    return readBuildVersion(window.xhs && window.xhs.launchOptions);
+  }
+  function getBuildVersionAsync() {
+    var sync = getSyncBuildVersion();
+    if (sync) return Promise.resolve(sync);
+    var miniTool = window.xhs && window.xhs.miniTool;
+    if (!miniTool || typeof miniTool.getLaunchOptions !== 'function') return Promise.resolve(0);
+    return miniTool.getLaunchOptions().then(readBuildVersion).catch(function () { return 0; });
+  }
+  function isClientVersionAtLeast(buildVersion, minimum) {
+    return Math.floor(buildVersion / 1000) >= minimum;
+  }
+  function nativeMiniTool() {
+    var miniTool = window.xhs && window.xhs.miniTool;
+    if (!miniTool) return null;
+    if (typeof miniTool.setStorage !== 'function' || typeof miniTool.getStorage !== 'function') return null;
+    return miniTool;
+  }
+
+  /* localStorage 同步读写（降级轨道 + v1 旧 key 直读） */
+  function lsGet(key) {
     try {
       var raw = localStorage.getItem(key);
       if (!raw) return null;
       return JSON.parse(raw);
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   }
-  function saveJSON(key, val) {
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+  function lsSet(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+  }
+  function lsRemove(key) {
+    try { localStorage.removeItem(key); return true; } catch (e) { return false; }
+  }
+
+  /* 双轨读：Promise<data|null> */
+  function storageGet(key) {
+    if (useNativeStorage) {
+      var miniTool = nativeMiniTool();
+      if (miniTool) {
+        return miniTool.getStorage({ key: key }).then(function (res) {
+          return (res && typeof res.data !== 'undefined') ? res.data : null;
+        }).catch(function () { return null; });
+      }
+    }
+    return Promise.resolve(lsGet(key));
+  }
+  /* 双轨写：Promise<boolean> */
+  function storageSet(key, val) {
+    if (useNativeStorage) {
+      var miniTool = nativeMiniTool();
+      if (miniTool) {
+        return miniTool.setStorage({ key: key, data: val }).then(function () { return true; }).catch(function () { return false; });
+      }
+    }
+    return Promise.resolve(lsSet(key, val));
+  }
+
+  /* 初始化：判定轨道 + 跨存储迁移（localStorage → 端能力） */
+  function storageInit() {
+    return getBuildVersionAsync().then(function (buildVersion) {
+      var miniTool = nativeMiniTool();
+      useNativeStorage = !!miniTool && isClientVersionAtLeast(buildVersion, STORAGE_MIN_CLIENT_VERSION);
+      if (!useNativeStorage) return null;
+      return migrateLsToNative();
+    });
+  }
+  /* 把 localStorage 里的 records/theme 搬到端能力，搬成功清掉本地。
+   * v1 旧 key 不搬——v1→v2 迁移在启动逻辑里做，搬过去反而乱。 */
+  function migrateLsToNative() {
+    var keys = [KEY_RECORDS, KEY_THEME];
+    var tasks = [];
+    for (var i = 0; i < keys.length; i++) {
+      (function (key) {
+        var lsVal = lsGet(key);
+        if (lsVal === null) { tasks.push(Promise.resolve()); return; }
+        tasks.push(storageGet(key).then(function (nativeVal) {
+          if (nativeVal !== null) return null; /* 端能力已有，不覆盖 */
+          return storageSet(key, lsVal).then(function (ok) { if (ok) lsRemove(key); });
+        }));
+      })(keys[i]);
+    }
+    return Promise.all(tasks);
   }
 
   /* ---------- 日期工具 ---------- */
@@ -64,9 +149,9 @@
   }
 
   function migrateV1() {
-    var old = loadJSON(KEY_RECORDS_V1);
+    var old = lsGet(KEY_RECORDS_V1);
     if (!old) return null;
-    var s = loadJSON(KEY_SETTINGS_V1);
+    var s = lsGet(KEY_SETTINGS_V1);
     var limit = toMin(LEGACY_END);
     if (s && typeof s.end === 'string') {
       var m = toMin(s.end);
@@ -75,18 +160,7 @@
     return normalizeRecords(old, limit);
   }
 
-  var records = loadJSON(KEY_RECORDS);
-  if (records) {
-    records = normalizeRecords(records);
-  } else {
-    var migrated = migrateV1();
-    if (migrated) {
-      records = migrated;
-      saveJSON(KEY_RECORDS, records);
-    } else {
-      records = {};
-    }
-  }
+  var records = {}; /* 启动时由 initRecords() 异步填充 */
 
   /* ---------- 状态判定 ----------
    * 0 未打卡 | 1 准时下班 | 2 加班
@@ -140,15 +214,15 @@
    * data-theme-mode 保留原始选择（含 auto），供设置面板高亮用。
    * 老内核不认 prefers-color-scheme：两个媒体查询都不匹配时退回默认「深夜」。
    */
-  var KEY_THEME = 'owt_theme_v1';
   var THEMES = [
     { mode: 'auto',  name: '跟随系统', meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fd05c'] },
     { mode: 'dark',  name: '深夜',     meta: '#0d1117', dots: ['#0d1117', '#161b22', '#3fd05c'] },
     { mode: 'light', name: '明亮',     meta: '#f2f4f7', dots: ['#f2f4f7', '#ffffff', '#2da44e'] },
     { mode: 'sepia', name: '暖阳纸张', meta: '#f6f0e4', dots: ['#f6f0e4', '#fffaf0', '#4f8a5b'] },
-    { mode: 'mint',  name: '薄荷',     meta: '#eef6f4', dots: ['#eef6f4', '#ffffff', '#2fa26b'] }
+    { mode: 'mint',  name: '薄荷',     meta: '#eef6f4', dots: ['#eef6f4', '#ffffff', '#2fa26b'] },
+    { mode: 'sunset', name: '落日',    meta: '#2a1d14', dots: ['#2a1d14', '#3d2d22', '#e89530'] }
   ];
-  var DEFAULT_THEME = 'dark';
+  var DEFAULT_THEME = 'auto';
   var themeMode = DEFAULT_THEME;
   var mqDark = null, mqLight = null;
   try {
@@ -209,7 +283,9 @@
     if (!chip) return;
     var mode = chip.getAttribute('data-mode');
     if (mode === themeMode) return;
-    saveJSON(KEY_THEME, mode);
+    storageSet(KEY_THEME, mode).then(function (ok) {
+      if (!ok) toast('主题保存失败，下次打开不会沿用');
+    });
     applyTheme(mode);
     buzz();
   });
@@ -219,7 +295,7 @@
     if (mqDark.addEventListener) mqDark.addEventListener('change', onSystemThemeChange);
     else if (mqDark.addListener) mqDark.addListener(onSystemThemeChange);
   }
-  applyTheme(loadJSON(KEY_THEME) || DEFAULT_THEME);
+  applyTheme(DEFAULT_THEME); /* 异步加载见文件末尾 loadThemeAsync */
 
   /* ---------- 渲染：今日卡片 ---------- */
   function renderToday() {
@@ -241,7 +317,7 @@
     var key = todayKey();
     if (records[key] && records[key].ok === ok) return;   /* 已是该状态，重复点不写库、不清数据 */
     records[key] = { ok: ok };
-    saveJSON(KEY_RECORDS, records);
+    persistRecords();
     buzz();
     toast(ok ? '记下了：今天准时下班' : '记下了：今天加班');
     renderAll();
@@ -251,7 +327,7 @@
   btnEditToday.addEventListener('click', function () {
     var key = todayKey();
     delete records[key];
-    saveJSON(KEY_RECORDS, records);
+    persistRecords();
     toast('已撤销今天的打卡');
     renderAll();
   });
@@ -444,7 +520,7 @@
   function setDay(key, st) {
     if (!key) return;
     records[key] = { ok: st === 1 };
-    saveJSON(KEY_RECORDS, records);
+    persistRecords();
     buzz();
     closeSheets();
     toast(key === todayKey() ? '已记为' + stateText(st) : '已保存 ' + key);
@@ -456,7 +532,7 @@
   $('btnDayClear').addEventListener('click', function () {
     if (!editingKey) { closeSheets(); return; }
     delete records[editingKey];
-    saveJSON(KEY_RECORDS, records);
+    persistRecords();
     closeSheets();
     toast('已清除 ' + editingKey);
     renderAll();
@@ -521,7 +597,7 @@
       var data = JSON.parse(raw);
       if (!data || typeof data.records !== 'object') throw new Error('bad');
       records = normalizeRecords(data.records);
-      saveJSON(KEY_RECORDS, records);
+      persistRecords();
       closeSheets();
       toast('导入成功');
       renderAll();
@@ -553,7 +629,7 @@
   });
   $('btnClearConfirm').addEventListener('click', function () {
     records = {};
-    saveJSON(KEY_RECORDS, records);
+    persistRecords();
     closeSheets();
     toast('已清空');
     renderAll();
@@ -569,6 +645,41 @@
   });
   setAppHeight();
 
+  /* ---------- 持久化 + 异步启动 ----------
+   * persistRecords：写 records 到当前轨道，失败时 toast 提示（§3.7 要求调用方处理 false）。
+   * initRecords：启动时异步读 records，无则尝试 v1 迁移并写入。
+   * loadThemeAsync：启动时异步读主题并应用。
+   * 启动顺序：storageInit（判定轨道 + 跨存储迁移）→ initRecords → renderAll → loadThemeAsync。
+   */
+  function persistRecords() {
+    return storageSet(KEY_RECORDS, records).then(function (ok) {
+      if (!ok) toast('保存失败，下次打开可能丢失');
+    });
+  }
+  function initRecords() {
+    return storageGet(KEY_RECORDS).then(function (saved) {
+      if (saved) {
+        records = normalizeRecords(saved);
+        return null;
+      }
+      /* v1 迁移：v1 数据只在 localStorage（旧版本写的），端能力不会有 v1 */
+      var migrated = migrateV1();
+      if (migrated) {
+        records = migrated;
+        return storageSet(KEY_RECORDS, records).then(function (ok) {
+          if (!ok) toast('存储写入失败，本次迁移结果不会保留');
+        });
+      }
+      records = {};
+      return null;
+    });
+  }
+  function loadThemeAsync() {
+    return storageGet(KEY_THEME).then(function (savedTheme) {
+      if (savedTheme) applyTheme(savedTheme);
+    });
+  }
+
   /* ---------- 启动 ---------- */
   function renderAll() {
     renderToday();
@@ -576,5 +687,8 @@
     renderHeatmap();
     scrollHeatmapRight();                                    /* 每次重绘都停在最新一周 */
   }
-  renderAll();
+  storageInit().then(initRecords).then(function () {
+    renderAll();
+    loadThemeAsync();
+  });
 })();

@@ -593,21 +593,36 @@ var CHARTS = [
   id:13, cat:"advanced", name:"热力图", en:"Heatmap",
   desc:"用颜色深浅展示二维矩阵数值",
   intro:"在二维网格中用颜色深浅编码单元格数值，直观展示二维分布与密集区。适合展示「时间 × 类别」「行 × 列」的密度与强度。",
-  prompt:"Show user activity density across the week with a heatmap.\nUse: a seven-by-eight grid of weekday and time-of-day cells, cell color encoding intensity along a light-to-deep ramp, thin light borders between cells, a horizontal legend at the bottom, and hover tooltips.\nKeep it dense and clean. Avoid it when precise values must be read off the chart.",
+  prompt:"Show user activity density across the week with a heatmap.\nUse: a seven-by-eight grid of weekday and time-of-day cells, rounded cells separated by small even gaps, intensity encoded as a single-hue ramp from near-white to deep, a compact horizontal legend below, and hover tooltips. Let the pattern itself do the talking instead of printing a number in every cell.\nKeep it dense yet airy. Avoid it when precise values must be read off the chart.",
   goodFor:"用户活跃热力、相关性矩阵、时空密度",
   badFor:"精确读数、单维趋势、占比",
   option:function(m){
     var t = m === "thumb";
+    /* 数据做成"白天高、深夜低、周末整体走低"：比纯随机更像真实活跃度，色块也更有层次 */
+    var hourBase = [6, 4, 10, 32, 60, 78, 84, 58];
     var d = [], s = 13;
     function rnd(){ s = (s * 9301 + 49297) % 233280; return s / 233280; }
-    for(var i = 0; i < 7; i++) for(var j = 0; j < 8; j++) d.push([j, i, Math.round(rnd() * 100)]);
+    for(var i = 0; i < 7; i++){
+      for(var j = 0; j < 8; j++){
+        var v = hourBase[j] * (i >= 5 ? 0.62 : 1) + (rnd() - 0.5) * 16;
+        d.push([j, i, Math.max(2, Math.round(v))]);
+      }
+    }
+    /* 色阶要跟着明暗走：浅色主题由浅入深、暗色主题由暗到亮，两端都保持单调节奏，中间不出现回折 */
+    var ramp = CUR_THEME.dark
+      ? ["#E8EEF9", "#3E7BE0", "#6EA8FF", "#A8CBFF"]
+      : ["#F2F5FF", "#8FB0FF", "#4C7DFF", "#3A63D8"];
     return {
       tooltip:t?undefined:{},
-      grid:{left:t?8:48,right:t?8:16,top:t?8:16,bottom:t?8:24},
-      xAxis:{type:"category",data:HR,axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:!t},boundaryGap:true},
-      yAxis:{type:"category",data:WK,axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:!t}},
-      visualMap:{min:0,max:100,show:!t,orient:"horizontal",left:"center",bottom:0,inRange:{color:["#F2F5FF","#4C7DFF","#3A63D8"]}},
-      series:[{type:"heatmap",data:d,label:t?{show:false}:{show:true},itemStyle:{borderColor:"#fff",borderWidth:1}}]
+      grid:{left:t?8:48,right:t?8:16,top:t?8:16,bottom:t?8:50},
+      xAxis:{type:"category",data:HR,axisLabel:{show:!t,fontSize:10},axisTick:{show:false},axisLine:{show:false},splitLine:{show:false},boundaryGap:true},
+      yAxis:{type:"category",data:WK,axisLabel:{show:!t,fontSize:10},axisTick:{show:false},axisLine:{show:false},splitLine:{show:false}},
+      visualMap:{min:0,max:100,show:!t,orient:"horizontal",left:"center",bottom:0,itemWidth:10,itemHeight:t?90:130,inRange:{color:ramp}},
+      series:[{
+        type:"heatmap",data:d,
+        itemStyle:{borderRadius:t?5:9,borderColor:"#fff",borderWidth:2},
+        emphasis:{itemStyle:{shadowBlur:12,shadowColor:"rgba(0,0,0,.3)"}}
+      }]
     };
   }
 },
@@ -662,19 +677,41 @@ var CHARTS = [
   id:16, cat:"advanced", name:"主题河流图", en:"ThemeRiver",
   desc:"用河流形状展示主题随时间演变",
   intro:"用围绕时间轴的色带展示各主题随时间的数量演变，色带宽度即该时刻该主题的量。形状如河流，适合展示话题热度随时间的迁移。",
-  prompt:"Show how three topics rise and fall over a year as a theme river.\nUse: smooth stacked bands flowing left to right along a time axis, a distinct hue per topic, labels only where a band is wide enough to hold them, and hover highlighting that lifts one band with a soft glow.\nKeep it organic and flowing. Avoid it beyond five or six topics, or when precise comparison is needed.",
+  prompt:"Show how three topics rise and fall over a year as a theme river.\nUse: smooth stacked bands flowing left to right along a time axis, a distinct hue per topic, topic names parked at the left end of each band where it is thickest, faint vertical gridlines on the time axis, and hover highlighting that lifts one band with a soft glow.\nKeep it organic and flowing. Avoid it beyond five or six topics, or when precise comparison is needed.",
   goodFor:"话题热度演变、多主题时间对比、舆情",
   badFor:"精确读数、占比、非时间数据",
   option:function(m){
     var t = m === "thumb";
-    var d = [], s = 19;
-    function rnd(){ s = (s * 9301 + 49297) % 233280; return s / 233280; }
-    var themes = ["科技","财经","体育"];
-    for(var i = 1; i <= 12; i++) for(var k = 0; k < 3; k++) d.push([i + "月", Math.round(rnd() * 30 + 5), themes[k]]);
+    /* 河流图的时间轴吃的是"可解析的日期"：写成「1月」这类中文刻度轴解析不出坐标，
+       整条河会被算成 Infinity 直接不显示，所以这里一律用 2026/01/01 这种日期，
+       月份只交给 axisLabel.formatter 去显示。 */
+    var themes = [{n:"科技",base:28,amp:10,ph:0.6},{n:"财经",base:19,amp:8,ph:2.6},{n:"体育",base:13,amp:6,ph:4.6}];
+    var d = [];
+    for(var i = 0; i < 12; i++){
+      var date = "2026/" + (i < 9 ? "0" : "") + (i + 1) + "/01";
+      for(var k = 0; k < themes.length; k++){
+        var th = themes[k];
+        var v = Math.round(th.base + th.amp * Math.sin(i / 12 * Math.PI * 2 + th.ph));
+        d.push([date, Math.max(4, v), th.n]);
+      }
+    }
     return {
-      tooltip:t?undefined:{},
-      singleAxis:{type:"category",axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t}},
-      series:[{type:"themeRiver",data:d,label:t?{show:false}:{show:true},emphasis:{itemStyle:{shadowBlur:10}}}]
+      tooltip:t?undefined:{trigger:"axis"},
+      singleAxis:{
+        type:"time",
+        top:t?4:18, bottom:t?4:26, left:t?26:56, right:t?26:56,
+        axisTick:{show:false},
+        axisLine:{show:!t,lineStyle:{color:"#E1E8F6"}},
+        splitLine:{show:!t,lineStyle:{type:"dashed",color:C.grid}},
+        axisLabel:{show:!t,fontSize:11,hideOverlap:true,formatter:function(v){ return (new Date(v).getMonth() + 1) + "月"; }}
+      },
+      series:[{
+        type:"themeRiver",
+        data:d,
+        label:{show:!t,fontSize:12,position:"left",color:"#fff"},
+        itemStyle:{borderWidth:0},
+        emphasis:{itemStyle:{shadowBlur:16,shadowColor:"rgba(0,0,0,.28)"}}
+      }]
     };
   }
 },
@@ -717,18 +754,34 @@ var CHARTS = [
   id:18, cat:"advanced", name:"极坐标柱状", en:"Polar Bar",
   desc:"在极坐标系下用径向长度展示数值",
   intro:"把柱状图搬到极坐标系：类别沿圆周分布，数值用径向长度展示。形成「玫瑰」或「风玫瑰」形态，兼具美感与周期性展示能力。",
-  prompt:"Show wind frequency by direction as a polar rose chart.\nUse: eight evenly spaced spokes around a circle, petals growing outward from the center with rounded tips and a soft radial gradient, light angular gridlines, and the dominant direction picked out in the strongest accent color while the rest stay muted.\nKeep it decorative yet readable. Avoid it for non-cyclical categories, whose order readers will misread.",
+  prompt:"Show wind frequency by direction as a polar rose chart.\nUse: eight evenly spaced spokes around a circle with a clear gap between petals, petals growing outward from the centre with rounded tips, and a three-step tint that deepens as the value grows so the dominant direction stands out while the smaller ones stay light. Keep the spoke and ring gridlines pale and quiet.\nKeep it decorative yet readable. Avoid it for non-cyclical categories, whose order readers will misread.",
   goodFor:"风向风频、周期性数据、角度分布",
   badFor:"精确数值比较、非周期类别",
   option:function(m){
     var t = m === "thumb";
     var dirs = ["N","NE","E","SE","S","SW","W","NW"];
+    /* 花瓣按数值分三档上色（深 / 中 / 浅）：主方向自然跳出来，小花瓣退到浅色，
+       再留出角度间隙，就不会像原来那样八个柱挤成一圈。 */
+    var vals = [38, 26, 56, 22, 16, 12, 28, 44];
+    var data = [];
+    for(var i = 0; i < vals.length; i++){
+      var v = vals[i];
+      data.push({
+        value:v,
+        itemStyle:{color: v >= 45 ? "#3A63D8" : (v >= 30 ? "#4C7DFF" : "#8FB0FF"), borderRadius:4}
+      });
+    }
     return {
       tooltip:t?undefined:{},
-      polar:{radius:t?"92%":"70%"},
-      angleAxis:{type:"category",data:dirs,axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:!t}},
-      radiusAxis:{axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:!t&&{lineStyle:{type:"dashed",color:C.grid}}}},
-      series:[{type:"bar",data:rw(8,30,15,21),coordinateSystem:"polar",itemStyle:{color:barGrad(C.blue),borderRadius:4}}]
+      polar:{radius:t?"92%":"76%",center:["50%","52%"]},
+      angleAxis:{type:"category",data:dirs,boundaryGap:true,axisLabel:{show:!t,fontSize:11},axisTick:{show:false},axisLine:{show:false},splitLine:{show:!t,lineStyle:{color:C.grid}}},
+      /* 半径轴不写数字：刻度数字会压在正上方那条花瓣上，玫瑰图读的是"哪个方向更长" */
+      radiusAxis:{axisLabel:{show:false},axisTick:{show:false},axisLine:{show:false},splitLine:{show:!t,lineStyle:{type:"dashed",color:"#E8EEF9"}}},
+      series:[{
+        type:"bar",data:data,coordinateSystem:"polar",barWidth:t?"54%":"52%",
+        itemStyle:{borderRadius:4},
+        emphasis:{itemStyle:{shadowBlur:14,shadowColor:"rgba(0,0,0,.28)"}}
+      }]
     };
   }
 },
@@ -1044,30 +1097,36 @@ var CHARTS = [
 },
 {
   id:30, cat:"multi", name:"多图组合", en:"Grid Combo",
-  desc:"多子图并列展示关联指标",
-  intro:"用 grid 数组定义多个子坐标系，在同一画布并列多个相关图表。适合仪表板把关联指标组合展示，节省空间且便于对照。",
-  prompt:"Show two related mini charts side by side in one canvas: a bar chart of six monthly sales on the left and a line chart of four channel trends on the right.\nUse: a shared visual language — the same type sizes, gridline color and spacing — with enough gap between the panels that axis labels never collide.\nKeep it dashboard-like and compact. Avoid it beyond three panels; split into separate charts instead.",
-  goodFor:"仪表板组合、关联指标对照、空间紧凑展示",
+  desc:"柱状与饼图并列，趋势与占比同屏",
+  intro:"在同一画布内并列两个不同坐标系的图：柱状图用 grid 划出直角坐标系，饼图用 center / radius 百分比直接定位，两者互不干扰、各说各话。适合仪表板把「趋势量」与「占比构成」这类互补指标放在一屏内对照，省空间又便于横向比对。",
+  prompt:"Show two complementary mini charts side by side in one canvas: a bar chart of six monthly sales on the left and a pie chart of four sales channels on the right.\nUse: a shared visual language — the same type sizes and spacing — bars with rounded tops over a light dashed gridline, a pie with thin white gaps between slices and a compact legend stacked to its right, and enough room between the two panels that nothing ever collides.\nKeep it dashboard-like and compact. Avoid it beyond three panels; split into separate charts instead.",
+  goodFor:"仪表板组合、趋势 + 占比对照、空间紧凑展示",
   badFor:"单一焦点、全屏单图",
   option:function(m){
     var t = m === "thumb";
     return {
       tooltip:t?undefined:{},
-      grid:[
-        {left:t?"6%":"8%",right:t?"52%":"52%",top:t?"8%":"12%",bottom:t?"12%":"18%"},
-        {left:t?"54%":"56%",right:t?"6%":"8%",top:t?"8%":"12%",bottom:t?"12%":"18%"}
-      ],
-      xAxis:[
-        {type:"category",data:MON.slice(0,6),axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:false},gridIndex:0},
-        {type:"category",data:["A","B","C","D"],axisLabel:{show:!t},axisTick:{show:!t},axisLine:{show:!t},splitLine:{show:false},gridIndex:1}
-      ],
-      yAxis:[
-        {type:"value",axisLabel:{show:!t},axisTick:{show:false},axisLine:{show:false},splitLine:{show:!t&&{lineStyle:{type:"dashed",color:C.grid}}},gridIndex:0},
-        {type:"value",axisLabel:{show:!t},axisTick:{show:false},axisLine:{show:false},splitLine:{show:!t&&{lineStyle:{type:"dashed",color:C.grid}}},gridIndex:1}
-      ],
+      legend:t?undefined:{right:0,top:"middle",orient:"vertical",itemWidth:9,itemHeight:9,itemGap:8},
+      /* 左半屏走直角坐标系，右半屏留给饼图：饼图不吃 grid，用 center / radius 定位 */
+      grid:{left:t?"4%":"6%",right:t?"54%":"56%",top:t?"12%":"14%",bottom:t?"14%":"20%"},
+      xAxis:{type:"category",data:MON.slice(0,6),axisLabel:{show:!t},axisTick:{show:false},axisLine:{show:false},splitLine:{show:false},gridIndex:0},
+      yAxis:{type:"value",axisLabel:{show:!t},axisTick:{show:false},axisLine:{show:false},splitLine:{show:!t&&{lineStyle:{type:"dashed",color:C.grid}}},gridIndex:0},
       series:[
-        {type:"bar",data:rw(6,50,15,5),xAxisIndex:0,yAxisIndex:0,itemStyle:{borderRadius:[4,4,0,0],color:barGrad(C.blue)},color:"#4C7DFF"},
-        {type:"line",data:rw(4,40,12,7),xAxisIndex:1,yAxisIndex:1,smooth:!t,symbol:t?"none":"circle",color:"#F76B8A"}
+        {type:"bar",data:rw(6,50,15,5),xAxisIndex:0,yAxisIndex:0,barWidth:t?"58%":"52%",itemStyle:{borderRadius:[4,4,0,0],color:barGrad(C.blue)},color:"#4C7DFF"},
+        {
+          type:"pie",
+          center:[t?"68%":"64%",t?"48%":"50%"],
+          radius:t?["26%","52%"]:["20%","38%"],
+          data:[
+            {value:1048,name:"搜索"},
+            {value:735,name:"直接"},
+            {value:580,name:"广告"},
+            {value:484,name:"其他"}
+          ],
+          label:{show:false},
+          labelLine:{show:false},
+          itemStyle:{borderColor:"#fff",borderWidth:2}
+        }
       ]
     };
   }
@@ -1097,6 +1156,8 @@ var fabTop = document.getElementById("fabTop");
 var fabBack = document.getElementById("fabBack");
 var activeCat = "all";
 var activeCharts = [];
+var viewMode = "list";      /* "list" | "detail"，用于判断该不该记列表的滚动位置 */
+var listScrollY = 0;        /* 离开列表时的滚动位置，从详情返回时原地接上 */
 
 var ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 var ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
@@ -1140,7 +1201,7 @@ function renderTabs(){
   });
 }
 
-function renderList(){
+function renderList(restoreY){
   disposeCharts();
   titleEl.textContent = "图表图鉴";
   fabBack.classList.remove("show");
@@ -1185,7 +1246,9 @@ function renderList(){
     wrap.appendChild(sec);
   });
   app.appendChild(wrap);
-  window.scrollTo(0, 0);
+  /* 列表卡片高度固定，恢复滚动位置不必等图表渲染完；
+     从详情返回时用离开前记下的位置，切分类 / 首次进入则为 0（回到顶部）。 */
+  window.scrollTo(0, restoreY || 0);
 }
 
 function renderDetail(id){
@@ -1261,10 +1324,14 @@ function renderDetail(id){
   promptBlock.className = "block";
   promptBlock.innerHTML =
     '<h3 class="h3-b">AI 提示词</h3>' +
-    '<p class="hint">提示词只描述「内容 + 风格」，不限定技术栈，由 AI 自选方案；点按可全选，长按文字手动复制后粘贴给 AI</p>' +
+    '<p class="hint">点按下方提示词可全选，长按文字即可手动复制，再粘贴给 AI 生成该风格图表</p>' +
     '<div class="prompt-box"><pre>' + escapeHtml(s.prompt) + '</pre></div>' +
     '<button class="copy-btn" id="copyBtn">' + ICON_COPY + '复制提示词</button>';
   d.appendChild(promptBlock);
+
+  /* 点提示词框本身也全选（文案里承诺的就是这个手势），与下方按钮同一套动作 */
+  var promptPre = promptBlock.querySelector(".prompt-box pre");
+  promptBlock.querySelector(".prompt-box").addEventListener("click", function(){ selectPrompt(promptPre); });
 
   var sceneBlock = document.createElement("div");
   sceneBlock.className = "block";
@@ -1285,7 +1352,7 @@ function renderDetail(id){
 
   var copyBtn = document.getElementById("copyBtn");
   if(copyBtn){
-    copyBtn.addEventListener("click", function(){ copyText(s.prompt, copyBtn); });
+    copyBtn.addEventListener("click", function(){ selectPrompt(promptPre); });
   }
 
   window.scrollTo(0, 0);
@@ -1295,24 +1362,34 @@ function escapeHtml(str){
   return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function copyText(text, btn){
-  var box = btn && btn.closest ? btn.closest(".block") : null;
-  var pre = box ? box.querySelector(".prompt-box pre") : null;
-  if(pre){
-    var range = document.createRange();
-    range.selectNodeContents(pre);
-    var sel = window.getSelection();
-    if(sel){ sel.removeAllRanges(); sel.addRange(range); }
-  }
-  showToast("已选中提示词，请长按文字手动复制");
+/* 容器内剪贴板 API 不可用（宿主已禁用写入剪贴板能力），
+   这里只做"选中"这一步，剩下交给用户长按手动复制。 */
+function selectPrompt(pre){
+  if(!pre){ return; }
+  var range = document.createRange();
+  range.selectNodeContents(pre);
+  var sel = window.getSelection();
+  if(sel){ sel.removeAllRanges(); sel.addRange(range); }
+  showToast("已选中提示词，长按文字即可复制");
 }
 
 function route(){
   disposeCharts();
   var h = location.hash || "#/";
   var m = h.match(/^#\/c\/(\d+)$/);
-  if(m){ renderDetail(parseInt(m[1], 10)); }
-  else { activeCat = "all"; renderTabs(); renderList(); }
+  if(m){
+    /* 进详情前先记下表单调到哪儿了（只在"列表 → 详情"时记，详情页内部跳转不覆盖）；
+       详情页自己会回到顶部，返回列表时再原地接上，不必每次都从头翻。 */
+    if(viewMode === "list"){
+      listScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    }
+    viewMode = "detail";
+    renderDetail(parseInt(m[1], 10));
+  } else {
+    viewMode = "list";
+    renderTabs();                  /* 保留已选分类：返回后仍是刚才那一组 */
+    renderList(listScrollY);
+  }
 }
 
 /* ============ 主题切换 ============ */

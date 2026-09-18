@@ -18,7 +18,7 @@
 - **不记具体事件**：没有文字输入，也不需要写日记——只回答一个问题：今天心情怎么样。
 - **不分工作日 / 休息日**：不维护节假日表，任何一天记录都算数。
 - **多套主题**：设置里可在「跟随系统 / 深夜 / 明亮 / 暖阳纸张 / 薄荷 / 樱粉」间切换，「跟随系统」会随手机的深色 / 浅色模式自动变；选择只存本机，下次打开自动沿用。
-- **数据自管**：全部存于本机 `localStorage`，支持导出 / 导入 JSON 备份、一键清空。
+- **数据自管**：按小红书小工具容器 [§2.4](https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s2-4) 规范，客户端 ≥ 9.46.0 时用 Storage JS API（`window.xhs.miniTool.setStorage`）持久化，低版本降级 `localStorage`，从低版本升级时自动把 `localStorage` 旧数据迁移到 Storage JS API；支持导出 / 导入 JSON 备份、一键清空。
 
 ## 使用
 
@@ -73,6 +73,7 @@ python _dev/build_zip.py    # 前置校验 + 打包 zip
 - **导出 / 导入**：容器禁止 `a[download]` 下载与剪贴板 API，`<input type=file>` 在容器内只能选图片/视频。故导出改为在页内弹层用 textarea 展示 JSON 文本（长按全选复制），导入改为粘贴 JSON 文本后确认。
 - **不用原生对话框**：容器 iframe 未开 `allow-modals` 时 `confirm()` 不弹窗、静默返回 false；「清空数据」改为独立的页内确认框。
 - **不可用能力已移除**：无网络请求、无 Worker、无 eval、无 iframe、无外链资源。
+- **数据存储**：依容器 §2.4 / §3.6 / §3.7，客户端 ≥ 9.46.0（`buildVersion` 末 3 位为编译序号需忽略）且注入 `window.xhs.miniTool.setStorage` 时优先用 Storage JS API（异步），未满足时降级 `localStorage`（容器不保证其可用，所有读写均做异常处理并容忍数据缺失）；启动时先迁移 `localStorage` 旧数据到 Storage JS API，再异步加载 records 与 theme 后渲染。
 
 ## 技术说明
 
@@ -80,6 +81,6 @@ python _dev/build_zip.py    # 前置校验 + 打包 zip
 - 兼容性基线 Chrome 61 / ES2017：JS 仅用 `var` / `function` 等 ES5 风格语法；CSS 毛玻璃等仅作 `@supports` 增强层，Flex 间距用 margin 基线，安全区用 `var(--safe-area-inset-*, env(...))` 组合并保留静态兜底，视口高度经 JS 维护 `--app-height` 并保留 `100vh` 兜底。Chrome 61 实机兼容性未实测。
 - 堆积图零图表库：`renderMix()` 把每种心情的天数写进对应色块的 `flex-grow`，色块的 `flex-basis` 在 CSS 里固定为 0，于是「天数的比例」直接变成「宽度比例」，段间 4px 固定间隔露出卡片底色。
 - 类名避坑：日历里「今天」那一格的类名是 `is-today` 而非 `today`——`.today` 已被今日区块（整块卡片）占用，重名会把 12px 圆点撑成 34×30 的色块。
-- 存储 key：`md_records_v1`，形如 `{ 'YYYY-MM-DD': { m: 1-6 } }`（`m` 为心情编号：1 兴奋 / 2 开心 / 3 平静 / 4 一般 / 5 难过 / 6 愤怒）。
+- 存储 key：`md_records_v1`，形如 `{ 'YYYY-MM-DD': { m: 1-6 } }`（`m` 为心情编号：1 兴奋 / 2 开心 / 3 平静 / 4 一般 / 5 难过 / 6 愤怒）。存储底层为 Storage JS API 优先 / `localStorage` 降级（见「小工具容器适配 · 数据存储」），key 不变。
 - 主题：配色全部走 CSS 变量（`:root` 为默认「深夜」，其余主题在 `html[data-theme="..."]` 里整组覆盖，样式规则不写死颜色）；`main.js` 把当前模式存 `md_theme_v1`（`auto|dark|light|sepia|mint|sakura`，缺省 `auto`）并写到 `<html data-theme>`，同时同步 `<meta name="theme-color">`。`auto` 用 `prefers-color-scheme` 解析成 `dark`/`light`，老内核两个媒体查询都不匹配时退回「深夜」。
 - 不区分工作日 / 休息日：代码里没有节假日表，任何一天记录都一视同仁。「连续好心情」按打卡记录往前连续计算（遇到「一般/难过/愤怒」记录即中断），没记录的日子自动跳过 —— 放假不打断。

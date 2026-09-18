@@ -13,8 +13,8 @@
 - **改历史**：点热力图任意格子，选「准时下班 / 加班了 / 清除记录」。
 - **不记具体时间**：没有时间输入，也不需要设置标准上下班时间——只回答一个问题：今天准不准时。
 - **不分工作日 / 休息日**：不维护节假日表，任何一天打卡都算数——调休补班、周末加班天然正确，放长假不打卡也不影响统计。
-- **多套主题**：设置里可在「跟随系统 / 深夜 / 明亮 / 暖阳纸张 / 薄荷」间切换，「跟随系统」会随手机的深色 / 浅色模式自动变；选择只存本机，下次打开自动沿用。
-- **数据自管**：全部存于本机 `localStorage`，支持导出 / 导入 JSON 备份、一键清空。
+- **多套主题**：设置里可在「跟随系统 / 深夜 / 明亮 / 暖阳纸张 / 薄荷 / 落日」间切换，「跟随系统」会随手机的深色 / 浅色模式自动变；选择只存本机，下次打开自动沿用。
+- **数据自管**：按小红书 §3.7 双轨存储——客户端 ≥ 9.46.0 走 Storage JS API（`window.xhs.miniTool`），低版本降级 `localStorage`；升级后自动迁移本地数据到端能力。支持导出 / 导入 JSON 备份、一键清空。
 
 ## 使用
 
@@ -70,12 +70,13 @@ python _dev/build_zip.py    # 前置校验 + 打包 zip
 - **导出 / 导入**：容器禁止 `a[download]` 下载与剪贴板 API，`<input type=file>` 在容器内只能选图片/视频。故导出改为在页内弹层用 textarea 展示 JSON 文本（长按全选复制），导入改为粘贴 JSON 文本后确认。
 - **不用原生对话框**：容器 iframe 未开 `allow-modals` 时 `confirm()` 不弹窗、静默返回 false，表现就是「点了没反应」；「清空数据」改为独立的页内确认框（写明将删除多少条，取消则退回设置面板），不用「再点一次」那种轻确认。
 - **不可用能力已移除**：无网络请求、无 Worker、无 eval、无 iframe、无外链资源。
+- **存储双轨（§3.7）**：客户端 ≥ 9.46.0 用 `window.xhs.miniTool.setStorage/getStorage` 端能力（推荐，持久化有保障），低版本降级 `localStorage`（容器不保证持久性，仅作兼容）。启动时按 §3.6 读 `buildVersion` 判定轨道；从低版本升级后，把 `localStorage` 里的 records / theme 搬到端能力并清掉本地。所有写入返回 `Promise<boolean>`，失败时 toast 提示，不假设已持久化（§3.7 要求）。
 
 ## 技术说明
 
 - 零依赖、零构建、离线可用。
 - 兼容性基线 Chrome 61 / ES2017：JS 仅用 `var` / `function` 等 ES5 风格语法；CSS 毛玻璃等仅作 `@supports` 增强层，Flex 间距用 margin 基线，安全区用 `var(--safe-area-inset-*, env(...))` 组合并保留静态兜底，视口高度经 JS 维护 `--app-height` 并保留 `100vh` 兜底。Chrome 61 实机兼容性未实测。
-- 存储 key：`owt_records_v2`，形如 `{ 'YYYY-MM-DD': { ok: true|false } }`（`ok` 即「今天准时下班」）。
-- 主题：配色全部走 CSS 变量（`:root` 为默认「深夜」，其余主题在 `html[data-theme="..."]` 里整组覆盖，样式规则不写死颜色）；`main.js` 把当前模式存 `owt_theme_v1`（`auto|dark|light|sepia|mint`，缺省 `dark`）并写到 `<html data-theme>`，同时同步 `<meta name="theme-color">`。`auto` 用 `prefers-color-scheme` 解析成 `dark`/`light`，老内核两个媒体查询都不匹配时退回「深夜」。
+- 存储 key：`owt_records_v2`，形如 `{ 'YYYY-MM-DD': { ok: true|false } }`（`ok` 即「今天准时下班」）。按 §3.7 双轨：客户端 ≥ 9.46.0 用 `window.xhs.miniTool.setStorage/getStorage`，低版本降级 `localStorage`；启动时按 §3.6 读 `buildVersion` 判定轨道，升级后把 localStorage 旧数据搬到端能力并清本地。所有写入返回 `Promise<boolean>`，失败时 toast 提示，不假设已持久化。
+- 主题：配色全部走 CSS 变量（`:root` 为默认「深夜」，其余主题在 `html[data-theme="..."]` 里整组覆盖，样式规则不写死颜色）；`main.js` 把当前模式存 `owt_theme_v1`（`auto|dark|light|sepia|mint`，缺省 `auto` 即跟随系统）并写到 `<html data-theme>`，同时同步 `<meta name="theme-color">`。`auto` 用 `prefers-color-scheme` 解析成 `dark`/`light`，老内核两个媒体查询都不匹配时退回「深夜」。
 - 旧数据自动迁移：首次打开若只有 v1（`owt_records_v1`，记上下班时间），按 v1 里存的标准下班 + 宽限折算成「准时 / 加班」写入 v2（v1 无设置时以 18:00 判定），只打了上班卡的日期不迁移。旧版导出的备份 JSON 也可直接导入。
 - 不区分工作日 / 休息日：代码里没有节假日表，任何一天打卡都一视同仁。「连续准时」按打卡记录往前连续计算（遇到「加班」记录即中断），没打卡的日子自动跳过 —— 放假不打断，调休上班、周末加班也不会算错。
