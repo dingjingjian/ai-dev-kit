@@ -97,4 +97,4 @@ python ../../.skill/minitool-zip-builder/scripts/audit_artifact.py ./vehicle-atl
 
 > 兼容性状态：已在 Chromium（桌面内核）390×844 视口完成渲染自检；**Chrome 61 / Android 8.1 真机兼容性未实测**，交付前须按 `.skill/minitool-zip-builder/references/` 的 JS / CSS 自检清单在目标内核复核。
 >
-> 配图状态：53 张已就位（4 张分类封面 + 49 张条目图），合计约 0.55 MB，打包 zip 约 592 KB。页面无占位块残留；主体过高的竖高条目（热气球 / 运载火箭 / 可重复使用运载器等）与 4 张封面在卡片裁切下仍需按 `_dev/image-spec.md` 逐张复核构图。
+> 配图状态：53 张已就位（4 张分类封面 + 49 张条目图），合计约 565 KB，打包 zip 约 601 KB。页面无占位块残留；主体过高的竖高条目（热气球 / 运载火箭 / 可重复使用运载器等）与 4 张封面在卡片裁切下仍需按 `_dev/image-spec.md` 逐张复核构图。
