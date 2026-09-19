@@ -13,6 +13,7 @@
 ## 功能
 
 - **列表页**：四类分组，每张卡片上半部为该风格的纯 CSS 迷你示例，下半部为名称 + 一句话特征。
+- **分类筛选**：顶部分类 tab 用 2 字短名（全部 / 通用 / 落地 / 仪表 / 现代）+ 自动换行，**不做横向滚动**——360px 及以上单行放得下 5 个分类，任何机型都点得到（分组标题仍显示全名「落地页 / 仪表板」）。
 - **详情页**：风格介绍、AI 提示词（可一键复制到剪贴板）、主色 / 辅助色色块、适用 / 不适用场景。
 - **路由**：hash 路由（`#/` 列表、`#/s/<id>` 详情），适配小红书容器无跳转限制。
 - **返回原位**：从详情返回列表时回到离开时的滚动位置与分类，不用从头再翻。
@@ -35,7 +36,9 @@
 |----|------|
 | 源码 | `index.html`（内联 CSS）+ `main.js`（数据 + 渲染逻辑，经典脚本） |
 | demo 实现 | 每个 demo 根节点须撑满 `.demo-body`（`width/height:100%`）；内部尺寸统一用 `em`，基准字号由 `.demo-body` 控制（卡片 11px / 详情页 16px），同一套 demo 在两处自动等比缩放 |
-| 自检 | `_dev/shot_check.py`，截图列表页与 4 张详情页，并断言每个 demo 撑满预览区、hero 高度符合预期 |
+| 顶栏分类 tab | 只用 `flex-wrap` 换行，**禁止**在吸顶栏里做横向滚动容器：低端 Android（Chrome 61）上吸顶栏内的嵌套滚动容器会让吸顶栏滑动时渲染残缺（「往下滑显示不全」），且横滑会把右侧分类推出屏幕点不到。标签必须用 2 字短名（`CATS[].tab`）：Android 8 中文字体略宽 + 逐元素宽度取整，360px 下 3 字标签会把整行顶到第二行换行（新机却刚好放得下）。间距写 `.tab` 自身 `margin`（Chrome <84 无 flex gap）；自检 `_dev/shot_tabs.py` 断言无横滑区、单行、且字体加宽 +1px/字后仍单行 |
+| 混合与合成层 | 预览区本身就是混合隔离组（`isolation:isolate` 写在 `.demo` 上），**新增 demo 用到 `mix-blend-mode` / `filter` / `backdrop-filter` 时必须跑 `_dev/layer_check.py`**。否则混合元素的底衬会一直回溯到根，Chrome 为整页生成一个不可滚动的合成层（实测 h=15417px，DPR3 ≈ 46000 设备像素）；这类层要整块光栅化，超过低端 Android 的 GPU 纹理上限（约 4096 设备像素）后只画得出顶部一段 → 安卓 8 上首页滑到「活力色块」（4096/3 ≈ 1365px 处）之后整片空白 |
+| 自检 | `_dev/shot_check.py`（截图列表页与 4 张详情页，断言 demo 撑满预览区、hero 高度）、`_dev/shot_tabs.py`（分类 tab 无横滑区、单行）、`_dev/layer_check.py`（无超大不可滚动合成层） |
 | 打包 | `_dev/build_zip.py`，前置校验 + 打包 zip（产物 `uiux-style-gallery.zip`） |
 | 体积 | 远小于 2MB 建议值 |
 | 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `build_zip.py` 刷新 `dist/` 与 zip，不要手改 `dist/` |
@@ -44,6 +47,9 @@
 
 ```bash
 python _dev/build_zip.py    # 前置校验 + 打包 zip
+python _dev/shot_check.py   # 截图 + demo 撑满预览区 / hero 高度自检
+python _dev/shot_tabs.py    # 分类 tab 自检（无横滑、单行）
+python _dev/layer_check.py  # 合成层自检（无超大不可滚动层）
 ```
 
 ## 应用上架信息

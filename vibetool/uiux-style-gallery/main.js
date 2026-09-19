@@ -1016,10 +1016,12 @@ var STYLES = [
   }
 ];
 
+/* zh 用于分组标题与详情页；tab 是顶栏 tab 的短名（必须 2 字，见 index.html「分类 tab」
+   注释：Android 8 字体更宽，3 字标签会把整行顶到第二行），缺省回落到 zh。 */
 var CATS = [
   {key:"general", zh:"通用", en:"General"},
-  {key:"landing", zh:"落地页", en:"Landing"},
-  {key:"dashboard", zh:"仪表板", en:"Dashboard"},
+  {key:"landing", zh:"落地页", en:"Landing", tab:"落地"},
+  {key:"dashboard", zh:"仪表板", en:"Dashboard", tab:"仪表"},
   {key:"modern", zh:"现代", en:"Modern"}
 ];
 
@@ -1044,18 +1046,6 @@ function showToast(msg){
   setTimeout(function(){ toastEl.classList.remove("show"); }, 1800);
 }
 
-function updateTabsFade(){
-  var max = tabs.scrollWidth - tabs.clientWidth;
-  if(max <= 2){
-    tabs.classList.remove("show-left", "show-right");
-    return;
-  }
-  if(tabs.scrollLeft > 4){ tabs.classList.add("show-left"); }
-  else { tabs.classList.remove("show-left"); }
-  if(tabs.scrollLeft < max - 4){ tabs.classList.add("show-right"); }
-  else { tabs.classList.remove("show-right"); }
-}
-
 function renderTabs(){
   tabs.innerHTML = "";
   var all = document.createElement("button");
@@ -1066,11 +1056,10 @@ function renderTabs(){
   CATS.forEach(function(c){
     var b = document.createElement("button");
     b.className = "tab" + (activeCat === c.key ? " active" : "");
-    b.textContent = c.zh;
+    b.textContent = c.tab || c.zh;
     b.addEventListener("click", function(){ activeCat = c.key; renderTabs(); renderList(); });
     tabs.appendChild(b);
   });
-  updateTabsFade();
 }
 
 function renderList(restoreY){

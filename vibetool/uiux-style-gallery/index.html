@@ -48,24 +48,22 @@ code,pre{font-family:"SF Mono",Menlo,Consolas,monospace;}
 .topbar h1{font-size:17px; font-weight:600; letter-spacing:-.02em; flex:1; text-align:center;}
 .topbar .spacer{width:36px; flex-shrink:0;}
 
-/* 分类 tab */
+/* 分类 tab：短名 + 自动换行，不用横向滚动。
+   （1）横滑＝在吸顶栏里再套一个滚动容器，低端 Android（Chrome 61 / Android 8）上会让
+       吸顶栏在滑动时渲染残缺，表现为「往下滑显示不全」；且横滑必然把右侧分类推到屏幕外
+       点不到。改为 flex-wrap 换行后 5 个分类任何时候都点得到（分组标题仍显示全名）。
+   （2）标签必须取短名（2 字），且整行要留出 ~30px 余量：Android 8 的中文字体比新机
+       略宽、逐元素宽度取整也会多出十几 px，360px 屏下 3 字标签（落地页/仪表板）会把
+       整行顶到第二行换行（新机上却刚好放得下），短名后各机型都是单行。
+   （3）间距走子项 margin：Chrome <84 没有 flex gap，基线为 Chrome 61。
+   echarts-gallery 从首版起就是「短名 + 换行」，真机无此问题，两边保持一致。 */
 .tabs{
   max-width:var(--page); margin:0 auto;
-  display:flex;  padding:0 12px 10px;
-  overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none;
-  position:relative;
+  display:flex; flex-wrap:wrap;
+  padding:0 12px 4px;
 }
-.tabs::-webkit-scrollbar{display:none;}
-.tabs::before, .tabs::after{
-  content:""; position:absolute; top:0; bottom:0; width:18px; pointer-events:none; z-index:3;
-  opacity:0; transition:opacity .2s var(--ease);
-}
-.tabs::before{left:0; background:linear-gradient(90deg, var(--bg), rgba(245,245,247,0));}
-.tabs::after{right:0; background:linear-gradient(90deg, rgba(245,245,247,0), var(--bg));}
-.tabs.show-left::before{opacity:1;}
-.tabs.show-right::after{opacity:1;}
 .tab{
-  flex-shrink:0; padding:7px 15px; border-radius:999px;
+  flex-shrink:0; margin:0 6px 8px 0; padding:7px 11px; border-radius:999px;
   font-size:13px; font-weight:500; color:var(--ink-2);
   background:var(--card); border:1px solid var(--line); white-space:nowrap;
   transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
@@ -101,8 +99,18 @@ code,pre{font-family:"SF Mono",Menlo,Consolas,monospace;}
 }
 .card:active{transform:scale(.985);}
 
+/* 预览区同时是「混合隔离组」（isolation:isolate）。
+   .d67（RGB 分离故障）用了 mix-blend-mode:screen：混合元素的底衬默认要回溯到最近的
+   隔离组，页面里没有任何隔离组时会一直落到根，Chrome 于是为整页生成一个高 15417px
+   的「不可滚动」合成层（实测 h=15417，DPR3 下 ≈ 46000 设备像素）。不可滚动层要整块
+   光栅化，超过 GPU 纹理上限（4096 设备像素）后只画得出最上面一段 —— 安卓 8 上表现
+   就是首页往下滑，滑到「活力色块」之后整片空白（4096/3 ≈ 1365 CSS px 正好落在那张
+   卡片中间）。同理，filter / backdrop-filter 的渲染表面也被这里挡住不再外溢。
+   在 .demo 上建立隔离组后巨型层消失（实测非滚动层最大只剩 640px = 视口高度），
+   且观感不变：d67 自己有不透明黑底，混合结果与之前一致。
+   isolation 是 Chrome 41+ 能力，基线 Chrome 61 可用；自检见 _dev/layer_check.py。 */
 .demo{
-  position:relative; height:140px; overflow:hidden;
+  position:relative; height:140px; overflow:hidden; isolation:isolate;
   background:#fff; border-bottom:1px solid var(--line-2);
 }
 .card-info{padding:13px 14px 14px;}
@@ -896,8 +904,7 @@ code,pre{font-family:"SF Mono",Menlo,Consolas,monospace;}
 
 /* flex gap fallback: 用子元素 margin 替代 (Chrome <84) */
 .topbar > * + *{ margin-left:6px; }
-/* 分类 tab */
-.tabs > * + *{ margin-left:8px; }
+/* 分类 tab 的间距写在 .tab 自身 margin 上（换行后每行首项不该再有左间距） */
 .section-head > * + *{ margin-left:8px; }
 .card-head > * + *{ margin-left:6px; }
 .block h3 > * + *{ margin-left:8px; }
