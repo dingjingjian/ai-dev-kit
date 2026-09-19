@@ -128,6 +128,39 @@ def store_tagline_of(desc):
     return desc[:cut].strip()
 
 
+# 商店上屏文案要脱敏的第三方软件 / 平台名（独立于 build.py 的 STORE_NEUTRAL 再写一份）。
+# 商店是货架、不替别家产品打广告；TRACKS.md 原文照旧，只在折算层换成通用说法。
+NEUTRAL_MAP = (
+    ("飞书多维表格", "在线表格"),
+    ("飞书", "在线文档"),
+    ("GitHub 式", "格子式"),
+    ("GitHub", "代码托管"),
+    ("Cloudflare", "反爬校验"),
+    ("Word 转 Markdown", "文档转 Markdown"),
+    ("Word", "文档"),
+    ("乐高 10294", "积木"),
+    ("乐高", "积木"),
+    ("Blender 建模", "3D 建模"),
+    ("Blender", "3D 建模"),
+    ("Electron", "桌面端"),
+    ("Git 提交", "提交记录"),
+    ("Git", "版本控制"),
+)
+NEUTRAL_BRANDS = ["飞书", "GitHub", "Cloudflare", "Word", "乐高", "Blender", "Electron", "Git"]
+_CN_GAP = re.compile(r"([\u4e00-\u9fff]) ([\u4e00-\u9fff])")
+
+
+def store_neutral_of(text):
+    """独立复算 _dev/build.py 的 store_neutral()：上屏文案去第三方软件 / 平台名。"""
+    for a, b in NEUTRAL_MAP:
+        text = text.replace(a, b)
+    for _ in range(3):
+        text, n = _CN_GAP.subn(r"\1\2", text)
+        if not n:
+            break
+    return text
+
+
 def check(name, cond, extra=""):
     if cond:
         print("  ok  " + name)
@@ -369,6 +402,11 @@ def main():
         check("WebGL 起得来（data-gl=ok）", ws is not None and ws["gl"] is True, str(ws))
         check("月面贴图来自 ./assets/moon.jpg（data-tex=ok）",
               ws is not None and ws["tex"] == "ok", str(ws))
+        # 月面朝向：贴图 u=0.5 是月理 0° 经度，而 SphereGeometry 把 u=0.5 摆在 +X、u=0.25
+        # 摆在 +Z —— 必须绕 Y 偏转 -90° 才能让「正面朝地球」（默认视角正对 0° 经度，
+        # 否则正对的是 90°W、画面一半是背面高地）。这是纹理与真实月球对齐的接缝，别删。
+        check("月面正面朝地球（faceYaw = -90°）",
+              ws is not None and abs(ws["faceYaw"] + math.pi / 2) < 1e-6, str(ws))
         check("index.html 用本地 three.min.js（无 CDN）", pg.evaluate(
             "!!document.querySelector('script[src=\"./assets/three.min.js\"]')"))
         # 只保留天气：分段切换 / 月相滑块 / 显示设置 / 科普块全部不再存在
@@ -921,22 +959,28 @@ def main():
               "%d vs %d" % (sum(len(g["items"]) for g in st), exp_total))
         check("商店分类名与顺序同 TRACKS.md",
               [g["name"] for g in st] == [g["name"] for g in exp])
-        check("商店逐项对应 TRACKS.md（分类 + 名称 + 目录 + 定位 + 状态全量续存）",
+        check("商店逐项对应 TRACKS.md（分类 + 名称 + 目录 + 定位 + 状态全量续存；名称按商店口径脱敏）",
               [(g["tag"], i["name"], i["dir"], i["desc"], i["status"])
                for g in st for i in g["items"]]
-              == [(g["tag"], n, d, c, s) for g in exp for n, d, c, s in g["items"]])
+              == [(g["tag"], store_neutral_of(n), d, c, s)
+                  for g in exp for n, d, c, s in g["items"]])
         # 上架状态标签是商城口径：由 TRACKS 原文折叠而来，测试独立复算同一套规则
         check("商店上架标签与 TRACKS 原文折算一致（独立复算）",
               [(i["label"], i["tone"]) for g in st for i in g["items"]]
               == [store_state_of(s) for g in exp for n, d, c, s in g["items"]])
         # 副标题同样由定位原文折出（砍技术括注），与独立复算对拍
-        check("商店副标题与 TRACKS 定位折算一致（独立复算）",
+        check("商店副标题与 TRACKS 定位折算一致（独立复算：砍括注 + 去第三方软件名）",
               [i["tag"] for g in st for i in g["items"]]
-              == [store_tagline_of(c) for g in exp for n, d, c, s in g["items"]])
+              == [store_neutral_of(store_tagline_of(c))
+                  for g in exp for n, d, c, s in g["items"]])
         check("商店不含 .skill（技能不是应用）",
               not any(i["dir"].startswith(".skill/") for g in st for i in g["items"]))
         vis_card = "document.querySelectorAll('.view:not(.hidden) .store-sec:not(.hidden) .store-card')"
         check("商店卡片数 = 项目数", pg.evaluate(vis_card + ".length") == exp_total)
+        # 上屏文案零第三方软件名：原文（t 字段）照旧带品牌，但屏幕上不许出现任何一处
+        store_text = pg.evaluate("document.querySelector('.view:not(.hidden)').textContent")
+        hits = [b for b in NEUTRAL_BRANDS if b in store_text]
+        check("商店上屏文案零第三方软件名（飞书 / GitHub / Word / Blender …）", not hits, str(hits))
         check("商店分组数 = 分类数", pg.evaluate(
             "document.querySelectorAll('.view:not(.hidden) .store-sec').length") == len(exp))
         check("商店店头显示收录总数",
@@ -998,7 +1042,7 @@ def main():
         # 卡片副标题是商店口径的短句（不是索引里的定位长句），且恒定单行省略号
         check("卡片副标题上屏的是折算后的短句、单行省略",
               pg.evaluate("document.querySelector('.view:not(.hidden) .store-card .store-desc')"
-                          ".textContent") == store_tagline_of(exp[0]["items"][0][2])
+                          ".textContent") == store_neutral_of(store_tagline_of(exp[0]["items"][0][2]))
               and pg.evaluate(
                   "(function(){var d=document.querySelector("
                   "'.view:not(.hidden) .store-card .store-desc');var s=getComputedStyle(d);"
@@ -1054,7 +1098,8 @@ def main():
               about.get("设备名称") == "FakePhone 18 NoDuo", str(about))
         check("关于本机：系统版本 = 人工智能 OS v2.0",
               about.get("系统版本") == "人工智能 OS v2.0", str(about.get("系统版本")))
-        check("关于本机：型号 = AI引擎", about.get("型号") == "AI引擎", str(about.get("型号")))
+        check("关于本机：AI引擎 = 全靠人工 v0.2",
+              about.get("AI引擎") == "全靠人工 v0.2", str(about.get("AI引擎")))
         check("关于本机：末行是「存储方式」且不再叫「本地缓存」",
               "存储方式" in about and "本地缓存" not in about, str(list(about)))
         check("关于本机：存储方式只写通道名，不缀「降级」",

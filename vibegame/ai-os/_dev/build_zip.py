@@ -32,10 +32,12 @@ js = (ROOT / "main.js").read_text(encoding="utf-8")
 
 
 def store_expected():
-    """独立解析 TRACKS.md（与 _dev/build.py 各写一遍），取所有「应用」的 (名称, 目录)。
+    """独立解析 TRACKS.md（与 _dev/build.py 各写一遍），取所有「应用」的 (目录, 定位原文)。
 
     只作门禁对拍用：打包前确认 main.js 里的商店清单确实由它派生 —— 手抄一份、
     或改了 TRACKS.md 却忘了重跑构建，都会在这里被挡下（.skill/ 是技能，不算应用）。
+    对拍用的是**不上屏**的原文（目录 + 定位）：上屏的名称 / 副标题会经商店口径折算
+    （去第三方软件名等），对上屏文案比对等于把折算规则在这里再抄一遍。
     """
     head = re.compile(r"^##\s*#([a-z]+)[\s\u3000]*(.+?)\s*[（(]\d+[）)]\s*$")
     out, cur = [], None
@@ -51,10 +53,10 @@ def store_expected():
             cells = [c.strip() for c in line.strip("|").split("|")]
             if len(cells) < 4:
                 continue
-            name, path = cells[0], cells[1].strip("`")
+            path = cells[1].strip("`")
             if not path.endswith("/") or path.startswith(".skill/"):
                 continue
-            out.append((name, path))
+            out.append((path, cells[2]))
     return out
 
 
@@ -62,12 +64,16 @@ STORE_ITEMS = store_expected() if TRACKS.exists() else []
 
 
 def store_in_sync():
-    """main.js 里逐项能对上 TRACKS.md（json.dumps 默认分隔符，故可整段子串比对）。"""
+    """main.js 里逐项能对上 TRACKS.md（json.dumps 默认分隔符，故可整段子串比对）。
+
+    比的是注入数据里不上屏的 (目录, 定位原文) 一对 —— 名称与副标题是商店口径、
+    经折算脱敏后上屏，不参与原文比对。
+    """
     if not STORE_ITEMS or "var STORE_GROUPS = [" not in js:
         return False
-    for name, path in STORE_ITEMS:
-        pair = '"n": %s, "d": %s' % (json.dumps(name, ensure_ascii=False),
-                                     json.dumps(path, ensure_ascii=False))
+    for path, desc in STORE_ITEMS:
+        pair = '"d": %s, "t": %s' % (json.dumps(path, ensure_ascii=False),
+                                     json.dumps(desc, ensure_ascii=False))
         if pair not in js:
             return False
     return True

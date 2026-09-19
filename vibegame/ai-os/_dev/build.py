@@ -70,6 +70,45 @@ def store_tagline(desc):
     return desc[:cut].strip()
 
 
+# 「应用商店」的上屏口径：第三方软件 / 平台名一律换成通用说法。
+# 商店是给玩家看的货架，不替别家产品打广告、也不把「依赖某平台」当卖点；而 TRACKS.md
+# 是仓库索引的唯一真源，「飞书写入」这类技术事实对维护者有意义 —— 故原文照旧不动，
+# 只在这一层折算脱敏（与 store_tagline() / store_state() 同属商店口径，smoke_test.py
+# 各写一份独立复算对拍）。长词在前，避免「GitHub」被「Git」先吃掉这类半截替换。
+STORE_NEUTRAL = (
+    # 平台 / 服务
+    ("飞书多维表格", "在线表格"),
+    ("飞书", "在线文档"),
+    ("GitHub 式", "格子式"),
+    ("GitHub", "代码托管"),
+    ("Cloudflare", "反爬校验"),
+    # 工具 / 品牌（应用名也一起换：商店里不出现别家产品名）
+    ("Word 转 Markdown", "文档转 Markdown"),
+    ("Word", "文档"),
+    ("乐高 10294", "积木"),
+    ("乐高", "积木"),
+    ("Blender 建模", "3D 建模"),
+    ("Blender", "3D 建模"),
+    ("Electron", "桌面端"),
+    ("Git 提交", "提交记录"),
+    ("Git", "版本控制"),
+)
+# 品牌词换成中文后，原文给英文单词留的隔离空格会变成「中 空 中」（如「从 提交记录生成」）；
+# 现有文案里中文之间从不留空，故此规则只收这种替换残留。
+_STORE_CN_GAP = re.compile(r"([\u4e00-\u9fff]) ([\u4e00-\u9fff])")
+
+
+def store_neutral(text):
+    """把商店上屏文案里的第三方软件 / 平台名换成通用说法（映射见 STORE_NEUTRAL）。"""
+    for a, b in STORE_NEUTRAL:
+        text = text.replace(a, b)
+    for _ in range(3):
+        text, n = _STORE_CN_GAP.subn(r"\1\2", text)
+        if not n:
+            break
+    return text
+
+
 def store_apps():
     """「应用商店」的项目清单：构建期解析仓库根 TRACKS.md（分类索引的唯一真源）。
 
@@ -77,9 +116,10 @@ def store_apps():
     清单必须由它派生而不是手抄一份 —— 手抄件会在「新增项目 / 改定位 / 改物料状态」
     时与上游分叉，且不会有人记得回来同步。只读解析，不改动上游文件；
     跳过 `.skill/` 开头的行（那是技能，不是应用），其余按四大分类原样分组。
-    每项：n 名称（上屏）/ tag 商店副标题（上屏，由 store_tagline() 折出）/
-    st 上架短标签 + tone 语气色（上屏，由 store_state() 折出）/
-    d 目录与 t 定位原文、s 物料状态原文（**不上屏**，只供构建门禁与自检对拍）。
+    每项：n 名称（上屏，经 store_neutral() 去第三方软件名）/ tag 商店副标题（上屏，
+    由 store_tagline() 折出后再 store_neutral() 脱敏）/ st 上架短标签 + tone 语气色（上屏，
+    由 store_state() 折出）/ d 目录与 t 定位原文、s 物料状态原文（**不上屏**，只供构建门禁
+    与自检对拍；脱敏只作用于上屏字段，原文一字不动）。
     返回 [{tag, name, items:[...]}]，注入 main.js 的 __STORE_DATA__。
     """
     if not os.path.isfile(TRACKS):
@@ -105,8 +145,9 @@ def store_apps():
             if not path.endswith("/") or path.startswith(".skill/"):
                 continue
             label, tone = store_state(status)
-            cur["items"].append({"n": name, "d": path, "t": desc, "s": status,
-                                 "st": label, "tone": tone, "tag": store_tagline(desc)})
+            cur["items"].append({"n": store_neutral(name), "d": path, "t": desc, "s": status,
+                                 "st": label, "tone": tone,
+                                 "tag": store_neutral(store_tagline(desc))})
     groups = [g for g in groups if g["items"]]
     if not groups:
         raise SystemExit("未能从 %s 解析出任何项目，请检查分类标题与表格格式。" % TRACKS)
@@ -2443,11 +2484,11 @@ JS = r"""
     var cardAbout = el('div', 'card');
     cardAbout.appendChild(el('div', 'card-title', '关于本机'));
     /* 设备三行：机型（FakePhone 18 NoDuo）+ 系统（人工智能 OS v2.0，版本号仍取 v1 数据）
-     * + 引擎型号（只写「AI引擎」，不再缀版本/吐槽）；「存储方式」只报当前通道名，
+     * + 引擎行（标签即「AI引擎」，值「全靠人工 v0.2」）；「存储方式」只报当前通道名，
      * 不在行内标注「降级」（对照 §5：容器写入失败时 storeSummary() 自己如实说明） */
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">FakePhone 18 NoDuo</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">人工智能 OS ' + ABOUT_TXT.version + '</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI引擎</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">AI引擎</span><span class="val">全靠人工 v0.2</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">存储方式</span><span class="val" id="storeVal">' + storeSummary() + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品方</span><span class="val">' + ABOUT_TXT.title + '</span>'));
     body.appendChild(cardAbout);
@@ -4149,6 +4190,9 @@ JS = r"""
    *    当前真实月相推出**（0° 新月 / 180° 满月），不设滑块
    *  - 背景：程序化星空天球（CanvasTexture）+ 近层星点 Points + 两层加法辉光 Sprite
    *  - 相机：球坐标 theta/phi/radius，拖动旋转、滚轮/双指缩放；**不自转**（只由手势驱动）
+   *  - 月面朝向：本体固定朝地球（潮汐锁定）—— 贴图经度基准与 SphereGeometry 的 UV 有一处
+   *    90° 错位，用固定偏转 WX_FACE_YAW 校正（见该常量注释），否则默认视角对着的是
+   *    90°W 一侧、认不出是平时看到的那张脸
    *  渲染循环只在视图可见时跑（隐藏即停帧），月相每分钟对一次表。
    * 3D 失败（无 WebGL）时页面不留白：观测台显示降级提示，天气读数照常可用。 */
 
@@ -4267,6 +4311,14 @@ JS = r"""
     var theta = 0, phi = Math.PI / 2, radius = 18;
     var autoSpin = false;                 /* **不做自动自转**：月面只由手势驱动 */
     var spinY = 0, spinMul = 0;
+    /* 月面朝向（真机口径，不随月相变）：月球潮汐锁定，正面（月理 0° 经度）永远朝向地球。
+     * assets/moon.jpg 是 -180°..180° 的等距圆柱展开图，u=0.5 即 0° 经度（实测：图内月海
+     * 重心落在 u≈0.40，对应 20°W–30°W，与正面月海一致）；而 Three.js SphereGeometry 把
+     * u=0.5 摆在 +X、u=0.25 摆在 +Z —— 不加偏转时初始相机（theta=0，+Z）正对的是 90°W
+     * （正面西缘），画面里一半是背面高地，认不出是平时看到的那张脸。绕 Y 轴 -90° 把
+     * 0° 经度转到 +Z：默认正对月面正面中心（静海 / 雨海一带），且东（危海）在右、西
+     * （风暴洋）在左 —— 与北半球地面观测同向（上北下南、东右西左）。 */
+    var WX_FACE_YAW = -Math.PI / 2;
     var phaseDeg = 180;
     var dprCap = Math.min(global.devicePixelRatio || 1, 1.5);   /* 同 moon-3d：像素比封顶 1.5 */
     var sw = 0, sh = 0, dirty = true;
@@ -4430,7 +4482,7 @@ JS = r"""
     /* 画一帧：旋转只由手势给（不自转）；两层辉光跟着月球；WebGL 不可用时不画 */
     function wxDraw() {
       if (!glOK || !renderer) { return; }
-      moon.rotation.y = spinY;
+      moon.rotation.y = spinY + WX_FACE_YAW;   /* 不自转，只把正面摆向地球（见 WX_FACE_YAW） */
       wxCamPos();
       glowA.position.copy(moon.position);
       glowB.position.copy(moon.position);
@@ -4547,7 +4599,7 @@ JS = r"""
     // 供自检读取的观测状态（与 AIOS.storeBackend 同类：只读快照，不做写操作）
     v.state = function () {
       return { gl: glOK, tex: stage.getAttribute('data-tex'), phase: phaseDeg,
-               theta: theta, phi: phi, radius: radius, spin: spinY };
+               theta: theta, phi: phi, radius: radius, spin: spinY, faceYaw: WX_FACE_YAW };
     };
     v.onShow = function () { sw = 0; dirty = true; wxKick(); };
     wxApplyPhase(wxMoonAge(Date.now()));
