@@ -495,7 +495,8 @@ body[data-mode="dark"] .app-icon{
 .store-hero-v{ margin:0 5px; font-size:34px; font-weight:800; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
 .store-hero-u{ font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
 .store-hero-d{ position:relative; margin-top:5px; font-size:11.5px; letter-spacing:.2px; color:rgba(255,255,255,.82); }
-/* 分类筛选：等分满宽五格（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊 */
+/* 分类筛选：等分满宽（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊。
+ * 列数由 JS 按「分类数 + 1」内联写入 repeat(N,1fr)；这里的 5 列只是兜底值。 */
 .store-tabs{ display:grid; grid-template-columns:repeat(5,1fr); grid-gap:6px; margin-top:10px; }
 .store-tab{
   height:38px; border-radius:var(--r-sm);

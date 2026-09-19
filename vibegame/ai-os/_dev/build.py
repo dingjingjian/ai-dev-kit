@@ -606,7 +606,8 @@ body[data-mode="dark"] .app-icon{
 .store-hero-v{ margin:0 5px; font-size:34px; font-weight:800; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
 .store-hero-u{ font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
 .store-hero-d{ position:relative; margin-top:5px; font-size:11.5px; letter-spacing:.2px; color:rgba(255,255,255,.82); }
-/* 分类筛选：等分满宽五格（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊 */
+/* 分类筛选：等分满宽（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊。
+ * 列数由 JS 按「分类数 + 1」内联写入 repeat(N,1fr)；这里的 5 列只是兜底值。 */
 .store-tabs{ display:grid; grid-template-columns:repeat(5,1fr); grid-gap:6px; margin-top:10px; }
 .store-tab{
   height:38px; border-radius:var(--r-sm);
@@ -1710,9 +1711,10 @@ JS = r"""
     return (v === undefined || v === null) ? dft : v;
   }
 
-  /* 关于本机展示：当前缓存通道与用量（仅容器通道提供用量；容器写入失败如实说明） */
+  /* 关于本机「存储方式」：只报当前通道（与用量），不标「降级」——是哪个通道就写哪个；
+   * 只有容器通道**写入失败**时才额外说明已回落（§5 要求如实，且那是真的出了状况）。 */
   function storeSummary() {
-    if (storeBackend !== 'xhs') { return 'localStorage（降级）'; }
+    if (storeBackend !== 'xhs') { return 'localStorage'; }
     if (!storeHealthy) { return '容器 Storage 写入失败 · 已回落 localStorage'; }
     if (storeUsage && typeof storeUsage.currentSize !== 'undefined') {
       return '容器 Storage · ' + storeUsage.currentSize + ' / ' + (storeUsage.limitSize || 10240) + ' KB';
@@ -2194,15 +2196,16 @@ JS = r"""
 
     var cardSound = el('div', 'card');
     cardSound.appendChild(el('div', 'card-title', '声音与触感'));
-    /* 系统音效开关：真的能关（aios_sound 持久化），关掉后全系统安静 ——
-     * 切换音自己发（on / off），故标 data-sfx="none" 不叠通用 tap；
-     * 开启时顺手复用 v1 的「声音」吐槽文案，恶搞内核照旧。 */
+    /* 「声音」行 = 音效总开关（原「系统音效」行与 v1 的「声音」吐槽行合并成这一行：
+     * 吐槽行本来就只是弹个提示，与开关同义，两行并一行才像真机的设置项）。
+     * 真的能关（aios_sound 持久化），关掉后全系统安静 —— 切换音自己发（on / off），
+     * 故标 data-sfx="none" 不叠通用 tap；开启时仍复用 v1 的「声音」吐槽文案。 */
     var rowSfx = el('div', 'row');
-    rowSfx.appendChild(el('span', 'lbl', '系统音效'));
+    rowSfx.appendChild(el('span', 'lbl', '声音'));
     var swSound = el('button', 'switch');
     swSound.id = 'swSound';
     swSound.setAttribute('data-sfx', 'none');
-    swSound.setAttribute('aria-label', '系统音效开关');
+    swSound.setAttribute('aria-label', '声音开关（控制系统音效）');
     swSound.addEventListener('click', function () {
       var next = !sfxOn;
       if (!next) { sfxPlay('off'); }        /* 关：先把确认音发出去，再静音 */
@@ -2212,16 +2215,18 @@ JS = r"""
     });
     rowSfx.appendChild(swSound);
     cardSound.appendChild(rowSfx);
-    cardSound.appendChild(tipRow('声音', 'sounds'));
     cardSound.appendChild(tipRow('触感', 'haptics'));
     body.appendChild(cardSound);
 
     var cardAbout = el('div', 'card');
     cardAbout.appendChild(el('div', 'card-title', '关于本机'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">人工智能 OS</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">' + ABOUT_TXT.version + '</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI-1（模拟）</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">本地缓存</span><span class="val" id="storeVal">' + storeSummary() + '</span>'));
+    /* 设备三行：机型（FakePhone 18 NoDuo）+ 系统（人工智能 OS v2.0，版本号仍取 v1 数据）
+     * + 引擎型号（只写「AI引擎」，不再缀版本/吐槽）；「存储方式」只报当前通道名，
+     * 不在行内标注「降级」（对照 §5：容器写入失败时 storeSummary() 自己如实说明） */
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">FakePhone 18 NoDuo</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">人工智能 OS ' + ABOUT_TXT.version + '</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI引擎</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">存储方式</span><span class="val" id="storeVal">' + storeSummary() + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品方</span><span class="val">' + ABOUT_TXT.title + '</span>'));
     body.appendChild(cardAbout);
     body.appendChild(toast);
@@ -4385,6 +4390,9 @@ JS = r"""
 
     var tabsData = [{ tag: 'all', label: '全部' }];
     STORE_GROUPS.forEach(function (g) { tabsData.push({ tag: g.tag, label: g.name }); });
+    /* 筛选格数跟着分类数走 —— TRACKS.md 增删分类时不必回来改代码；
+     * CSS 里的 repeat(5,1fr) 只是基线兜底（本行内联样式覆盖它）。 */
+    tabs.style.gridTemplateColumns = 'repeat(' + tabsData.length + ',1fr)';
     tabsData.forEach(function (t) {
       var btn = el('button', 'store-tab', esc(t.label));
       btn.setAttribute('data-cat', t.tag);

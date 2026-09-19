@@ -922,6 +922,12 @@ def main():
             "document.querySelectorAll('.view:not(.hidden) .store-sec').length") == len(exp))
         check("商店店头显示收录总数",
               pg.evaluate("document.querySelector('.store-hero-v').textContent") == str(exp_total))
+        check("分类筛选格数 = 分类数 + 1（全部）", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .store-tab').length") == len(exp) + 1
+              and pg.evaluate(
+                  "getComputedStyle(document.querySelector('.view:not(.hidden) .store-tabs'))"
+                  ".gridTemplateColumns.split(' ').filter(function(x){return x!=='';}).length"
+              ) == len(exp) + 1)
         check("商店按分类显示了分组标题",
               [t for t in pg.evaluate(
                   "Array.prototype.map.call(document.querySelectorAll('.view:not(.hidden) .store-sec-t'),"
@@ -1004,6 +1010,36 @@ def main():
         pg.wait_for_timeout(300)
         check("切回浅色", pg.evaluate("document.body.getAttribute('data-mode')") == "light")
         pg.screenshot(path=os.path.join(SHOTS, "v2-settings.png"))
+
+        # 设置页文案：卡片逐行读出来对拍（改名 / 合并行一旦回退，这里会立刻红）
+        def card_rows(title):
+            return pg.evaluate(
+                "(function(){var cs=document.querySelectorAll('.view:not(.hidden) .card'),i;"
+                "for(i=0;i<cs.length;i++){var t=cs[i].querySelector('.card-title');"
+                "if(t && t.textContent==='%s'){var o={},r=cs[i].querySelectorAll('.row');"
+                "for(var j=0;j<r.length;j++){o[r[j].querySelector('.lbl').textContent]="
+                "r[j].querySelector('.val').textContent;}return o;}}return {};})()" % title)
+        sound_rows = pg.evaluate(
+            "(function(){var cs=document.querySelectorAll('.view:not(.hidden) .card'),i;"
+            "for(i=0;i<cs.length;i++){var t=cs[i].querySelector('.card-title');"
+            "if(t && t.textContent==='声音与触感'){return Array.prototype.map.call("
+            "cs[i].querySelectorAll('.row .lbl'),function(n){return n.textContent;});}}"
+            "return null;})()")
+        check("「声音与触感」合并为「声音」「触感」两行（原系统音效行并入声音行）",
+              sound_rows == ["声音", "触感"], str(sound_rows))
+        check("「声音」行即音效开关（开关就在这一行里）", pg.evaluate(
+            "(function(){var s=document.getElementById('swSound');"
+            "return !!s && s.closest('.row').querySelector('.lbl').textContent==='声音';})()"))
+        about = card_rows("关于本机")
+        check("关于本机：设备名称 = FakePhone 18 NoDuo",
+              about.get("设备名称") == "FakePhone 18 NoDuo", str(about))
+        check("关于本机：系统版本 = 人工智能 OS v2.0",
+              about.get("系统版本") == "人工智能 OS v2.0", str(about.get("系统版本")))
+        check("关于本机：型号 = AI引擎", about.get("型号") == "AI引擎", str(about.get("型号")))
+        check("关于本机：末行是「存储方式」且不再叫「本地缓存」",
+              "存储方式" in about and "本地缓存" not in about, str(list(about)))
+        check("关于本机：存储方式只写通道名，不缀「降级」",
+              about.get("存储方式") == "localStorage", str(about.get("存储方式")))
 
         # 系统音效可整体静音：开关落盘 aios_sound，静音后全系统不再发声，且跨会话保持
         check("音效开关上屏即反映当前状态（缺省开）",
@@ -1128,7 +1164,8 @@ def main():
         check("无容器时退回 localStorage 降级通道", pg.evaluate("AIOS.storeBackend()") == "local")
         check("降级通道按 aios_ 前缀落盘",
               pg.evaluate("localStorage.getItem('aios_wmask')") is not None)
-        check("关于本机标注降级通道", "降级" in pg.evaluate("AIOS.storeSummary()"))
+        check("关于本机「存储方式」只报通道名（容器不可用 = localStorage，不标「降级」）",
+              pg.evaluate("AIOS.storeSummary()") == "localStorage")
         pg.screenshot(path=os.path.join(SHOTS, "v2-inapp.png"))
 
         # ---------- 存储：容器 Storage JS API 优先（§3.6 版本判断 / §3.7 Storage） ----------

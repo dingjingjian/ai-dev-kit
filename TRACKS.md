@@ -60,7 +60,7 @@ ai-dev-kit/
 | 十二生肖拼豆坊 | `vibegame/perler-zodiac/` | 12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF） | 完整（zip + 导出闭环冒烟过） |
 | AI 计算器 | `vibegame/ai-calculator/` | 会故意算错的计算器，判断对错得分、连对加成 | 已发布 |
 | 星航者·太阳系漫游 | `vibegame/solar-voyager/` | 太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM | 已发布 |
-| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选/展开） | 已发布 |
+| 人工智能 OS | `vibegame/ai-os/` | 移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选） | 已发布 |
 | 倒车入库 | `vibegame/reverse-parking/` | 第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分 | 设计就绪 · 待落地 |
 | 核战危机 | `vibegame/defcon/` | 3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢 | 已发布 |
 | 流浪地球·逃出太阳系 | `vibegame/wandering-earth-3d/` | 滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利 | 可玩（headless 16 项过，待物料） |
