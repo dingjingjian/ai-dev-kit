@@ -1,0 +1,493 @@
+{
+  "style": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9",
+  "itemSize": "640x360",
+  "coverSize": "960x540",
+  "images": [
+    {
+      "file": "assets/img/cover-car.webp",
+      "base": "cover-car",
+      "kind": "cover",
+      "cat": "car",
+      "name": "汽车 / 卡车 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Cars & Trucks vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/cover-train.webp",
+      "base": "cover-train",
+      "kind": "cover",
+      "cat": "train",
+      "name": "火车 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Trains & Rail vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/cover-plane.webp",
+      "base": "cover-plane",
+      "kind": "cover",
+      "cat": "plane",
+      "name": "飞机 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Aircraft vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/cover-ship-pax.webp",
+      "base": "cover-ship-pax",
+      "kind": "cover",
+      "cat": "ship-pax",
+      "name": "轮船 · 客运 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Ships · Passenger vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/cover-ship-cargo.webp",
+      "base": "cover-ship-cargo",
+      "kind": "cover",
+      "cat": "ship-cargo",
+      "name": "轮船 · 货运 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Ships · Cargo vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/cover-other.webp",
+      "base": "cover-other",
+      "kind": "cover",
+      "cat": "other",
+      "name": "其他 · 分类封面",
+      "size": "960x540",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a tidy lineup of typical in-service Others vehicles from around the world, arranged side by side at a slight three-quarter angle, unified visual style"
+    },
+    {
+      "file": "assets/img/car-01.webp",
+      "base": "car-01",
+      "kind": "item",
+      "cat": "car",
+      "name": "丰田卡罗拉",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a white Toyota Corolla sedan, 12th generation, clean modern family car"
+    },
+    {
+      "file": "assets/img/car-02.webp",
+      "base": "car-02",
+      "kind": "item",
+      "cat": "car",
+      "name": "大众高尔夫",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a compact German hatchback car, dark gray metallic, 8th generation styling"
+    },
+    {
+      "file": "assets/img/car-03.webp",
+      "base": "car-03",
+      "kind": "item",
+      "cat": "car",
+      "name": "福特 F-150",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a large American pickup truck, blue body, chrome grille, off-road tires"
+    },
+    {
+      "file": "assets/img/car-04.webp",
+      "base": "car-04",
+      "kind": "item",
+      "cat": "car",
+      "name": "特斯拉 Model 3",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a sleek white electric sedan with smooth aerodynamic body and no front grille"
+    },
+    {
+      "file": "assets/img/car-05.webp",
+      "base": "car-05",
+      "kind": "item",
+      "cat": "car",
+      "name": "丰田海拉克斯",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a rugged silver double-cab pickup truck with roof rack, dusty off-road setting"
+    },
+    {
+      "file": "assets/img/car-06.webp",
+      "base": "car-06",
+      "kind": "item",
+      "cat": "car",
+      "name": "奔驰乌尼莫克",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an orange articulated off-road utility truck with portal axles and high ground clearance"
+    },
+    {
+      "file": "assets/img/car-07.webp",
+      "base": "car-07",
+      "kind": "item",
+      "cat": "car",
+      "name": "斯堪尼亚 S 系列",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a European long-haul semi truck tractor unit with flat-floor high cab, blue and white livery"
+    },
+    {
+      "file": "assets/img/car-08.webp",
+      "base": "car-08",
+      "kind": "item",
+      "cat": "car",
+      "name": "沃尔沃 FH16",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a heavy long-haul truck with tall sleeper cab, dark green cab, timber trailer"
+    },
+    {
+      "file": "assets/img/train-01.webp",
+      "base": "train-01",
+      "kind": "item",
+      "cat": "train",
+      "name": "新干线 N700S",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Japanese Shinkansen N700S high-speed train, white body with blue and gold stripe, streamlined long nose"
+    },
+    {
+      "file": "assets/img/train-02.webp",
+      "base": "train-02",
+      "kind": "item",
+      "cat": "train",
+      "name": "复兴号 CR400AF/BF",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Chinese Fuxing CR400AF high-speed EMU train, silver-white body with red stripe, streamlined nose"
+    },
+    {
+      "file": "assets/img/train-03.webp",
+      "base": "train-03",
+      "kind": "item",
+      "cat": "train",
+      "name": "TGV Duplex",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a French TGV Duplex double-deck high-speed train, silver body with blue and orange stripes"
+    },
+    {
+      "file": "assets/img/train-04.webp",
+      "base": "train-04",
+      "kind": "item",
+      "cat": "train",
+      "name": "ICE 4",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a modern German ICE high-speed train, white body with red stripe along the full length"
+    },
+    {
+      "file": "assets/img/train-05.webp",
+      "base": "train-05",
+      "kind": "item",
+      "cat": "train",
+      "name": "欧洲之星 e320",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Eurostar e320 high-speed train, dark blue body with yellow front, international livery"
+    },
+    {
+      "file": "assets/img/train-06.webp",
+      "base": "train-06",
+      "kind": "item",
+      "cat": "train",
+      "name": "SBB Re 460",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Swiss SBB Re 460 electric locomotive in red livery with white front, pulling double-deck coaches"
+    },
+    {
+      "file": "assets/img/train-07.webp",
+      "base": "train-07",
+      "kind": "item",
+      "cat": "train",
+      "name": "印度 Vande Bharat",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an Indian Vande Bharat Express train, white body with orange and green stripes, semi-streamlined nose"
+    },
+    {
+      "file": "assets/img/train-08.webp",
+      "base": "train-08",
+      "kind": "item",
+      "cat": "train",
+      "name": "迪拜地铁 7000 系",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a modern driverless metro train on an elevated viaduct in a desert city, silver and blue livery"
+    },
+    {
+      "file": "assets/img/plane-01.webp",
+      "base": "plane-01",
+      "kind": "item",
+      "cat": "plane",
+      "name": "空客 A380",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an Airbus A380 double-deck four-engine airliner, white fuselage with blue tail, very wide wingspan"
+    },
+    {
+      "file": "assets/img/plane-02.webp",
+      "base": "plane-02",
+      "kind": "item",
+      "cat": "plane",
+      "name": "波音 747-8",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Boeing 747-8 jumbo jet with the distinctive upper deck hump, four engines under swept wings"
+    },
+    {
+      "file": "assets/img/plane-03.webp",
+      "base": "plane-03",
+      "kind": "item",
+      "cat": "plane",
+      "name": "空客 A350-1000",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an Airbus A350-1000 twin-engine wide-body airliner, white fuselage with black cockpit mask and elegant winglets"
+    },
+    {
+      "file": "assets/img/plane-04.webp",
+      "base": "plane-04",
+      "kind": "item",
+      "cat": "plane",
+      "name": "波音 787-9",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Boeing 787 Dreamliner in flight, white and blue livery, large windows and raked wingtips"
+    },
+    {
+      "file": "assets/img/plane-05.webp",
+      "base": "plane-05",
+      "kind": "item",
+      "cat": "plane",
+      "name": "中国商飞 C919",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a COMAC C919 narrow-body airliner, white fuselage with green and blue tail livery, twin engines under wing"
+    },
+    {
+      "file": "assets/img/plane-06.webp",
+      "base": "plane-06",
+      "kind": "item",
+      "cat": "plane",
+      "name": "空客 A320neo",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an Airbus A320neo short-to-medium range twinjet, white fuselage with blue tail, sharklet wingtips"
+    },
+    {
+      "file": "assets/img/plane-07.webp",
+      "base": "plane-07",
+      "kind": "item",
+      "cat": "plane",
+      "name": "波音 777-300ER",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a Boeing 777-300ER long-range twinjet, large engine nacelles, white fuselage with airline blue tail"
+    },
+    {
+      "file": "assets/img/plane-08.webp",
+      "base": "plane-08",
+      "kind": "item",
+      "cat": "plane",
+      "name": "安托诺夫 An-124",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an Antonov An-124 heavy cargo aircraft with high wing and four engines, nose cargo door open"
+    },
+    {
+      "file": "assets/img/ship-pax-01.webp",
+      "base": "ship-pax-01",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "海洋标志号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 the world's largest cruise ship, white hull with bold blue and turquoise artwork on the bow, many decks with glass canopies"
+    },
+    {
+      "file": "assets/img/ship-pax-02.webp",
+      "base": "ship-pax-02",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "海洋交响号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a giant Oasis-class cruise ship with an open central park district of real trees and a boardwalk, white hull"
+    },
+    {
+      "file": "assets/img/ship-pax-03.webp",
+      "base": "ship-pax-03",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "玛丽皇后二号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a classic ocean liner with red and black funnel and long dark hull, transatlantic liner profile"
+    },
+    {
+      "file": "assets/img/ship-pax-04.webp",
+      "base": "ship-pax-04",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "爱达·魔都号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a large modern cruise ship with blue and white hull and Chinese cultural art motifs on the bow"
+    },
+    {
+      "file": "assets/img/ship-pax-05.webp",
+      "base": "ship-pax-05",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "迪士尼愿望号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a modern LNG cruise ship with dark navy hull and gold accents, playful family-oriented design with a fairytale castle motif"
+    },
+    {
+      "file": "assets/img/ship-pax-06.webp",
+      "base": "ship-pax-06",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "MSC 欧罗巴号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an ultra large LNG cruise ship with a long open promenade along the hull and a spiral slide, dark blue and white livery"
+    },
+    {
+      "file": "assets/img/ship-pax-07.webp",
+      "base": "ship-pax-07",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "全球号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a private residential cruise ship, elegant white hull with balconies along every deck"
+    },
+    {
+      "file": "assets/img/ship-pax-08.webp",
+      "base": "ship-pax-08",
+      "kind": "item",
+      "cat": "ship-pax",
+      "name": "塔林客 Megastar",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a modern LNG powered shuttle ferry with blue and white livery crossing the Baltic sea"
+    },
+    {
+      "file": "assets/img/ship-cargo-01.webp",
+      "base": "ship-cargo-01",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "MSC Irina",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an ultra large container ship fully stacked with colorful containers, dark blue hull, huge bow"
+    },
+    {
+      "file": "assets/img/ship-cargo-02.webp",
+      "base": "ship-cargo-02",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "长荣 Ever Ace",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a 24000 TEU class container ship with green hull, twin-island superstructure, containers stacked high"
+    },
+    {
+      "file": "assets/img/ship-cargo-03.webp",
+      "base": "ship-cargo-03",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "HMM Algeciras",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a 24000 TEU class container ship with white and blue hull, ultra wide beam, fully loaded with containers"
+    },
+    {
+      "file": "assets/img/ship-cargo-04.webp",
+      "base": "ship-cargo-04",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "CMA CGM Jacques Saadé",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an LNG powered ultra large container ship, dark blue hull with white superstructure at the front, tall containers"
+    },
+    {
+      "file": "assets/img/ship-cargo-05.webp",
+      "base": "ship-cargo-05",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "中远海运宇宙号",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a 21000 TEU class container ship with white hull and red accents, dense container stacks"
+    },
+    {
+      "file": "assets/img/ship-cargo-06.webp",
+      "base": "ship-cargo-06",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "Prelude FLNG",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an enormous floating LNG production facility, boxy industrial topsides on a huge hull, no self-propulsion"
+    },
+    {
+      "file": "assets/img/ship-cargo-07.webp",
+      "base": "ship-cargo-07",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "Höegh Aurora",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a very large car carrier vessel with tall boxy enclosed decks and a small superstructure, orange and white hull"
+    },
+    {
+      "file": "assets/img/ship-cargo-08.webp",
+      "base": "ship-cargo-08",
+      "kind": "item",
+      "cat": "ship-cargo",
+      "name": "Christophe de Margerie",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 an icebreaking LNG carrier with reinforced bow in arctic ice, red and white hull, four spherical or membrane tanks"
+    },
+    {
+      "file": "assets/img/other-01.webp",
+      "base": "other-01",
+      "kind": "item",
+      "cat": "other",
+      "name": "上海磁浮列车",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a high-speed maglev train on an elevated concrete guideway, white body with blue stripe, no wheels visible"
+    },
+    {
+      "file": "assets/img/other-02.webp",
+      "base": "other-02",
+      "kind": "item",
+      "cat": "other",
+      "name": "重庆单轨 2 号线",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a straddle-type monorail train passing directly through a hole in a residential building, hillside city"
+    },
+    {
+      "file": "assets/img/other-03.webp",
+      "base": "other-03",
+      "kind": "item",
+      "cat": "other",
+      "name": "空客 H145",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a light twin-engine rescue helicopter with medical livery, white body with orange stripes, hovering low"
+    },
+    {
+      "file": "assets/img/other-04.webp",
+      "base": "other-04",
+      "kind": "item",
+      "cat": "other",
+      "name": "齐柏林 NT 飞艇",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a large modern zeppelin airship with a silver helium envelope flying above a lake and green hills"
+    },
+    {
+      "file": "assets/img/other-05.webp",
+      "base": "other-05",
+      "kind": "item",
+      "cat": "other",
+      "name": "Ski-Doo 雪地摩托",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a modern snowmobile on fresh deep snow, black and yellow body, front skis and rear track"
+    },
+    {
+      "file": "assets/img/other-06.webp",
+      "base": "other-06",
+      "kind": "item",
+      "cat": "other",
+      "name": "香港山顶缆车",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a red funicular tram on a very steep track climbing a green hillside, dense city skyline in the background"
+    },
+    {
+      "file": "assets/img/other-07.webp",
+      "base": "other-07",
+      "kind": "item",
+      "cat": "other",
+      "name": "22220 型核动力破冰船",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a huge red and white nuclear icebreaker smashing through thick arctic ice, tall bridge tower"
+    },
+    {
+      "file": "assets/img/other-08.webp",
+      "base": "other-08",
+      "kind": "item",
+      "cat": "other",
+      "name": "SpaceX 载人龙飞船",
+      "size": "640x360",
+      "prompt": "Clean editorial vehicle encyclopedia illustration, photorealistic 3D product render, three-quarter front view, soft even studio lighting, plain uncluttered light-gray gradient background, subtle contact shadow under the subject, subject centered and fully visible with about 20% empty margin on all sides, no people, no text, no letters, no logo, no watermark, landscape 16:9 a reusable crewed space capsule with white body and dark heatshield docked to a space station"
+    }
+  ]
+}
