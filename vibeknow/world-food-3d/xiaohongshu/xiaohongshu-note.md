@@ -51,7 +51,7 @@
 
 ## 话题标签
 
-#小红书vibecoding大赛  #vibeknow  #vibecoding  #小红书小工具  #世界美食  #干饭人的日常  #美食推荐
+#小红书vibecoding大赛 #vibeknow #vibecoding #小红书小工具 #世界美食 #干饭人的日常 #美食推荐
 
 ---
 

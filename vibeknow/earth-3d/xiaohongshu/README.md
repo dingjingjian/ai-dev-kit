@@ -1,4 +1,4 @@
-# 口袋地球 · 小红书参赛素材归档
+# 把地球装进口袋！太绝了🌍
 
 本目录收录「口袋地球」（earth-3d）参加小红书 vibecoding 大赛的全部宣传素材。
 
@@ -43,3 +43,6 @@ xiaohongshu/
 - 技术栈：纯前端 HTML + Three.js（WebGL），零依赖单文件
 - 核心功能：蓝色星球 / 四季成因 / 地球内部 / 经纬网格 四大科普模式
 - 参赛赛道：#vibeknow 人文知识赛道
+
+
+#小红书vibecoding大赛 #vibeknow #小红书小工具 #3D地球 #地球 #宇宙 #天文 #vibecoding
