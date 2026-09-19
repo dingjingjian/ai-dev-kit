@@ -9,6 +9,7 @@
 规范真源：DESIGN.md §5/§6；容器与兼容细则见仓库 .skill/minitool-zip-builder/。
 用法：python _dev/build_zip.py
 """
+import json
 import os
 import re
 import shutil
@@ -19,12 +20,58 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent          # ai-os/
 DIST = ROOT / "dist"
 ZIP = ROOT / "ai-os.zip"
+# 仓库根 TRACKS.md：「应用商店」的数据真源（_dev/build.py 在构建期解析后注入 main.js）
+# ROOT 已是 ai-os/，故上溯两级到仓库根（vibegame/ai-os -> vibegame -> 仓库根）
+TRACKS = (ROOT / ".." / ".." / "TRACKS.md").resolve()
 ALLOWED_EXT = {".html", ".css", ".js", ".png", ".jpg", ".jpeg", ".gif",
                ".webp", ".svg", ".woff", ".woff2", ".json"}
 sys.stdout.reconfigure(encoding="utf-8")
 
 html = (ROOT / "index.html").read_text(encoding="utf-8")
 js = (ROOT / "main.js").read_text(encoding="utf-8")
+
+
+def store_expected():
+    """独立解析 TRACKS.md（与 _dev/build.py 各写一遍），取所有「应用」的 (名称, 目录)。
+
+    只作门禁对拍用：打包前确认 main.js 里的商店清单确实由它派生 —— 手抄一份、
+    或改了 TRACKS.md 却忘了重跑构建，都会在这里被挡下（.skill/ 是技能，不算应用）。
+    """
+    head = re.compile(r"^##\s*#([a-z]+)[\s\u3000]*(.+?)\s*[（(]\d+[）)]\s*$")
+    out, cur = [], None
+    with open(TRACKS, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            m = head.match(line)
+            if m:
+                cur = m.group(1)
+                continue
+            if cur is None or not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 4:
+                continue
+            name, path = cells[0], cells[1].strip("`")
+            if not path.endswith("/") or path.startswith(".skill/"):
+                continue
+            out.append((name, path))
+    return out
+
+
+STORE_ITEMS = store_expected() if TRACKS.exists() else []
+
+
+def store_in_sync():
+    """main.js 里逐项能对上 TRACKS.md（json.dumps 默认分隔符，故可整段子串比对）。"""
+    if not STORE_ITEMS or "var STORE_GROUPS = [" not in js:
+        return False
+    for name, path in STORE_ITEMS:
+        pair = '"n": %s, "d": %s' % (json.dumps(name, ensure_ascii=False),
+                                     json.dumps(path, ensure_ascii=False))
+        if pair not in js:
+            return False
+    return True
+
 
 # ---------- 前置校验：不合规直接拒绝打包 ----------
 GUARDS = [
@@ -78,6 +125,10 @@ GUARDS = [
               for p in (ROOT / "assets").rglob(ext)]),
     ("音效可整体静音（data-sfx 派发 + aios_sound 落盘）",
      "data-sfx" in js and "'sound'" in js and "sfxSetEnabled" in js),
+    # 应用商店（DESIGN.md §4.12）：清单构建期由仓库根 TRACKS.md 派生后注入 main.js。
+    ("应用商店清单与仓库根 TRACKS.md 一致（构建期派生，非手抄）", store_in_sync()),
+    ("应用商店含四大分类", all(('"%s"' % t) in js
+                          for t in ("vibetool", "vibegame", "vibeart", "vibeknow"))),
 ]
 print("—— 打包前置校验 ——")
 failed = [name for name, ok in GUARDS if not ok]

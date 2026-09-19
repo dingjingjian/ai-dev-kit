@@ -5,15 +5,20 @@
   ../index.html  —— 入口（内联 CSS，引用 ./main.js）
   ../main.js     —— 应用逻辑（ES2017 / Chrome 61 基线）
 
+「应用商店」的项目清单在构建期从仓库根 TRACKS.md 派生后注入 main.js（见 store_apps()）。
+
 规范真源见 ../DESIGN.md。容器/兼容细则见仓库 .skill/minitool-zip-builder/。
 运行：python build.py
 """
 import io
 import json
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.normpath(os.path.join(HERE, ".."))
+# 仓库根（ai-os/_dev -> ai-os -> vibegame -> <repo>）：TRACKS.md 在这里
+TRACKS = os.path.normpath(os.path.join(HERE, "..", "..", "..", "TRACKS.md"))
 
 
 def cam_shots():
@@ -30,6 +35,82 @@ def cam_shots():
         raise SystemExit("相机素材不足（%d 张）：%s\n请先运行：python _dev/make_cam_photos.py"
                          % (len(files), d))
     return ["./assets/cam/" + n for n in files]
+
+
+def store_state(status):
+    """把 TRACKS.md 的「物料状态」原文折成商店语言：返回 (短标签, 语气色)。
+
+    原文是写给维护者看的（混着验收记录、包体体积、投稿口径），原样上屏就成了
+    「文档」而不是「商店」；卡片只留一个短标签，语气色走站内语义色：
+      ok = 已上架（已有成品/已发布）· warn = 开发中（待落地/未做/缺物料）· dim = 内部自用。
+    原文仍随数据注入（s 字段）供构建门禁与自检对拍，但不上屏。
+    """
+    if any(k in status for k in ("已发布", "完整", "可玩", "已打包")):
+        return "已上架", "ok"
+    if "自用" in status:
+        return "内部自用", "dim"
+    if any(k in status for k in ("待", "未", "缺")):
+        return "开发中", "warn"
+    return "已收录", "dim"
+
+
+def store_tagline(desc):
+    """把 TRACKS.md 的「一句话定位」压成商店副标题（tag）。
+
+    定位是写给仓库索引看的，常带技术括注与实现说明 —— ai-os 那条甚至点名了
+    `vibeknow/moon-3d` 这类上游路径，原样进商店就又变成「文档」。这里只砍掉
+    第一个「（」或「：」之后的部分（都是括注/定义式展开），保留「它是什么」；
+    长度交给卡片的一行省略号。完整定位仍随数据注入（t 字段）备查，不上屏。
+    """
+    cut = len(desc)
+    for sep in ("（", "："):
+        i = desc.find(sep)
+        if i > 0 and i < cut:
+            cut = i
+    return desc[:cut].strip()
+
+
+def store_apps():
+    """「应用商店」的项目清单：构建期解析仓库根 TRACKS.md（分类索引的唯一真源）。
+
+    TRACKS.md 是全仓项目分类的唯一真源，商店里逐个介绍这些已开发的小工具，
+    清单必须由它派生而不是手抄一份 —— 手抄件会在「新增项目 / 改定位 / 改物料状态」
+    时与上游分叉，且不会有人记得回来同步。只读解析，不改动上游文件；
+    跳过 `.skill/` 开头的行（那是技能，不是应用），其余按四大分类原样分组。
+    每项：n 名称（上屏）/ tag 商店副标题（上屏，由 store_tagline() 折出）/
+    st 上架短标签 + tone 语气色（上屏，由 store_state() 折出）/
+    d 目录与 t 定位原文、s 物料状态原文（**不上屏**，只供构建门禁与自检对拍）。
+    返回 [{tag, name, items:[...]}]，注入 main.js 的 __STORE_DATA__。
+    """
+    if not os.path.isfile(TRACKS):
+        raise SystemExit("找不到仓库根 %s\n它是「应用商店」的数据真源，请勿删除或改名。" % TRACKS)
+    # 分类标题形如：## #vibetool　实用工具（14）
+    head_re = re.compile(r"^##\s*#([a-z]+)[\s\u3000]*(.+?)\s*[（(]\d+[）)]\s*$")
+    groups, cur = [], None
+    with io.open(TRACKS, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            m = head_re.match(line)
+            if m:
+                cur = {"tag": m.group(1), "name": m.group(2).strip(), "items": []}
+                groups.append(cur)
+                continue
+            if cur is None or not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 4:
+                continue
+            name, path, desc, status = cells[0], cells[1].strip("`"), cells[2], cells[3]
+            # 表头 / 分隔行（目录列不是 `xxx/`）、技能目录，一律不算应用
+            if not path.endswith("/") or path.startswith(".skill/"):
+                continue
+            label, tone = store_state(status)
+            cur["items"].append({"n": name, "d": path, "t": desc, "s": status,
+                                 "st": label, "tone": tone, "tag": store_tagline(desc)})
+    groups = [g for g in groups if g["items"]]
+    if not groups:
+        raise SystemExit("未能从 %s 解析出任何项目，请检查分类标题与表格格式。" % TRACKS)
+    return groups
 
 # ---------------------------------------------------------------------------
 # CSS（Chrome 61 基线层 + @supports 增强层；不维护两套样式表）
@@ -502,6 +583,94 @@ body[data-mode="dark"] .app-icon{
 .ph-chips .chip{ margin:0 4px 8px 4px; }
 .ph-tip{ margin-top:14px; font-size:13px; line-height:1.5; color:var(--ink-dim); max-width:260px; }
 .pfoot-hint{ font-size:12px; color:var(--ink-dim); text-align:center; }
+
+/* ============ 应用商店（§4.12） ============ */
+/* 顶部固定带（店头 + 分类筛选）：内容区仍是全页唯一滚动区 */
+.store-bar{
+  flex:0 0 auto;
+  padding:8px calc(16px + var(--safe-r)) 10px calc(16px + var(--safe-l));
+}
+/* 店头：品牌渐变横幅（与主屏时钟组件同一套「主视觉渐变卡」语言，§4.3.1）+ 购物袋水印 */
+.store-hero{
+  position:relative; overflow:hidden;
+  border-radius:var(--r-lg); padding:15px 18px; color:#fff;
+  background-image:
+    radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,.28), rgba(255,255,255,0) 55%),
+    linear-gradient(135deg,#7C5CFF 0%,#4A56D6 100%);
+  box-shadow:var(--sh-2);
+}
+.store-hero-art{ position:absolute; right:-8px; bottom:-18px; opacity:.15; }
+.store-hero-art svg{ width:100px; height:100px; fill:#fff; }
+.store-hero-top{ position:relative; display:flex; align-items:baseline; }
+.store-hero-k{ font-size:11px; letter-spacing:.3px; color:rgba(255,255,255,.78); }
+.store-hero-v{ margin:0 5px; font-size:34px; font-weight:800; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+.store-hero-u{ font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
+.store-hero-d{ position:relative; margin-top:5px; font-size:11.5px; letter-spacing:.2px; color:rgba(255,255,255,.82); }
+/* 分类筛选：等分满宽五格（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊 */
+.store-tabs{ display:grid; grid-template-columns:repeat(5,1fr); grid-gap:6px; margin-top:10px; }
+.store-tab{
+  height:38px; border-radius:var(--r-sm);
+  font-size:12px; font-weight:600; color:var(--ink); white-space:nowrap;
+  background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1);
+  transition:transform .16s ease;
+}
+.store-tab:active{ transform:scale(.96); }
+.store-tab.sel{
+  color:#fff; border-color:transparent;
+  background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
+}
+/* 货架 */
+.store-list{ padding-top:2px; }
+.store-sec.hidden{ display:none; }
+.store-sec-h{ display:flex; align-items:center; padding:14px 2px 8px 2px; }
+.store-sec-dot{ flex:0 0 auto; width:10px; height:10px; border-radius:3px; margin-right:8px; box-shadow:var(--sh-1); }
+.store-sec-t{ font-size:14px; font-weight:600; color:var(--ink); letter-spacing:.2px; }
+.store-sec-n{ margin-left:auto; font-size:11px; color:var(--ink-dim); }
+/* 货架卡：招牌图标 + 名称 + 一句副标题 + 上架标签（一行一卡，静态不展开） */
+.store-card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:11px 14px; margin-bottom:9px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.store-head{ display:flex; align-items:center; }
+/* 招牌图标：与主屏图标同一套质感（squircle 23% + 中性投影 + 内高光/内底影，§4.6） */
+.store-mini{
+  flex:0 0 auto; width:46px; height:46px; border-radius:23%;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:19px; font-weight:700;
+  box-shadow:
+    var(--sh-1),
+    0 4px 10px rgba(20,20,40,.14),
+    inset 0 1px 0 rgba(255,255,255,.35),
+    inset 0 -1px 0 rgba(0,0,0,.10);
+}
+body[data-mode="dark"] .store-mini{
+  box-shadow:
+    var(--sh-1),
+    0 4px 10px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.20),
+    inset 0 -1px 0 rgba(0,0,0,.28);
+}
+.store-title{ flex:1 1 auto; min-width:0; margin-left:12px; }
+.store-name{ font-size:15.5px; font-weight:600; color:var(--ink); }
+/* 副标题：商店口径的一句短句，恒定单行省略号（副标题不该长成一段话） */
+.store-desc{
+  margin-top:3px; font-size:12.5px; line-height:1.5; color:var(--ink-dim);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.store-tags{ margin-top:6px; display:flex; }
+/* 上架状态标签：语气色走站内语义色（ok / warn / 中性），本机那枚是 accent */
+.store-chip{
+  display:inline-block; font-size:11px; line-height:1.6;
+  border-radius:999px; padding:2px 9px;
+  color:var(--ink-dim); background:rgba(120,120,140,.14);
+}
+.store-chip.ok{ color:var(--ok); background:rgba(31,169,113,.12); }
+.store-chip.warn{ color:var(--warn); background:rgba(232,161,60,.16); }
+.store-chip.self{ color:var(--accent); background:rgba(108,76,241,.12); margin-left:6px; }
+.store-empty{ padding:28px 0; text-align:center; font-size:13px; color:var(--ink-dim); }
 
 /* ============ 游戏页组件（§4.7 二期a） ============ */
 .gstats{
@@ -1322,17 +1491,22 @@ JS = r"""
     sms: '<svg viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2zm3 5h10v2H7V8zm0 4h7v2H7v-2z"/></svg>',
     camera: '<svg viewBox="0 0 24 24"><path d="M9 3L7.5 5H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
     moon: '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>',
+    /* 购物袋：袋身（圆角矩形）+ 提手（弧线）—— 手绘简单几何，不写复杂单 path */
+    bag: '<svg viewBox="0 0 24 24"><path d="M5.4 7.6h13.2a1.6 1.6 0 0 1 1.6 1.7l-.9 10a2 2 0 0 1-2 1.8H6.7a2 2 0 0 1-2-1.8l-.9-10a1.6 1.6 0 0 1 1.6-1.7z"/><path d="M8.8 7.6V6.1a3.2 3.2 0 0 1 6.4 0v1.5" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
   /* ---------- 应用清单 ---------- */
   var APPS = [
-    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
-    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
-    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
-    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
-    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
-    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 }
+    { id: 'calc',      name: '计算器',   slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
+    { id: 'assistant', name: '助手',     slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
+    { id: 'calendar',  name: '日历',     slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
+    { id: 'schedule',  name: '日程',     slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
+    { id: 'alarm',     name: '闹钟',     slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
+    { id: 'stats',     name: '统计',     slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 },
+    /* 应用商店的色相取青柠绿（黄绿，hue≈92）—— 主屏其余图标里没有这个色区，
+     * 与日程/电话的春绿、统计/助手的青蓝都拉得开（DESIGN §4.3 色相不重复）。 */
+    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 }
   ];
   var DOCK = [
     { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
@@ -1342,9 +1516,33 @@ JS = r"""
   ];
 
   /* 月球天气：唯一入口是主屏天气小组件（§4.3.1），故不进 APPS / DOCK ——
-   * 主屏图标网格与 Dock 保持 6 + 4，只在多任务轮播里以卡片形态出现。 */
+   * 主屏图标网格与 Dock 保持 7 + 4，只在多任务轮播里以卡片形态出现。 */
   var WEATHER_APP = { id: 'weather', name: '月球天气', slogan: '数据来源：AI 编的，别当真',
                       g: 'moon', c: ['#8FA6D8', '#3A4A7A'], deg: 135 };
+
+  /* ---------- 应用商店数据（§4.12） ----------
+   * 由 _dev/build.py 在构建期解析仓库根 TRACKS.md 后注入（占位符 __STORE_DATA__）——
+   * 与小工具包体无关，全部在包内，运行时不读任何外部文件；手抄清单会与 TRACKS.md 分叉，
+   * 故这里只声明、不维护内容。结构：[{tag, name, items:[{n 名称, d 目录, t 定位, s 状态}]}] */
+  var STORE_GROUPS = __STORE_DATA__;
+  /* 货架图标色板：8 组身份色按序轮转，同分类相邻两张卡片必不同色 —— 商店里的图标是
+   * 「每个应用自己的招牌色」（与主屏图标同一性质），属身份色而非 §4.5 的语义色，
+   * 故可以多色并列；色值直接复用主屏那套，商店与桌面看起来是同一个世界的应用。 */
+  var STORE_ICON_PALETTE = [
+    ['#6C7CF5', '#4A56D6'], ['#4FC3F7', '#2E7FE8'], ['#FFB84C', '#F08A1E'], ['#3ECF8E', '#17A06B'],
+    ['#8F7BF7', '#6A4CE0'], ['#4FD0E5', '#2E9EC4'], ['#F06AA8', '#D2387A'], ['#FF8A5B', '#E05A2B']
+  ];
+  /* 分类的视觉标识（色相：实用工具蓝 / 互动游戏紫 / 数字艺术玫红 / 人文知识青绿）；
+   * 名字取 TRACKS.md 的分类名，颜色是 UI 决策，故只在这里定。 */
+  var STORE_CAT = {
+    vibetool: ['#4A8DF0', '#2A5FD0'],
+    vibegame: ['#8F7BF7', '#6A4CE0'],
+    vibeart:  ['#F0688F', '#C93A66'],
+    vibeknow: ['#2FBFA8', '#12897C']
+  };
+  var STORE_CAT_FALLBACK = ['#8E8E96', '#5C5C66'];
+
+  function storeCatColor(tag) { return STORE_CAT[tag] || STORE_CAT_FALLBACK; }
 
   function findApp(id) {
     var i;
@@ -1794,6 +1992,12 @@ JS = r"""
   var recentsEl = null;
   var weatherView = null;    // 月球天气视图（首次进入时构建；AIOS.weatherState 读取它的快照）
 
+  /* 文本转义：应用商店的名称 / 定位 / 状态是从 TRACKS.md 解析出来的外部文本，
+   * 一律转义后再进 innerHTML，免得文中的 & < > 被当成标签解析。 */
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function el(tag, cls, html) {
     var n = document.createElement(tag);
     if (cls) { n.className = cls; }
@@ -1801,12 +2005,17 @@ JS = r"""
     return n;
   }
 
+  /* 图标质感配方：顶部高光 + 主渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）。
+   * 主屏图标与商店货架图标共用同一套配方，不各写一遍。 */
+  function iconPaint(node, cols, deg) {
+    node.style.backgroundImage =
+      'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
+      'linear-gradient(' + (deg || 135) + 'deg,' + cols[0] + ',' + cols[1] + ')';
+  }
+
   function iconNode(app, extra) {
     var n = el('div', 'app-icon' + (extra ? ' ' + extra : ''));
-    // 顶部高光 + 主题渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）
-    n.style.backgroundImage =
-      'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
-      'linear-gradient(' + (app.deg || 135) + 'deg,' + app.c[0] + ',' + app.c[1] + ')';
+    iconPaint(n, app.c, app.deg);
     n.innerHTML = GLYPH[app.g];
     return n;
   }
@@ -4106,7 +4315,108 @@ JS = r"""
     return v;
   }
 
-  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather };
+  /* ---------- 应用商店（§4.12）：介绍 ai-dev-kit 里已开发的小工具 ----------
+   * 数据是构建期注入的 STORE_GROUPS（TRACKS.md 派生），这里只负责呈现。
+   * 呈现一律用「商店语言」，不是「文档语言」：
+   *   卡片 = 招牌图标 + 名称 + 一句副标题（tag）+ 上架标签（st / tone）；
+   *   目录（d）、定位原文（t）、物料状态原文（s）**都不上屏** —— 那是给维护者看的。
+   * 一行一卡、不再做展开：副标题本身就是商店口径的短句，完整定位在仓库索引里查。 */
+  function storeCard(it, idx) {
+    var card = el('div', 'store-card');
+    var head = el('div', 'store-head');
+
+    /* 招牌图标：沿用主屏图标的中性投影 + 内高光，颜色取货架色板按序轮转（同分类相邻不同色） */
+    var mini = el('div', 'store-mini', esc(it.n.charAt(0)));
+    iconPaint(mini, STORE_ICON_PALETTE[idx % STORE_ICON_PALETTE.length], 135);
+    head.appendChild(mini);
+
+    var title = el('div', 'store-title');
+    title.appendChild(el('div', 'store-name', esc(it.n)));
+    title.appendChild(el('div', 'store-desc', esc(it.tag)));
+    /* 本机（ai-os 自己）在清单里也有一行：按商店的说法标「已安装」——你正用着它 */
+    var self = (it.d === 'vibegame/ai-os/') ? '<span class="store-chip self">已安装</span>' : '';
+    title.appendChild(el('div', 'store-tags',
+      '<span class="store-chip ' + esc(it.tone) + '">' + esc(it.st) + '</span>' + self));
+    head.appendChild(title);
+
+    card.appendChild(head);
+    return card;
+  }
+
+  function buildStore() {
+    var v = el('div', 'view hidden');
+    v.appendChild(el('div', 'phead', '<h1>应用商店</h1>'));
+
+    var total = 0;
+    STORE_GROUPS.forEach(function (g) { total += g.items.length; });
+
+    /* 顶部固定带（概览 + 分类筛选）：不随列表滚走 —— 30 多个项目翻到中后段还要能切分类，
+     * 否则只能一路滚回顶部。内容区仍是全页唯一滚动区（§4.4）。 */
+    var bar = el('div', 'store-bar');
+    /* 店头：品牌渐变横幅（与主屏时钟组件同一套「主视觉渐变卡」语言，§4.3.1）+ 购物袋水印 */
+    var hero = el('div', 'store-hero');
+    hero.appendChild(el('div', 'store-hero-art', GLYPH.bag));
+    hero.appendChild(el('div', 'store-hero-top',
+      '<span class="store-hero-k">已收录</span>' +
+      '<span class="store-hero-v">' + total + '</span><span class="store-hero-u">款</span>'));
+    hero.appendChild(el('div', 'store-hero-d',
+      'ai-dev-kit 出品 · ' + STORE_GROUPS.length + ' 个分类 · 点卡片看简介'));
+    bar.appendChild(hero);
+
+    var list = el('div', 'pbody store-list');
+    var empty = el('div', 'store-empty', '没有可展示的项目。');
+    empty.style.display = 'none';
+    var tabs = el('div', 'store-tabs');
+
+    function pick(tag) {
+      var i, shown = 0, btns = tabs.children, secs = list.children;
+      for (i = 0; i < btns.length; i++) {
+        if (btns[i].getAttribute('data-cat') === tag) { btns[i].classList.add('sel'); }
+        else { btns[i].classList.remove('sel'); }
+      }
+      for (i = 0; i < secs.length; i++) {
+        if (secs[i].getAttribute('data-cat') === null) { continue; }
+        if (tag === 'all' || secs[i].getAttribute('data-cat') === tag) {
+          secs[i].classList.remove('hidden'); shown++;
+        } else { secs[i].classList.add('hidden'); }
+      }
+      empty.style.display = shown ? 'none' : 'block';
+    }
+
+    var tabsData = [{ tag: 'all', label: '全部' }];
+    STORE_GROUPS.forEach(function (g) { tabsData.push({ tag: g.tag, label: g.name }); });
+    tabsData.forEach(function (t) {
+      var btn = el('button', 'store-tab', esc(t.label));
+      btn.setAttribute('data-cat', t.tag);
+      btn.setAttribute('data-sfx', 'tap');
+      btn.setAttribute('aria-label', '筛选：' + t.label);
+      btn.addEventListener('click', function () { pick(t.tag); });
+      tabs.appendChild(btn);
+    });
+    bar.appendChild(tabs);
+    v.appendChild(bar);
+
+    STORE_GROUPS.forEach(function (g) {
+      var sec = el('div', 'store-sec');
+      sec.setAttribute('data-cat', g.tag);
+      var col = storeCatColor(g.tag);
+      var h = el('div', 'store-sec-h');
+      var dot = el('span', 'store-sec-dot');
+      dot.style.backgroundImage = 'linear-gradient(135deg,' + col[0] + ',' + col[1] + ')';
+      h.appendChild(dot);
+      h.appendChild(el('span', 'store-sec-t', esc(g.name)));
+      h.appendChild(el('span', 'store-sec-n', g.items.length + ' 款'));
+      sec.appendChild(h);
+      g.items.forEach(function (it, i) { sec.appendChild(storeCard(it, i)); });
+      list.appendChild(sec);
+    });
+    list.appendChild(empty);
+    v.appendChild(list);
+    pick('all');
+    return v;
+  }
+
+  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
   /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
@@ -4361,6 +4671,19 @@ JS = r"""
                   storeBackend: function () { return storeBackend; },
                   storeSummary: storeSummary,
                   hydrateStore: hydrateStore,
+                  /* 应用商店数据快照（自检用；只读副本，改不动注入的那份） */
+                  storeGroups: function () {
+                    var out = [];
+                    STORE_GROUPS.forEach(function (g) {
+                      var items = [];
+                      g.items.forEach(function (it) {
+                        items.push({ name: it.n, dir: it.d, desc: it.t, status: it.s,
+                                     label: it.st, tone: it.tone, tag: it.tag });
+                      });
+                      out.push({ tag: g.tag, name: g.name, items: items });
+                    });
+                    return out;
+                  },
                   /* 系统音效接缝（自检用；只读 —— 开关只能从设置页切）：
                    * names 是音效词表，stats 给出上下文状态与各音效触发次数。 */
                   soundEnabled: function () { return sfxOn; },
@@ -4375,6 +4698,7 @@ JS = r"""
 
 def main():
     shots = cam_shots()
+    store = store_apps()
     index_path = os.path.join(OUT, "index.html")
     js_path = os.path.join(OUT, "main.js")
     with io.open(index_path, "w", encoding="utf-8", newline="\n") as f:
@@ -4383,12 +4707,17 @@ def main():
         f.write("\n")
         f.write(HTML_TAIL.strip("\n"))
         f.write("\n")
+    # ensure_ascii=False：中文原样写进 main.js，别让项目定位变成 \uXXXX 转义
+    js = JS.replace("__CAM_SHOTS__", json.dumps(shots))
+    js = js.replace("__STORE_DATA__", json.dumps(store, ensure_ascii=False))
     with io.open(js_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(JS.replace("__CAM_SHOTS__", json.dumps(shots)).strip("\n"))
+        f.write(js.strip("\n"))
         f.write("\n")
     print("built:", index_path)
     print("built:", js_path, "（月球天气的 Three.js 与月面贴图在 ./assets/，由 build_zip.py 一并打包）")
     print("built: 相机取景素材 %d 张（./assets/cam/，由 _dev/make_cam_photos.py 派生）" % len(shots))
+    print("built: 应用商店 %d 个分类 / %d 个项目（构建期由仓库根 TRACKS.md 派生）"
+          % (len(store), sum(len(g["items"]) for g in store)))
 
 
 if __name__ == "__main__":

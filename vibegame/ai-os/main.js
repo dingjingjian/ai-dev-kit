@@ -14,17 +14,22 @@
     sms: '<svg viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2zm3 5h10v2H7V8zm0 4h7v2H7v-2z"/></svg>',
     camera: '<svg viewBox="0 0 24 24"><path d="M9 3L7.5 5H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
     moon: '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>',
+    /* 购物袋：袋身（圆角矩形）+ 提手（弧线）—— 手绘简单几何，不写复杂单 path */
+    bag: '<svg viewBox="0 0 24 24"><path d="M5.4 7.6h13.2a1.6 1.6 0 0 1 1.6 1.7l-.9 10a2 2 0 0 1-2 1.8H6.7a2 2 0 0 1-2-1.8l-.9-10a1.6 1.6 0 0 1 1.6-1.7z"/><path d="M8.8 7.6V6.1a3.2 3.2 0 0 1 6.4 0v1.5" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
   /* ---------- 应用清单 ---------- */
   var APPS = [
-    { id: 'calc',      name: '计算器', slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
-    { id: 'assistant', name: '助手',   slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
-    { id: 'calendar',  name: '日历',   slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
-    { id: 'schedule',  name: '日程',   slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
-    { id: 'alarm',     name: '闹钟',   slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
-    { id: 'stats',     name: '统计',   slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 }
+    { id: 'calc',      name: '计算器',   slogan: '它会算，只是偶尔不对', g: 'calc',  c: ['#6C7CF5', '#4A56D6'], deg: 135 },
+    { id: 'assistant', name: '助手',     slogan: '它不会答，你得替它答', g: 'bot',   c: ['#4FC3F7', '#2E7FE8'], deg: 120 },
+    { id: 'calendar',  name: '日历',     slogan: '它排的不是期，是雷',   g: 'cal',   c: ['#FFB84C', '#F08A1E'], deg: 150 },
+    { id: 'schedule',  name: '日程',     slogan: '它记不住，得你帮它记', g: 'list',  c: ['#3ECF8E', '#17A06B'], deg: 135 },
+    { id: 'alarm',     name: '闹钟',     slogan: '它不会响，得你帮它响', g: 'alarm', c: ['#8F7BF7', '#6A4CE0'], deg: 120 },
+    { id: 'stats',     name: '统计',     slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 },
+    /* 应用商店的色相取青柠绿（黄绿，hue≈92）—— 主屏其余图标里没有这个色区，
+     * 与日程/电话的春绿、统计/助手的青蓝都拉得开（DESIGN §4.3 色相不重复）。 */
+    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 }
   ];
   var DOCK = [
     { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
@@ -34,9 +39,33 @@
   ];
 
   /* 月球天气：唯一入口是主屏天气小组件（§4.3.1），故不进 APPS / DOCK ——
-   * 主屏图标网格与 Dock 保持 6 + 4，只在多任务轮播里以卡片形态出现。 */
+   * 主屏图标网格与 Dock 保持 7 + 4，只在多任务轮播里以卡片形态出现。 */
   var WEATHER_APP = { id: 'weather', name: '月球天气', slogan: '数据来源：AI 编的，别当真',
                       g: 'moon', c: ['#8FA6D8', '#3A4A7A'], deg: 135 };
+
+  /* ---------- 应用商店数据（§4.12） ----------
+   * 由 _dev/build.py 在构建期解析仓库根 TRACKS.md 后注入（占位符 [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班打卡", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + GitHub 式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，GitHub 式热力图回看半年情绪"}, {"n": "拼豆设计工具", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "Word 转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "均未", "st": "开发中", "tone": "warn", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + Electron 双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/Cloudflare/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、飞书写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从 Git 提交生成日报并写入飞书多维表格"}, {"n": "图表图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆坊", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选/展开）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "3D 地球科普", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "世界美食大百科", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "3D 火箭发射", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "3D 登月全程", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已打包 · 缺笔记", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "侏罗纪公园 3D", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}]}]）——
+   * 与小工具包体无关，全部在包内，运行时不读任何外部文件；手抄清单会与 TRACKS.md 分叉，
+   * 故这里只声明、不维护内容。结构：[{tag, name, items:[{n 名称, d 目录, t 定位, s 状态}]}] */
+  var STORE_GROUPS = [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班打卡", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + GitHub 式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，GitHub 式热力图回看半年情绪"}, {"n": "拼豆设计工具", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "Word 转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "均未", "st": "开发中", "tone": "warn", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + Electron 双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/Cloudflare/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、飞书写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从 Git 提交生成日报并写入飞书多维表格"}, {"n": "图表图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆坊", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选/展开）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "3D 地球科普", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "世界美食大百科", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "3D 火箭发射", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "3D 登月全程", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已打包 · 缺笔记", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "侏罗纪公园 3D", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}]}];
+  /* 货架图标色板：8 组身份色按序轮转，同分类相邻两张卡片必不同色 —— 商店里的图标是
+   * 「每个应用自己的招牌色」（与主屏图标同一性质），属身份色而非 §4.5 的语义色，
+   * 故可以多色并列；色值直接复用主屏那套，商店与桌面看起来是同一个世界的应用。 */
+  var STORE_ICON_PALETTE = [
+    ['#6C7CF5', '#4A56D6'], ['#4FC3F7', '#2E7FE8'], ['#FFB84C', '#F08A1E'], ['#3ECF8E', '#17A06B'],
+    ['#8F7BF7', '#6A4CE0'], ['#4FD0E5', '#2E9EC4'], ['#F06AA8', '#D2387A'], ['#FF8A5B', '#E05A2B']
+  ];
+  /* 分类的视觉标识（色相：实用工具蓝 / 互动游戏紫 / 数字艺术玫红 / 人文知识青绿）；
+   * 名字取 TRACKS.md 的分类名，颜色是 UI 决策，故只在这里定。 */
+  var STORE_CAT = {
+    vibetool: ['#4A8DF0', '#2A5FD0'],
+    vibegame: ['#8F7BF7', '#6A4CE0'],
+    vibeart:  ['#F0688F', '#C93A66'],
+    vibeknow: ['#2FBFA8', '#12897C']
+  };
+  var STORE_CAT_FALLBACK = ['#8E8E96', '#5C5C66'];
+
+  function storeCatColor(tag) { return STORE_CAT[tag] || STORE_CAT_FALLBACK; }
 
   function findApp(id) {
     var i;
@@ -486,6 +515,12 @@
   var recentsEl = null;
   var weatherView = null;    // 月球天气视图（首次进入时构建；AIOS.weatherState 读取它的快照）
 
+  /* 文本转义：应用商店的名称 / 定位 / 状态是从 TRACKS.md 解析出来的外部文本，
+   * 一律转义后再进 innerHTML，免得文中的 & < > 被当成标签解析。 */
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
   function el(tag, cls, html) {
     var n = document.createElement(tag);
     if (cls) { n.className = cls; }
@@ -493,12 +528,17 @@
     return n;
   }
 
+  /* 图标质感配方：顶部高光 + 主渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）。
+   * 主屏图标与商店货架图标共用同一套配方，不各写一遍。 */
+  function iconPaint(node, cols, deg) {
+    node.style.backgroundImage =
+      'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
+      'linear-gradient(' + (deg || 135) + 'deg,' + cols[0] + ',' + cols[1] + ')';
+  }
+
   function iconNode(app, extra) {
     var n = el('div', 'app-icon' + (extra ? ' ' + extra : ''));
-    // 顶部高光 + 主题渐变；投影为中性（真机不用同色光晕，见 DESIGN §4.6）
-    n.style.backgroundImage =
-      'radial-gradient(120% 90% at 22% 0%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%),' +
-      'linear-gradient(' + (app.deg || 135) + 'deg,' + app.c[0] + ',' + app.c[1] + ')';
+    iconPaint(n, app.c, app.deg);
     n.innerHTML = GLYPH[app.g];
     return n;
   }
@@ -2798,7 +2838,108 @@
     return v;
   }
 
-  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather };
+  /* ---------- 应用商店（§4.12）：介绍 ai-dev-kit 里已开发的小工具 ----------
+   * 数据是构建期注入的 STORE_GROUPS（TRACKS.md 派生），这里只负责呈现。
+   * 呈现一律用「商店语言」，不是「文档语言」：
+   *   卡片 = 招牌图标 + 名称 + 一句副标题（tag）+ 上架标签（st / tone）；
+   *   目录（d）、定位原文（t）、物料状态原文（s）**都不上屏** —— 那是给维护者看的。
+   * 一行一卡、不再做展开：副标题本身就是商店口径的短句，完整定位在仓库索引里查。 */
+  function storeCard(it, idx) {
+    var card = el('div', 'store-card');
+    var head = el('div', 'store-head');
+
+    /* 招牌图标：沿用主屏图标的中性投影 + 内高光，颜色取货架色板按序轮转（同分类相邻不同色） */
+    var mini = el('div', 'store-mini', esc(it.n.charAt(0)));
+    iconPaint(mini, STORE_ICON_PALETTE[idx % STORE_ICON_PALETTE.length], 135);
+    head.appendChild(mini);
+
+    var title = el('div', 'store-title');
+    title.appendChild(el('div', 'store-name', esc(it.n)));
+    title.appendChild(el('div', 'store-desc', esc(it.tag)));
+    /* 本机（ai-os 自己）在清单里也有一行：按商店的说法标「已安装」——你正用着它 */
+    var self = (it.d === 'vibegame/ai-os/') ? '<span class="store-chip self">已安装</span>' : '';
+    title.appendChild(el('div', 'store-tags',
+      '<span class="store-chip ' + esc(it.tone) + '">' + esc(it.st) + '</span>' + self));
+    head.appendChild(title);
+
+    card.appendChild(head);
+    return card;
+  }
+
+  function buildStore() {
+    var v = el('div', 'view hidden');
+    v.appendChild(el('div', 'phead', '<h1>应用商店</h1>'));
+
+    var total = 0;
+    STORE_GROUPS.forEach(function (g) { total += g.items.length; });
+
+    /* 顶部固定带（概览 + 分类筛选）：不随列表滚走 —— 30 多个项目翻到中后段还要能切分类，
+     * 否则只能一路滚回顶部。内容区仍是全页唯一滚动区（§4.4）。 */
+    var bar = el('div', 'store-bar');
+    /* 店头：品牌渐变横幅（与主屏时钟组件同一套「主视觉渐变卡」语言，§4.3.1）+ 购物袋水印 */
+    var hero = el('div', 'store-hero');
+    hero.appendChild(el('div', 'store-hero-art', GLYPH.bag));
+    hero.appendChild(el('div', 'store-hero-top',
+      '<span class="store-hero-k">已收录</span>' +
+      '<span class="store-hero-v">' + total + '</span><span class="store-hero-u">款</span>'));
+    hero.appendChild(el('div', 'store-hero-d',
+      'ai-dev-kit 出品 · ' + STORE_GROUPS.length + ' 个分类 · 点卡片看简介'));
+    bar.appendChild(hero);
+
+    var list = el('div', 'pbody store-list');
+    var empty = el('div', 'store-empty', '没有可展示的项目。');
+    empty.style.display = 'none';
+    var tabs = el('div', 'store-tabs');
+
+    function pick(tag) {
+      var i, shown = 0, btns = tabs.children, secs = list.children;
+      for (i = 0; i < btns.length; i++) {
+        if (btns[i].getAttribute('data-cat') === tag) { btns[i].classList.add('sel'); }
+        else { btns[i].classList.remove('sel'); }
+      }
+      for (i = 0; i < secs.length; i++) {
+        if (secs[i].getAttribute('data-cat') === null) { continue; }
+        if (tag === 'all' || secs[i].getAttribute('data-cat') === tag) {
+          secs[i].classList.remove('hidden'); shown++;
+        } else { secs[i].classList.add('hidden'); }
+      }
+      empty.style.display = shown ? 'none' : 'block';
+    }
+
+    var tabsData = [{ tag: 'all', label: '全部' }];
+    STORE_GROUPS.forEach(function (g) { tabsData.push({ tag: g.tag, label: g.name }); });
+    tabsData.forEach(function (t) {
+      var btn = el('button', 'store-tab', esc(t.label));
+      btn.setAttribute('data-cat', t.tag);
+      btn.setAttribute('data-sfx', 'tap');
+      btn.setAttribute('aria-label', '筛选：' + t.label);
+      btn.addEventListener('click', function () { pick(t.tag); });
+      tabs.appendChild(btn);
+    });
+    bar.appendChild(tabs);
+    v.appendChild(bar);
+
+    STORE_GROUPS.forEach(function (g) {
+      var sec = el('div', 'store-sec');
+      sec.setAttribute('data-cat', g.tag);
+      var col = storeCatColor(g.tag);
+      var h = el('div', 'store-sec-h');
+      var dot = el('span', 'store-sec-dot');
+      dot.style.backgroundImage = 'linear-gradient(135deg,' + col[0] + ',' + col[1] + ')';
+      h.appendChild(dot);
+      h.appendChild(el('span', 'store-sec-t', esc(g.name)));
+      h.appendChild(el('span', 'store-sec-n', g.items.length + ' 款'));
+      sec.appendChild(h);
+      g.items.forEach(function (it, i) { sec.appendChild(storeCard(it, i)); });
+      list.appendChild(sec);
+    });
+    list.appendChild(empty);
+    v.appendChild(list);
+    pick('all');
+    return v;
+  }
+
+  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
   /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
@@ -3053,6 +3194,19 @@
                   storeBackend: function () { return storeBackend; },
                   storeSummary: storeSummary,
                   hydrateStore: hydrateStore,
+                  /* 应用商店数据快照（自检用；只读副本，改不动注入的那份） */
+                  storeGroups: function () {
+                    var out = [];
+                    STORE_GROUPS.forEach(function (g) {
+                      var items = [];
+                      g.items.forEach(function (it) {
+                        items.push({ name: it.n, dir: it.d, desc: it.t, status: it.s,
+                                     label: it.st, tone: it.tone, tag: it.tag });
+                      });
+                      out.push({ tag: g.tag, name: g.name, items: items });
+                    });
+                    return out;
+                  },
                   /* 系统音效接缝（自检用；只读 —— 开关只能从设置页切）：
                    * names 是音效词表，stats 给出上下文状态与各音效触发次数。 */
                   soundEnabled: function () { return sfxOn; },

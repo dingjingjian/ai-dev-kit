@@ -473,6 +473,94 @@ body[data-mode="dark"] .app-icon{
 .ph-tip{ margin-top:14px; font-size:13px; line-height:1.5; color:var(--ink-dim); max-width:260px; }
 .pfoot-hint{ font-size:12px; color:var(--ink-dim); text-align:center; }
 
+/* ============ 应用商店（§4.12） ============ */
+/* 顶部固定带（店头 + 分类筛选）：内容区仍是全页唯一滚动区 */
+.store-bar{
+  flex:0 0 auto;
+  padding:8px calc(16px + var(--safe-r)) 10px calc(16px + var(--safe-l));
+}
+/* 店头：品牌渐变横幅（与主屏时钟组件同一套「主视觉渐变卡」语言，§4.3.1）+ 购物袋水印 */
+.store-hero{
+  position:relative; overflow:hidden;
+  border-radius:var(--r-lg); padding:15px 18px; color:#fff;
+  background-image:
+    radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,.28), rgba(255,255,255,0) 55%),
+    linear-gradient(135deg,#7C5CFF 0%,#4A56D6 100%);
+  box-shadow:var(--sh-2);
+}
+.store-hero-art{ position:absolute; right:-8px; bottom:-18px; opacity:.15; }
+.store-hero-art svg{ width:100px; height:100px; fill:#fff; }
+.store-hero-top{ position:relative; display:flex; align-items:baseline; }
+.store-hero-k{ font-size:11px; letter-spacing:.3px; color:rgba(255,255,255,.78); }
+.store-hero-v{ margin:0 5px; font-size:34px; font-weight:800; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+.store-hero-u{ font-size:13px; font-weight:600; color:rgba(255,255,255,.85); }
+.store-hero-d{ position:relative; margin-top:5px; font-size:11.5px; letter-spacing:.2px; color:rgba(255,255,255,.82); }
+/* 分类筛选：等分满宽五格（与难度选择 / 键盘同一套控件语言，§4.4），不是散在左侧的小胶囊 */
+.store-tabs{ display:grid; grid-template-columns:repeat(5,1fr); grid-gap:6px; margin-top:10px; }
+.store-tab{
+  height:38px; border-radius:var(--r-sm);
+  font-size:12px; font-weight:600; color:var(--ink); white-space:nowrap;
+  background:var(--card); border:1px solid var(--line);
+  box-shadow:var(--sh-1);
+  transition:transform .16s ease;
+}
+.store-tab:active{ transform:scale(.96); }
+.store-tab.sel{
+  color:#fff; border-color:transparent;
+  background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
+  box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.30);
+}
+/* 货架 */
+.store-list{ padding-top:2px; }
+.store-sec.hidden{ display:none; }
+.store-sec-h{ display:flex; align-items:center; padding:14px 2px 8px 2px; }
+.store-sec-dot{ flex:0 0 auto; width:10px; height:10px; border-radius:3px; margin-right:8px; box-shadow:var(--sh-1); }
+.store-sec-t{ font-size:14px; font-weight:600; color:var(--ink); letter-spacing:.2px; }
+.store-sec-n{ margin-left:auto; font-size:11px; color:var(--ink-dim); }
+/* 货架卡：招牌图标 + 名称 + 一句副标题 + 上架标签（一行一卡，静态不展开） */
+.store-card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+  padding:11px 14px; margin-bottom:9px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.store-head{ display:flex; align-items:center; }
+/* 招牌图标：与主屏图标同一套质感（squircle 23% + 中性投影 + 内高光/内底影，§4.6） */
+.store-mini{
+  flex:0 0 auto; width:46px; height:46px; border-radius:23%;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-size:19px; font-weight:700;
+  box-shadow:
+    var(--sh-1),
+    0 4px 10px rgba(20,20,40,.14),
+    inset 0 1px 0 rgba(255,255,255,.35),
+    inset 0 -1px 0 rgba(0,0,0,.10);
+}
+body[data-mode="dark"] .store-mini{
+  box-shadow:
+    var(--sh-1),
+    0 4px 10px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.20),
+    inset 0 -1px 0 rgba(0,0,0,.28);
+}
+.store-title{ flex:1 1 auto; min-width:0; margin-left:12px; }
+.store-name{ font-size:15.5px; font-weight:600; color:var(--ink); }
+/* 副标题：商店口径的一句短句，恒定单行省略号（副标题不该长成一段话） */
+.store-desc{
+  margin-top:3px; font-size:12.5px; line-height:1.5; color:var(--ink-dim);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.store-tags{ margin-top:6px; display:flex; }
+/* 上架状态标签：语气色走站内语义色（ok / warn / 中性），本机那枚是 accent */
+.store-chip{
+  display:inline-block; font-size:11px; line-height:1.6;
+  border-radius:999px; padding:2px 9px;
+  color:var(--ink-dim); background:rgba(120,120,140,.14);
+}
+.store-chip.ok{ color:var(--ok); background:rgba(31,169,113,.12); }
+.store-chip.warn{ color:var(--warn); background:rgba(232,161,60,.16); }
+.store-chip.self{ color:var(--accent); background:rgba(108,76,241,.12); margin-left:6px; }
+.store-empty{ padding:28px 0; text-align:center; font-size:13px; color:var(--ink-dim); }
+
 /* ============ 游戏页组件（§4.7 二期a） ============ */
 .gstats{
   display:flex; align-items:center;

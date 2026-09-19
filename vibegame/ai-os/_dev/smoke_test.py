@@ -16,6 +16,8 @@ from playwright.sync_api import sync_playwright
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, ".."))
 SHOTS = os.path.join(HERE, "_shots")
+# 仓库根 TRACKS.md：应用商店的数据真源（build.py 解析后注入 main.js）
+TRACKS_MD = os.path.normpath(os.path.join(HERE, "..", "..", "..", "TRACKS.md"))
 
 
 def find_chrome():
@@ -66,6 +68,64 @@ def wx_phase_at(ms):
         name = "残月"
     lit = round((1 - math.cos(math.radians(deg))) / 2 * 100)
     return name, lit
+
+
+def tracks_items():
+    """独立复算仓库根 TRACKS.md 里的项目清单（与 build.py 各写一遍解析）。
+
+    用于跟「应用商店」注入的数据、以及上屏的 DOM 两两对拍：产品侧解析一旦漂移
+    （漏分类 / 漏项目 / 把 .skill 技能当应用 / 顺序错位 / 文本被转义改样），
+    这条断言就会抓住。返回 [{"tag", "name", "items":[(名称, 目录, 定位, 状态)]}]。
+    """
+    head = re.compile(r"^##\s*#([a-z]+)[\s\u3000]*(.+?)\s*[（(]\d+[）)]\s*$")
+    groups, cur = [], None
+    with io.open(TRACKS_MD, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
+            m = head.match(line)
+            if m:
+                cur = {"tag": m.group(1), "name": m.group(2).strip(), "items": []}
+                groups.append(cur)
+                continue
+            if cur is None or not line.startswith("|"):
+                continue
+            cells = [c.strip() for c in line.strip("|").split("|")]
+            if len(cells) < 4:
+                continue
+            name, path = cells[0], cells[1].strip("`")
+            if not path.endswith("/") or path.startswith(".skill/"):
+                continue
+            cur["items"].append((name, path, cells[2], cells[3]))
+    return [g for g in groups if g["items"]]
+
+
+def store_state_of(status):
+    """独立复算 _dev/build.py 的 store_state()：TRACKS 物料状态原文 -> (商店标签, 语气色)。
+
+    商店卡片只上屏这个短标签（原文是文档口径，不上屏），故折算规则一旦漂移
+    （例如原文没改、标签却变了），对拍就会失败。
+    """
+    if any(k in status for k in ("已发布", "完整", "可玩", "已打包")):
+        return "已上架", "ok"
+    if "自用" in status:
+        return "内部自用", "dim"
+    if any(k in status for k in ("待", "未", "缺")):
+        return "开发中", "warn"
+    return "已收录", "dim"
+
+
+def store_tagline_of(desc):
+    """独立复算 _dev/build.py 的 store_tagline()：TRACKS 定位 -> 商店副标题。
+
+    规则：砍掉第一个「（」或「：」之后的部分（技术括注 / 定义式展开），其余留给
+    卡片的一行省略号。目的是让商店副标题不带实现细节与上游路径。
+    """
+    cut = len(desc)
+    for sep in ("（", "："):
+        i = desc.find(sep)
+        if i > 0 and i < cut:
+            cut = i
+    return desc[:cut].strip()
 
 
 def check(name, cond, extra=""):
@@ -214,8 +274,8 @@ def main():
         # 顶部预留带内左右净空无按钮
         n_btn_top = pg.evaluate("document.querySelectorAll('.statusbar button, .phead button').length")
         check("顶部带/页头无按钮", n_btn_top == 0, str(n_btn_top))
-        # 主屏 6 图标 + Dock 4
-        check("主屏 6 图标", pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 6)
+        # 主屏 7 图标 + Dock 4
+        check("主屏 7 图标", pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 7)
         check("Dock 4 图标且无标签", pg.evaluate("document.querySelectorAll('.dock .app-tile').length") == 4
               and pg.evaluate("document.querySelectorAll('.dock .app-name').length") == 0)
         # 容器视口比纯浏览器矮，主屏剩余空间被吃满时只剩这条外边距，必须留够
@@ -355,7 +415,7 @@ def main():
         pg.wait_for_timeout(300)
         check("返回回主屏且天气不占图标网格", pg.evaluate(
             "!document.querySelector('.home').classList.contains('hidden')")
-              and pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 6
+              and pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 7
               and pg.evaluate("document.querySelectorAll('.dock .app-tile').length") == 4)
 
         # 月相由时间决定：注入固定时钟，分别验证「满月」与「蛾眉月」的读数、姿态与缩放
@@ -769,17 +829,21 @@ def main():
         check("快门即拍即换（无定格预览）", shot3 != shot2, "%s -> %s" % (shot2, shot3))
         check("快门出声（shot 计入）",
               pg.evaluate("AIOS.soundStats()")["plays"].get("shot", 0) >= 1)
-        # 连拍升温：3 张后温度明显高于基准，但还没进过热态
-        for _ in range(3):
-            pg.click(".cam-shutter")
+        # 连拍升温：3 张后温度明显高于基准，但还没进过热态。
+        # 「连拍」必须用程序化 click 连击，不能一枚枚 pg.click：后者的可交互性检查
+        # 每枚要几十到几百毫秒，慢机上 8 枚点完要十几秒 —— 温度按 0.5℃/s 实时回落，
+        # 净升温被冷却吃掉，压根到不了 45℃ 封锁线（曾复现：8 连拍后仍 44.6℃）。
+        def burst(n):
+            for _ in range(n):
+                pg.evaluate("document.querySelector('.view:not(.hidden) .cam-shutter').click()")
+        burst(3)
         t1 = pg.evaluate(CAM_TEMP)
         check("连拍升温（3 张后高于基准 +3℃）", t1 > t0 + 3, "%s -> %s" % (t0, t1))
         check("未过热时 HUD 不显示过热文案", pg.evaluate(
             "(function(){var h=" + CAM_HUD + ";return h.textContent.indexOf('过热')<0 "
             "&& h.className.indexOf('hot')<0;})()"), str(t1))
         # 继续连拍 → 过热：HUD 转红 + 文案变化
-        for _ in range(8):
-            pg.click(".cam-shutter")
+        burst(8)
         t2 = pg.evaluate(CAM_TEMP)
         check("连拍至过热（HUD 转红 + 过热文案）", pg.evaluate(
             "(function(){var h=" + CAM_HUD + ";return h.textContent.indexOf('过热')>=0 "
@@ -820,6 +884,108 @@ def main():
         pg.screenshot(path=os.path.join(SHOTS, "v2-stats.png"))
         pg.locator(".modal-cancel").click()
         pg.wait_for_timeout(200)
+        pg.click("#keyBack")
+        pg.wait_for_timeout(300)
+
+        # 应用商店（§4.12）：介绍 ai-dev-kit 已开发的小工具，清单在构建期由仓库根 TRACKS.md 派生。
+        # 期望值在这里独立复算一遍（测试自带一份解析），再与注入数据、上屏 DOM 三方对拍。
+        exp = tracks_items()
+        exp_total = sum(len(g["items"]) for g in exp)
+        check("TRACKS.md 可解析（四大分类 / 有项目）", len(exp) == 4 and exp_total > 0,
+              "%d 类 / %d 项" % (len(exp), exp_total))
+        pg.locator('[aria-label="应用商店"]').first.click()
+        pg.wait_for_timeout(400)
+        st = pg.evaluate("AIOS.storeGroups()")
+        check("商店分类数与 TRACKS.md 一致", len(st) == len(exp), str(len(st)))
+        check("商店项目数与 TRACKS.md 独立复算一致",
+              sum(len(g["items"]) for g in st) == exp_total,
+              "%d vs %d" % (sum(len(g["items"]) for g in st), exp_total))
+        check("商店分类名与顺序同 TRACKS.md",
+              [g["name"] for g in st] == [g["name"] for g in exp])
+        check("商店逐项对应 TRACKS.md（分类 + 名称 + 目录 + 定位 + 状态全量续存）",
+              [(g["tag"], i["name"], i["dir"], i["desc"], i["status"])
+               for g in st for i in g["items"]]
+              == [(g["tag"], n, d, c, s) for g in exp for n, d, c, s in g["items"]])
+        # 上架状态标签是商城口径：由 TRACKS 原文折叠而来，测试独立复算同一套规则
+        check("商店上架标签与 TRACKS 原文折算一致（独立复算）",
+              [(i["label"], i["tone"]) for g in st for i in g["items"]]
+              == [store_state_of(s) for g in exp for n, d, c, s in g["items"]])
+        # 副标题同样由定位原文折出（砍技术括注），与独立复算对拍
+        check("商店副标题与 TRACKS 定位折算一致（独立复算）",
+              [i["tag"] for g in st for i in g["items"]]
+              == [store_tagline_of(c) for g in exp for n, d, c, s in g["items"]])
+        check("商店不含 .skill（技能不是应用）",
+              not any(i["dir"].startswith(".skill/") for g in st for i in g["items"]))
+        vis_card = "document.querySelectorAll('.view:not(.hidden) .store-sec:not(.hidden) .store-card')"
+        check("商店卡片数 = 项目数", pg.evaluate(vis_card + ".length") == exp_total)
+        check("商店分组数 = 分类数", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .store-sec').length") == len(exp))
+        check("商店店头显示收录总数",
+              pg.evaluate("document.querySelector('.store-hero-v').textContent") == str(exp_total))
+        check("商店按分类显示了分组标题",
+              [t for t in pg.evaluate(
+                  "Array.prototype.map.call(document.querySelectorAll('.view:not(.hidden) .store-sec-t'),"
+                  "function(n){return n.textContent;})")] == [g["name"] for g in exp])
+        # 商店语言：只给「上架标签」，不摆目录路径与物料状态原文（那是文档口径）
+        check("商店不显示项目路径（目录不上屏）", pg.evaluate(
+            "(function(){var t=document.querySelector('.view:not(.hidden) .store-list').textContent;"
+            "return ['vibetool/','vibegame/','vibeart/','vibeknow/','.skill/'].every(function(p){"
+            "return t.indexOf(p)<0;});})()"))
+        check("商店不显示物料状态原文（只给折算后的上架标签）", pg.evaluate(
+            "(function(){var t=document.querySelector('.view:not(.hidden) .store-list').textContent;"
+            "return ['八层验证','zip + ','headless','已发布','自用 · '].every(function(p){"
+            "return t.indexOf(p)<0;});})()"))
+        chip_n = pg.evaluate("document.querySelectorAll('.view:not(.hidden) .store-card .store-chip').length")
+        self_n = pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .store-card .store-chip.self').length")
+        check("每张卡片都有上架标签（本机那行另加一枚）",
+              chip_n == exp_total + self_n and self_n == 1, "%d 枚 / 本机标记 %d" % (chip_n, self_n))
+        check("卡片上屏的确实是折算后的上架标签",
+              pg.evaluate("document.querySelector('.view:not(.hidden) .store-card .store-chip')"
+                          ".textContent") == store_state_of(exp[0]["items"][0][3])[0])
+        want_tones = sorted(set(store_state_of(s)[1] for g in exp for n, d, c, s in g["items"]))
+        got_tones = sorted(set(pg.evaluate(
+            "Array.prototype.map.call(document.querySelectorAll("
+            "'.view:not(.hidden) .store-card .store-chip'),"
+            "function(n){return n.className.replace('store-chip','').replace('self','').trim();})"
+            ".filter(function(x){return x!=='';})")))
+        check("上架标签语气色只用 ok / warn / 中性三档", got_tones == want_tones,
+              "%s vs %s" % (got_tones, want_tones))
+        # 招牌图标：货架色板按序轮转，同分类内相邻卡片不得同色（纯文字的单调感就出在这）
+        check("同分类相邻卡片招牌图标不同色（货架色板轮转）", pg.evaluate(
+            "(function(){var s=document.querySelector('.view:not(.hidden) .store-sec');"
+            "var m=s.querySelectorAll('.store-mini'),i,p='';"
+            "for(i=0;i<m.length;i++){var b=getComputedStyle(m[i]).backgroundImage;"
+            "if(b===p){return false;}p=b;}return m.length>1;})()"))
+        # 本机（ai-os 自己）也在清单里：按商店的说法标「已安装」（你正用着它）
+        check("本机在商店清单里并标「已安装」", pg.evaluate(
+            "(function(){var cs=document.querySelectorAll('.store-card'),i;"
+            "for(i=0;i<cs.length;i++){if(cs[i].querySelector('.store-name').textContent==='人工智能 OS'){"
+            "var c=cs[i].querySelector('.store-chip.self');return !!c && c.textContent==='已安装';}}"
+            "return false;})()"))
+        # 分类筛选：点「互动游戏」只剩该分类，卡片数 = 该分类项目数
+        game_n = len([g for g in exp if g["tag"] == "vibegame"][0]["items"])
+        pg.locator('.view:not(.hidden) .store-tab[data-cat="vibegame"]').click()
+        pg.wait_for_timeout(250)
+        check("分类筛选只留该分类且计数正确", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .store-sec:not(.hidden)').length") == 1
+              and pg.evaluate(vis_card + ".length") == game_n)
+        # 卡片副标题是商店口径的短句（不是索引里的定位长句），且恒定单行省略号
+        check("卡片副标题上屏的是折算后的短句、单行省略",
+              pg.evaluate("document.querySelector('.view:not(.hidden) .store-card .store-desc')"
+                          ".textContent") == store_tagline_of(exp[0]["items"][0][2])
+              and pg.evaluate(
+                  "(function(){var d=document.querySelector("
+                  "'.view:not(.hidden) .store-card .store-desc');var s=getComputedStyle(d);"
+                  "return s.whiteSpace==='nowrap' && s.textOverflow==='ellipsis';})()"))
+        pg.screenshot(path=os.path.join(SHOTS, "v2-store.png"))
+        # 回到「全部」应恢复所有分组
+        pg.locator('.view:not(.hidden) .store-tab[data-cat="all"]').click()
+        pg.wait_for_timeout(250)
+        check("切回全部恢复所有分组", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .store-sec:not(.hidden)').length") == len(exp)
+              and pg.evaluate(vis_card + ".length") == exp_total)
+        check("商店页无 console/page 错误", len(errors) == 0, "; ".join(errors[:3]))
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
