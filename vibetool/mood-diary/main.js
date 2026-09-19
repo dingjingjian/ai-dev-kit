@@ -27,17 +27,27 @@
    *   1) 双通道：容器 Storage（客户端 ≥ 9.46.0 且已注入 setStorage / getStorage）+ localStorage 镜像；
    *   2) 写：镜像通道同步先行、容器异步跟上，任一成功即算成功，两条都失败才回报失败（§3.7 要求）；
    *   3) 读：容器优先，缺失 / 失败退回镜像；容器有而镜像没有则回填，两侧互为兜底；
-   *   4) 启动：判定容器通道后后台对齐两侧（缺哪边补哪边），不阻塞首屏；
+   *   4) 启动：判定容器通道后后台对齐两侧（缺哪边补哪边），不阻塞首屏；SDK 注入晚于首屏
+   *      脚本时按 INJECT_WAIT 轮询等待，等到即切换通道，不靠重开小工具；
    *   5) 端能力一律 success / fail 回调 + 800ms 超时兜底（旧容器上 Promise 版不可靠，也不能挂住调用方）；
    *   6) 版本号：buildVersion 抹掉末 3 位，同步取值 → 异步兜底，取不到按「不支持」处理，取值过程绝不抛错；
-   *   7) 通道可见：设置面板里显示当前数据通道，真机可自查。
+   *   7) 通道可见：设置面板里只写当前走的通道（用户不需要知道判定细节）；为什么走这条通道、
+   *      真机 buildVersion、端能力缺什么，留在 console，URL 带 ?debug 时才一并上屏。
    * 参考：https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s2-4
    */
   var KEY_RECORDS = 'md_records_v1';
   var KEY_THEME = 'md_theme_v1';
   var STORAGE_MIN_CLIENT_VERSION = 9460; /* 客户端 9.46.0 */
   var XHS_CALL_TIMEOUT = 800;            /* 端能力超时即当失败，退回镜像通道 */
-  var containerUsable = false;           /* 启动时判定：容器 Storage 通道是否可用 */
+  var INJECT_WAIT = 1500;                /* 等 SDK 注入的上限，官方未承诺注入时机 */
+  var INJECT_POLL = 100;                 /* 等注入时的轮询间隔 */
+  var containerUsable = false;           /* 判定结果：容器 Storage 通道是否可用 */
+  var containerReason = 'probing';       /* 未启用容器通道的原因码，仅开发自查用 */
+  var containerBuildVersion = 0;         /* 真机上取到的原始 buildVersion，排查版本门槛用 */
+  var containerApiMissing = '';          /* 端能力里缺哪些接口（setStorage / getStorage），排查用 */
+  var containerApiList = '';             /* 端能力里实际有哪些函数，排查 bridge 类型用 */
+  var recordsDirty = false;              /* 启动后用户是否已写过数据（写过的内存是最新的，不许容器回灌） */
+  var detecting = null;                  /* 判定进行中，避免并发重复判定 / 对齐 */
   var storageUsage = null;               /* { currentSize, limitSize }，单位 KB（仅容器通道提供） */
 
   /* §3.6 客户端版本判断：buildVersion 末 3 位是编译序号，须忽略 */
@@ -46,31 +56,95 @@
     return Number(miniToolEnv && miniToolEnv.buildVersion) || 0;
   }
   function getClientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
-  /* 版本号：先同步逐级判空，取不到再异步兜底；两条路都失败按「不支持容器 Storage」处理。
-   * 老 SDK 可能不支持 Promise（不传回调时返回 undefined），故非 Promise 返回值也照收，
-   * 并且整段 try/catch —— 取版本号这一步绝不能把后面的启动链带崩。 */
-  function getBuildVersion() {
-    var xhs = window.xhs;
-    var syncBV = 0;
-    try { syncBV = readBuildVersion(xhs && xhs.launchOptions); } catch (e) { syncBV = 0; }
-    if (syncBV) return Promise.resolve(syncBV);
-    var miniTool = xhs && xhs.miniTool;
-    if (!miniTool || typeof miniTool.getLaunchOptions !== 'function') return Promise.resolve(0);
-    try {
-      var ret = miniTool.getLaunchOptions();
-      if (ret && typeof ret.then === 'function') {
-        return ret.then(readBuildVersion, function () { return 0; });
-      }
-      return Promise.resolve(readBuildVersion(ret));
-    } catch (e) { return Promise.resolve(0); }
+  /* 端能力注入状态：api 为「setStorage / getStorage 都在」的对象（读写都要用，缺一不可），
+   * miniTool 是原样拿到的端能力对象（不为 null 就说明 bridge 在，只是接口不全），
+   * reason 记缺失在哪一环 —— 判定细节只进 console / ?debug，不上屏。 */
+  function sdkState() {
+    var xhs = null;
+    try { xhs = window.xhs; } catch (e) { return { api: null, miniTool: null, reason: 'no-bridge' }; }
+    if (!xhs) return { api: null, miniTool: null, reason: 'no-bridge' };
+    var api = null;
+    try { api = xhs.miniTool; } catch (e) { api = null; }
+    if (!api) return { api: null, miniTool: null, reason: 'no-api' };
+    if (typeof api.setStorage !== 'function' || typeof api.getStorage !== 'function') {
+      return { api: null, miniTool: api, reason: 'no-storage-api' };
+    }
+    return { api: api, miniTool: api, reason: '' };
   }
   /* 已注入的端能力（setStorage / getStorage 都在才认）；取值本身也吞异常 */
-  function miniToolApi() {
-    var miniTool = null;
-    try { miniTool = window.xhs && window.xhs.miniTool; } catch (e) { return null; }
-    if (!miniTool) return null;
-    if (typeof miniTool.setStorage !== 'function' || typeof miniTool.getStorage !== 'function') return null;
-    return miniTool;
+  function miniToolApi() { return sdkState().api; }
+  /* 缺哪些接口（开发自查用）：setStorage / getStorage / 两者都缺 */
+  function missingApiText(miniTool) {
+    if (!miniTool) return '';
+    var miss = [];
+    if (typeof miniTool.setStorage !== 'function') miss.push('setStorage');
+    if (typeof miniTool.getStorage !== 'function') miss.push('getStorage');
+    return miss.join('、');
+  }
+  /* 端能力对象上都有哪些函数（最多列 6 个）：用来判断 bridge 到底是不是小工具容器那套。
+   * 只提供非 storage 能力（如 postNote / saveImageToPhotosAlbum）时，基本可断定是
+   * 客户端版本没到 9.46.0，容器没把 Storage 这批注入进来。 */
+  function apiNameText(miniTool) {
+    if (!miniTool) return '';
+    var skip = { success: 1, fail: 1, complete: 1 };
+    var names = [];
+    try {
+      for (var k in miniTool) {
+        if (skip[k]) continue;
+        if (typeof miniTool[k] === 'function' && names.length < 6) names.push(k);
+      }
+    } catch (e) { return ''; }
+    return names.length ? names.join('、') + (names.length >= 6 ? '…' : '') : '';
+  }
+  /* 版本号：先同步逐级判空，取不到再异步兜底；两条路都失败按「不支持容器 Storage」处理。
+   * 整段 try/catch —— 取版本号这一步绝不能把后面的启动链带崩。 */
+  function getBuildVersion(api) {
+    var syncBV = 0;
+    try { syncBV = readBuildVersion(window.xhs && window.xhs.launchOptions); } catch (e) { syncBV = 0; }
+    if (syncBV) return Promise.resolve(syncBV);
+    if (!api || typeof api.getLaunchOptions !== 'function') return Promise.resolve(0);
+    return fetchLaunchOptions(api).then(readBuildVersion);
+  }
+  /* getLaunchOptions：取启动参数里的 buildVersion。文档说 Promise 与 success / fail 回调
+   * 都支持，但真机上只认回调的实现确实存在（storage 那套就是因此一律走回调），故两种都给：
+   * 传了回调还返回 Promise 也能接住。再叠 800ms 超时，保证只 resolve 一次、绝不挂住启动链。 */
+  function fetchLaunchOptions(api) {
+    return new Promise(function (resolve) {
+      var done = false;
+      var timer = setTimeout(function () { finish(null); }, XHS_CALL_TIMEOUT);
+      function finish(launchOptions) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve(launchOptions || null);
+      }
+      try {
+        var ret = api.getLaunchOptions({
+          success: function (launchOptions) { finish(launchOptions); },
+          fail: function () { finish(null); }
+        });
+        if (ret && typeof ret.then === 'function') {
+          ret.then(function (launchOptions) { finish(launchOptions); }, function () { finish(null); });
+        } else if (ret) {
+          finish(ret);                                     /* 老 SDK 也可能直接同步返回 */
+        }
+      } catch (e) { finish(null); }
+    });
+  }
+  /* 等端能力注入：官方没承诺 window.xhs 的注入时机（§3.6 明确「都可能缺失」），
+   * 首屏脚本跑得比注入早是正常的，所以「现在没看到」不等于「不支持」——按 100ms 轮询等到
+   * INJECT_WAIT 为止；waitMs 为 0 时只看当前状态，不引入任何等待。 */
+  function waitForInjection(waitMs) {
+    return new Promise(function (resolve) {
+      var st = sdkState();
+      if (st.api || !waitMs) { resolve(st); return; }
+      var waited = 0;
+      var timer = setInterval(function () {
+        var cur = sdkState();
+        waited += INJECT_POLL;
+        if (cur.api || waited >= waitMs) { clearInterval(timer); resolve(cur); }
+      }, INJECT_POLL);
+    });
   }
   /* 端能力调用：Promise<{ ok, res }>。传 success / fail 回调（不传回调的 Promise
    * 用法在旧容器上不可靠），再叠一层超时兜底，保证任何情况下只 resolve 一次。 */
@@ -126,14 +200,93 @@
   }
 
   /* 初始化：判定容器通道（版本 + 注入）→ 后台对齐两侧，并探测容器用量。
-   * 对齐与用量都放后台跑、不阻塞首屏：读数据本身已带镜像兜底。 */
+   * 分两条路，区别只在「SDK 现在在不在」：
+   *   快路径（已注入）：立即判定，行为与不引入等待时完全一致，不给首屏加延迟；
+   *   慢路径（还没注入）：先用镜像通道起步（读数据本就有镜像兜底），后台等它最多 INJECT_WAIT，
+   *                       等到就把通道切过去并补做对齐 —— SDK 迟到也能自愈，不必重开小工具。 */
   function storageInit() {
-    return getBuildVersion().then(function (buildVersion) {
-      containerUsable = !!miniToolApi() && getClientVersion(buildVersion) >= STORAGE_MIN_CLIENT_VERSION;
-      if (!containerUsable) return null;
+    var st = sdkState();
+    if (!st.api) {
+      containerReason = st.reason;
+      lateDetect();
+      return Promise.resolve(false);
+    }
+    return getBuildVersion(st.api).then(function (buildVersion) {
+      containerBuildVersion = buildVersion;
+      if (getClientVersion(buildVersion) < STORAGE_MIN_CLIENT_VERSION) {
+        containerUsable = false;
+        containerReason = buildVersion ? 'old-client' : 'no-version';
+        return false;
+      }
+      containerUsable = true;
+      containerReason = '';
       syncChannels();
       return probeUsage();
     });
+  }
+  /* SDK 迟到：等到注入 → 判定 → 对齐两侧 → 刷新设置面板里的通道说明。 */
+  function lateDetect() {
+    detectContainer(INJECT_WAIT).then(function (usable) {
+      if (usable) alignChannels();
+      renderStorageNote();
+    }, function () { renderStorageNote(); });
+  }
+  /* 重新判定容器通道（可反复调用：SDK 迟到、打开设置时按需重探）。
+   * 只有真判定成功才做两侧对齐与用量探测，返回 Promise<boolean>。 */
+  function detectContainer(waitMs) {
+    if (detecting) return detecting;
+    detecting = waitForInjection(waitMs).then(function (st) {
+      if (!st.api) {
+        containerUsable = false;
+        containerReason = st.reason;
+        /* bridge 在、只是接口不齐时，仍试着把版本号读出来：能读到 9.46.0 以上就是
+         * 「注入了但这批接口没给」，读不到或版本偏低则多半是客户端根本没到版本门槛。
+         * 注意此处用的是 st.miniTool（不要求含 storage），getLaunchOptions 通常先于 storage 就位。 */
+        containerApiMissing = missingApiText(st.miniTool);
+        containerApiList = apiNameText(st.miniTool);
+        return getBuildVersion(st.miniTool).then(function (buildVersion) {
+          containerBuildVersion = buildVersion;
+          return false;
+        });
+      }
+      return getBuildVersion(st.api).then(function (buildVersion) {
+        containerBuildVersion = buildVersion;
+        if (getClientVersion(buildVersion) < STORAGE_MIN_CLIENT_VERSION) {
+          containerUsable = false;
+          containerReason = buildVersion ? 'old-client' : 'no-version';
+          return false;
+        }
+        containerUsable = true;
+        containerReason = '';
+        return alignChannels().then(function () { return true; });
+      });
+    });
+    detecting.then(function () { detecting = null; }, function () {
+      containerUsable = false;
+      containerReason = 'error';
+      detecting = null;
+    });
+    return detecting;
+  }
+  /* 容器通道就绪后的收尾：探测用量 + 两侧对齐。
+   * 启动后用户已经写过数据（recordsDirty）就不能再做「容器优先」的对齐——此刻内存才是最新的，
+   * 让容器回灌会把刚记的心情冲掉；改为一律把内存 / 镜像的最新值上推给容器。
+   * 没写过才走常规对齐（容器为准），并回读一次容器真源补上首屏可能缺失的数据。 */
+  function alignChannels() {
+    var tasks = [probeUsage()];
+    if (recordsDirty) {
+      tasks.push(pushChannels());
+    } else {
+      tasks.push(syncChannels().then(function () { return reloadFromContainer(); }));
+    }
+    return Promise.all(tasks);
+  }
+  /* 把本地最新值上推给容器（不回读、不回灌）：用户已经写过数据时用 */
+  function pushChannels() {
+    var tasks = [xhsCall('setStorage', { key: KEY_RECORDS, data: records })];
+    var theme = lsGet(KEY_THEME);
+    if (theme !== null) tasks.push(xhsCall('setStorage', { key: KEY_THEME, data: theme }));
+    return Promise.all(tasks);
   }
   /* 容器与镜像互相对齐：容器有本地没有 → 补本地；本地有容器没有 → 迁进容器；
    * 都有以容器为准（升级到端能力后容器才是真源）。不删除任何一份——两侧互为兜底。 */
@@ -166,13 +319,44 @@
       }
     });
   }
-  /* 设置面板里的数据通道说明（真机自查用） */
+  /* 未启用容器通道的原因码 → 人话。只给开发看：默认不上屏，URL 带 ?debug 或看 console。
+   * 缺 Storage 接口时补上「缺哪个 + 已经注入了哪些」：这批接口随客户端 9.46.0 才注入，
+   * 若端能力里有 postNote 之类的别的接口、偏偏没有 setStorage，基本就是客户端版本没到。 */
+  var REASON_TEXT = {
+    probing: '正在检测端能力',
+    'no-bridge': '未注入端能力 SDK（window.xhs 不存在）',
+    'no-api': '端能力对象缺失（window.xhs.miniTool 不存在）',
+    'no-storage-api': '端能力里没有 Storage 这批接口（随客户端 9.46.0 注入）',
+    'no-version': '未取到客户端版本号（buildVersion 缺失）',
+    'old-client': '客户端版本低于 9.46.0',
+    error: '端能力调用异常'
+  };
+  function reasonText() {
+    if (containerReason !== 'no-storage-api') return REASON_TEXT[containerReason] || REASON_TEXT.probing;
+    return '端能力里没有 ' + (containerApiMissing || 'setStorage') + '（随客户端 9.46.0 注入）';
+  }
+  /* 设置面板里的数据通道说明：只说当前走哪条通道，不解释原因（用户不需要知道这些）。 */
   function storageSummary() {
     if (!containerUsable) return '数据通道：localStorage（降级）';
     if (storageUsage && typeof storageUsage.currentSize !== 'undefined') {
       return '数据通道：容器 Storage · ' + storageUsage.currentSize + ' / ' + (storageUsage.limitSize || 10240) + ' KB';
     }
     return '数据通道：容器 Storage';
+  }
+  /* 排查开关：URL 带 ?debug（或 #debug）时把判定细节也上屏；默认只打 console，
+   * 用户侧永远只看到「走的哪条通道」这一行。 */
+  var DEBUG = false;
+  try {
+    DEBUG = /[?&#]debug\b/.test(String(window.location.search || '') + String(window.location.hash || ''));
+  } catch (e) { DEBUG = false; }
+  /* 判定细节（开发自查用）：为什么走这条通道、真机版本号、端能力里缺什么 / 有什么 */
+  function storageDebugDetail() {
+    var parts = [containerUsable ? '判定：容器通道可用' : '判定：未启用容器通道 · ' + reasonText()];
+    if (containerBuildVersion) parts.push('buildVersion ' + containerBuildVersion);
+    if (containerApiMissing) parts.push('缺接口 ' + containerApiMissing);
+    if (containerApiList) parts.push('已注入端能力 ' + containerApiList);
+    if (storageUsage) parts.push('用量 ' + storageUsage.currentSize + '/' + (storageUsage.limitSize || 10240) + ' KB');
+    return '| ' + parts.join('；');
   }
 
   /* ---------- 日期工具 ---------- */
@@ -677,7 +861,11 @@
   $('btnDayCancel').addEventListener('click', closeSheets);
 
   /* ---------- 弹层：设置 ---------- */
-  $('btnSettings').addEventListener('click', function () { renderStorageNote(); openSheet(setSheet); });
+  $('btnSettings').addEventListener('click', function () {
+    renderStorageNote();
+    openSheet(setSheet);
+    if (!containerUsable) probeOnDemand();      /* 未启用时重探一次：SDK 迟到也能显示成容器通道 */
+  });
   $('btnSetCancel').addEventListener('click', closeSheets);
   overlay.addEventListener('click', closeSheets);
 
@@ -784,14 +972,36 @@
 
   /* 写 records：两条通道都写，只有都失败才提示（§3.7 要求调用方处理 false） */
   function persistRecords() {
+    recordsDirty = true;                       /* 用户写过：内存即最新，容器通道迟到就绪时不许回灌 */
     return storageSet(KEY_RECORDS, records).then(function (ok) {
       if (!ok) toast('保存失败，下次打开可能丢失');
     });
   }
-  /* 设置面板里的数据通道说明：打开设置时刷新一次，能看到真机实际走的通道 */
+  /* 数据通道说明：用户侧只写「走的哪条通道」；判定细节任何情况下都留在 console（开发自查），
+   * 只有 URL 带 ?debug 时才一并上屏。 */
   function renderStorageNote() {
+    var base = storageSummary();
+    var detail = storageDebugDetail();
+    try { console.log('[storage] ' + base + detail); } catch (e) {}
     var el = $('storageNote');
-    if (el) el.textContent = storageSummary();
+    if (el) el.textContent = DEBUG ? base + ' ' + detail : base;
+  }
+  /* 打开设置时补一次判定（最多等注入 300ms）：别让「降级」只是首屏那一瞬间的结论 */
+  function probeOnDemand() {
+    detectContainer(300).then(renderStorageNote, renderStorageNote);
+  }
+  /* 容器通道迟到就绪后回读一次：容器才是真源（浏览器自带存储不保证持续有效，镜像可能被清过）。
+   * 只在用户还没写过数据时被 alignChannels 调用。 */
+  function reloadFromContainer() {
+    return storageGet(KEY_RECORDS).then(function (recData) {
+      var next = recData ? normalizeRecords(recData) : null;
+      return storageGet(KEY_THEME).then(function (themeLoaded) {
+        if (next) records = next;
+        applyTheme(themeLoaded || DEFAULT_THEME);
+        renderAll();
+        renderStorageNote();
+      });
+    });
   }
 
   /* ---------- 启动：异步加载存储后渲染 ----------

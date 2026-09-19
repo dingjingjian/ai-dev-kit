@@ -81,25 +81,76 @@
    *   2) 写：镜像通道同步先行、容器异步跟上，任一成功即算成功，两条都失败才回报失败（§3.7 要求）；
    *   3) 读：容器优先，缺失 / 失败退回镜像；容器有而镜像没有则回填，两侧互为兜底；
    *   4) 启动：并发水合（每个 key 各自 800ms 超时，整体不拖长开机），两侧缺哪边补哪边；
+   *      SDK 注入晚于首屏脚本时先用镜像起步，后台按 INJECT_WAIT 轮询等它，等到即切通道；
    *   5) 端能力一律 success / fail 回调 + 800ms 超时兜底（旧容器上 Promise 版不可靠，也不能挂住调用方）；
    *   6) 版本号：buildVersion 抹掉末 3 位，同步取值 → 异步兜底，取不到按「不支持」处理，取值过程绝不抛错；
-   *   7) 通道可见：关于本机显示当前数据通道，容器写入失败也在那里如实说明。
+   *   7) 通道可见：关于本机只报当前通道与用量（不解释判定原因）；为什么走这条通道、真机
+   *      buildVersion、端能力缺什么，留在 console，URL 带 ?debug 时才一并上屏。
    * 容器 API 是异步的，故启动时一次性水合进内存缓存（storeCache），此后读写全同步。 */
   var STORE_PREFIX = 'aios_';
   var STORAGE_MIN_CLIENT_VERSION = 9460;   /* 客户端 9.46.0（buildVersion 末 3 位为编译序号，需忽略） */
   var XHS_CALL_TIMEOUT = 800;              /* 端能力超时即当失败，由镜像通道兜住 */
+  var INJECT_WAIT = 1500;                  /* 等 SDK 注入的上限，官方未承诺注入时机 */
+  var INJECT_POLL = 100;                   /* 等注入时的轮询间隔 */
   var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages'];
 
   var storeCache = {};        /* 短 key -> 字符串值 */
   var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
   var storeHealthy = true;    /* 容器通道写入是否一直成功（失败则「关于本机」如实说明） */
   var storeUsage = null;      /* { currentSize, limitSize }，单位 KB（getStorageInfo） */
+  var storeReason = 'probing';      /* 未启用容器通道的原因码，仅 console / ?debug 输出 */
+  var storeBuildVersion = 0;        /* 真机上取到的原始 buildVersion，排查版本门槛用 */
+  var storeApiMissing = '';         /* 端能力里缺哪些接口（setStorage / getStorage），排查用 */
+  var storeApiList = '';            /* 端能力里实际有哪些函数，排查 bridge 类型用 */
+  var storeDirty = false;           /* 用户是否在开机流程之后改过数据（改过的内存最新，不许容器回灌） */
+  var storeReady = false;           /* 开机流程（水合 + 开机动画）是否走完：走完才有「用户写入」可言 */
+  var storeDetecting = false;       /* 判定进行中，避免并发重复水合 */
+  var STORE_DEBUG = false;          /* URL 带 ?debug / #debug 时把判定细节也上屏 */
+  try {
+    STORE_DEBUG = /[?&#]debug\b/.test(String(global.location.search || '') + String(global.location.hash || ''));
+  } catch (e) { STORE_DEBUG = false; }
 
   function miniToolApi() {
     try {
       var xhs = global.xhs;
       return (xhs && xhs.miniTool) || null;
     } catch (e) { return null; }
+  }
+  /* 端能力注入状态：api 为「setStorage / getStorage 都在」的对象，reason 记缺失在哪一环。
+   * 判定细节只进 console / ?debug，用户侧永远只看到通道名。 */
+  function sdkState() {
+    var api = miniToolApi();
+    if (!api) {
+      var hasXhs = false;
+      try { hasXhs = !!global.xhs; } catch (e) { hasXhs = false; }
+      return { api: null, miniTool: null, reason: hasXhs ? 'no-api' : 'no-bridge' };
+    }
+    if (typeof api.setStorage !== 'function' || typeof api.getStorage !== 'function') {
+      return { api: null, miniTool: api, reason: 'no-storage-api' };
+    }
+    return { api: api, miniTool: api, reason: '' };
+  }
+  /* 缺哪些接口（开发自查用）：setStorage / getStorage / 两者都缺 */
+  function missingApiText(miniTool) {
+    if (!miniTool) { return ''; }
+    var miss = [];
+    if (typeof miniTool.setStorage !== 'function') { miss.push('setStorage'); }
+    if (typeof miniTool.getStorage !== 'function') { miss.push('getStorage'); }
+    return miss.join('、');
+  }
+  /* 端能力对象上都有哪些函数（最多列 6 个）：只提供 postNote 之类、偏偏没有 storage 时，
+   * 基本可断定是客户端版本没到 9.46.0（这批接口随该版本才注入）。 */
+  function apiNameText(miniTool) {
+    if (!miniTool) { return ''; }
+    var skip = { success: 1, fail: 1, complete: 1 };
+    var names = [];
+    try {
+      for (var k in miniTool) {
+        if (skip[k]) { continue; }
+        if (typeof miniTool[k] === 'function' && names.length < 6) { names.push(k); }
+      }
+    } catch (e) { return ''; }
+    return names.length ? names.join('、') + (names.length >= 6 ? '…' : '') : '';
   }
 
   /* 9462004 -> 9.46.2 -> 9462：末 3 位编译序号必须先抹掉 */
@@ -109,23 +160,41 @@
   }
   function getClientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
 
-  /* 版本号：先同步取（逐级判空），取不到再异步兜底；两条路都失败按「不支持」处理 */
-  function getBuildVersion(cb) {
+  /* 版本号：先同步取（逐级判空），取不到再异步兜底；两条路都失败按「不支持」处理。
+   * getLaunchOptions 两种形态都给（success / fail 回调 + Promise 返回值），并叠 800ms 超时 ——
+   * 文档说两种形态都支持，但真机上只认回调的实现确实存在，且取值绝不能挂住启动。 */
+  function getBuildVersion(cb, api) {
     var sync = 0;
     try { sync = readBuildVersion(global.xhs && global.xhs.launchOptions); } catch (e) { sync = 0; }
     if (sync) { cb(sync); return; }
-    var api = miniToolApi();
-    if (!api || typeof api.getLaunchOptions !== 'function') { cb(0); return; }
+    var target = api || miniToolApi();
+    if (!target || typeof target.getLaunchOptions !== 'function') { cb(0); return; }
     var done = false;
-    function finish(v) { if (done) { return; } done = true; cb(v); }
+    var timer = global.setTimeout(function () { finish(0); }, XHS_CALL_TIMEOUT);
+    function finish(v) { if (done) { return; } done = true; global.clearTimeout(timer); cb(v); }
     try {
-      var ret = api.getLaunchOptions();
+      var ret = target.getLaunchOptions({
+        success: function (lo) { finish(readBuildVersion(lo)); },
+        fail: function () { finish(0); }
+      });
       if (ret && typeof ret.then === 'function') {
         ret.then(function (lo) { finish(readBuildVersion(lo)); }, function () { finish(0); });
-      } else {
-        finish(readBuildVersion(ret));
+      } else if (ret) {
+        finish(readBuildVersion(ret));                     /* 老 SDK 也可能直接同步返回 */
       }
     } catch (e) { finish(0); }
+  }
+  /* 等端能力注入：官方没承诺 window.xhs 的注入时机（§3.6 明确「都可能缺失」），
+   * 首屏脚本跑得比注入早是正常的 —— 按 100ms 轮询等到 INJECT_WAIT 为止。 */
+  function waitInjection(waitMs, cb) {
+    var st = sdkState();
+    if (st.api || !waitMs) { cb(st); return; }
+    var waited = 0;
+    var timer = global.setInterval(function () {
+      var cur = sdkState();
+      waited += INJECT_POLL;
+      if (cur.api || waited >= waitMs) { global.clearInterval(timer); cb(cur); }
+    }, INJECT_POLL);
   }
 
   /* 容器端能力统一走 success/fail 回调（Promise 版在旧容器上不可靠），并加超时兜底：
@@ -157,61 +226,149 @@
   }
 
   /* 启动水合：容器 Storage 优先、localStorage 兜底，两侧缺哪边补哪边（升级/降级一致性）。
-   * 容器不可用或版本不足时只用镜像通道，流程照常继续。
-   * 全部 key 的 getStorage 并发发起（各自 800ms 超时），整体最坏也就 ~800ms，不拖长开机。 */
+   * 分两条路，区别只在「SDK 现在在不在」：
+   *   快路径（已注入）：立即判定并水合，行为与不引入等待时完全一致，不给开机加延迟；
+   *   慢路径（还没注入）：先用镜像起步（cb 立刻回调，不拖开机动画），后台等它最多 INJECT_WAIT，
+   *                       等到就把通道切过去并补做对齐 —— SDK 迟到也能自愈，不必重开小工具。 */
   function hydrateStore(cb) {
     var i, lv;
     for (i = 0; i < STORE_KEYS.length; i++) {
       lv = lsGet(STORE_KEYS[i]);
       if (lv !== null) { storeCache[STORE_KEYS[i]] = lv; }
     }
+    var st = sdkState();
+    if (!st.api) {
+      storeBackend = 'local';
+      storeReason = st.reason;
+      storeApiMissing = missingApiText(st.miniTool);
+      storeApiList = apiNameText(st.miniTool);
+      logStoreState('启动');
+      cb();
+      lateDetectStore();
+      return;
+    }
     getBuildVersion(function (bv) {
-      var api = miniToolApi();
-      var usable = getClientVersion(bv) >= STORAGE_MIN_CLIENT_VERSION && api &&
-                   typeof api.getStorage === 'function' && typeof api.setStorage === 'function';
-      if (!usable) { storeBackend = 'local'; cb(); return; }
+      storeBuildVersion = bv;
+      if (getClientVersion(bv) < STORAGE_MIN_CLIENT_VERSION) {
+        storeBackend = 'local';
+        storeReason = bv ? 'old-client' : 'no-version';
+        logStoreState('启动');
+        cb();
+        return;
+      }
       storeBackend = 'xhs';
-      var toLocal = [], toXhs = [], pending = STORE_KEYS.length;
-      function settled() {
-        pending--;
-        if (pending === 0) { flush(); }
-      }
-      function readOne(key) {
-        xhsCall('getStorage', { key: STORE_PREFIX + key }, function (got, res) {
-          var data = (got && res) ? res.data : null;
-          if (data !== undefined && data !== null) {
-            storeCache[key] = (typeof data === 'string') ? data : JSON.stringify(data);
-            if (lsGet(key) === null) { toLocal.push(key); }     /* 容器有、镜像没有：补下去 */
-          } else if (storeCache[key] !== undefined) {
-            toXhs.push(key);                                    /* 镜像有、容器没有：迁上来 */
-          }
-          settled();
+      storeReason = '';
+      hydrateFromContainer(function () { logStoreState('启动'); cb(); });
+    }, st.api);
+  }
+  /* 容器通道水合：容器 Storage 优先、localStorage 兜底，缺哪边补哪边（升级/降级一致性）。
+   * 全部 key 的 getStorage 并发发起（各自 800ms 超时），整体最坏也就 ~800ms，不拖长开机。 */
+  function hydrateFromContainer(cb) {
+    var i;
+    var toLocal = [], toXhs = [], pending = STORE_KEYS.length;
+    function settled() {
+      pending--;
+      if (pending === 0) { flush(); }
+    }
+    function readOne(key) {
+      xhsCall('getStorage', { key: STORE_PREFIX + key }, function (got, res) {
+        var data = (got && res) ? res.data : null;
+        if (data !== undefined && data !== null) {
+          storeCache[key] = (typeof data === 'string') ? data : JSON.stringify(data);
+          if (lsGet(key) === null) { toLocal.push(key); }     /* 容器有、镜像没有：补下去 */
+        } else if (storeCache[key] !== undefined) {
+          toXhs.push(key);                                    /* 镜像有、容器没有：迁上来 */
+        }
+        settled();
+      });
+    }
+    for (i = 0; i < STORE_KEYS.length; i++) { readOne(STORE_KEYS[i]); }
+    function flush() {
+      var n;
+      for (n = 0; n < toLocal.length; n++) { lsSet(toLocal[n], storeCache[toLocal[n]]); }
+      var j = 0;
+      (function step() {
+        if (j >= toXhs.length) { probeStoreUsage(cb); return; }
+        var key = toXhs[j];
+        j++;
+        xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function (ok) {
+          if (!ok) { storeHealthy = false; }
+          step();
         });
+      })();
+    }
+  }
+  /* 容器用量（仅容器通道提供） */
+  function probeStoreUsage(cb) {
+    xhsCall('getStorageInfo', {}, function (got, res) {
+      if (got && res && typeof res.currentSize !== 'undefined') {
+        storeUsage = { currentSize: res.currentSize, limitSize: res.limitSize };
       }
-      for (i = 0; i < STORE_KEYS.length; i++) { readOne(STORE_KEYS[i]); }
-      function flush() {
-        var n;
-        for (n = 0; n < toLocal.length; n++) { lsSet(toLocal[n], storeCache[toLocal[n]]); }
-        var j = 0;
-        (function step() {
-          if (j >= toXhs.length) { usage(); return; }
-          var key = toXhs[j];
-          j++;
-          xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function (ok) {
-            if (!ok) { storeHealthy = false; }
-            step();
-          });
-        })();
-      }
-      function usage() {
-        xhsCall('getStorageInfo', {}, function (got, res) {
-          if (got && res && typeof res.currentSize !== 'undefined') {
-            storeUsage = { currentSize: res.currentSize, limitSize: res.limitSize };
-          }
-          cb();
-        });
-      }
+      cb();
     });
+  }
+  /* SDK 迟到：等到注入 → 判定 → 对齐 → 把界面读到的值重放一次（主题 / 设置页读的都是缓存） */
+  function lateDetectStore() {
+    detectStore(INJECT_WAIT, function (usable) {
+      if (!usable) { return; }
+      loadTheme();
+      applyTheme();
+      syncSettingsUI();
+    });
+  }
+  /* 重新判定容器通道（可反复调用）。成功时做一次对齐：
+   * 用户已经写过数据（storeDirty）就只把内存最新值上推容器，绝不让容器回灌旧值；
+   * 没写过才走常规水合（容器为准），并让界面重放一次。 */
+  function detectStore(waitMs, cb) {
+    if (storeDetecting) { return; }
+    storeDetecting = true;
+    waitInjection(waitMs, function (st) {
+      if (!st.api) {
+        storeBackend = 'local';
+        storeReason = st.reason;
+        storeApiMissing = missingApiText(st.miniTool);
+        storeApiList = apiNameText(st.miniTool);
+        getBuildVersion(function (bv) {
+          storeBuildVersion = bv;
+          storeDetecting = false;
+          logStoreState('重判');
+          cb(false);
+        }, st.miniTool);
+        return;
+      }
+      getBuildVersion(function (bv) {
+        storeBuildVersion = bv;
+        if (getClientVersion(bv) < STORAGE_MIN_CLIENT_VERSION) {
+          storeBackend = 'local';
+          storeReason = bv ? 'old-client' : 'no-version';
+          storeDetecting = false;
+          logStoreState('重判');
+          cb(false);
+          return;
+        }
+        storeBackend = 'xhs';
+        storeReason = '';
+        var finish = function () { storeDetecting = false; logStoreState('重判'); cb(true); };
+        if (storeDirty) { pushStore(finish); } else { hydrateFromContainer(finish); }
+      }, st.api);
+    });
+  }
+  /* 把内存里的最新值全量上推容器（不回读、不回灌）：用户已经写过数据时用 */
+  function pushStore(cb) {
+    var keys = [], k;
+    for (k in storeCache) {
+      if (Object.prototype.hasOwnProperty.call(storeCache, k)) { keys.push(k); }
+    }
+    var i = 0;
+    (function step() {
+      if (i >= keys.length) { probeStoreUsage(cb); return; }
+      var key = keys[i];
+      i++;
+      xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function (ok) {
+        if (!ok) { storeHealthy = false; }
+        step();
+      });
+    })();
   }
 
   /* 写入：内存 + 镜像通道 + 容器通道。镜像先行（同步、可靠），容器写失败由镜像兜住，
@@ -219,6 +376,9 @@
   function store(key, val) {
     var s = String(val);
     storeCache[key] = s;
+    /* 开机阶段自己也写（applyTheme 落 mode / wall），那不是「用户改过」——只有开机流程
+     * 走完之后的写入才算，否则迟到判定会把开机默认值反推上去盖掉容器里的真值。 */
+    if (storeReady) { storeDirty = true; }
     var localOk = lsSet(key, s);
     if (storeBackend === 'xhs') {
       xhsCall('setStorage', { key: STORE_PREFIX + key, data: s }, function (ok) {
@@ -234,14 +394,47 @@
   }
 
   /* 关于本机「存储方式」：只报当前通道（与用量），不标「降级」——是哪个通道就写哪个；
-   * 只有容器通道**写入失败**时才额外说明已回落（§5 要求如实，且那是真的出了状况）。 */
+   * 只有容器通道**写入失败**时才额外说明已回落（§5 要求如实，且那是真的出了状况）。
+   * 判定原因属于开发自查信息，默认不上屏，只在 console 里留一份（见 logStoreState）。 */
   function storeSummary() {
-    if (storeBackend !== 'xhs') { return 'localStorage'; }
-    if (!storeHealthy) { return '容器 Storage 写入失败 · 已回落 localStorage'; }
-    if (storeUsage && typeof storeUsage.currentSize !== 'undefined') {
-      return '容器 Storage · ' + storeUsage.currentSize + ' / ' + (storeUsage.limitSize || 10240) + ' KB';
-    }
-    return '容器 Storage';
+    var base;
+    if (storeBackend !== 'xhs') { base = 'localStorage'; }
+    else if (!storeHealthy) { base = '容器 Storage 写入失败 · 已回落 localStorage'; }
+    else if (storeUsage && typeof storeUsage.currentSize !== 'undefined') {
+      base = '容器 Storage · ' + storeUsage.currentSize + ' / ' + (storeUsage.limitSize || 10240) + ' KB';
+    } else { base = '容器 Storage'; }
+    return STORE_DEBUG ? base + ' ' + storeDebugDetail() : base;
+  }
+  /* 未启用容器通道的原因码 → 人话。只给开发看：默认不上屏，URL 带 ?debug 或看 console。
+   * 缺 Storage 接口时补上「缺哪个 + 已经注入了哪些」：这批接口随客户端 9.46.0 才注入，
+   * 若端能力里有 postNote 之类的别的接口、偏偏没有 setStorage，基本就是客户端版本没到。 */
+  var STORE_REASON_TEXT = {
+    probing: '正在检测端能力',
+    'no-bridge': '未注入端能力 SDK（window.xhs 不存在）',
+    'no-api': '端能力对象缺失（window.xhs.miniTool 不存在）',
+    'no-storage-api': '端能力里没有 Storage 这批接口（随客户端 9.46.0 注入）',
+    'no-version': '未取到客户端版本号（buildVersion 缺失）',
+    'old-client': '客户端版本低于 9.46.0',
+    error: '端能力调用异常'
+  };
+  function reasonText() {
+    if (storeReason !== 'no-storage-api') { return STORE_REASON_TEXT[storeReason] || STORE_REASON_TEXT.probing; }
+    return '端能力里没有 ' + (storeApiMissing || 'setStorage') + '（随客户端 9.46.0 注入）';
+  }
+  /* 判定细节（开发自查用）：为什么走这条通道、真机版本号、端能力里缺什么 / 有什么 */
+  function storeDebugDetail() {
+    var parts = [storeBackend === 'xhs' ? '判定：容器通道可用' : '判定：未启用容器通道 · ' + reasonText()];
+    if (storeBuildVersion) { parts.push('buildVersion ' + storeBuildVersion); }
+    if (storeApiMissing) { parts.push('缺接口 ' + storeApiMissing); }
+    if (storeApiList) { parts.push('已注入端能力 ' + storeApiList); }
+    if (storeUsage) { parts.push('用量 ' + storeUsage.currentSize + '/' + (storeUsage.limitSize || 10240) + ' KB'); }
+    return '| ' + parts.join('；');
+  }
+  /* 判定结果留一份到 console（开发自查用；用户侧看不到） */
+  function logStoreState(where) {
+    try {
+      global.console.log('[storage] ' + where + '：' + storeSummary() + (STORE_DEBUG ? '' : storeDebugDetail()));
+    } catch (e) { /* 无 console 就算了 */ }
   }
 
   /* ---------- 系统音效（DESIGN.md §4.11）：Web Audio 实时合成，零音频文件 ----------
@@ -760,6 +953,19 @@
     /* 设置页是懒构建的，而 syncSettingsUI 只在主题/音效变化时才被调用 ——
      * 不在这里同步一次，深色开关与音效开关首次上屏时都会显示成「关」。 */
     syncSettingsUI();
+    /* 每次进设置页补一次存储判定：SDK 注入比 INJECT_WAIT 还晚时，用户翻到这里就能自愈，
+     * 免得「关于本机」一直停在 localStorage 却看不出为什么。 */
+    v.onShow = function () {
+      syncSettingsUI();
+      if (storeBackend !== 'xhs') {
+        detectStore(300, function (usable) {
+          if (!usable) { return; }
+          loadTheme();
+          applyTheme();
+          syncSettingsUI();
+        });
+      }
+    };
   }
 
   function syncSettingsUI() {
@@ -3173,6 +3379,7 @@
   }
 
   function startUI() {
+    storeReady = true;   /* 开机流程（水合 + 开机动画）到此结束，此后 store() 的写入才算「用户改过」 */
     buildHome();
     buildRecents();
     sfxBind();   /* 系统音效的唯一入口：装好 click 委托，此后所有交互自动出声 */
