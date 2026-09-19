@@ -717,11 +717,35 @@ body[data-mode="dark"] .store-mini{
 /* 计算器页：固定不滚动（真机计算器观感）。显示卡不参与压缩（表达式/大数不裁切、
  * 按键不跳动），空间不足全部由键盘行高消化。 */
 .pbody.calc-body{ overflow:hidden; flex-shrink:0; }
+/* 极限兜底：键盘压缩有下限（见 .pfoot.calc-foot 的 min-height），净高真的装不下时
+ * （横屏 / 被压扁的容器）整页可纵向滚动 —— 这是「=」键可达的最后一道保险。
+ * 正常净高下内容装得下，不出现滚动条（设计口径见 DESIGN.md §4.4）。 */
+.view-calc{ overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain; }
 /* 净高不足的小屏：指标条与显示卡紧凑化，把高度让给键盘（行高不小于 ~40px） */
 @media (max-height:700px){
   .calc-body .gstats{ padding:8px 12px; margin-bottom:8px; }
   .calc-body .calc-display{ padding:12px 18px; }
   .calc-body .calc-shown{ font-size:32px; }
+}
+/* 极矮净高：固定件（页头 / 指标条 / 显示卡 / 提示行 / 页脚内边距 / 键距）一起收紧，
+ * 省下的高度全给键盘。阈值按「容器内净高」取：容器视口比纯浏览器矮约 120px
+ * （宿主顶栏 + 金刚键栏），故 660px 视口 ≈ 容器内 540px 净高。 */
+@media (max-height:660px){
+  .view-calc .phead{ height:42px; }
+  .view-calc .phead h1{ font-size:16px; }
+  .calc-body .gstats{ padding:4px 10px; margin-bottom:6px; }
+  .calc-body .gstat-main .v{ font-size:20px; }
+  .calc-body .gstat-sub .si{ font-size:10px; margin-left:8px; }
+  .calc-body .calc-display{ padding:8px 14px; margin-bottom:8px; }
+  .calc-body .calc-expr{ font-size:11px; line-height:14px; min-height:14px; }
+  .calc-body .calc-shown{ font-size:26px; margin-top:4px; }
+  .calc-body .calc-feedback{ margin-top:6px; font-size:12px; line-height:16px; min-height:16px; }
+  .calc-body .calc-feedback.ask{ font-size:13px; }
+  /* 只收纵向内边距：左右仍是 --foot-px-l/-r，判定覆盖层与键盘同宽对齐的约定不变 */
+  .pfoot.calc-foot{ padding:6px var(--foot-px-r) 8px var(--foot-px-l); }
+  .keypad{ grid-gap:6px; }
+  .key{ font-size:18px; }
+  .key.eq{ font-size:19px; }
 }
 .calc-expr{ font-size:13px; line-height:18px; min-height:18px; color:var(--ink-dim); letter-spacing:.3px; }
 .calc-shown{
@@ -741,11 +765,14 @@ body[data-mode="dark"] .store-mini{
 .judge-ok{ background:linear-gradient(135deg,#2BB673,#1FA971); }
 .judge-no{ background:linear-gradient(135deg,#E86A6A,#E05252); }
 /* 计算器页脚：键盘纵向可压缩（小屏唯一让高度的部件）；判定时「对/错」覆盖在键盘原位，
- * 页脚高度全程不变 —— 按 = 前后页面不跳动。 */
+ * 页脚高度全程不变 —— 按 = 前后页面不跳动。
+ * 压缩下限 202px = 键盘行高下限 180 + 页脚内边距 22（紧凑档内边距更小，行高反而略高）：
+ * 到此为止不再压缩，装不下时由 .view-calc 的整页滚动兜底 —— 绝不能把键盘压成 0 高度
+ * 溢出屏外（回归：矮屏 / 横屏下计算器「=」键看不见也点不到）。 */
 .pfoot.calc-foot{
   position:relative;
   display:flex; flex-direction:column;
-  flex:0 1 auto; min-height:0;
+  flex:0 1 auto; min-height:202px;
 }
 /* 覆盖层左右按页脚内缩量内收，与键盘同宽（绝不贴屏边） */
 .calc-judge{ position:absolute; left:var(--foot-px-l); right:var(--foot-px-r); top:50%; transform:translateY(-50%); }
@@ -908,7 +935,9 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 
 /* 计算器键盘（v1 还原：用户自己按表达式）
  * 行高上限 64px（宽松屏与 v1 一致），空间不足时随页脚一起被压缩 —— 键盘永远贴底、
- * 整页不产生滚动。按键高度由行高决定（height:auto + 网格拉伸），不再写死 64px。 */
+ * 整页不产生滚动。按键高度由行高决定（height:auto + 网格拉伸），不再写死 64px。
+ * 压缩下限由页脚给出（.calc-foot 的 min-height）：行高最多压到 ≈28px/行，
+ * 再矮就整页滚动 —— 网格行被压到 0 时行距仍在，内容会溢出页脚、「=」会被推出屏外。 */
 .keypad{
   display:grid; grid-template-columns:repeat(4,1fr); grid-gap:10px;
   grid-auto-rows:minmax(0,64px);
@@ -2395,7 +2424,8 @@ JS = r"""
   }
 
   function buildCalc() {
-    var v = el('div', 'view hidden');
+    /* view-calc：计算器页专属修饰 —— 净高不足时允许整页滚动（见 CSS，键盘行高下限的兜底） */
+    var v = el('div', 'view view-calc hidden');
     v.appendChild(el('div', 'phead', '<h1>计算器</h1>'));
     var body = el('div', 'pbody calc-body');
     var stats = el('div', 'gstats');
@@ -4365,7 +4395,7 @@ JS = r"""
       '<span class="store-hero-k">已收录</span>' +
       '<span class="store-hero-v">' + total + '</span><span class="store-hero-u">款</span>'));
     hero.appendChild(el('div', 'store-hero-d',
-      'ai-dev-kit 出品 · ' + STORE_GROUPS.length + ' 个分类 · 点卡片看简介'));
+      '人工智能Ding🥕 出品 · ' + STORE_GROUPS.length + ' 个分类'));
     bar.appendChild(hero);
 
     var list = el('div', 'pbody store-list');

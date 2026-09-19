@@ -545,10 +545,29 @@ def main():
             "(function(){var v=document.querySelector('.view:not(.hidden)');"
             "var b=v.querySelector('.pbody');var kp=v.querySelector('.keypad');"
             "return [b.scrollHeight<=b.clientHeight+1, Math.round(kp.getBoundingClientRect().bottom),"
-            "window.innerHeight, Math.round(kp.querySelector('.key').getBoundingClientRect().height)];})()")
+            "window.innerHeight, Math.round(kp.querySelector('.key').getBoundingClientRect().height),"
+            "v.scrollHeight<=v.clientHeight+1];})()")
         check("小屏 360x640 不滚动且键盘贴底在屏内",
-              small[0] and small[1] <= small[2] and small[3] >= 34, str(small))
+              small[0] and small[1] <= small[2] and small[3] >= 34 and small[4], str(small))
         pg.screenshot(path=os.path.join(SHOTS, "v2-calc-small.png"))
+        # 极矮净高（横屏 / 被压扁的容器）：键盘行高有下限，装不下时整页可纵向滚动，「=」必须滚得到。
+        # 回归：行高被压到 0 而行距仍在 —— 网格内容溢出页脚、「=」被推出屏外且页面不可滚动，
+        # 玩家看得见上面 4 行键位，却既看不到也按不到「=」。
+        pg.set_viewport_size({"width": 360, "height": 430})
+        pg.wait_for_timeout(300)
+        tiny = pg.evaluate(
+            "(function(){var v=document.querySelector('.view:not(.hidden)');"
+            "var ks=v.querySelectorAll('.keypad .key');var eq=ks[ks.length-1];"
+            "var before=eq.getBoundingClientRect();"
+            "v.scrollTop=v.scrollHeight;"
+            "var after=eq.getBoundingClientRect();var vb=v.getBoundingClientRect();"
+            "var r=[getComputedStyle(v).overflowY, Math.round(before.bottom), Math.round(after.bottom),"
+            "Math.round(vb.bottom), Math.round(after.height), Math.round(after.left), Math.round(vb.left)];"
+            "v.scrollTop=0;return r;})()")
+        check("极矮净高 360x430：整页可滚动到「=」（行高下限 + 不贴屏边）",
+              tiny[0] == "auto" and tiny[1] > tiny[3] and tiny[2] <= tiny[3] + 1
+              and tiny[4] >= 24 and tiny[5] > tiny[6], str(tiny))
+        pg.screenshot(path=os.path.join(SHOTS, "v2-calc-tiny.png"))
         pg.set_viewport_size({"width": 390, "height": 844})
         pg.wait_for_timeout(300)
         pg.click("#keyBack")

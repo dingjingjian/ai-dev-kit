@@ -917,7 +917,8 @@
   }
 
   function buildCalc() {
-    var v = el('div', 'view hidden');
+    /* view-calc：计算器页专属修饰 —— 净高不足时允许整页滚动（见 CSS，键盘行高下限的兜底） */
+    var v = el('div', 'view view-calc hidden');
     v.appendChild(el('div', 'phead', '<h1>计算器</h1>'));
     var body = el('div', 'pbody calc-body');
     var stats = el('div', 'gstats');
@@ -2887,7 +2888,7 @@
       '<span class="store-hero-k">已收录</span>' +
       '<span class="store-hero-v">' + total + '</span><span class="store-hero-u">款</span>'));
     hero.appendChild(el('div', 'store-hero-d',
-      'ai-dev-kit 出品 · ' + STORE_GROUPS.length + ' 个分类 · 点卡片看简介'));
+      '人工智能Ding🥕 出品 · ' + STORE_GROUPS.length + ' 个分类'));
     bar.appendChild(hero);
 
     var list = el('div', 'pbody store-list');
