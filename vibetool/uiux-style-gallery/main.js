@@ -1030,6 +1030,8 @@ var toastEl = document.getElementById("toast");
 var fabTop = document.getElementById("fabTop");
 var fabBack = document.getElementById("fabBack");
 var activeCat = "all";
+var viewMode = "list";      /* "list" | "detail"，用于判断该不该记列表的滚动位置 */
+var listScrollY = 0;        /* 离开列表时的滚动位置，从详情返回时原地接上 */
 
 var ICON_CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg>';
 var ICON_COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2.5"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
@@ -1071,7 +1073,7 @@ function renderTabs(){
   updateTabsFade();
 }
 
-function renderList(){
+function renderList(restoreY){
   titleEl.textContent = "设计风格图鉴";
   fabBack.classList.remove("show");
   tabs.style.display = "flex";
@@ -1109,7 +1111,9 @@ function renderList(){
     wrap.appendChild(sec);
   });
   app.appendChild(wrap);
-  window.scrollTo(0, 0);
+  /* 卡片高度固定，恢复滚动位置不必等布局变化；
+     从详情返回时用离开前记下的位置，切分类 / 首次进入则为 0（回到顶部）。 */
+  window.scrollTo(0, restoreY || 0);
 }
 
 function renderDetail(id){
@@ -1214,11 +1218,17 @@ function route(){
   var h = location.hash || "#/";
   var m = h.match(/^#\/s\/(\d+)$/);
   if(m){
+    /* 进详情前先记下列表翻到哪儿了（只在"列表 → 详情"时记，详情页内部跳转不覆盖）；
+       详情页自己会回到顶部，返回列表时再原地接上，不必每次都从头翻。 */
+    if(viewMode === "list"){
+      listScrollY = window.pageYOffset || document.documentElement.scrollTop || 0;
+    }
+    viewMode = "detail";
     renderDetail(parseInt(m[1], 10));
   } else {
-    activeCat = "all";
-    renderTabs();
-    renderList();
+    viewMode = "list";
+    renderTabs();                  /* 保留已选分类：返回后仍是刚才那一组 */
+    renderList(listScrollY);
   }
 }
 

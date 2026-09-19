@@ -1,48 +1,82 @@
 (function () {
   'use strict';
 
-  /* ---------- 存储（小红书 Storage JS API 双轨，§3.6 / §3.7）----------
+  /* ---------- 存储层（小红书容器 §2.4 数据存储 / §3.6 版本判断 / §3.7 Storage） ----------
    * v2：只记准不准时 —— { 'YYYY-MM-DD': { ok: true|false } }
    * v1（历史）：{ 'YYYY-MM-DD': { in: 'HH:MM', out: 'HH:MM' } }，首次打开时迁移。
    *
-   * 客户端 ≥ 9.46.0 走 window.xhs.miniTool 端能力（推荐，持久化有保障）；
-   * 低版本降级到 localStorage（容器不保证其持久性，仅作兼容）。
-   * 升级到端能力后，把 localStorage 旧数据搬到端能力并清掉本地。
-   * 所有写入返回 Promise<boolean>，调用方须处理 false（§3.7 要求）。
+   * 统一存储契约（与 mood-diary / ai-os 同构，三处改动请同步）：
+   *   1) 双通道：容器 Storage（客户端 ≥ 9.46.0 且已注入 setStorage / getStorage）+ localStorage 镜像；
+   *   2) 写：镜像通道同步先行、容器异步跟上，任一成功即算成功，两条都失败才回报失败（§3.7 要求）；
+   *   3) 读：容器优先，缺失 / 失败退回镜像；容器有而镜像没有则回填，两侧互为兜底；
+   *   4) 启动：判定容器通道后后台对齐两侧（缺哪边补哪边），不阻塞首屏；
+   *   5) 端能力一律 success / fail 回调 + 800ms 超时兜底（旧容器上 Promise 版不可靠，也不能挂住调用方）；
+   *   6) 版本号：buildVersion 抹掉末 3 位，同步取值 → 异步兜底，取不到按「不支持」处理，取值过程绝不抛错；
+   *   7) 通道可见：设置面板里显示当前数据通道，真机可自查。
    */
   var KEY_RECORDS = 'owt_records_v2';
   var KEY_RECORDS_V1 = 'owt_records_v1';
   var KEY_SETTINGS_V1 = 'owt_settings_v1';
   var KEY_THEME = 'owt_theme_v1';
   var STORAGE_MIN_CLIENT_VERSION = 9460; /* 客户端 9.46.0 */
-  var useNativeStorage = false;
+  var XHS_CALL_TIMEOUT = 800;            /* 端能力超时即当失败，退回镜像通道 */
+  var containerUsable = false;           /* 启动时判定：容器 Storage 通道是否可用 */
+  var storageUsage = null;               /* { currentSize, limitSize }，单位 KB（仅容器通道提供） */
 
   /* §3.6 客户端版本判断：buildVersion 末 3 位是编译序号，须忽略 */
   function readBuildVersion(launchOptions) {
     var env = launchOptions && launchOptions.miniToolEnv;
     return Number(env && env.buildVersion) || 0;
   }
-  function getSyncBuildVersion() {
-    return readBuildVersion(window.xhs && window.xhs.launchOptions);
-  }
-  function getBuildVersionAsync() {
-    var sync = getSyncBuildVersion();
+  function getClientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
+  /* 版本号：先同步逐级判空，取不到再异步兜底；两条路都失败按「不支持容器 Storage」处理。
+   * 老 SDK 可能不支持 Promise（不传回调时返回 undefined），故非 Promise 返回值也照收，
+   * 并且整段 try/catch —— 取版本号这一步绝不能把后面的启动链带崩。 */
+  function getBuildVersion() {
+    var xhs = window.xhs;
+    var sync = 0;
+    try { sync = readBuildVersion(xhs && xhs.launchOptions); } catch (e) { sync = 0; }
     if (sync) return Promise.resolve(sync);
-    var miniTool = window.xhs && window.xhs.miniTool;
+    var miniTool = xhs && xhs.miniTool;
     if (!miniTool || typeof miniTool.getLaunchOptions !== 'function') return Promise.resolve(0);
-    return miniTool.getLaunchOptions().then(readBuildVersion).catch(function () { return 0; });
+    try {
+      var ret = miniTool.getLaunchOptions();
+      if (ret && typeof ret.then === 'function') {
+        return ret.then(readBuildVersion, function () { return 0; });
+      }
+      return Promise.resolve(readBuildVersion(ret));
+    } catch (e) { return Promise.resolve(0); }
   }
-  function isClientVersionAtLeast(buildVersion, minimum) {
-    return Math.floor(buildVersion / 1000) >= minimum;
-  }
-  function nativeMiniTool() {
-    var miniTool = window.xhs && window.xhs.miniTool;
+  /* 已注入的端能力（setStorage / getStorage 都在才认）；取值本身也吞异常 */
+  function miniToolApi() {
+    var miniTool = null;
+    try { miniTool = window.xhs && window.xhs.miniTool; } catch (e) { return null; }
     if (!miniTool) return null;
     if (typeof miniTool.setStorage !== 'function' || typeof miniTool.getStorage !== 'function') return null;
     return miniTool;
   }
+  /* 端能力调用：Promise<{ ok, res }>。传 success / fail 回调（不传回调的 Promise
+   * 用法在旧容器上不可靠），再叠一层超时兜底，保证任何情况下只 resolve 一次。 */
+  function xhsCall(apiName, payload) {
+    return new Promise(function (resolve) {
+      var api = miniToolApi();
+      if (!api || typeof api[apiName] !== 'function') { resolve({ ok: false, res: null }); return; }
+      var done = false;
+      var timer = setTimeout(function () { finish(false, null); }, XHS_CALL_TIMEOUT);
+      function finish(ok, res) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve({ ok: ok, res: res || null });
+      }
+      payload.success = function (res) { finish(res !== false, res); };
+      payload.fail = function () { finish(false, null); };
+      try { api[apiName](payload); } catch (e) { finish(false, null); }
+    });
+  }
 
-  /* localStorage 同步读写（降级轨道 + v1 旧 key 直读） */
+  /* 镜像通道（localStorage）读写：一律吞异常（§2.4 不保证可用 / 持续有效），
+   * 同时承担 v1 旧 key（只在 localStorage）的直读。 */
   function lsGet(key) {
     try {
       var raw = localStorage.getItem(key);
@@ -53,58 +87,77 @@
   function lsSet(key, val) {
     try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
   }
-  function lsRemove(key) {
-    try { localStorage.removeItem(key); return true; } catch (e) { return false; }
-  }
 
-  /* 双轨读：Promise<data|null> */
+  /* 读：容器优先，缺失 / 失败退回镜像；容器有而本地没有时顺手回填镜像。
+   * 返回 Promise<data|null>。 */
   function storageGet(key) {
-    if (useNativeStorage) {
-      var miniTool = nativeMiniTool();
-      if (miniTool) {
-        return miniTool.getStorage({ key: key }).then(function (res) {
-          return (res && typeof res.data !== 'undefined') ? res.data : null;
-        }).catch(function () { return null; });
-      }
-    }
-    return Promise.resolve(lsGet(key));
-  }
-  /* 双轨写：Promise<boolean> */
-  function storageSet(key, val) {
-    if (useNativeStorage) {
-      var miniTool = nativeMiniTool();
-      if (miniTool) {
-        return miniTool.setStorage({ key: key, data: val }).then(function () { return true; }).catch(function () { return false; });
-      }
-    }
-    return Promise.resolve(lsSet(key, val));
-  }
-
-  /* 初始化：判定轨道 + 跨存储迁移（localStorage → 端能力） */
-  function storageInit() {
-    return getBuildVersionAsync().then(function (buildVersion) {
-      var miniTool = nativeMiniTool();
-      useNativeStorage = !!miniTool && isClientVersionAtLeast(buildVersion, STORAGE_MIN_CLIENT_VERSION);
-      if (!useNativeStorage) return null;
-      return migrateLsToNative();
+    if (!containerUsable) return Promise.resolve(lsGet(key));
+    return xhsCall('getStorage', { key: key }).then(function (r) {
+      var nativeVal = (r.ok && r.res && typeof r.res.data !== 'undefined') ? r.res.data : null;
+      if (nativeVal === null || nativeVal === undefined) return lsGet(key);
+      if (lsGet(key) === null) lsSet(key, nativeVal);
+      return nativeVal;
     });
   }
-  /* 把 localStorage 里的 records/theme 搬到端能力，搬成功清掉本地。
-   * v1 旧 key 不搬——v1→v2 迁移在启动逻辑里做，搬过去反而乱。 */
-  function migrateLsToNative() {
+  /* 写：镜像通道同步先行 + 容器异步跟上，任一成功即返回 true。
+   * 只有两条通道都失败才返回 false，调用方据此提示（§3.7 要求）。 */
+  function storageSet(key, val) {
+    var localOk = lsSet(key, val);
+    if (!containerUsable) return Promise.resolve(localOk);
+    return xhsCall('setStorage', { key: key, data: val }).then(function (r) {
+      return localOk || r.ok;
+    });
+  }
+
+  /* 初始化：判定容器通道（版本 + 注入）→ 后台对齐两侧 + 探测容器用量。
+   * 对齐与用量都放后台跑、不阻塞首屏：读数据本身已带镜像兜底。 */
+  function storageInit() {
+    return getBuildVersion().then(function (buildVersion) {
+      containerUsable = !!miniToolApi() && getClientVersion(buildVersion) >= STORAGE_MIN_CLIENT_VERSION;
+      if (!containerUsable) return null;
+      syncChannels();
+      return probeUsage();
+    });
+  }
+  /* 容器与镜像互相对齐：容器有本地没有 → 补本地；本地有容器没有 → 迁进容器；
+   * 两边都有则以容器为准（升级到端能力后容器才是真源）。
+   * v1 旧 key 不参与——v1→v2 迁移在启动逻辑里做，搬过去反而乱。 */
+  function syncChannels() {
     var keys = [KEY_RECORDS, KEY_THEME];
     var tasks = [];
     for (var i = 0; i < keys.length; i++) {
       (function (key) {
-        var lsVal = lsGet(key);
-        if (lsVal === null) { tasks.push(Promise.resolve()); return; }
-        tasks.push(storageGet(key).then(function (nativeVal) {
-          if (nativeVal !== null) return null; /* 端能力已有，不覆盖 */
-          return storageSet(key, lsVal).then(function (ok) { if (ok) lsRemove(key); });
+        var localVal = lsGet(key);
+        tasks.push(xhsCall('getStorage', { key: key }).then(function (r) {
+          var nativeVal = (r.ok && r.res && typeof r.res.data !== 'undefined') ? r.res.data : null;
+          if (nativeVal === null || nativeVal === undefined) {
+            if (localVal === null) return null;                        /* 两边都没有：无需对齐 */
+            return xhsCall('setStorage', { key: key, data: localVal }).then(function () {});
+          }
+          if (localVal === null || JSON.stringify(localVal) !== JSON.stringify(nativeVal)) {
+            lsSet(key, nativeVal);                                     /* 容器为准，镜像跟上 */
+          }
+          return null;
         }));
       })(keys[i]);
     }
     return Promise.all(tasks);
+  }
+  /* 容器用量（仅容器通道提供，单位 KB），用于设置面板展示 */
+  function probeUsage() {
+    return xhsCall('getStorageInfo', {}).then(function (r) {
+      if (r.ok && r.res && typeof r.res.currentSize !== 'undefined') {
+        storageUsage = { currentSize: r.res.currentSize, limitSize: r.res.limitSize };
+      }
+    });
+  }
+  /* 设置面板里的数据通道说明（真机自查用） */
+  function storageSummary() {
+    if (!containerUsable) return '数据通道：localStorage（降级）';
+    if (storageUsage && typeof storageUsage.currentSize !== 'undefined') {
+      return '数据通道：容器 Storage · ' + storageUsage.currentSize + ' / ' + (storageUsage.limitSize || 10240) + ' KB';
+    }
+    return '数据通道：容器 Storage';
   }
 
   /* ---------- 日期工具 ---------- */
@@ -540,7 +593,7 @@
   $('btnDayCancel').addEventListener('click', closeSheets);
 
   /* ---------- 弹层：设置 ---------- */
-  $('btnSettings').addEventListener('click', function () { openSheet(setSheet); });
+  $('btnSettings').addEventListener('click', function () { renderStorageNote(); openSheet(setSheet); });
   $('btnSetCancel').addEventListener('click', closeSheets);
   overlay.addEventListener('click', closeSheets);
 
@@ -646,15 +699,20 @@
   setAppHeight();
 
   /* ---------- 持久化 + 异步启动 ----------
-   * persistRecords：写 records 到当前轨道，失败时 toast 提示（§3.7 要求调用方处理 false）。
+   * persistRecords：写 records 到两条通道，两条都失败才 toast（§3.7 要求调用方处理 false）。
    * initRecords：启动时异步读 records，无则尝试 v1 迁移并写入。
    * loadThemeAsync：启动时异步读主题并应用。
-   * 启动顺序：storageInit（判定轨道 + 跨存储迁移）→ initRecords → renderAll → loadThemeAsync。
+   * 启动顺序：storageInit（判定容器通道 + 后台对齐两条通道）→ initRecords → renderAll → loadThemeAsync。
    */
   function persistRecords() {
     return storageSet(KEY_RECORDS, records).then(function (ok) {
       if (!ok) toast('保存失败，下次打开可能丢失');
     });
+  }
+  /* 设置面板里的数据通道说明：打开设置时刷新一次，能看到真机实际走的通道 */
+  function renderStorageNote() {
+    var el = $('storageNote');
+    if (el) el.textContent = storageSummary();
   }
   function initRecords() {
     return storageGet(KEY_RECORDS).then(function (saved) {
@@ -690,5 +748,6 @@
   storageInit().then(initRecords).then(function () {
     renderAll();
     loadThemeAsync();
+    renderStorageNote();
   });
 })();

@@ -55,6 +55,18 @@ GUARDS = [
     ("存储走容器 Storage JS API", "miniTool" in js and "setStorage" in js and "getStorage" in js),
     ("保留下拉级通道 localStorage", "localStorage.setItem" in js and "localStorage.getItem" in js),
     ("存储 key 前缀 aios_", "STORE_PREFIX = 'aios_'" in js),
+    # 第三方库本地化：Three.js 随包分发（./assets/three.min.js），不引任何 CDN。
+    # 注意：受扫描的只有"我们自己的代码"（index.html + main.js）；three.min.js 是上游产物，
+    # 其中的 http(s) 字样与内部 loader 不会在运行时被触发（本项目只用静态场景 + 本地贴图）。
+    ("Three.js 走本地 ./assets/（无 CDN）",
+     '<script src="./assets/three.min.js"></script>' in html
+     and not re.search(r"<script[^>]+src\s*=\s*[\"']https?://", html, re.I)),
+    ("月面贴图随包分发（./assets/moon.jpg）", (ROOT.parent / "assets" / "moon.jpg").exists()
+     or (ROOT / "assets" / "moon.jpg").exists()),
+    ("启动头像随包分发（./assets/avatar.png）", (ROOT / "assets" / "avatar.png").exists()),
+    # 相机取景素材：三个 vibeknow 项目派生的小图（_dev/make_cam_photos.py），随包分发
+    ("相机取景素材随包分发（./assets/cam/*.webp）", len(list((ROOT / "assets" / "cam").glob("*.webp"))) >= 3),
+    ("相机素材清单指向包内相对路径", "./assets/cam/" in js),
     ("版本判断忽略 buildVersion 末 3 位", "Math.floor(buildVersion / 1000)" in js
      and "STORAGE_MIN_CLIENT_VERSION = 9460" in js),
 ]
@@ -71,7 +83,15 @@ if DIST.exists():
 DIST.mkdir(parents=True)
 for name in ("index.html", "main.js"):
     shutil.copy2(ROOT / name, DIST / name)
-print("\ndist: %s" % sorted(p.name for p in DIST.iterdir()))
+# 运行时资源：Three.js / 月面贴图 / 启动头像 / 相机取景素材（assets/ 原样搬运）
+ASSETS = ROOT / "assets"
+shutil.copytree(ASSETS, DIST / "assets")
+dist_files = sorted(p.relative_to(DIST).as_posix() for p in DIST.rglob("*") if p.is_file())
+cam_n = len([f for f in dist_files if f.startswith("assets/cam/")])
+print("\ndist：%d 个文件（根 %d + assets/cam %d + assets 其余 %d）"
+      % (len(dist_files), len([f for f in dist_files if "/" not in f]),
+         cam_n, len(dist_files) - cam_n - len([f for f in dist_files if "/" not in f])))
+print("      %s" % [f for f in dist_files if not f.startswith("assets/cam/")])
 
 # ---------- 打包（压缩 dist 的内容，index.html 落在 zip 根） ----------
 if ZIP.exists():
@@ -89,11 +109,19 @@ with zipfile.ZipFile(ZIP) as z:
     names = z.namelist()
 size = ZIP.stat().st_size
 assert "index.html" in names, "index.html 不在 zip 根目录"
-assert not any("/" in n for n in names), "存在子目录层级"
+# 允许 zip 根 + assets/ 子树：Three.js / 月面贴图 / 头像 / 相机素材都放 assets/
+# （相机素材按其来源再分一层 assets/cam/，便于与上游项目对应）。
+# 规范未限制嵌套层级（zip-artifact-spec.md §1：除 index.html 必须在根外，
+# 其余文件可自由平铺或分目录），但仍禁止绝对路径与 ../ 逃逸，并要求顶层只出现 assets/。
+for n in names:
+    assert not n.startswith("/") and ".." not in n, "存在越界路径：%s" % n
+    parts = n.split("/")
+    assert len(parts) <= 3 and (len(parts) == 1 or parts[0] == "assets"), \
+        "只允许 zip 根与 assets/ 子树（含一层次目录）：%s" % n
 
 print("\n产物：%s" % ZIP)
 print("体积：%.1f KB（上限 10MB，建议 ≤2MB，%s）"
       % (size / 1024, "通过" if size <= 2 * 1024 * 1024 else "超建议值"))
 print("内容：%s" % names)
-print("校验：index.html 位于 zip 根，无多余层级 ✅")
+print("校验：index.html 位于 zip 根；子目录仅在 assets/ 子树内 ✅")
 print("提醒：交付前跑 .skill/minitool-zip-builder/scripts/audit_artifact.py（或 .mjs）复核体积门禁。")

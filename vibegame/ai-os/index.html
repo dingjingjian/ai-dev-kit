@@ -290,7 +290,7 @@ body[data-mode="dark"] .widget.w-weather{
 .w-hl{ display:block; font-size:11px; color:var(--ink-dim); margin-top:8px; }
 .w-src{ font-size:10px; color:var(--ink-dim); opacity:.85; margin-top:5px; }
 
-/* 钱包组件：银行卡质感深色卡（顶部sheen+内发丝），假余额，点按打码 */
+/* 钱包组件：银行卡质感深色卡（顶部sheen+内发丝），假余额，默认打码、点按显示 */
 .widget.w-wallet{
   background:
     radial-gradient(150% 110% at 0% 0%, rgba(255,255,255,.14), rgba(255,255,255,0) 44%),
@@ -960,15 +960,16 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   background:linear-gradient(135deg,#8F7BF7,#6A4CE0);
   box-shadow:var(--sh-1), inset 0 1px 0 rgba(255,255,255,.3);
 }
-.cam-view{ position:relative; flex:1 1 auto; min-height:0; border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--sh-2); }
-.cam-el{ position:absolute; transform:translate(-50%,-50%); }
-.cam-el.circle{ border-radius:50%; opacity:.6; }
-.cam-el.glyph{ line-height:1; opacity:.85; }
+.cam-view{ position:relative; flex:1 1 auto; min-height:0; border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--sh-2); background:#141419; }
+/* 取景画面：素材图铺满卡片（cover 裁切，不拉伸变形） */
+.cam-shot{ position:absolute; top:0; left:0; right:0; bottom:0; width:100%; height:100%; object-fit:cover; }
 .cam-hud{
   position:absolute; left:10px; bottom:10px;
   background:rgba(0,0,0,.35); color:#fff; font-size:11px;
   padding:4px 8px; border-radius:8px; font-variant-numeric:tabular-nums;
+  transition:background .2s ease;
 }
+.cam-hud.hot{ background:rgba(224,82,82,.72); }
 .cam-badge{ position:absolute; right:10px; bottom:10px; background:rgba(0,0,0,.35); color:#fff; font-size:11px; padding:4px 8px; border-radius:8px; }
 .cam-flash{ position:absolute; top:0; left:0; right:0; bottom:0; background:#fff; opacity:0; pointer-events:none; transition:opacity .15s ease; }
 .cam-flash.on{ opacity:.9; }
@@ -983,11 +984,11 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
   width:66px; height:66px; border-radius:50%;
   background:#fff; border:4px solid rgba(255,255,255,.55);
   box-shadow:var(--sh-2), inset 0 0 0 2px rgba(20,20,40,.08), inset 0 2px 4px rgba(255,255,255,.7);
-  transition:transform .12s ease;
+  transition:transform .12s ease, background .2s ease, border-color .2s ease;
 }
 .cam-shutter:active{ transform:scale(.9); }
-.cam-top-btn{ padding:8px 14px; border-radius:999px; font-size:13px; font-weight:600; color:#fff; background:rgba(120,120,140,.35); }
-.cam-top-btn.save{ background:linear-gradient(135deg,#FF6B35,#FF4D6D); }
+/* 过热封锁：快门转灰（提示「按不动」是机制不是卡死） */
+.cam-shutter.blocked{ background:rgba(255,255,255,.40); border-color:rgba(255,255,255,.25); }
 .cam-foot{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; }
 .radar-wrap{ text-align:center; }
 .score-big{ text-align:center; font-size:40px; font-weight:800; color:var(--accent); font-variant-numeric:tabular-nums; line-height:1.1; margin-bottom:4px; }
@@ -1013,6 +1014,85 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .modal-btn + .modal-btn{ margin-left:10px; }
 .modal-cancel{ background:rgba(120,120,140,.14); color:var(--ink); }
 .modal-ok{ background:linear-gradient(135deg,#E86A6A,#E05252); color:#fff; }
+
+/* ============ 月球天气（§4.9） ============
+ * 入口是主屏天气小组件（§4.3.1），不占主屏图标网格与 Dock；整页只有天气。
+ * 月球用 Canvas 2D 逐像素渲染球面（见 buildWeather），不引入 WebGL / Three.js ——
+ * 两者都会撞上 §5 兼容门禁（禁用能力零命中、无外部资源）。 */
+.wx-stage{
+  position:relative;
+  height:236px;
+  border-radius:var(--r-lg);
+  overflow:hidden;
+  margin-bottom:12px;
+  background:
+    radial-gradient(120% 92% at 50% 118%, rgba(108,76,241,.30), rgba(108,76,241,0) 62%),
+    radial-gradient(circle at 20% 14%, rgba(88,128,208,.22), transparent 46%),
+    linear-gradient(180deg,#0B0F1E 0%,#131A2E 62%,#1B2237 100%);
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:var(--sh-2), inset 0 1px 0 rgba(255,255,255,.10);
+  touch-action:none; /* 拖动旋转不与内容区滚动抢手势 */
+}
+.wx-stage canvas{ position:absolute; top:0; left:0; display:block; }
+/* 无 WebGL / 上下文丢失时的降级提示：观测台不留白，读数照常 */
+.wx-fallback{
+  position:absolute; top:0; left:0; right:0; bottom:0;
+  display:flex; align-items:center; justify-content:center;
+  padding:0 26px; text-align:center;
+  font-size:12px; line-height:1.6; color:rgba(255,255,255,.72);
+}
+.wx-hud{
+  position:absolute; top:11px; left:13px; right:13px;
+  display:flex; align-items:flex-start; justify-content:space-between;
+  pointer-events:none;
+}
+.wx-loc{ font-size:11px; color:rgba(255,255,255,.62); letter-spacing:.4px; }
+.wx-loc-name{ font-size:15px; font-weight:600; color:#fff; margin-top:3px; letter-spacing:.3px; }
+.wx-chip{
+  flex:0 0 auto; padding:4px 10px; border-radius:999px;
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.18);
+  font-size:11px; color:#EAF1FB; font-variant-numeric:tabular-nums;
+}
+.wx-tip{
+  position:absolute; left:0; right:0; bottom:9px; text-align:center;
+  font-size:11px; color:rgba(255,255,255,.62); pointer-events:none;
+  /* 满月时盘面很亮，提示行压在月面上必须靠投影才读得清 */
+  text-shadow:0 1px 3px rgba(0,0,0,.65);
+}
+/* 天气读数：主卡（大温度 + glyph chip）+ 两列数据格 */
+.wx-hero{
+  display:flex; align-items:center;
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:14px 16px; margin-bottom:12px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.wx-hero .h-main{ flex:1 1 auto; min-width:0; }
+.wx-hero .h-temp{
+  font-size:38px; font-weight:800; line-height:1; color:var(--ink);
+  letter-spacing:-1px; font-variant-numeric:tabular-nums;
+}
+.wx-hero .h-cond{ font-size:13px; color:var(--ink-dim); margin-top:8px; }
+.wx-glyph{
+  flex:0 0 auto; width:52px; height:52px; border-radius:50%; margin-left:12px;
+  background:rgba(70,127,232,.14);
+  display:flex; align-items:center; justify-content:center;
+}
+.wx-glyph svg{ width:26px; height:26px; fill:#2E7FE8; }
+.wx-grid{ display:grid; grid-template-columns:1fr 1fr; grid-gap:10px; }
+.wx-item{
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-md); padding:10px 12px;
+  box-shadow:var(--sh-1), var(--hl);
+}
+.wx-item .k{ font-size:11px; color:var(--ink-dim); }
+.wx-item .v{ font-size:15px; font-weight:700; color:var(--ink); margin-top:4px; font-variant-numeric:tabular-nums; }
+.wx-src{ font-size:11px; color:var(--ink-dim); opacity:.85; text-align:center; margin:14px 0 2px 0; }
+
+/* 净高不足的小屏：观测台降高，保证读数一屏看全 */
+@media (max-height:700px){
+  .wx-stage{ height:194px; }
+  .wx-hero .h-temp{ font-size:32px; }
+}
 
 /* ============ 多任务轮播（§3） ============ */
 /* 遮罩只铺内容区（不含状态栏与底部金刚键）：金刚键在多任务下必须仍可按（DESIGN §3） */
@@ -1103,7 +1183,7 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 .syskey:active{ opacity:.55; transform:scale(.9); }
 .syskey svg{ width:20px; height:20px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
 
-/* ============ 开机启动屏（§4.9） ============
+/* ============ 开机启动屏（§4.10） ============
  * 打开应用时全屏覆盖，约 1.8s 开机动画后淡出进入主屏；不可跳过。
  * JS 就绪前默认显示（HTML 默认无 .done），避免白屏。 */
 #bootScreen{
@@ -1121,10 +1201,8 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 #bootScreen.done{ opacity:0; }
 .boot-logo{
   width:88px; height:88px; border-radius:24%;
-  background:linear-gradient(135deg,#6C4CF1 0%,#4A2FD0 100%);
-  display:flex; align-items:center; justify-content:center;
-  font-size:34px; font-weight:800; color:#fff; letter-spacing:1px;
-  box-shadow:0 12px 32px rgba(108,76,241,.45), inset 0 1px 0 rgba(255,255,255,.30);
+  object-fit:cover;
+  box-shadow:0 12px 32px rgba(108,76,241,.45);
 }
 .boot-title{ margin-top:22px; font-size:20px; font-weight:600; letter-spacing:.5px; color:#fff; }
 .boot-bar{
@@ -1140,11 +1218,11 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
 
   <!-- 开机启动屏：约 1.8s 开机动画，不可跳过；JS 就绪前默认显示，避免白屏 -->
   <div id="bootScreen">
-    <div class="boot-logo">AI</div>
+    <img class="boot-logo" src="./assets/avatar.png" alt="人工智能Ding🥕">
     <div class="boot-title">人工智能OS</div>
     <div class="boot-bar"><div class="boot-bar-fill" id="bootFill"></div></div>
     <div class="boot-tip" id="bootTip">正在启动...</div>
-    <div class="boot-foot">v2.0 · 人工智能科技 出品</div>
+    <div class="boot-foot">Designed by 人工智能Ding🥕</div>
   </div>
 
   <!-- 状态栏：真机布局，时间居左、状态图标居右；纯展示无交互，
@@ -1173,6 +1251,8 @@ body[data-mode="dark"] .ms-cell.rev{ box-shadow:inset 0 1px 3px rgba(0,0,0,.45);
     <button class="syskey" id="keyRecents" aria-label="多任务"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
   </nav>
 
+<!-- Three.js 走本地 ./assets/three.min.js（与 vibeknow/earth-3d 同一套引入方式，零 CDN） -->
+<script src="./assets/three.min.js"></script>
 <script src="./main.js"></script>
 </body>
 </html>

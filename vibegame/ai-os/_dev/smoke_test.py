@@ -5,9 +5,11 @@
 运行：PYTHONUTF8=1 <python> smoke_test.py
 """
 import io
+import math
 import os
 import re
 import sys
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -35,6 +37,35 @@ def find_chrome():
 CHROME = find_chrome()
 
 FAIL = []
+
+# 月相：与产品同一套常量近似（平均朔望月 + 2000-01-06 18:14 UTC 朔），但由测试独立复算一遍，
+# 用来对拍「月相 / 照亮比例」读数 —— UI 与算术任何一处漂移都会被这条断言抓住。
+WX_SYNODIC = 29.530588853
+WX_REF_NEW = 947182440000
+
+
+def wx_phase_at(ms):
+    """返回 (月相名, 照亮百分比)。"""
+    age = ((ms - WX_REF_NEW) / 86400000.0) % WX_SYNODIC
+    deg = age / WX_SYNODIC * 360.0
+    if deg < 8 or deg > 352:
+        name = "新月"
+    elif deg < 82:
+        name = "蛾眉月"
+    elif deg < 98:
+        name = "上弦月"
+    elif deg < 172:
+        name = "盈凸月"
+    elif deg < 188:
+        name = "满月"
+    elif deg < 262:
+        name = "亏凸月"
+    elif deg < 278:
+        name = "下弦月"
+    else:
+        name = "残月"
+    lit = round((1 - math.cos(math.radians(deg))) / 2 * 100)
+    return name, lit
 
 
 def check(name, cond, extra=""):
@@ -137,7 +168,12 @@ def main():
     url = "file:///" + os.path.join(ROOT, "index.html").replace("\\", "/")
 
     with sync_playwright() as p:
-        b = p.chromium.launch(executable_path=CHROME) if CHROME else p.chromium.launch()
+        # --allow-file-access-from-files：本用例以 file:// 直开页面，而 WebGL 会把跨源图片判为
+        # 「不可上传纹理」——不给这个开关，月面贴图在 file:// 下必然加载失败（容器里走 https，
+        # 同源不受影响）。加了它，file:// 与容器两条路的贴图行为才一致，断言才有意义。
+        launch_args = ["--allow-file-access-from-files"]
+        b = (p.chromium.launch(executable_path=CHROME, args=launch_args) if CHROME
+             else p.chromium.launch(args=launch_args))
 
         def new_page(init_script=None):
             """独立上下文（存储互不串味），可预注入容器环境。"""
@@ -219,20 +255,20 @@ def main():
         check("天气组件为一眼假设定", "月球" in pg.evaluate("document.querySelector('.w-city').textContent")
               and pg.evaluate("document.querySelector('.w-temp').textContent") == "-173°")
         check("天气组件带免责来源", "AI 编的" in pg.evaluate("document.querySelector('.w-src').textContent"))
-        check("钱包组件假余额", pg.evaluate(
-            "document.querySelector('.w-bal').textContent") == "￥ -99,999")
+        check("钱包组件默认打码", pg.evaluate(
+            "document.querySelector('.w-bal').textContent") == "￥ -****")
         pg.click(".w-wallet")
         pg.wait_for_timeout(200)
-        check("钱包点按打码", pg.evaluate(
-            "document.querySelector('.w-bal').textContent") == "￥ -****")
+        check("钱包点按显示余额", pg.evaluate(
+            "document.querySelector('.w-bal').textContent") == "￥ -99,999")
         pg.reload()
         wait_home(pg)
-        check("打码状态持久化", pg.evaluate(
-            "document.querySelector('.w-bal').textContent") == "￥ -****")
+        check("显示状态持久化", pg.evaluate(
+            "document.querySelector('.w-bal').textContent") == "￥ -99,999")
         pg.click(".w-wallet")
         pg.wait_for_timeout(200)
-        check("钱包再点还原", pg.evaluate(
-            "document.querySelector('.w-bal').textContent") == "￥ -99,999")
+        check("钱包再点恢复打码", pg.evaluate(
+            "document.querySelector('.w-bal').textContent") == "￥ -****")
         pg.click("#wClock")
         pg.wait_for_timeout(300)
         check("时钟组件打开闹钟", pg.evaluate(
@@ -240,6 +276,115 @@ def main():
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
         pg.screenshot(path=os.path.join(SHOTS, "v2-home.png"))
+
+        # 月球天气（§4.9）：主屏天气小组件是唯一入口；Three.js 渲染 —— 月相按当前时间算、且不自转。
+        # 观测状态走 AIOS.weatherState() 快照（与 AIOS.storeBackend 同类只读接缝）；
+        # 画面是否真的变了用元素截图字节比对，不依赖任何 2D getImageData。
+        CELLS_JS = ("[document.querySelector('.view:not(.hidden) [data-f=phase]').textContent,"
+                    "document.querySelector('.view:not(.hidden) [data-f=lit]').textContent,"
+                    "document.querySelector('.view:not(.hidden) [data-f=age]').textContent,"
+                    "document.querySelector('.view:not(.hidden) [data-f=sight]').textContent]")
+        STAGE = ".view:not(.hidden) .wx-stage"
+        pg.click("#wWeather")
+        pg.wait_for_timeout(1200)
+        check("天气小组件打开月球天气", pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .phead h1').textContent") == "月球天气")
+        check("观测台单画布（Three.js 一个 canvas 承担星空+月球）", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .wx-stage canvas').length") == 1)
+        ws = pg.evaluate("AIOS.weatherState()")
+        check("WebGL 起得来（data-gl=ok）", ws is not None and ws["gl"] is True, str(ws))
+        check("月面贴图来自 ./assets/moon.jpg（data-tex=ok）",
+              ws is not None and ws["tex"] == "ok", str(ws))
+        check("index.html 用本地 three.min.js（无 CDN）", pg.evaluate(
+            "!!document.querySelector('script[src=\"./assets/three.min.js\"]')"))
+        # 只保留天气：分段切换 / 月相滑块 / 显示设置 / 科普块全部不再存在
+        check("只留天气（无分段·无滑块·无设置开关·无科普块）", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .wx-tabs, .view:not(.hidden) .wx-range,"
+            " .view:not(.hidden) .switch, .view:not(.hidden) .wx-narr').length") == 0)
+        check("天气读数与主屏组件同源", pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .wx-hero .h-temp').textContent") == "-173°"
+              and "AI 编的" in pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .wx-src').textContent"))
+        check("天气读数 12 格", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .wx-grid .wx-item').length") == 12)
+        # 月相按当前时间推算：读数与测试独立复算的结果对拍（月相名精确相等，照亮比例 ±1%）
+        exp_name, exp_lit = wx_phase_at(int(time.time() * 1000))
+        cells = pg.evaluate(CELLS_JS)
+        check("月相按当前时间推算（真机时钟对拍）",
+              cells[0] == exp_name and abs(int(cells[1].rstrip("%")) - exp_lit) <= 1,
+              "%s/%s vs 期望 %s/%d%%" % (cells[0], cells[1], exp_name, exp_lit))
+        check("月龄与观测建议已回填", cells[2].endswith("天") and len(cells[3]) >= 4, str(cells))
+        # 不自转：静置 900ms，相机与月球姿态快照一字不变，观测台画面字节也完全一致
+        shot0 = pg.locator(STAGE).screenshot()
+        pg.wait_for_timeout(900)
+        shot1 = pg.locator(STAGE).screenshot()
+        ws1 = pg.evaluate("AIOS.weatherState()")
+        check("取消自转：姿态与画面都不动",
+              shot0 == shot1 and (ws1["theta"], ws1["phi"], ws1["radius"], ws1["spin"]) ==
+              (ws["theta"], ws["phi"], ws["radius"], ws["spin"]), str(ws1))
+        pg.screenshot(path=os.path.join(SHOTS, "v2-weather.png"))
+        # 拖动：相机 theta/phi 跟着改，画面字节也变；松手后立刻停住
+        box = pg.locator(STAGE).bounding_box()
+        pg.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        pg.mouse.down()
+        pg.mouse.move(box["x"] + box["width"] / 2 + 70, box["y"] + box["height"] / 2, steps=6)
+        pg.mouse.up()
+        pg.wait_for_timeout(500)
+        ws2 = pg.evaluate("AIOS.weatherState()")
+        check("拖动旋转（相机 theta 变化、画面随之改变）",
+              abs(ws2["theta"] - ws1["theta"]) > 0.05
+              and pg.locator(STAGE).screenshot() != shot1, "%s -> %s" % (ws1["theta"], ws2["theta"]))
+        pg.wait_for_timeout(700)
+        check("拖动后同样不自转（松手即停）",
+              pg.evaluate("AIOS.weatherState()")["theta"] == ws2["theta"])
+        pg.click("#keyBack")
+        pg.wait_for_timeout(300)
+        check("返回回主屏且天气不占图标网格", pg.evaluate(
+            "!document.querySelector('.home').classList.contains('hidden')")
+              and pg.evaluate("document.querySelectorAll('.home-grid .app-tile').length") == 6
+              and pg.evaluate("document.querySelectorAll('.dock .app-tile').length") == 4)
+
+        # 月相由时间决定：注入固定时钟，分别验证「满月」与「蛾眉月」的读数、姿态与缩放
+        for tag, age_days in (("满月", 14.765), ("蛾眉月", 5.9)):
+            fixed = int(WX_REF_NEW + age_days * 86400000)
+            exp_name, exp_lit = wx_phase_at(fixed)
+            p7 = new_page("Date.now = function () { return %d; };" % fixed)
+            p7.goto(url)
+            wait_home(p7)
+            p7.click("#wWeather")
+            p7.wait_for_timeout(1200)
+            cells = p7.evaluate(CELLS_JS)
+            wsx = p7.evaluate("AIOS.weatherState()")
+            check("固定时钟（%s）月相读数" % tag,
+                  cells[0] == exp_name and abs(int(cells[1].rstrip("%")) - exp_lit) <= 1,
+                  "%s/%s vs 期望 %s/%d%%" % (cells[0], cells[1], exp_name, exp_lit))
+            check("固定时钟（%s）WebGL 与贴图就绪" % tag,
+                  wsx is not None and wsx["gl"] is True and wsx["tex"] == "ok", str(wsx))
+            if tag == "满月":
+                # 满月：光从相机方向照来 —— 盘面最亮；滚轮拉近后相机半径应显著变小
+                r1 = wsx["radius"]
+                c = p7.locator(STAGE).bounding_box()
+                p7.mouse.move(c["x"] + c["width"] / 2, c["y"] + c["height"] / 2)
+                for _ in range(4):
+                    p7.mouse.wheel(0, -300)
+                p7.wait_for_timeout(400)
+                r2 = p7.evaluate("AIOS.weatherState()")["radius"]
+                check("滚轮拉近（相机半径变小）", r2 < r1 * 0.85, "%s -> %s" % (r1, r2))
+                p7.screenshot(path=os.path.join(SHOTS, "v2-weather-full.png"))
+            else:
+                # 蛾眉月：日照角 ~72°，与满月画面对比应明显不同（晨昏线真的按相位摆过去了）
+                shot_crescent = p7.locator(STAGE).screenshot()
+                p7.screenshot(path=os.path.join(SHOTS, "v2-weather-crescent.png"))
+                full = new_page("Date.now = function () { return %d; };"
+                                % int(WX_REF_NEW + 14.765 * 86400000))
+                full.goto(url)
+                wait_home(full)
+                full.click("#wWeather")
+                full.wait_for_timeout(1200)
+                check("蛾眉月与满月的观测台画面不同（光照按相位走）",
+                      full.locator(STAGE).screenshot() != shot_crescent)
+                full.close()
+            p7.close()
 
         # 打开计算器 → v1 玩法：键盘输入 → = 出结果 → 判对错
         pg.locator('[aria-label="计算器"]').first.click()
@@ -408,11 +553,12 @@ def main():
         check("插旗后剩余雷 7", pg.evaluate(
             "document.querySelectorAll('.ms-meta [data-f=\"mines\"]')[0].textContent") == "7")
         pg.screenshot(path=os.path.join(SHOTS, "v2-cal.png"))
-        pg.locator(".diff-btn").nth(2).click()
+        # 难度按钮一律限定在可见视图内（应用视图常驻 viewRoot，不加限定会命中其它页的同类控件）
+        pg.locator(".view:not(.hidden) .diff-btn").nth(2).click()
         pg.wait_for_timeout(300)
         check("困难 42 格 12 雷", pg.evaluate("document.querySelectorAll('.ms-cell').length") == 42
               and pg.evaluate("document.querySelectorAll('.ms-meta [data-f=\"mines\"]')[0].textContent") == "12")
-        pg.locator(".diff-btn").nth(0).click()
+        pg.locator(".view:not(.hidden) .diff-btn").nth(0).click()
         pg.wait_for_timeout(300)
         check("简单 5 雷", pg.evaluate(
             "document.querySelectorAll('.ms-meta [data-f=\"mines\"]')[0].textContent") == "5")
@@ -569,20 +715,75 @@ def main():
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
-        # 相机：模拟取景→快门→预览→保存
+        # 相机：美食素材取景（`vibeknow/world-food-3d` 借材，每 3s 随机换、不与上一张重复）
+        #        + 拍完即换（无预览/重拍/保存）+ 温控（连拍升温 / 过热封锁 / 静置散热）
+        CAM_SRC = ("(function(){var s=document.querySelector('.view:not(.hidden) .cam-shot');"
+                   "return s ? (s.getAttribute('src')||'') : '';})()")
+        CAM_TEMP = ("(function(){var h=document.querySelector('.view:not(.hidden) .cam-hud');"
+                    "return h ? parseFloat(h.textContent.replace(/[^0-9.]/g,'')) : NaN;})()")
+        CAM_HUD = "document.querySelector('.view:not(.hidden) .cam-hud')"
         pg.locator('[aria-label="相机"]').first.click()
-        pg.wait_for_timeout(400)
-        check("取景元素≥3", pg.evaluate("document.querySelectorAll('.view:not(.hidden) .cam-el').length") >= 3)
-        check("镜头温度 HUD", "镜头温度" in pg.evaluate("document.querySelector('.cam-hud').textContent"))
-        pg.click(".cam-shutter")
         pg.wait_for_timeout(700)
-        check("快门后进预览", pg.evaluate(
-            "document.querySelector('.cam-top-btn').style.display") != "none")
-        pg.click(".cam-top-btn.save")
-        pg.wait_for_timeout(300)
-        check("保存反馈", "已保存" in pg.evaluate("document.querySelector('.cam-top-btn.save').textContent"))
+        shot1 = pg.evaluate(CAM_SRC)
+        check("取景为包内美食素材（./assets/cam/food-*.webp）",
+              re.match(r"^\./assets/cam/food-[\w.-]+\.webp$", shot1 or "") is not None, shot1)
+        check("素材已解码上屏（naturalWidth>0）", pg.evaluate(
+            "(function(){var s=document.querySelector('.view:not(.hidden) .cam-shot');"
+            "return !!s && s.naturalWidth > 0 && s.naturalHeight > 0;})()"))
+        # 取景图铺满取景框（cover 裁切），不能只占一角
+        check("取景图铺满取景框", pg.evaluate(
+            "(function(){var s=document.querySelector('.view:not(.hidden) .cam-shot');"
+            "var v=document.querySelector('.view:not(.hidden) .cam-view');if(!s||!v)return false;"
+            "var a=s.getBoundingClientRect(),b=v.getBoundingClientRect();"
+            "return Math.abs(a.width-b.width)<=1&&Math.abs(a.height-b.height)<=1;})()"))
+        check("无预览/重拍/保存控件（拍完不逗留）", pg.evaluate(
+            "document.querySelectorAll('.view:not(.hidden) .cam-top-btn').length") == 0)
+        t0 = pg.evaluate(CAM_TEMP)
+        check("初始镜头温度≈基准 36℃", 34.5 <= t0 <= 37.5, str(t0))
         pg.screenshot(path=os.path.join(SHOTS, "v2-camera.png"))
-        pg.wait_for_timeout(1600)
+        pg.wait_for_timeout(3400)
+        shot2 = pg.evaluate(CAM_SRC)
+        check("每 3s 换一张且不与上一张重复",
+              shot2 != "" and shot2 != shot1, "%s -> %s" % (shot1, shot2))
+        # 拍完立刻换下一张（不再定格预览）
+        pg.click(".cam-shutter")
+        pg.wait_for_timeout(150)
+        shot3 = pg.evaluate(CAM_SRC)
+        check("快门即拍即换（无定格预览）", shot3 != shot2, "%s -> %s" % (shot2, shot3))
+        # 连拍升温：3 张后温度明显高于基准，但还没进过热态
+        for _ in range(3):
+            pg.click(".cam-shutter")
+        t1 = pg.evaluate(CAM_TEMP)
+        check("连拍升温（3 张后高于基准 +3℃）", t1 > t0 + 3, "%s -> %s" % (t0, t1))
+        check("未过热时 HUD 不显示过热文案", pg.evaluate(
+            "(function(){var h=" + CAM_HUD + ";return h.textContent.indexOf('过热')<0 "
+            "&& h.className.indexOf('hot')<0;})()"), str(t1))
+        # 继续连拍 → 过热：HUD 转红 + 文案变化
+        for _ in range(8):
+            pg.click(".cam-shutter")
+        t2 = pg.evaluate(CAM_TEMP)
+        check("连拍至过热（HUD 转红 + 过热文案）", pg.evaluate(
+            "(function(){var h=" + CAM_HUD + ";return h.textContent.indexOf('过热')>=0 "
+            "&& h.className.indexOf('hot')>=0;})()"), str(t2))
+        check("过热时快门转灰（封锁外观）", pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .cam-shutter').className.indexOf('blocked')>=0"))
+        pg.screenshot(path=os.path.join(SHOTS, "v2-camera-hot.png"))
+        # 过热封锁：再按不升温、且有徽标提示
+        t3 = pg.evaluate(CAM_TEMP)
+        pg.click(".cam-shutter")
+        pg.wait_for_timeout(150)
+        t4 = pg.evaluate(CAM_TEMP)
+        check("过热时快门封禁（不再升温）", t4 <= t3 + 0.2, "%s -> %s" % (t3, t4))
+        check("封禁时给出徽标提示", "凉" in pg.evaluate(
+            "document.querySelector('.view:not(.hidden) .cam-badge').textContent"))
+        # 静置散热：温度回落，凉下来后快门恢复
+        pg.wait_for_timeout(4000)
+        t5 = pg.evaluate(CAM_TEMP)
+        check("静置散热（温度回落）", t5 < t2 - 1, "%s -> %s" % (t2, t5))
+        pg.click(".cam-shutter")
+        pg.wait_for_timeout(150)
+        t6 = pg.evaluate(CAM_TEMP)
+        check("降温后快门恢复可用（升温即拍成）", t6 > t5 + 0.5, "%s -> %s" % (t5, t6))
         pg.click("#keyBack")
         pg.wait_for_timeout(300)
 
@@ -713,7 +914,9 @@ def main():
         pg.screenshot(path=os.path.join(SHOTS, "v2-inapp.png"))
 
         # ---------- 存储：容器 Storage JS API 优先（§3.6 版本判断 / §3.7 Storage） ----------
-        p2 = new_page(fake_container(seed_wmask="1"))
+        # 种子取 "0"（存档为「已显示」）而非默认的 "1"：默认值改成打码后，只有与默认相反
+        # 的存档值才能证明「迁移过来的值真被读到」，否则用例会退化成恒真。
+        p2 = new_page(fake_container(seed_wmask="0"))
         p2.goto(url)
         wait_home(p2)
         check("注入容器后走容器 Storage 通道", p2.evaluate("AIOS.storeBackend()") == "xhs")
@@ -728,17 +931,17 @@ def main():
         check("启动水合读取全部键", p2.evaluate(
             "window.__xhsCalls.filter(function(c){return c.indexOf('getStorage:')===0;}).length") == 6)
         check("降级通道既有数据迁移进容器",
-              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "1"
+              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "0"
               and p2.evaluate("window.__xhsCalls.indexOf('setStorage:aios_wmask')") >= 0)
-        check("迁移后的值被读取（钱包按存档打码）",
-              p2.evaluate("document.querySelector('.w-bal').textContent") == "￥ -****")
+        check("迁移后的值被读取（钱包按存档显示余额，非默认打码）",
+              p2.evaluate("document.querySelector('.w-bal').textContent") == "￥ -99,999")
         check("容器用量来自 getStorageInfo", "KB" in p2.evaluate("AIOS.storeSummary()"))
         check("主题也写入容器", p2.evaluate("window.__fakeXhsStorage['aios_wall']") == "light-mesh")
         p2.click(".w-wallet")
         p2.wait_for_timeout(300)
         check("写操作双通道落盘",
-              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "0"
-              and p2.evaluate("localStorage.getItem('aios_wmask')") == "0")
+              p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "1"
+              and p2.evaluate("localStorage.getItem('aios_wmask')") == "1")
         p2.close()
 
         # 版本门槛：buildVersion 末 3 位是编译序号，不得参与比较

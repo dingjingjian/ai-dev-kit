@@ -13,6 +13,7 @@
     phone: '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>',
     sms: '<svg viewBox="0 0 24 24"><path d="M4 3h16a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-5 4V5a2 2 0 0 1 2-2zm3 5h10v2H7V8zm0 4h7v2H7v-2z"/></svg>',
     camera: '<svg viewBox="0 0 24 24"><path d="M9 3L7.5 5H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2.5L15 3H9zm3 5a5 5 0 1 1 0 10 5 5 0 0 1 0-10zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/></svg>',
+    moon: '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
@@ -32,23 +33,37 @@
     { id: 'settings', name: '设置', slogan: '壁纸、外观与关于本机', g: 'gear',  c: ['#8E8E96', '#5C5C66'], deg: 135 }
   ];
 
+  /* 月球天气：唯一入口是主屏天气小组件（§4.3.1），故不进 APPS / DOCK ——
+   * 主屏图标网格与 Dock 保持 6 + 4，只在多任务轮播里以卡片形态出现。 */
+  var WEATHER_APP = { id: 'weather', name: '月球天气', slogan: '数据来源：AI 编的，别当真',
+                      g: 'moon', c: ['#8FA6D8', '#3A4A7A'], deg: 135 };
+
   function findApp(id) {
     var i;
     for (i = 0; i < APPS.length; i++) { if (APPS[i].id === id) { return APPS[i]; } }
     for (i = 0; i < DOCK.length; i++) { if (DOCK[i].id === id) { return DOCK[i]; } }
+    if (id === WEATHER_APP.id) { return WEATHER_APP; }
     return null;
   }
 
-  /* ---------- 存储层（小红书容器能力清单 §2.4 数据存储 / §3.6 版本判断 / §3.7 Storage） ----------
-   * 容器 Storage JS API 优先（客户端 ≥ 9.46.0），localStorage 只作降级兼容；
-   * 两条通道都写、读时以容器值为准，客户端升级/降级都不会丢数据。
+  /* ---------- 存储层（小红书容器 §2.4 数据存储 / §3.6 版本判断 / §3.7 Storage） ----------
+   * 统一存储契约（与 offwork-heatmap / mood-diary 同构，三处改动请同步）：
+   *   1) 双通道：容器 Storage（客户端 ≥ 9.46.0 且已注入 setStorage / getStorage）+ localStorage 镜像；
+   *   2) 写：镜像通道同步先行、容器异步跟上，任一成功即算成功，两条都失败才回报失败（§3.7 要求）；
+   *   3) 读：容器优先，缺失 / 失败退回镜像；容器有而镜像没有则回填，两侧互为兜底；
+   *   4) 启动：并发水合（每个 key 各自 800ms 超时，整体不拖长开机），两侧缺哪边补哪边；
+   *   5) 端能力一律 success / fail 回调 + 800ms 超时兜底（旧容器上 Promise 版不可靠，也不能挂住调用方）；
+   *   6) 版本号：buildVersion 抹掉末 3 位，同步取值 → 异步兜底，取不到按「不支持」处理，取值过程绝不抛错；
+   *   7) 通道可见：关于本机显示当前数据通道，容器写入失败也在那里如实说明。
    * 容器 API 是异步的，故启动时一次性水合进内存缓存（storeCache），此后读写全同步。 */
   var STORE_PREFIX = 'aios_';
   var STORAGE_MIN_CLIENT_VERSION = 9460;   /* 客户端 9.46.0（buildVersion 末 3 位为编译序号，需忽略） */
+  var XHS_CALL_TIMEOUT = 800;              /* 端能力超时即当失败，由镜像通道兜住 */
   var STORE_KEYS = ['mode', 'wall', 'wmask', 'stats', 'phone_records', 'sms_messages'];
 
   var storeCache = {};        /* 短 key -> 字符串值 */
   var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
+  var storeHealthy = true;    /* 容器通道写入是否一直成功（失败则「关于本机」如实说明） */
   var storeUsage = null;      /* { currentSize, limitSize }，单位 KB（getStorageInfo） */
 
   function miniToolApi() {
@@ -63,7 +78,7 @@
     var env = launchOptions && launchOptions.miniToolEnv;
     return Number(env && env.buildVersion) || 0;
   }
-  function clientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
+  function getClientVersion(buildVersion) { return Math.floor(buildVersion / 1000); }
 
   /* 版本号：先同步取（逐级判空），取不到再异步兜底；两条路都失败按「不支持」处理 */
   function getBuildVersion(cb) {
@@ -91,7 +106,7 @@
     var api = miniToolApi();
     if (!api || typeof api[apiName] !== 'function') { cb(false, null); return; }
     var done = false;
-    var timer = global.setTimeout(function () { finish(false, null); }, 800);
+    var timer = global.setTimeout(function () { finish(false, null); }, XHS_CALL_TIMEOUT);
     function finish(ok, res) {
       if (done) { return; }
       done = true;
@@ -103,54 +118,60 @@
     try { api[apiName](payload); } catch (e) { finish(false, null); }
   }
 
-  /* 降级通道：浏览器自带存储不保证可用/持续有效（§2.4），读写一律吞异常 */
-  function localGet(key) {
+  /* 镜像通道（localStorage）：浏览器自带存储不保证可用/持续有效（§2.4），读写一律吞异常。
+   * lsSet 返回是否真的写进去——两条通道都失败才算写失败。 */
+  function lsGet(key) {
     try { return global.localStorage.getItem(STORE_PREFIX + key); } catch (e) { return null; }
   }
-  function localSet(key, val) {
-    try { global.localStorage.setItem(STORE_PREFIX + key, val); } catch (e) { /* 容忍失败 */ }
+  function lsSet(key, val) {
+    try { global.localStorage.setItem(STORE_PREFIX + key, val); return true; } catch (e) { return false; }
   }
 
   /* 启动水合：容器 Storage 优先、localStorage 兜底，两侧缺哪边补哪边（升级/降级一致性）。
-   * 容器不可用或版本不足时只用降级通道，流程照常继续。 */
+   * 容器不可用或版本不足时只用镜像通道，流程照常继续。
+   * 6 个 key 的 getStorage 并发发起（各自 800ms 超时），整体最坏也就 ~800ms，不拖长开机。 */
   function hydrateStore(cb) {
     var i, lv;
     for (i = 0; i < STORE_KEYS.length; i++) {
-      lv = localGet(STORE_KEYS[i]);
+      lv = lsGet(STORE_KEYS[i]);
       if (lv !== null) { storeCache[STORE_KEYS[i]] = lv; }
     }
     getBuildVersion(function (bv) {
       var api = miniToolApi();
-      var usable = clientVersion(bv) >= STORAGE_MIN_CLIENT_VERSION && api &&
+      var usable = getClientVersion(bv) >= STORAGE_MIN_CLIENT_VERSION && api &&
                    typeof api.getStorage === 'function' && typeof api.setStorage === 'function';
       if (!usable) { storeBackend = 'local'; cb(); return; }
       storeBackend = 'xhs';
-      var toLocal = [], toXhs = [], idx = 0;
-      function next() {
-        if (idx >= STORE_KEYS.length) { flush(); return; }
-        var key = STORE_KEYS[idx];
-        idx++;
+      var toLocal = [], toXhs = [], pending = STORE_KEYS.length;
+      function settled() {
+        pending--;
+        if (pending === 0) { flush(); }
+      }
+      function readOne(key) {
         xhsCall('getStorage', { key: STORE_PREFIX + key }, function (got, res) {
           var data = (got && res) ? res.data : null;
           if (data !== undefined && data !== null) {
             storeCache[key] = (typeof data === 'string') ? data : JSON.stringify(data);
-            if (localGet(key) === null) { toLocal.push(key); }  /* 容器有、降级通道没有：补下去 */
+            if (lsGet(key) === null) { toLocal.push(key); }     /* 容器有、镜像没有：补下去 */
           } else if (storeCache[key] !== undefined) {
-            toXhs.push(key);                                    /* 降级通道有、容器没有：迁上来 */
+            toXhs.push(key);                                    /* 镜像有、容器没有：迁上来 */
           }
-          next();
+          settled();
         });
       }
-      next();
+      for (i = 0; i < STORE_KEYS.length; i++) { readOne(STORE_KEYS[i]); }
       function flush() {
         var n;
-        for (n = 0; n < toLocal.length; n++) { localSet(toLocal[n], storeCache[toLocal[n]]); }
+        for (n = 0; n < toLocal.length; n++) { lsSet(toLocal[n], storeCache[toLocal[n]]); }
         var j = 0;
         (function step() {
           if (j >= toXhs.length) { usage(); return; }
           var key = toXhs[j];
           j++;
-          xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function () { step(); });
+          xhsCall('setStorage', { key: STORE_PREFIX + key, data: storeCache[key] }, function (ok) {
+            if (!ok) { storeHealthy = false; }
+            step();
+          });
         })();
       }
       function usage() {
@@ -164,14 +185,18 @@
     });
   }
 
-  /* 写入：内存 + 降级通道镜像 + 容器通道（容器写失败由降级通道兜住） */
+  /* 写入：内存 + 镜像通道 + 容器通道。镜像先行（同步、可靠），容器写失败由镜像兜住，
+   * 并记下来供「关于本机」如实说明；返回镜像通道是否写成功。 */
   function store(key, val) {
     var s = String(val);
     storeCache[key] = s;
-    localSet(key, s);
+    var localOk = lsSet(key, s);
     if (storeBackend === 'xhs') {
-      xhsCall('setStorage', { key: STORE_PREFIX + key, data: s }, function () { /* 降级通道已兜底 */ });
+      xhsCall('setStorage', { key: STORE_PREFIX + key, data: s }, function (ok) {
+        if (!ok) { storeHealthy = false; syncSettingsUI(); }
+      });
     }
+    return localOk;
   }
   /* 读取：走内存缓存（启动水合已完成），无值返回默认值 */
   function read(key, dft) {
@@ -179,9 +204,10 @@
     return (v === undefined || v === null) ? dft : v;
   }
 
-  /* 关于本机展示：当前缓存通道与用量（仅容器通道提供用量） */
+  /* 关于本机展示：当前缓存通道与用量（仅容器通道提供用量；容器写入失败如实说明） */
   function storeSummary() {
     if (storeBackend !== 'xhs') { return 'localStorage（降级）'; }
+    if (!storeHealthy) { return '容器 Storage 写入失败 · 已回落 localStorage'; }
     if (storeUsage && typeof storeUsage.currentSize !== 'undefined') {
       return '容器 Storage · ' + storeUsage.currentSize + ' / ' + (storeUsage.limitSize || 10240) + ' KB';
     }
@@ -227,6 +253,7 @@
   var views = {};            // id -> element
   var homeView = null;
   var recentsEl = null;
+  var weatherView = null;    // 月球天气视图（首次进入时构建；AIOS.weatherState 读取它的快照）
 
   function el(tag, cls, html) {
     var n = document.createElement(tag);
@@ -269,22 +296,24 @@
 
     var row = el('div', 'w-row');
 
-    // 天气组件：一眼假的设定数据（恶搞内核），纯展示不可点
-    var weather = el('div', 'widget w-half w-weather');
+    // 天气组件：一眼假的设定数据（恶搞内核）；点击进入「月球天气」应用（§4.3.1 / §4.9）
+    var weather = el('button', 'widget w-half w-weather');
+    weather.setAttribute('aria-label', '天气组件，打开月球天气');
+    weather.id = 'wWeather';
     weather.appendChild(el('div', 'w-city', '月球 · 静海'));
     var wrow2 = el('div', 'w-wrow2');
     wrow2.appendChild(el('span', 'w-temp', '-173°'));
-    wrow2.appendChild(el('span', 'w-glyphchip',
-      '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>'));
+    wrow2.appendChild(el('span', 'w-glyphchip', GLYPH.moon));
     weather.appendChild(wrow2);
     weather.appendChild(el('span', 'w-hl', '晴 · 流星雨概率 40%'));
     weather.appendChild(el('div', 'w-src', '数据来源：AI 编的，别当真'));
+    weather.addEventListener('click', function () { openApp('weather'); });
     row.appendChild(weather);
 
-    // 钱包组件：银行卡质感，假余额，点按打码/还原（状态持久化）
+    // 钱包组件：银行卡质感，假余额，默认打码，点按显示/隐藏（状态持久化）
     var wallet = el('button', 'widget w-half w-wallet');
-    wallet.setAttribute('aria-label', '钱包组件，点按打码或还原余额');
-    var masked = read('wmask', '0') === '1';
+    wallet.setAttribute('aria-label', '钱包组件，点按显示或隐藏余额');
+    var masked = read('wmask', '1') === '1';   /* 默认打码：首次进入也只显示 ￥ -****（DESIGN §4.3.1） */
     var wtop = el('div', 'w-wtop');
     wtop.appendChild(el('span', 'w-bank', '灵光银行 · 数字卡'));
     wtop.appendChild(el('span', 'w-chip'));
@@ -420,7 +449,7 @@
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">设备名称</span><span class="val">人工智能 OS</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">系统版本</span><span class="val">' + ABOUT_TXT.version + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">型号</span><span class="val">AI-1（模拟）</span>'));
-    cardAbout.appendChild(el('div', 'row', '<span class="lbl">本地缓存</span><span class="val">' + storeSummary() + '</span>'));
+    cardAbout.appendChild(el('div', 'row', '<span class="lbl">本地缓存</span><span class="val" id="storeVal">' + storeSummary() + '</span>'));
     cardAbout.appendChild(el('div', 'row', '<span class="lbl">出品方</span><span class="val">' + ABOUT_TXT.title + '</span>'));
     body.appendChild(cardAbout);
     body.appendChild(toast);
@@ -441,6 +470,9 @@
       if (nodes[i].getAttribute('data-wall') === theme.wall) { nodes[i].classList.add('sel'); }
       else { nodes[i].classList.remove('sel'); }
     }
+    /* 数据通道：容器写入失败时会回调到这里，行内文案随之改成「已回落 localStorage」 */
+    var sv = document.getElementById('storeVal');
+    if (sv) { sv.textContent = storeSummary(); }
   }
 
   /* ---------- 占位应用页（游戏二期接入，DESIGN.md §7） ---------- */
@@ -1215,8 +1247,9 @@
   var ALARM_TXT = {onTime:"你比我准时",late:"你和我一样睡过啦？",retry:"再来一次"};
   var CAL_TXT = {header:"本月由 AI 重新排期，共 35 天",headerHard:"本月由 AI 重新排期，共 42 天",loseTitle:"踩中了 AI 埋的加班雷",loseMessage:"本月白干。",winTitle:"本月平安度过",winMessage:"AI 的加班阴谋破产。",restart:"重新排期",nextMonth:"下一月"};
   var ABOUT_TXT = {title:"人工智能Ding🥕",description:"本机名为人工智能，实则全靠人工。AI 负责假装工作，你负责替它干活。",version:"v2.0"};
-  var CAM_GRAD = ["linear-gradient(135deg, #667eea 0%, #764ba2 100%)","linear-gradient(135deg, #f093fb 0%, #f5576c 100%)","linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)","linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)","linear-gradient(135deg, #fa709a 0%, #fee140 100%)","linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)","linear-gradient(135deg, #d299c2 0%, #fef9d7 100%)","linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%)","linear-gradient(135deg, #cd9cf2 0%, #f6f3ff 100%)","linear-gradient(135deg, #fddb92 0%, #d1fdff 100%)"];
-  var CAM_COLORS = ["#fff","#ffd700","#ff6b6b","#4ecdc4","#45b7d1","#96ceb4","#ffeaa7","#dfe6e9"];
+  /* 相机取景素材（美食 / 猫咪 / 恐龙三套，由 _dev/make_cam_photos.py 派生，
+   * 清单在构建时由 _dev/build.py 扫描 ./assets/cam/ 生成，保证与随包文件一致） */
+  var CAM_SHOTS = ["./assets/cam/food-asado.webp", "./assets/cam/food-beijing-kaoya.webp", "./assets/cam/food-borscht.webp", "./assets/cam/food-braai.webp", "./assets/cam/food-ceviche.webp", "./assets/cam/food-chawanmushi.webp", "./assets/cam/food-churrasco.webp", "./assets/cam/food-croissant.webp", "./assets/cam/food-cuban-sandwich.webp", "./assets/cam/food-deep-dish-pizza.webp", "./assets/cam/food-dongyingong.webp", "./assets/cam/food-fish-and-chips.webp", "./assets/cam/food-fondue.webp", "./assets/cam/food-hamburger.webp", "./assets/cam/food-hangi.webp", "./assets/cam/food-hanshi-kaorou.webp", "./assets/cam/food-humita.webp", "./assets/cam/food-injera.webp", "./assets/cam/food-jollof-rice.webp", "./assets/cam/food-kunafa.webp", "./assets/cam/food-meat-pie.webp", "./assets/cam/food-moussaka.webp", "./assets/cam/food-napoli-pizza.webp", "./assets/cam/food-paella.webp", "./assets/cam/food-poke.webp", "./assets/cam/food-poutine.webp", "./assets/cam/food-rougucha.webp", "./assets/cam/food-schweinshaxe.webp", "./assets/cam/food-shaweima.webp", "./assets/cam/food-sushi.webp", "./assets/cam/food-taco.webp", "./assets/cam/food-tagine.webp", "./assets/cam/food-wuhan-reganmian.webp", "./assets/cam/food-xiaolongbao.webp", "./assets/cam/food-yindu-gali.webp", "./assets/cam/food-yuenan-hefen.webp"];
   var RADAR_LABELS = ["计算力","知识量","记忆力","排雷力","守时度","连击力"];
 
   /* ---------- 助手（v1 还原）：聊天问答，它不会答你得替它答 ---------- */
@@ -1737,7 +1770,14 @@
     return v;
   }
 
-  /* ---------- 相机（v1 还原）：纯模拟取景 + 闪光灯 + 重拍/保存 ---------- */
+  /* ---------- 相机（取景素材化 · 拍完即换 · 镜头温控）：模拟取景 + 闪光灯 ----------
+   * **取景画面为素材图**：三套本地图（美食 / 猫咪 / 恐龙）由 _dev/make_cam_photos.py
+   * 从 `vibeknow/world-food-3d`、`cat-globe-3d`、`jurassic-park-3d` 派生为
+   * `./assets/cam/*.webp` 随包分发；取景框每 3s 随机换一张（不与上一张重复），
+   * 按快门**立刻换了下一张**（无预览页、无「重拍 / 保存」，不再停留定格），
+   * 每次快门重置 3s 计时。仍是纯模拟，不申请摄像头采集权限（v1 即如此）。
+   * **镜头温控**：温度由「拍照频率」推得 —— 每按一次 +1.5℃，静置按 0.5℃/s 回落到
+   * 基准 36℃；≥43.5℃ 转红警示，≥45℃ 快门封锁（变灰 + 徽标提示），凉下来才能继续拍。 */
   function buildCamera() {
     var v = el('div', 'view hidden');
     v.appendChild(el('div', 'phead', '<h1>相机</h1>'));
@@ -1746,26 +1786,22 @@
     body.style.flexDirection = 'column';
     body.style.overflow = 'hidden';
     var view = el('div', 'cam-view');
+    var shot = el('img', 'cam-shot');
+    shot.alt = '';
     var hud = el('div', 'cam-hud', '');
     var badge = el('div', 'cam-badge', 'AI OS 相机');
     var flash = el('div', 'cam-flash');
-    view.appendChild(hud); view.appendChild(badge); view.appendChild(flash);
+    view.appendChild(shot); view.appendChild(hud); view.appendChild(badge); view.appendChild(flash);
     body.appendChild(view);
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var frow = el('div', 'cam-foot');
-    var cancelBtn = el('button', 'cam-top-btn', '重拍');
-    cancelBtn.style.display = 'none';
-    var saveBtn = el('button', 'cam-top-btn save', '保存');
-    saveBtn.style.display = 'none';
-    var leftBox = el('div');
-    leftBox.style.display = 'flex'; leftBox.style.justifyContent = 'flex-start'; leftBox.style.alignItems = 'center';
-    leftBox.appendChild(cancelBtn);
+    var leftBox = el('div');                        // 空占位：保住三列网格，快门恒居中
     var rightBox = el('div');
     rightBox.style.display = 'flex'; rightBox.style.justifyContent = 'flex-end'; rightBox.style.alignItems = 'center';
     var shutter = el('button', 'cam-shutter', '');
     var flashBtn = el('button', 'cam-side', '⚡');
-    rightBox.appendChild(saveBtn); rightBox.appendChild(flashBtn);
+    rightBox.appendChild(flashBtn);
     var mid = el('div');
     mid.style.display = 'flex'; mid.style.justifyContent = 'center'; mid.style.alignItems = 'center';
     mid.appendChild(shutter);
@@ -1773,81 +1809,92 @@
     foot.appendChild(frow);
     v.appendChild(foot);
 
-    var flashOn = true; var photo = null; var preview = false;
-    var liveScene = genScene();
-    function genScene() {
-      var types = ['circle', 'star', 'heart'];
-      var els = [];
-      var n = Math.floor(Math.random() * 5) + 3;
-      for (var i = 0; i < n; i++) {
-        els.push({
-          type: types[Math.floor(Math.random() * types.length)],
-          x: Math.random() * 80 + 10, y: Math.random() * 80 + 10,
-          size: Math.random() * 30 + 20,
-          color: CAM_COLORS[Math.floor(Math.random() * CAM_COLORS.length)]
-        });
+    var flashOn = true;
+    var liveShot = null; var shotIdx = -1;
+    function pickShot() {
+      var i = Math.floor(Math.random() * CAM_SHOTS.length);
+      if (CAM_SHOTS.length > 1 && i === shotIdx) { i = (i + 1) % CAM_SHOTS.length; }
+      shotIdx = i;
+      return CAM_SHOTS[i];
+    }
+    var decoded = {}; var decodedKeys = [];
+    /* 新图解码完再换 src：未就绪时保持上一张，取景框不会闪白 / 留空。
+     * 只保留最近 12 张的引用（其余交给 GC）：取景框每 3s 换一张，
+     * 长时间挂着相机会把 90 张全解码进内存，手机上没必要。 */
+    function showShot(src) {
+      if (shot.getAttribute('src') === src) { return; }
+      var img = decoded[src];
+      if (!img) {
+        img = new Image(); decoded[src] = img; decodedKeys.push(src);
+        img.src = src;
+        while (decodedKeys.length > 12) { delete decoded[decodedKeys.shift()]; }
       }
-      return { gradient: CAM_GRAD[Math.floor(Math.random() * CAM_GRAD.length)], elements: els };
+      function apply() { if (img.naturalWidth > 0) { shot.setAttribute('src', src); } }
+      if (img.complete) { apply(); } else { img.addEventListener('load', apply); }
     }
-    function paintScene() {
-      var olds = view.querySelectorAll('.cam-el');
-      for (i2 = 0; i2 < olds.length; i2++) { olds[i2].parentNode.removeChild(olds[i2]); }
-      var sc = preview ? photo : liveScene;
-      view.style.background = sc.gradient;
-      sc.elements.forEach(function (e) {
-        var n2 = el('div', 'cam-el ' + (e.type === 'circle' ? 'circle' : 'glyph'));
-        n2.style.left = e.x + '%'; n2.style.top = e.y + '%';
-        if (e.type === 'circle') {
-          n2.style.width = e.size + 'px'; n2.style.height = e.size + 'px'; n2.style.background = e.color;
-        } else {
-          n2.style.fontSize = e.size + 'px'; n2.style.color = e.color;
-          n2.textContent = e.type === 'star' ? '★' : '♥';
-        }
-        view.insertBefore(n2, hud);
-      });
+    function paintScene() { showShot(liveShot); }
+
+    /* --- 镜头温控（唯一数据源：拍照频率） --- */
+    var TEMP_BASE = 36.0, TEMP_HEAT = 1.5, TEMP_COOL = 0.5;
+    var TEMP_WARN = 43.5, TEMP_STOP = 45.0, TEMP_CAP = TEMP_BASE + 10;
+    var temp = TEMP_BASE; var tempTs = Date.now(); var stopped = false;
+    /* 散热按真实时间差结算，与定时器节拍漂移无关（闲时也照常结算） */
+    function coolTemp() {
+      var dt = (Date.now() - tempTs) / 1000;
+      if (dt <= 0) { return; }
+      tempTs = Date.now();
+      temp = temp - TEMP_COOL * dt;
+      if (temp < TEMP_BASE) { temp = TEMP_BASE; }
     }
-    var i2;
-    function rndTemp() { return Math.round((Math.random() * 6 + 36) * 10) / 10; }
-    hud.textContent = '镜头温度 ' + rndTemp() + '℃';
+    function paintTemp() {
+      var warn = temp >= TEMP_WARN; var stop = temp >= TEMP_STOP;
+      hud.textContent = (warn ? '镜头过热 ' : '镜头温度 ') + temp.toFixed(1) + '℃';
+      if (warn) { hud.classList.add('hot'); } else { hud.classList.remove('hot'); }
+      if (stop) { shutter.classList.add('blocked'); } else { shutter.classList.remove('blocked'); }
+      if (stop && !stopped) { hint('镜头过热，先别拍'); }
+      stopped = stop;
+    }
+    var BADGE = 'AI OS 相机';
+    function hint(msg) {
+      badge.textContent = msg;
+      global.setTimeout(function () { badge.textContent = BADGE; }, 1400);
+    }
+
+    /* --- 3s 自动换景：每次快门重置计时（刚拍完的那张不会被立刻顶掉） --- */
+    var rotTimer = null;
+    function scheduleRotate() {
+      if (rotTimer) { global.clearTimeout(rotTimer); }
+      rotTimer = global.setTimeout(function () {
+        if (current === 'camera') { liveShot = pickShot(); paintScene(); }
+        scheduleRotate();
+      }, 3000);
+    }
     global.setInterval(function () {
-      if (preview || current !== 'camera') { return; }
-      liveScene = genScene();
-      hud.textContent = '镜头温度 ' + rndTemp() + '℃';
-      paintScene();
-    }, 3000);
+      coolTemp();
+      if (current === 'camera') { paintTemp(); }
+    }, 500);
+
     flashBtn.addEventListener('click', function () {
       flashOn = !flashOn;
       flashBtn.style.opacity = flashOn ? '1' : '.4';
     });
     shutter.addEventListener('click', function () {
-      if (preview) { return; }
+      coolTemp();
+      if (temp >= TEMP_STOP) { paintTemp(); hint('太烫了，凉一下再拍'); return; }
       if (flashOn) {
         flash.classList.add('on');
         global.setTimeout(function () { flash.classList.remove('on'); }, 150);
       }
-      global.setTimeout(function () {
-        photo = genScene(); preview = true;
-        cancelBtn.style.display = ''; saveBtn.style.display = '';
-        shutter.style.visibility = 'hidden';
-        flashBtn.style.display = 'none';
-        paintScene();
-      }, 300);
+      temp = Math.min(TEMP_CAP, temp + TEMP_HEAT);   // 拍一张就升温
+      paintTemp();
+      liveShot = pickShot();                          // 拍完立刻换下一张
+      paintScene();
+      scheduleRotate();
     });
-    cancelBtn.addEventListener('click', function () {
-      preview = false; photo = null;
-      cancelBtn.style.display = 'none'; saveBtn.style.display = 'none';
-      shutter.style.visibility = '';
-      flashBtn.style.display = '';
-      liveScene = genScene(); paintScene();
-    });
-    saveBtn.addEventListener('click', function () {
-      saveBtn.textContent = '已保存 ✓';
-      global.setTimeout(function () {
-        saveBtn.textContent = '保存';
-        cancelBtn.click();
-      }, 1500);
-    });
-    v.onShow = paintScene;
+    v.onShow = function () { coolTemp(); paintTemp(); paintScene(); };
+    liveShot = pickShot();
+    paintTemp();
+    scheduleRotate();
     paintScene();
     return v;
   }
@@ -2034,7 +2081,423 @@
     return v;
   }
 
-  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats };
+  /* ---------- 月球天气（§4.9）：由主屏天气小组件点进来的应用 ----------
+   * **直接采用 vibeknow/moon-3d 的 Three.js 渲染方式**（本地 ./assets/three.min.js，
+   * 与 vibeknow/earth-3d 同一套引入方式，零 CDN）：
+   *  - WebGLRenderer + sRGB 输出 + ACESFilmic 色调映射（曝光 1.1）→ Scene / PerspectiveCamera
+   *  - 月球：SphereGeometry(R,64,64) + MeshStandardMaterial(月面贴图, roughness .95)
+   *  - 光照：AmbientLight(0x223044, 0.4) + DirectionalLight(0xffffff, 2.4)；**太阳方位角由
+   *    当前真实月相推出**（0° 新月 / 180° 满月），不设滑块
+   *  - 背景：程序化星空天球（CanvasTexture）+ 近层星点 Points + 两层加法辉光 Sprite
+   *  - 相机：球坐标 theta/phi/radius，拖动旋转、滚轮/双指缩放；**不自转**（只由手势驱动）
+   *  渲染循环只在视图可见时跑（隐藏即停帧），月相每分钟对一次表。
+   * 3D 失败（无 WebGL）时页面不留白：观测台显示降级提示，天气读数照常可用。 */
+
+  /* 真实月相：以 2000-01-06 18:14 UTC 那次新月为基准，按平均朔望月推月龄、照亮比例与日照角。
+   * 未做中心差修正，相对真实朔望误差在半天以内 —— 一台「月面天气站」够用，且不引天文库、不联网。 */
+  var WX_SYNODIC = 29.530588853;   /* 朔望月（天） */
+  var WX_REF_NEW = 947182440000;   /* 2000-01-06T18:14:00Z 的新月 */
+  function wxMoonAge(now) {
+    var age = ((now - WX_REF_NEW) / 86400000) % WX_SYNODIC;
+    return age < 0 ? age + WX_SYNODIC : age;
+  }
+  /* 观测建议：月相不同可见时段不同（真天文常识，用站内语气说） */
+  function wxSight(frac) {
+    if (frac < 0.04 || frac > 0.96) { return '不可见 · 宜观星'; }
+    if (frac < 0.30) { return '傍晚西边低空'; }
+    if (frac < 0.45) { return '入夜后西半天空'; }
+    if (frac <= 0.55) { return '整夜可见 · 宜观月'; }
+    if (frac < 0.72) { return '后半夜东边升起'; }
+    return '凌晨东边低空';
+  }
+  function wxPhaseName(deg) {
+    var d = ((deg % 360) + 360) % 360;
+    if (d < 8 || d > 352) { return '新月'; }
+    if (d < 82) { return '蛾眉月'; }
+    if (d < 98) { return '上弦月'; }
+    if (d < 172) { return '盈凸月'; }
+    if (d < 188) { return '满月'; }
+    if (d < 262) { return '亏凸月'; }
+    if (d < 278) { return '下弦月'; }
+    return '残月';
+  }
+
+  /* 纹理工厂（沿用 moon-3d 的三个 CanvasTexture 生成器）：
+   *  sky = 星空天球贴图（星云色斑 + 银河带 + 星点），plain = 4×4 占位色，radial = 辉光径向渐变 */
+  function wxStarfieldTex() {
+    var w = 2048, h = 1024;
+    var c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var x = c.getContext('2d');
+    var i, px, py, r, g, b, t, d, hue;
+    var bg = x.createLinearGradient(0, 0, 0, h);
+    bg.addColorStop(0, '#04050c');
+    bg.addColorStop(0.5, '#080a1a');
+    bg.addColorStop(1, '#04050c');
+    x.fillStyle = bg; x.fillRect(0, 0, w, h);
+    x.save(); x.translate(w / 2, h / 2); x.rotate(-0.4); x.translate(-w / 2, -h / 2);
+    for (i = 0; i < 22; i++) {
+      px = Math.random() * w; py = h / 2 + (Math.random() - 0.5) * h * 0.28; r = 100 + Math.random() * 220;
+      g = x.createRadialGradient(px, py, 0, px, py, r);
+      hue = Math.random();
+      var c1 = hue < 0.4 ? 'rgba(150,120,220,' : (hue < 0.7 ? 'rgba(90,130,210,' : 'rgba(200,120,150,');
+      g.addColorStop(0, c1 + (0.04 + Math.random() * 0.05) + ')');
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      x.fillStyle = g; x.fillRect(0, 0, w, h);
+    }
+    for (i = 0; i < 3600; i++) {
+      px = Math.random() * w; py = h / 2 + (Math.random() - 0.5) * h * 0.3;
+      d = Math.abs(py - h / 2) / (h * 0.15); b = (1 - d * d) * (0.3 + Math.random() * 0.6);
+      if (b <= 0) { continue; }
+      x.fillStyle = 'rgba(255,255,255,' + b + ')'; x.fillRect(px, py, 1, 1);
+    }
+    x.restore();
+    for (i = 0; i < 3800; i++) {
+      px = Math.random() * w; py = Math.random() * h; b = 0.15 + Math.random() * 0.5;
+      x.fillStyle = 'rgba(255,255,255,' + b + ')'; x.fillRect(px, py, 1, 1);
+    }
+    for (i = 0; i < 200; i++) {
+      px = Math.random() * w; py = Math.random() * h; b = 0.82 + Math.random() * 0.18;
+      x.fillStyle = 'rgba(255,255,255,' + b + ')'; x.fillRect(px, py, 1, 1);
+    }
+    t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+  function wxPlainTex(col) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 4;
+    var x = c.getContext('2d');
+    x.fillStyle = col; x.fillRect(0, 0, 4, 4);
+    return new THREE.CanvasTexture(c);
+  }
+  function wxRadialTex(c0, c1, c2) {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, c0); g.addColorStop(0.4, c1); g.addColorStop(1, c2);
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+
+  function buildWeather() {
+    var v = el('div', 'view hidden');
+    v.appendChild(el('div', 'phead', '<h1>月球天气</h1>'));
+    var body = el('div', 'pbody');
+    var i;
+
+    /* ---- 观测台：Three.js 画布（拖动旋转 / 滚轮·双指缩放） ---- */
+    var stage = el('div', 'wx-stage');
+    var moonCv = el('canvas', 'wx-moon');
+    stage.appendChild(moonCv);
+    var hud = el('div', 'wx-hud');
+    var hudL = el('div', 'wx-hud-l');
+    hudL.appendChild(el('div', 'wx-loc', '观测站 · 静海基地'));
+    hudL.appendChild(el('div', 'wx-loc-name', '月球 · 静海'));
+    hud.appendChild(hudL);
+    var hudChip = el('div', 'wx-chip', '');
+    hud.appendChild(hudChip);
+    stage.appendChild(hud);
+    stage.appendChild(el('div', 'wx-tip', '拖动旋转 · 滚轮/双指缩放'));
+    body.appendChild(stage);
+
+    /* ---- 观测状态：相机球坐标（拖动改 theta/phi，缩放改 radius）；月相由时间给 ---- */
+    var MOON_R = 5;                       /* 月球半径（场景单位，同 moon-3d） */
+    var R_MIN = 8, R_MAX = 60;            /* 相机半径范围（同 moon-3d） */
+    var theta = 0, phi = Math.PI / 2, radius = 18;
+    var autoSpin = false;                 /* **不做自动自转**：月面只由手势驱动 */
+    var spinY = 0, spinMul = 0;
+    var phaseDeg = 180;
+    var dprCap = Math.min(global.devicePixelRatio || 1, 1.5);   /* 同 moon-3d：像素比封顶 1.5 */
+    var sw = 0, sh = 0, dirty = true;
+    var scene = null, camera = null, renderer = null, moon = null, sky = null;
+    var sunLight = null, glowA = null, glowB = null, starsPts = null;
+    var glOK = false;
+
+    /* ---- 天气读数（与主屏天气组件同源；前四格月相按时相算） ---- */
+    var hero = el('div', 'wx-hero');
+    var hMain = el('div', 'h-main');
+    hMain.appendChild(el('div', 'h-temp', '-173°'));
+    hMain.appendChild(el('div', 'h-cond', '晴 · 流星雨概率 40%'));
+    hero.appendChild(hMain);
+    hero.appendChild(el('div', 'wx-glyph', GLYPH.moon));
+    body.appendChild(hero);
+
+    /* 12 格读数：动态项留引用（dyn），供 wxApplyPhase 回填 */
+    var dyn = {};
+    var CELLS = [
+      ['phase', '月相'], ['age', '月龄'], ['lit', '照亮比例'], ['sight', '观测建议'],
+      ['-', '月面温度', '-173°C'], ['-', '昼面温度', '+127°C'],
+      ['-', '太阳风', '420 km/s'], ['-', '大气压', '3×10⁻¹⁵ bar'],
+      ['-', '辐射剂量', '1.4 mSv/日'], ['-', '月尘静电', '轻微'],
+      ['-', '能见度', '极佳 · 无雾霾'], ['-', '紫外线指数', '爆表']
+    ];
+    var grid = el('div', 'wx-grid');
+    for (i = 0; i < CELLS.length; i++) {
+      var cell = el('div', 'wx-item');
+      cell.appendChild(el('div', 'k', CELLS[i][1]));
+      var cellV = el('div', 'v', CELLS[i][2] || '--');
+      cell.appendChild(cellV);
+      grid.appendChild(cell);
+      if (CELLS[i][0] !== '-') { cellV.setAttribute('data-f', CELLS[i][0]); dyn[CELLS[i][0]] = cellV; }
+    }
+    body.appendChild(grid);
+    body.appendChild(el('div', 'wx-src', '数据来源：AI 编的，别当真'));
+
+    /* ---- Three.js 观测场景：搭建方式与光照口径直接沿用 moon-3d ---- */
+    (function initGL() {
+      if (typeof THREE === 'undefined') { glOK = false; }
+      else {
+        try {
+          renderer = new THREE.WebGLRenderer({ canvas: moonCv, antialias: true,
+                                               powerPreference: 'high-performance' });
+          glOK = true;
+        } catch (e) { glOK = false; }
+      }
+      if (!glOK) {
+        // 无 WebGL：观测台不留白，给一句降级提示，天气读数照常
+        stage.setAttribute('data-gl', 'fail');
+        stage.appendChild(el('div', 'wx-fallback', '本机不支持 3D 观测（无 WebGL），天气读数照常'));
+        return;
+      }
+      stage.setAttribute('data-gl', 'ok');
+      renderer.setPixelRatio(dprCap);
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+
+      // 星空天球（程序化 CanvasTexture，零外部资源）
+      sky = new THREE.Mesh(new THREE.SphereGeometry(2500, 48, 32),
+        new THREE.MeshBasicMaterial({ map: wxStarfieldTex(), side: THREE.BackSide, depthWrite: false }));
+      scene.add(sky);
+
+      // 光照：冷色环境光（暗面不纯黑）+ 太阳平行光（方位角由真实月相给）
+      scene.add(new THREE.AmbientLight(0x223044, 0.4));
+      sunLight = new THREE.DirectionalLight(0xffffff, 2.4);
+      sunLight.position.set(0, 0, MOON_R * 3);
+      scene.add(sunLight);
+
+      // 月球本体：先顶着素色球，贴图到货再换（避免首帧空白）
+      var moonMat = new THREE.MeshStandardMaterial({
+        map: wxPlainTex('#b8b8b8'), roughness: 0.95, metalness: 0
+      });
+      moon = new THREE.Mesh(new THREE.SphereGeometry(MOON_R, 64, 64), moonMat);
+      scene.add(moon);
+
+      // 两层加法辉光（同 moon-3d 的月光感）
+      glowA = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: wxRadialTex('rgba(200,220,255,.28)', 'rgba(160,190,240,.1)', 'rgba(140,170,230,0)'),
+        blending: THREE.AdditiveBlending, transparent: true, depthWrite: false
+      }));
+      glowA.scale.set(MOON_R * 4.5, MOON_R * 4.5, 1);
+      scene.add(glowA);
+      glowB = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: wxRadialTex('rgba(180,210,255,.12)', 'rgba(140,180,230,.04)', 'rgba(120,160,220,0)'),
+        blending: THREE.AdditiveBlending, transparent: true, depthWrite: false
+      }));
+      glowB.scale.set(MOON_R * 8, MOON_R * 8, 1);
+      scene.add(glowB);
+
+      // 近层星点（BufferGeometry + Points，同 moon-3d）
+      starsPts = (function () {
+        var n = 2600, geo = new THREE.BufferGeometry();
+        var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+        var k, u, v, s, R, b, t;
+        for (k = 0; k < n; k++) {
+          u = Math.random() * 2 - 1; v = Math.random() * 6.2832; s = Math.sqrt(1 - u * u);
+          R = 800 + Math.random() * 600;
+          pos[k * 3] = R * s * Math.cos(v); pos[k * 3 + 1] = R * u; pos[k * 3 + 2] = R * s * Math.sin(v);
+          b = 0.25 + Math.random() * 0.75; t = Math.random();
+          if (t < 0.15) { col[k * 3] = b * 0.8; col[k * 3 + 1] = b * 0.85; col[k * 3 + 2] = b; }
+          else if (t < 0.25) { col[k * 3] = b; col[k * 3 + 1] = b * 0.85; col[k * 3 + 2] = b * 0.7; }
+          else { col[k * 3] = b; col[k * 3 + 1] = b; col[k * 3 + 2] = b; }
+        }
+        geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+        var pts = new THREE.Points(geo, new THREE.PointsMaterial({
+          size: 0.6, sizeAttenuation: true, vertexColors: true, transparent: true,
+          opacity: 0.9, depthWrite: false
+        }));
+        scene.add(pts);
+        return pts;
+      })();
+
+      // 月面贴图：本地 assets/moon.jpg（与 earth-3d / moon-3d 同款加载方式）
+      var maxA = renderer.capabilities.getMaxAnisotropy();
+      var ldr = new THREE.TextureLoader();
+      ldr.load('./assets/moon.jpg', function (t) {
+        t.encoding = THREE.sRGBEncoding;
+        t.anisotropy = maxA;
+        moonMat.map = t;
+        moonMat.needsUpdate = true;
+        stage.setAttribute('data-tex', 'ok');
+        dirty = true;
+        wxKick();
+      }, undefined, function () {
+        // file:// 直开时浏览器按跨源拦下本地贴图：留素色球 + 标注原因，不假装成功
+        stage.setAttribute('data-tex', 'fail');
+        stage.setAttribute('data-texhint', '1');
+      });
+    })();
+
+    /* 画布尺寸跟随观测台：只改 renderer 尺寸与相机 aspect（不再有离屏逐像素缓冲） */
+    function wxResize() {
+      var w = stage.clientWidth, h = stage.clientHeight;
+      if (!w || !h) { return false; }
+      sw = w; sh = h;
+      if (!glOK || !renderer) { return true; }
+      renderer.setPixelRatio(dprCap);
+      renderer.setSize(w, h, false);
+      moonCv.style.width = w + 'px';
+      moonCv.style.height = h + 'px';
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      dirty = true;
+      return true;
+    }
+
+    /* 相机球坐标 → 位置（同 moon-3d 的 camPos：theta 绕 Y、phi 自 +Y 起算） */
+    function wxCamPos() {
+      var sp = Math.sin(phi);
+      camera.position.set(radius * sp * Math.sin(theta), radius * Math.cos(phi),
+                          radius * sp * Math.cos(theta));
+      camera.lookAt(0, 0, 0);
+    }
+
+    /* 画一帧：旋转只由手势给（不自转）；两层辉光跟着月球；WebGL 不可用时不画 */
+    function wxDraw() {
+      if (!glOK || !renderer) { return; }
+      moon.rotation.y = spinY;
+      wxCamPos();
+      glowA.position.copy(moon.position);
+      glowB.position.copy(moon.position);
+      renderer.render(scene, camera);
+    }
+
+    /* 月龄 → 太阳方位角、照亮比例与读数：0° 新月 / 90° 上弦 / 180° 满月 / 270° 下弦。
+     * 与 moon-3d 的 setPhase 同一套几何：把平行光摆在 XZ 平面的 (sin a, 0, -cos a)·d 上，
+     * a=180° 时光从相机方向照过去即满月；theta/phi 不变时看到的就是真实相位。 */
+    function wxApplyPhase(age) {
+      var frac = age / WX_SYNODIC;
+      var a = frac * 6.283185307;
+      phaseDeg = frac * 360;
+      var lit = Math.round((1 - Math.cos(a)) / 2 * 100);
+      var nm = wxPhaseName(phaseDeg);
+      if (glOK && sunLight) {
+        var d = MOON_R * 4;
+        sunLight.position.set(Math.sin(a) * d, 0, -Math.cos(a) * d);
+      }
+      dyn.phase.textContent = nm;
+      dyn.age.textContent = age.toFixed(1) + ' 天';
+      dyn.lit.textContent = lit + '%';
+      dyn.sight.textContent = wxSight(frac);
+      hudChip.textContent = nm + ' · 照亮 ' + lit + '%';
+      dirty = true;
+    }
+
+    /* ---- 手势：单指旋转 / 双指·滚轮缩放（不自转：松手就停）
+     * 与 moon-3d 同款约定：第二指落下即让位给缩放，避免两根手指轮流改同一组角度而抖动。 */
+    var dragId = null, lastX = 0, lastY = 0, pinchD = 0;
+    function tdist(ts) {
+      var dx = ts[0].clientX - ts[1].clientX, dy = ts[0].clientY - ts[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+    stage.addEventListener('pointerdown', function (e) {
+      if (dragId !== null) { dragId = null; pinchD = 0; return; }
+      dragId = e.pointerId;
+      lastX = e.clientX; lastY = e.clientY;
+      try { stage.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+    });
+    // 与 moon-3d 同款手感：横向拖改 theta（相机绕 Y），纵向拖改 phi（俯仰，限位 0.1~π-0.1）
+    stage.addEventListener('pointermove', function (e) {
+      if (e.pointerId !== dragId) { return; }
+      theta -= (e.clientX - lastX) * 0.005;
+      phi -= (e.clientY - lastY) * 0.005;
+      if (phi < 0.1) { phi = 0.1; }
+      if (phi > 3.041592653589793) { phi = 3.041592653589793; }
+      lastX = e.clientX; lastY = e.clientY;
+      dirty = true;
+    });
+    function wxEndDrag(e) {
+      if (e.pointerId === dragId) { dragId = null; }
+    }
+    stage.addEventListener('pointerup', wxEndDrag);
+    stage.addEventListener('pointercancel', wxEndDrag);
+    // 缩放改的是相机半径（moon-3d 同款：滚轮下滚拉远、上滚拉近），夹在 R_MIN~R_MAX
+    stage.addEventListener('wheel', function (e) {
+      e.preventDefault();
+      radius *= 1 + (e.deltaY > 0 ? 0.08 : -0.08);
+      if (radius < R_MIN) { radius = R_MIN; }
+      if (radius > R_MAX) { radius = R_MAX; }
+      dirty = true;
+    }, { passive: false });
+    stage.addEventListener('touchstart', function (e) {
+      if (e.touches.length === 2) { pinchD = tdist(e.touches); }
+    }, { passive: true });
+    stage.addEventListener('touchmove', function (e) {
+      if (e.touches.length !== 2) { return; }
+      e.preventDefault();
+      var d = tdist(e.touches);
+      // 两指几乎重合时 d→0，pinch/d 会炸成天文数字把镜头甩飞：12px 以内只更新基线
+      if (pinchD > 12 && d > 12) {
+        radius *= pinchD / d;
+        if (radius < R_MIN) { radius = R_MIN; }
+        if (radius > R_MAX) { radius = R_MAX; }
+        dirty = true;
+      }
+      pinchD = d;
+    }, { passive: false });
+    stage.addEventListener('touchend', function (e) {
+      if (e.touches.length < 2) { pinchD = 0; }
+    }, { passive: true });
+    stage.addEventListener('touchcancel', function () { pinchD = 0; }, { passive: true });
+
+    /* ---- 心跳：每分钟对一次表（月相按时间走），其余只在 dirty 时重绘 ----
+     * 视图隐藏即停帧（onShow / 缩放 / 贴图到货再踢一脚），不做无谓的常驻动画循环。 */
+    var lastPhaseAt = 0, rafId = 0;
+    function wxKick() {
+      if (!rafId) { rafId = global.requestAnimationFrame(wxTick); }
+    }
+    function wxTick(ts) {
+      rafId = 0;
+      if (v.classList.contains('hidden')) { return; }
+      if (!sw || !sh) { if (!wxResize()) { wxKick(); return; } }
+      if (!lastPhaseAt || ts - lastPhaseAt > 60000) {
+        lastPhaseAt = ts;
+        wxApplyPhase(wxMoonAge(Date.now()));
+      }
+      if (dirty) { wxDraw(); dirty = false; }
+      wxKick();
+    }
+    global.addEventListener('resize', function () { sw = 0; dirty = true; wxKick(); });
+    // WebGL 上下文丢失：不白屏 —— 换降级提示，天气读数不受影响
+    moonCv.addEventListener('webglcontextlost', function (e) {
+      e.preventDefault();
+      glOK = false;
+      stage.setAttribute('data-gl', 'fail');
+      stage.appendChild(el('div', 'wx-fallback', '3D 观测已中断（图形上下文丢失），天气读数照常'));
+      dirty = false;
+    }, false);
+
+    v.appendChild(body);
+    weatherView = v;
+    // 供自检读取的观测状态（与 AIOS.storeBackend 同类：只读快照，不做写操作）
+    v.state = function () {
+      return { gl: glOK, tex: stage.getAttribute('data-tex'), phase: phaseDeg,
+               theta: theta, phi: phi, radius: radius, spin: spinY };
+    };
+    v.onShow = function () { sw = 0; dirty = true; wxKick(); };
+    wxApplyPhase(wxMoonAge(Date.now()));
+    wxResize();
+    wxKick();
+    return v;
+  }
+
+  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
   /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
@@ -2279,6 +2742,8 @@
   }
 
   global.AIOS = { openApp: openApp, goHome: goHome, goBack: goBack, theme: theme,
+                  /* 月球天气的观测状态快照（自检用；只读，不提供任何写入口） */
+                  weatherState: function () { return weatherView ? weatherView.state() : null; },
                   storeBackend: function () { return storeBackend; },
                   storeSummary: storeSummary,
                   hydrateStore: hydrateStore };
