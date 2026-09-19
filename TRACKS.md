@@ -36,16 +36,16 @@ ai-dev-kit/
 | 项目 | 目录 | 一句话定位 | 物料状态 |
 |------|------|-----------|----------|
 | 准时下班打卡 | `vibetool/offwork-heatmap/` | 上下班打卡 + GitHub 式热力图看每日准时情况 | 已发布 |
-| 心情日记 | `vibetool/mood-diary/` | 每天一种颜色记心情，GitHub 式热力图回看半年情绪 | 均未 |
+| 心情日记 | `vibetool/mood-diary/` | 每天一种颜色记心情，GitHub 式热力图回看半年情绪 | 已发布 |
 | 拼豆设计工具 | `vibetool/perler-bead-designer/` | 48 色标准色卡的拼豆图纸设计与导出 | 已发布 |
 | 像素画编辑器 | `vibetool/pixel-art-editor/` | 16–256 画布，笔刷/图层/撤销，导出 SVG+PNG | 已发布 |
 | Word 转 Markdown | `vibetool/word-to-md/` | 浏览器端 .docx 转 Markdown | 均未 |
-| 密码管理器 | `vibetool/password-manager/` | AES 加密本地密码库，Web + Electron 双模式 | 自用 · 不投稿 |
+| 密码管理器 | `vibetool/password-manager/` | AES 加密本地密码库，Web + Electron 双模式 | 已发布（自用） |
 | AI 网关 | `vibetool/ai_gateway/` | 本地 LLM API 统一网关，智能体只需配置一次 | 自用 · 不投稿 |
 | 网站截图 | `vibetool/screenshot/` | 多网站批量截图，处理懒加载/Cloudflare/字体 | 自用 · 不投稿 |
 | AI 新闻日报 | `vibetool/ai-news/` | AI 新闻采集、飞书写入、HTML 日报生成 | 自用 · 不投稿 |
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
-| 图表图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色 | 笔记就绪 · 未打包 |
+| 图表图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色 | 已发布 |
 | UI/UX 风格画廊 | `vibetool/uiux-style-gallery/` | 67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器 | 完整（zip + 笔记） |
 | 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） | 自用 · 不投稿 |
 | 宣传片录制器 | `.skill/demo-video-recorder/` | Playwright 驱动真浏览器录 9:16 竖屏片，Pillow 字幕（三主题）+ edge-tts 解说（v1.2.0） | 自用 · 不投稿 |
@@ -93,8 +93,8 @@ ai-dev-kit/
 | 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） | 已发布 |
 | 3D 月球科普 | `vibeknow/moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
 | 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
-| 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已打包 · 缺笔记 |
-| 火箭发射 | `vibeknow/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时 | 已打包 · 缺笔记 |
+| 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已发布 |
+| 火箭发射 | `vibeknow/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时 | 已发布 |
 | 侏罗纪公园 3D | `vibeknow/jurassic-park-3d/` | 侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架 | 已打包（zip + 物料） |
 
 ## 维护约定

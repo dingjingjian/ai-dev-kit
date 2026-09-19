@@ -69,6 +69,15 @@ GUARDS = [
     ("相机素材清单指向包内相对路径", "./assets/cam/" in js),
     ("版本判断忽略 buildVersion 末 3 位", "Math.floor(buildVersion / 1000)" in js
      and "STORAGE_MIN_CLIENT_VERSION = 9460" in js),
+    # 系统音效（DESIGN.md §4.11）：Web Audio 实时合成，零音频文件、无音频标签
+    ("音效为 Web Audio 实时合成（webkit 前缀兜底 + 振荡器）",
+     "webkitAudioContext" in js and "createOscillator" in js and "AudioContext" in js),
+    ("无音频标签 / 音频文件（音效不引任何外部资源）",
+     not re.search(r"<audio\b|<video\b|\.mp3|\.wav|\.ogg|\.m4a|\.aac", html + js, re.I)
+     and not [p for ext in ("*.mp3", "*.wav", "*.ogg", "*.m4a")
+              for p in (ROOT / "assets").rglob(ext)]),
+    ("音效可整体静音（data-sfx 派发 + aios_sound 落盘）",
+     "data-sfx" in js and "'sound'" in js and "sfxSetEnabled" in js),
 ]
 print("—— 打包前置校验 ——")
 failed = [name for name, ok in GUARDS if not ok]

@@ -59,7 +59,7 @@
   var STORE_PREFIX = 'aios_';
   var STORAGE_MIN_CLIENT_VERSION = 9460;   /* 客户端 9.46.0（buildVersion 末 3 位为编译序号，需忽略） */
   var XHS_CALL_TIMEOUT = 800;              /* 端能力超时即当失败，由镜像通道兜住 */
-  var STORE_KEYS = ['mode', 'wall', 'wmask', 'stats', 'phone_records', 'sms_messages'];
+  var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages'];
 
   var storeCache = {};        /* 短 key -> 字符串值 */
   var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
@@ -129,7 +129,7 @@
 
   /* 启动水合：容器 Storage 优先、localStorage 兜底，两侧缺哪边补哪边（升级/降级一致性）。
    * 容器不可用或版本不足时只用镜像通道，流程照常继续。
-   * 6 个 key 的 getStorage 并发发起（各自 800ms 超时），整体最坏也就 ~800ms，不拖长开机。 */
+   * 全部 key 的 getStorage 并发发起（各自 800ms 超时），整体最坏也就 ~800ms，不拖长开机。 */
   function hydrateStore(cb) {
     var i, lv;
     for (i = 0; i < STORE_KEYS.length; i++) {
@@ -214,6 +214,237 @@
     return '容器 Storage';
   }
 
+  /* ---------- 系统音效（DESIGN.md §4.11）：Web Audio 实时合成，零音频文件 ----------
+   * 「统一」的含义：全系统只有一张音效表 + 一条总线 + 一个开关，音效名是**系统语义**
+   * （tap / open / ok / wrong / shot …），不是「某个页面的音」——同一语义在任何应用里
+   * 听起来一致；新页面要出声只需标一个名字，不必自己再搭一套。
+   * 三条约束决定了写法（与 air-tycoon / solar-voyager 同一条红线）：
+   *   1) 不引音频文件、不联网：全部用振荡器 + 噪声实时合成；
+   *   2) 每处点击都要出声，所以声音必须极短、极干 —— 长尾会在连点里攒成噪音；
+   *   3) 环境无 Web Audio（或自动播放策略挡住）时**整层静音降级**：不抛错、不阻塞交互。
+   * 触发方式：文档级 click 委托 —— 可交互元素默认发 tap，个别元素用 data-sfx 指定语义，
+   * data-sfx="none" 表示该处由应用自己发（判定对错 / 快门 / 挂断…），避免两个声音叠在一起。 */
+  var SFX_VOL = 0.8;        /* 总线音量：整体一处可调 */
+  var sfxOn = true;         /* 由 aios_sound 回填（缺省开）；设置页「声音与触感」可切 */
+  var sfxArmed = false;     /* 首个用户手势前不建 AudioContext（自动播放策略会拦住它，
+                               控制台还会留一条 warning）：第一声天然在第一次点击之后 */
+  var sfxDead = false;      /* 环境无 Web Audio：整层静音，其余交互照常 */
+  var sfxCtx = null, sfxBus = null, sfxNoiseBuf = null;
+  var sfxLastAt = {}, sfxPlays = { total: 0 };
+
+  function sfxArm() { sfxArmed = true; }
+
+  function sfxCtxGet() {
+    if (sfxDead || !sfxArmed) { return null; }
+    try {
+      if (!sfxCtx) {
+        var C = global.AudioContext || global.webkitAudioContext;
+        if (!C) { sfxDead = true; return null; }
+        sfxCtx = new C();
+        sfxBus = sfxCtx.createGain();
+        sfxBus.gain.value = SFX_VOL;
+        sfxBus.connect(sfxCtx.destination);
+      }
+      /* 首次手势里 resume；没放行也不管，下一次点击还会再试 */
+      if (sfxCtx.state === 'suspended') {
+        var pr = sfxCtx.resume();
+        if (pr && pr.catch) { pr.catch(function () {}); }
+      }
+      return sfxCtx;
+    } catch (e) { sfxDead = true; return null; }
+  }
+
+  /* 白噪声只生成一次、循环使用：每次现算几万采样会让连点变大时在低端机上卡顿 */
+  function sfxNoise(a) {
+    if (sfxNoiseBuf && sfxNoiseBuf.sampleRate === a.sampleRate) { return sfxNoiseBuf; }
+    var len = Math.floor(a.sampleRate * 1.2), i;
+    sfxNoiseBuf = a.createBuffer(1, len, a.sampleRate);
+    var d = sfxNoiseBuf.getChannelData(0);
+    for (i = 0; i < len; i++) { d[i] = Math.random() * 2 - 1; }
+    return sfxNoiseBuf;
+  }
+
+  /* 单音：起音 → 指数衰减，可选滑音 / 滤波 / 失谐副振荡器
+   * opt: { type, vol, atk, to, cutoff, filter, detune, delay } */
+  function sfxTone(freq, dur, opt) {
+    var a = sfxCtxGet(); if (!a) { return; }
+    opt = opt || {};
+    try {
+      var t = a.currentTime + (opt.delay || 0);
+      var v = Math.max(0.0002, opt.vol == null ? 0.05 : opt.vol);
+      var atk = Math.min(opt.atk == null ? 0.005 : opt.atk, dur * 0.5);
+      dur = Math.max(dur || 0.1, atk + 0.03);
+      var g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + atk);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      var tail = g;
+      if (opt.cutoff) {
+        var f = a.createBiquadFilter();
+        f.type = opt.filter || 'lowpass';
+        f.frequency.value = opt.cutoff;
+        g.connect(f); tail = f;
+      }
+      tail.connect(sfxBus);
+      /* 失谐副振荡器把单薄的「嘟」撑成有厚度的音色 */
+      var n = opt.detune ? 2 : 1, i;
+      for (i = 0; i < n; i++) {
+        var o = a.createOscillator();
+        o.type = opt.type || 'sine';
+        o.frequency.setValueAtTime(Math.max(20, freq), t);
+        if (opt.to) { o.frequency.exponentialRampToValueAtTime(Math.max(20, opt.to), t + dur); }
+        if (i) { o.detune.value = opt.detune; }
+        o.connect(g);
+        o.start(t); o.stop(t + dur + 0.03);
+      }
+    } catch (e) { /* 单音失效不影响交互 */ }
+  }
+
+  /* 噪声音：快门、撞击、翻页的沙沙
+   * opt: { vol, atk, filter, cutoff, to, q, delay } */
+  function sfxHiss(dur, opt) {
+    var a = sfxCtxGet(); if (!a) { return; }
+    opt = opt || {};
+    try {
+      var t = a.currentTime + (opt.delay || 0);
+      var v = Math.max(0.0002, opt.vol == null ? 0.1 : opt.vol);
+      var atk = Math.min(opt.atk == null ? 0.004 : opt.atk, dur * 0.6);
+      var src = a.createBufferSource();
+      src.buffer = sfxNoise(a);
+      src.loop = true;                                   /* 循环噪声，靠包络裁出长度 */
+      var f = a.createBiquadFilter();
+      f.type = opt.filter || 'lowpass';
+      f.frequency.setValueAtTime(opt.cutoff || 900, t);
+      if (opt.to) { f.frequency.exponentialRampToValueAtTime(Math.max(60, opt.to), t + dur); }
+      if (opt.q != null) { f.Q.value = opt.q; }
+      var g = a.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(v, t + atk);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(f); f.connect(g); g.connect(sfxBus);
+      src.start(t); src.stop(t + dur + 0.03);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  /* 一串音：给打开 / 返回 / 判定 / 胜利这类「有方向」的提示。
+   * 排程走 AudioContext 时钟而不是 setTimeout —— 切页面时不会留下漏到下一屏的残音。 */
+  function sfxSeq(notes, o) {
+    o = o || {};
+    var step = o.step || 0.1, dur = o.dur || 0.24, d0 = o.delay || 0, i;
+    for (i = 0; i < notes.length; i++) {
+      sfxTone(notes[i], dur, {
+        type: o.type, vol: o.vol, atk: o.atk, to: o.to,
+        cutoff: o.cutoff, filter: o.filter, detune: o.detune,
+        delay: d0 + i * step
+      });
+    }
+  }
+
+  /* 音效表：名字即系统语义，音量与时值在这里定死，页面只挑名字。
+   * 连点型（tap / key / flip）一律 50ms 以内且不带尾巴；一次性大事（win / boom）才给琶音。 */
+  var SFX_TABLE = {
+    /* —— 系统 / 导航 —— */
+    tap: function () {                       /* 通用点击：木质的「嗒」 */
+      sfxTone(660, 0.05, { type: 'triangle', vol: 0.05, to: 430, atk: 0.002 });
+      sfxHiss(0.026, { vol: 0.045, filter: 'highpass', cutoff: 2600 });
+    },
+    nav: function () {                       /* 金刚键：比 tap 低一档，更像硬件键 */
+      sfxTone(300, 0.09, { type: 'sine', vol: 0.055, to: 220, atk: 0.004 });
+      sfxHiss(0.03, { vol: 0.028, filter: 'highpass', cutoff: 1800 });
+    },
+    back: function () { sfxSeq([440, 330], { type: 'sine', vol: 0.05, dur: 0.1, step: 0.055 }); },
+    open: function () { sfxSeq([520, 780], { type: 'sine', vol: 0.055, dur: 0.12, step: 0.07 }); },
+    on: function () { sfxSeq([660, 990], { type: 'sine', vol: 0.05, dur: 0.13, step: 0.07 }); },
+    off: function () { sfxSeq([520, 340], { type: 'sine', vol: 0.048, dur: 0.12, step: 0.065 }); },
+    /* —— 输入 —— */
+    key: function () { sfxTone(1250, 0.04, { type: 'square', vol: 0.028, to: 900, atk: 0.002 }); },
+    tick: function () { sfxTone(1180, 0.09, { type: 'triangle', vol: 0.04, to: 1500, atk: 0.003 }); },
+    eq: function () { sfxSeq([740, 1110], { type: 'sine', vol: 0.05, dur: 0.1, step: 0.05 }); },
+    /* —— 判定 —— */
+    ok: function () { sfxSeq([659, 988], { type: 'sine', vol: 0.055, dur: 0.16, step: 0.075 }); },
+    wrong: function () { sfxSeq([330, 233], { type: 'triangle', vol: 0.055, dur: 0.2, step: 0.085 }); },
+    deny: function () {                      /* 无效输入 / 被拒 / 危险操作 */
+      sfxTone(210, 0.14, { type: 'sawtooth', vol: 0.05, to: 150, cutoff: 800 });
+      sfxTone(160, 0.11, { type: 'square', vol: 0.026, to: 120, delay: 0.03 });
+    },
+    win: function () { sfxSeq([523, 659, 784, 1047], { type: 'sine', vol: 0.055, dur: 0.26, step: 0.1 }); },
+    lose: function () { sfxSeq([392, 294, 220], { type: 'triangle', vol: 0.055, dur: 0.3, step: 0.12 }); },
+    boom: function () {                      /* 踩雷 / 炸掉：全场最响的一声 */
+      sfxHiss(0.5, { vol: 0.2, cutoff: 900, to: 200 });
+      sfxTone(110, 0.42, { type: 'sawtooth', vol: 0.09, to: 45, cutoff: 600 });
+    },
+    /* —— 格子 / 小游戏 —— */
+    flip: function () { sfxTone(880, 0.045, { type: 'triangle', vol: 0.035, to: 620, atk: 0.002 }); },
+    flag: function () { sfxTone(1480, 0.05, { type: 'square', vol: 0.03, to: 1180, atk: 0.002 }); },
+    alarm: function () {                     /* 响铃窗口：两声方波，不悦耳是故意的 */
+      sfxTone(880, 0.1, { type: 'square', vol: 0.045, cutoff: 2200 });
+      sfxTone(880, 0.1, { type: 'square', vol: 0.045, cutoff: 2200, delay: 0.16 });
+    },
+    over: function () {                      /* 过热告警：下行两声 */
+      sfxTone(660, 0.14, { type: 'square', vol: 0.045, cutoff: 1600 });
+      sfxTone(520, 0.16, { type: 'square', vol: 0.045, cutoff: 1400, delay: 0.14 });
+    },
+    shot: function () {                      /* 快门：一记短噪声「咔」+ 低频闷响 */
+      sfxHiss(0.05, { vol: 0.13, filter: 'highpass', cutoff: 2400 });
+      sfxTone(180, 0.06, { type: 'square', vol: 0.045, to: 110, cutoff: 900 });
+    },
+    /* —— 通讯 —— */
+    sent: function () { sfxSeq([880, 1320], { type: 'sine', vol: 0.05, dur: 0.09, step: 0.045 }); },
+    msg: function () { sfxSeq([988, 1319], { type: 'triangle', vol: 0.05, dur: 0.14, step: 0.07 }); },
+    call: function () { sfxSeq([440, 440], { type: 'sine', vol: 0.05, dur: 0.12, step: 0.18 }); },
+    connect: function () { sfxSeq([587, 880], { type: 'sine', vol: 0.05, dur: 0.16, step: 0.08 }); },
+    hangup: function () { sfxSeq([440, 294], { type: 'square', vol: 0.04, dur: 0.12, step: 0.07 }); }
+  };
+
+  /* 播放：同一音效 30ms 内只发一次（属性变更与冒泡双触发、连点都靠它去重）。
+   * 环境无 Web Audio、或还没等到首个用户手势时静音降级，但计数照记 —— 自检据此断言
+   * 「该出声的地方确实调用过」，而不依赖无头环境真的能听见。 */
+  function sfxPlay(name) {
+    if (!sfxOn) { return false; }
+    var fn = SFX_TABLE[name];
+    if (!fn) { return false; }
+    var now = Date.now();
+    if (sfxLastAt[name] && now - sfxLastAt[name] < 30) { return false; }
+    sfxLastAt[name] = now;
+    sfxPlays.total += 1;
+    sfxPlays[name] = (sfxPlays[name] || 0) + 1;
+    try { fn(); } catch (e) { /* 单个音效失效不影响交互 */ }
+    return true;
+  }
+
+  function sfxLoad() { sfxOn = read('sound', '1') !== '0'; }
+
+  /* 开关（设置页「声音与触感」）：镜像 + 容器双通道落盘，切完即时生效 */
+  function sfxSetEnabled(v) {
+    sfxOn = !!v;
+    store('sound', sfxOn ? '1' : '0');
+    syncSettingsUI();
+  }
+
+  /* 从点击目标找音效名：先看 data-sfx，再退回「任何 <button> 发 tap」。
+   * 走到最近的 BUTTON 就停，故 data-sfx 必须标在最内层的可交互元素上。 */
+  function sfxSoundFor(node) {
+    var n = node;
+    while (n && n.nodeType === 1) {
+      var v = n.getAttribute ? n.getAttribute('data-sfx') : null;
+      if (v) { return v; }
+      if (n.tagName === 'BUTTON') { return 'tap'; }
+      n = n.parentNode;
+    }
+    return '';
+  }
+
+  /* 全系统音效的唯一入口：一次 click 委托 + 首个手势打点 */
+  function sfxBind() {
+    document.addEventListener('pointerdown', sfxArm, true);
+    document.addEventListener('keydown', sfxArm, true);
+    document.addEventListener('click', function (ev) {
+      sfxArm();                                   /* 程序化 click 没有 pointerdown，这里兜底 */
+      var s = sfxSoundFor(ev.target);
+      if (s && s !== 'none') { sfxPlay(s); }
+    }, false);
+  }
+
   /* ---------- 主题 ---------- */
   var WALLS = ['light-mesh', 'light-solid', 'dark-mesh', 'dark-solid'];
   /* swatch 预览与实际壁纸同色系（不是另一套配色，避免"选了跟看到的不一样"） */
@@ -283,6 +514,7 @@
     // 时钟组件：主视觉渐变卡；点击进入闹钟
     var clock = el('button', 'widget w-clock');
     clock.setAttribute('aria-label', '时钟组件，打开闹钟');
+    clock.setAttribute('data-sfx', 'open');
     clock.id = 'wClock';
     var main = el('span', 'w-clock-main');
     main.appendChild(el('span', 'w-clock-time', '--:--'));
@@ -299,6 +531,7 @@
     // 天气组件：一眼假的设定数据（恶搞内核）；点击进入「月球天气」应用（§4.3.1 / §4.9）
     var weather = el('button', 'widget w-half w-weather');
     weather.setAttribute('aria-label', '天气组件，打开月球天气');
+    weather.setAttribute('data-sfx', 'open');
     weather.id = 'wWeather';
     weather.appendChild(el('div', 'w-city', '月球 · 静海'));
     var wrow2 = el('div', 'w-wrow2');
@@ -313,6 +546,7 @@
     // 钱包组件：银行卡质感，假余额，默认打码，点按显示/隐藏（状态持久化）
     var wallet = el('button', 'widget w-half w-wallet');
     wallet.setAttribute('aria-label', '钱包组件，点按显示或隐藏余额');
+    wallet.setAttribute('data-sfx', 'tap');
     var masked = read('wmask', '1') === '1';   /* 默认打码：首次进入也只显示 ￥ -****（DESIGN §4.3.1） */
     var wtop = el('div', 'w-wtop');
     wtop.appendChild(el('span', 'w-bank', '灵光银行 · 数字卡'));
@@ -345,6 +579,7 @@
     APPS.forEach(function (app) {
       var tile = el('button', 'app-tile');
       tile.setAttribute('aria-label', app.name);
+      tile.setAttribute('data-sfx', 'open');
       tile.appendChild(iconNode(app));
       tile.appendChild(el('span', 'app-name', app.name));
       tile.addEventListener('click', function () { openApp(app.id); });
@@ -357,6 +592,7 @@
     DOCK.forEach(function (app) {
       var tile = el('button', 'app-tile');
       tile.setAttribute('aria-label', app.name);
+      tile.setAttribute('data-sfx', 'open');
       tile.appendChild(iconNode(app));
       tile.addEventListener('click', function () { openApp(app.id); });
       dock.appendChild(tile);
@@ -426,6 +662,7 @@
     }
     function tipRow(label, key) {
       var r = el('div', 'row');
+      r.setAttribute('data-sfx', 'tap');   /* 行是 div：通用点击音靠 data-sfx 标出来 */
       r.appendChild(el('span', 'lbl', label));
       r.appendChild(el('span', 'arrow', '›'));
       r.addEventListener('click', function () { showTip(SET_TIPS[key]); });
@@ -440,6 +677,24 @@
 
     var cardSound = el('div', 'card');
     cardSound.appendChild(el('div', 'card-title', '声音与触感'));
+    /* 系统音效开关：真的能关（aios_sound 持久化），关掉后全系统安静 ——
+     * 切换音自己发（on / off），故标 data-sfx="none" 不叠通用 tap；
+     * 开启时顺手复用 v1 的「声音」吐槽文案，恶搞内核照旧。 */
+    var rowSfx = el('div', 'row');
+    rowSfx.appendChild(el('span', 'lbl', '系统音效'));
+    var swSound = el('button', 'switch');
+    swSound.id = 'swSound';
+    swSound.setAttribute('data-sfx', 'none');
+    swSound.setAttribute('aria-label', '系统音效开关');
+    swSound.addEventListener('click', function () {
+      var next = !sfxOn;
+      if (!next) { sfxPlay('off'); }        /* 关：先把确认音发出去，再静音 */
+      sfxSetEnabled(next);
+      if (next) { sfxPlay('on'); }
+      showTip(next ? SET_TIPS.sounds : '已静音。世界清净了，AI 也清净了。');
+    });
+    rowSfx.appendChild(swSound);
+    cardSound.appendChild(rowSfx);
     cardSound.appendChild(tipRow('声音', 'sounds'));
     cardSound.appendChild(tipRow('触感', 'haptics'));
     body.appendChild(cardSound);
@@ -458,12 +713,19 @@
 
     views.settings = v;
     viewRoot.appendChild(v);
+    /* 设置页是懒构建的，而 syncSettingsUI 只在主题/音效变化时才被调用 ——
+     * 不在这里同步一次，深色开关与音效开关首次上屏时都会显示成「关」。 */
+    syncSettingsUI();
   }
 
   function syncSettingsUI() {
     var sw = document.getElementById('swDark');
     if (sw) {
       if (theme.mode === 'dark') { sw.classList.add('on'); } else { sw.classList.remove('on'); }
+    }
+    var swS = document.getElementById('swSound');
+    if (swS) {
+      if (sfxOn) { swS.classList.add('on'); } else { swS.classList.remove('on'); }
     }
     var i, nodes = document.querySelectorAll('.wall-swatch');
     for (i = 0; i < nodes.length; i++) {
@@ -642,6 +904,9 @@
     var judgeRow = el('div', 'judge-row calc-judge hidden-row');
     var bOk = el('button', 'judge-btn judge-ok', '对');
     var bNo = el('button', 'judge-btn judge-no', '错');
+    /* 判定音由 judge() 自己发（对 / 错），这里不再叠通用点击音 */
+    bOk.setAttribute('data-sfx', 'none');
+    bNo.setAttribute('data-sfx', 'none');
     judgeRow.appendChild(bOk);
     judgeRow.appendChild(bNo);
     foot.appendChild(keypad);
@@ -695,10 +960,12 @@
           errored = true;
           display = 'Error';
           disp.style.borderColor = 'rgba(224,82,82,.7)';
+          sfxPlay('deny');
           say('表达式无效，AI 拒绝背锅', 'no');
           paint();
           return;
         }
+        sfxPlay('eq');
         var wrong = Math.random() < 0.5;
         var shown = wrong ? calcCorrupt(t) : t;
         saved = { shown: shown, correct: t };
@@ -735,6 +1002,7 @@
       S.highScore = Math.max(S.highScore, S.score);
       statPut('calc', S);
       refresh();
+      sfxPlay(right ? 'ok' : 'wrong');
       say(right
         ? ('✓ 判断正确 +' + gain + (S.streak >= 3 ? '（' + S.streak + ' 连击奖励）' : ''))
         : '✗ 判断错误 -5，AI 露出无辜脸', right ? 'ok' : 'no');
@@ -759,6 +1027,7 @@
       else if (k === 'C') { cls += ' clr'; }
       else if ('÷×−+'.indexOf(k) >= 0) { cls += ' op'; }
       var b = el('button', cls, k);
+      b.setAttribute('data-sfx', k === '=' ? 'none' : 'key');   /* = 的提交音由 press() 发 */
       if (k === '=') { b.style.gridColumnSpan = '4'; b.style.gridColumn = '1 / span 4'; }
       b.addEventListener('click', function () {
         var map = { '÷': '/', '×': '*', '−': '-' };
@@ -775,6 +1044,7 @@
 
   /* ---------- 闹钟（v1 还原）：目标对齐到 :00/:30，响铃窗口 ±500ms，错过自动判晚 ---------- */
   var alarmState = { target: 0, ringing: false, result: null, done: false };
+  var alarmBeepAt = 0;   /* 响铃窗口内的补声节流（真闹钟不会只叫一次） */
   var alarmView = null;
   var alarmFinish = null;
   function alarmNextTarget(d, retry) {
@@ -823,6 +1093,7 @@
     v.appendChild(body);
     var foot = el('div', 'pfoot');
     var ring = el('button', 'ring-btn', '响铃');
+    ring.setAttribute('data-sfx', 'none');   /* 结果音由 finish() 发（准时 / 晚了），不叠点击音 */
     var retryBtn = el('button', 'ring-btn alarm-retry', '再来一次');
     retryBtn.style.display = 'none';
     foot.appendChild(ring);
@@ -856,6 +1127,7 @@
       if (onTime) { S.onTime += 1; }
       statPut('alarm', S);
       refresh();
+      sfxPlay(onTime ? 'ok' : 'lose');   /* 无论手动按下还是错过窗口自动判晚，都给结果音 */
       alarmState.result = onTime ? 'onTime' : 'late';
       alarmState.ringing = false;
       alarmState.done = true;
@@ -916,6 +1188,10 @@
          也不会自动判晚，玩家卡死。 */
       if (alarmFinish) { alarmFinish(false, ALARM_TXT.late); }
     }
+    /* 窗口内每秒补一声：响铃是持续事件，一次提示音在嘈杂环境里听不见 */
+    if (alarmState.ringing) {
+      if (!alarmBeepAt || now - alarmBeepAt >= 1000) { alarmBeepAt = now; sfxPlay('alarm'); }
+    } else { alarmBeepAt = 0; }
   }
 
   /* ---------- 日历·扫雷（v1 还原）：7 列 × 5/5/6 行，5/8/12 雷，首点 3×3 安全 ---------- */
@@ -1055,6 +1331,7 @@
       for (i = 0; i < N; i++) {
         (function (idx) {
           var c = el('button', 'ms-cell');
+          c.setAttribute('data-sfx', 'none');   /* 开格 / 插旗 / 踩雷的音各不相同，由动作自己发 */
           c.appendChild(el('i'));
           bindCell(c, idx);
           grid.appendChild(c);
@@ -1098,6 +1375,7 @@
     }
     function win() {
       state = 'won';
+      sfxPlay('win');
       var secs = Math.round((Date.now() - startTs) / 1000);
       var gain = cfg().base + (secs < 60 ? 10 : 0);
       S.score += gain;
@@ -1131,6 +1409,7 @@
       if (state === 'won' || state === 'lost') { return; }
       var b = board[idx];
       if (b.opened) { return; }
+      sfxPlay('flag');
       b.flagged = !b.flagged;
       flags += b.flagged ? 1 : -1;
       paint(idx);
@@ -1172,9 +1451,11 @@
       if (b.mine) {
         b.opened = true;
         paint(idx);
+        sfxPlay('boom');
         lose(idx);
         return;
       }
+      sfxPlay('flip');
       flood(idx);
       if (allSafeOpened()) { win(); }
     }
@@ -1302,6 +1583,7 @@
       global.setTimeout(function () {
         chat.removeChild(t);
         addBub('ai', text);
+        sfxPlay('msg');   /* 气泡落屏 = 收到一条消息，与短信同一条音 */
         if (after) { global.setTimeout(after, 900); }
       }, 1500);
     }
@@ -1331,6 +1613,7 @@
       busy = true;
       opts.innerHTML = '';
       var right = k === cur.q.a;
+      sfxPlay(right ? 'ok' : 'wrong');
       addBub('me', cur.q.options[k]);
       S.rounds += 1;
       if (right) {
@@ -1435,7 +1718,7 @@
       timer = global.setInterval(function () {
         secs -= 1;
         cd.textContent = secs + ' 秒后开始考验你';
-        if (secs <= 0) { clearInterval(timer); showRecall(); }
+        if (secs <= 0) { clearInterval(timer); sfxPlay('tick'); showRecall(); }
       }, 1000);
     }
     function showRecall() {
@@ -1450,6 +1733,7 @@
       optionsFor(it).forEach(function (txt) {
         var b = el('button', 'opt', txt);
         b.addEventListener('click', function () {
+          sfxPlay(txt === it.event ? 'ok' : 'wrong');
           if (txt === it.event) { correct += 1; }
           pos += 1;
           if (pos < items.length) { showRecall(); } else { finish(); }
@@ -1460,6 +1744,7 @@
     }
     function finish() {
       var gain = correct * 5 + (correct === items.length ? 10 : 0);
+      if (correct === items.length) { sfxPlay('win'); }
       S.score += gain;
       S.highScore = Math.max(S.highScore, S.score);
       S.accuracy = (S.accuracy * S.rounds + correct / items.length) / (S.rounds + 1);
@@ -1513,6 +1798,8 @@
     var contactsBtn = el('button', 'dial-del', '<svg viewBox="0 0 24 24"><path d="M12 12c2.2 0 4-1.8 4-4s-1.8-4-4-4-4 1.8-4 4 1.8 4 4 4zm0 2c-4 0-8 2-8 6v2h16v-2c0-4-4-6-8-6z"/></svg>');
     var callBtn = el('button', 'call-btn', '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>');
     var delBtn = el('button', 'dial-del', '⌫');
+    delBtn.setAttribute('data-sfx', 'key');
+    callBtn.setAttribute('data-sfx', 'none');   /* 呼叫 / 挂断的音由通话状态机发 */
     actRow.appendChild(contactsBtn); actRow.appendChild(callBtn); actRow.appendChild(delBtn);
     /* 通话结束态：拨号行整行让位给满宽「完成」主 CTA（同日程/日历结算动作的控件语言），
      * 不再把两个字塞进 50px 圆钮里（那既挤又和红色挂断语义打架）。 */
@@ -1542,6 +1829,8 @@
     var contactsList = el('div', 'contacts-list');
     CONTACTS.forEach(function (c) {
       var row = el('button', 'contact-row');
+      /* 点联系人 = 拨号：与 startCall 同一条音，30ms 去重会吃掉重复的那次 */
+      row.setAttribute('data-sfx', 'call');
       row.innerHTML = '<span class="contact-ava">' + c.name.charAt(0) + '</span>' +
         '<div><div class="contact-name">' + c.name + '</div><div class="contact-num">' + fmt(c.num) + '</div></div>';
       row.addEventListener('click', function () {
@@ -1573,6 +1862,7 @@
       var hIco = '<svg viewBox="0 0 24 24"><path d="M6.6 10.8c1.5 2.9 3.8 5.2 6.7 6.7l2.2-2.2c.3-.3.7-.4 1-.2 1.2.4 2.4.6 3.7.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.7.1.3 0 .7-.2 1l-2.3 2.1z"/></svg>';
       records.forEach(function (r) {
         var b = el('button', 'hist-row');
+        b.setAttribute('data-sfx', 'call');
         b.innerHTML = '<span class="hist-ico">' + hIco + '</span><span>' + fmt(r.number) + '</span><span class="ht">' + r.time + '</span>';
         b.addEventListener('click', function () { if (!inCall) { num = r.number; paintNum(); startCall(); } });
         hist.appendChild(b);
@@ -1593,6 +1883,7 @@
     }
     function connect() {
       phase = 'connected';
+      sfxPlay('connect');
       status.textContent = CALL_TXT.connected;
       timerEl.style.display = '';
       secs = 0; timerEl.textContent = '00:00';
@@ -1604,6 +1895,7 @@
     }
     function endCall(manual) {
       clearCallTimers();
+      sfxPlay('hangup');   /* 手动挂断与自动掉线同一条音 */
       if (manual) { resetCallUi(); return; }
       phase = 'ended';
       timerEl.style.display = 'none';
@@ -1629,6 +1921,7 @@
     function startCall() {
       if (!num || inCall) { return; }
       inCall = true; phase = 'dialing';
+      sfxPlay('call');
       endMsg.textContent = '';
       timerEl.style.display = 'none';
       status.textContent = CALL_TXT.dialing;
@@ -1642,6 +1935,7 @@
     var KEY_SUB = { '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
     ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'].forEach(function (k) {
       var b = el('button', 'dkey');
+      b.setAttribute('data-sfx', 'key');
       if (KEY_SUB[k]) { b.innerHTML = k + '<span class="dkey-sub">' + KEY_SUB[k] + '</span>'; }
       else { b.textContent = k; }
       b.addEventListener('click', function () {
@@ -1684,6 +1978,7 @@
     var input = el('input', 'sms-input');
     input.placeholder = '回复这条重要消息…';
     var send = el('button', 'sms-send', '发送');
+    send.setAttribute('data-sfx', 'none');   /* 发送音由 doSend 发，不叠点击音 */
     inputRow.appendChild(input); inputRow.appendChild(send);
     foot.appendChild(inputRow);
     v.appendChild(foot);
@@ -1754,6 +2049,7 @@
       var now = (d.getHours() < 10 ? '0' : '') + d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
       msgs.push({ id: Date.now(), sender: '我', content: text, time: now, read: true, isReply: false, conv: openConv });
       save(); paintChat();
+      sfxPlay('sent');
       var t = el('div', 'bub ai typing', '<i></i><i></i><i></i>');
       chat.appendChild(t); body.scrollTop = body.scrollHeight;
       global.setTimeout(function () {
@@ -1761,6 +2057,7 @@
         var reply = SMS_REPLY[Math.floor(Math.random() * SMS_REPLY.length)];
         msgs.push({ id: Date.now() + 1, sender: openConv, content: reply, time: now, read: true, isReply: true, conv: openConv });
         save(); paintChat();
+        sfxPlay('msg');
       }, 2000);
     }
     send.addEventListener('click', doSend);
@@ -1800,6 +2097,7 @@
     var rightBox = el('div');
     rightBox.style.display = 'flex'; rightBox.style.justifyContent = 'flex-end'; rightBox.style.alignItems = 'center';
     var shutter = el('button', 'cam-shutter', '');
+    shutter.setAttribute('data-sfx', 'none');   /* 快门 / 封锁的音由温控逻辑发 */
     var flashBtn = el('button', 'cam-side', '⚡');
     rightBox.appendChild(flashBtn);
     var mid = el('div');
@@ -1851,7 +2149,7 @@
       hud.textContent = (warn ? '镜头过热 ' : '镜头温度 ') + temp.toFixed(1) + '℃';
       if (warn) { hud.classList.add('hot'); } else { hud.classList.remove('hot'); }
       if (stop) { shutter.classList.add('blocked'); } else { shutter.classList.remove('blocked'); }
-      if (stop && !stopped) { hint('镜头过热，先别拍'); }
+      if (stop && !stopped) { hint('镜头过热，先别拍'); sfxPlay('over'); }   /* 刚跨过封锁线时提示一次 */
       stopped = stop;
     }
     var BADGE = 'AI OS 相机';
@@ -1880,11 +2178,12 @@
     });
     shutter.addEventListener('click', function () {
       coolTemp();
-      if (temp >= TEMP_STOP) { paintTemp(); hint('太烫了，凉一下再拍'); return; }
+      if (temp >= TEMP_STOP) { paintTemp(); hint('太烫了，凉一下再拍'); sfxPlay('deny'); return; }
       if (flashOn) {
         flash.classList.add('on');
         global.setTimeout(function () { flash.classList.remove('on'); }, 150);
       }
+      sfxPlay('shot');
       temp = Math.min(TEMP_CAP, temp + TEMP_HEAT);   // 拍一张就升温
       paintTemp();
       liveShot = pickShot();                          // 拍完立刻换下一张
@@ -2060,8 +2359,10 @@
       var row = el('div', 'modal-row');
       var cancel = el('button', 'modal-btn modal-cancel', '取消');
       var ok = el('button', 'modal-btn modal-ok', '重置');
+      ok.setAttribute('data-sfx', 'none');   /* 破坏性确认：走 deny 的「重」音，不用普通点击音 */
       cancel.addEventListener('click', function () { modalHost.style.display = 'none'; pending = null; });
       ok.addEventListener('click', function () {
+        sfxPlay('deny');
         if (pending === 'all') {
           var k2;
           for (k2 in DEFAULTS) { if (Object.prototype.hasOwnProperty.call(DEFAULTS, k2)) { statPut(k2, DEFAULTS[k2]); } }
@@ -2550,6 +2851,7 @@
   /* ---------- 多任务 ---------- */
   function buildRecents() {
     recentsEl = el('div', 'recents hidden');
+    recentsEl.setAttribute('data-sfx', 'back');   /* 点空白处 = 收起多任务 */
     // 点击遮罩空白处关闭面板。判定用「不在卡片内即关闭」，而非白名单 target：
     // 白名单（recentsEl / .recents-track）漏掉了空态 —— 清空全部任务后 renderRecents()
     // 只塞一个 .rc-empty，它是 flex:1 1 auto、撑满整个遮罩，点哪儿命中的都是它，
@@ -2572,6 +2874,7 @@
     // 一键清理工具栏（仅有任务时显示，置于卡片轨道下方居中）
     var toolbar = el('div', 'rc-toolbar');
     var clearBtn = el('button', 'rc-clear', '<svg viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>一键清理');
+    clearBtn.setAttribute('data-sfx', 'back');
     clearBtn.addEventListener('click', function (ev) {
       ev.stopPropagation();
       stack.length = 0;
@@ -2586,10 +2889,12 @@
     order.forEach(function (id) {
       var app = findApp(id);
       var card = el('div', 'rc-card');
+      card.setAttribute('data-sfx', 'open');       /* 点卡 = 恢复应用 */
       var head = el('div', 'rc-head');
       head.appendChild(iconNode(app));
       head.appendChild(el('span', 'rc-name', app.name));
       var close = el('button', 'rc-close', '<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" fill="none"/></svg>');
+      close.setAttribute('data-sfx', 'back');
       close.addEventListener('click', function (ev) {
         ev.stopPropagation();
         var i = stack.indexOf(id);
@@ -2714,13 +3019,14 @@
       pending--;
       if (pending === 0) { startUI(); }
     }
-    hydrateStore(function () { loadTheme(); applyTheme(); ready(); });
+    hydrateStore(function () { loadTheme(); sfxLoad(); applyTheme(); ready(); });
     runBoot(ready);
   }
 
   function startUI() {
     buildHome();
     buildRecents();
+    sfxBind();   /* 系统音效的唯一入口：装好 click 委托，此后所有交互自动出声 */
     tick();
     global.setInterval(tick, 1000);
     // 游戏心跳 100ms（v1 同款精度）：闹钟响铃窗口 + 日历用时（仅当前视图写 DOM）
@@ -2746,5 +3052,13 @@
                   weatherState: function () { return weatherView ? weatherView.state() : null; },
                   storeBackend: function () { return storeBackend; },
                   storeSummary: storeSummary,
-                  hydrateStore: hydrateStore };
+                  hydrateStore: hydrateStore,
+                  /* 系统音效接缝（自检用；只读 —— 开关只能从设置页切）：
+                   * names 是音效词表，stats 给出上下文状态与各音效触发次数。 */
+                  soundEnabled: function () { return sfxOn; },
+                  soundNames: function () { return Object.keys(SFX_TABLE); },
+                  soundStats: function () {
+                    return { ctx: sfxCtx ? sfxCtx.state : 'none', dead: sfxDead,
+                             armed: sfxArmed, plays: sfxPlays };
+                  } };
 })(window);

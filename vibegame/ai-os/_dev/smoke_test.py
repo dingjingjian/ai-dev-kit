@@ -265,10 +265,24 @@ def main():
         wait_home(pg)
         check("显示状态持久化", pg.evaluate(
             "document.querySelector('.w-bal').textContent") == "￥ -99,999")
+        # 系统音效（DESIGN.md §4.11）：reload 后是干净会话 —— 还没发生任何手势，
+        # 此时不得建 AudioContext（自动播放策略会拦住它，控制台还会留一条 warning）
+        sfx0 = pg.evaluate("AIOS.soundStats()")
+        check("音效词表齐备（系统语义命名，不是按页面命名）",
+              all(n in pg.evaluate("AIOS.soundNames()")
+                  for n in ["tap", "nav", "back", "open", "key", "eq", "ok", "wrong", "deny",
+                            "win", "lose", "boom", "flip", "flag", "alarm", "over", "shot",
+                            "sent", "msg", "call", "connect", "hangup"]))
+        check("首个手势前不建 AudioContext（避开自动播放策略告警）",
+              sfx0["ctx"] == "none" and sfx0["armed"] is False, str(sfx0))
         pg.click(".w-wallet")
         pg.wait_for_timeout(200)
         check("钱包再点恢复打码", pg.evaluate(
             "document.querySelector('.w-bal').textContent") == "￥ -****")
+        sfx1 = pg.evaluate("AIOS.soundStats()")
+        check("点击即发声（手势后建上下文，通用点击音计入）",
+              sfx1["armed"] is True and sfx1["ctx"] != "none"
+              and sfx1["plays"].get("tap", 0) >= 1, str(sfx1))
         pg.click("#wClock")
         pg.wait_for_timeout(300)
         check("时钟组件打开闹钟", pg.evaluate(
@@ -436,6 +450,9 @@ def main():
             "document.querySelectorAll('.gstats [data-f=\"score\"]')[0].textContent"))
         check("判定后分数按规则变化", score_after - score_before in (10, 15) or score_after == 0,
               "%d -> %d" % (score_before, score_after))
+        sj = pg.evaluate("AIOS.soundStats()")["plays"]
+        check("判定出声（ok / wrong 计入，判定音不叠通用点击音）",
+              sj.get("ok", 0) + sj.get("wrong", 0) >= 1, str(sj))
         pg.wait_for_timeout(1800)
         check("判定后回到键盘", pg.evaluate(
             "getComputedStyle(document.querySelector('.keypad')).visibility") == "visible")
@@ -750,6 +767,8 @@ def main():
         pg.wait_for_timeout(150)
         shot3 = pg.evaluate(CAM_SRC)
         check("快门即拍即换（无定格预览）", shot3 != shot2, "%s -> %s" % (shot2, shot3))
+        check("快门出声（shot 计入）",
+              pg.evaluate("AIOS.soundStats()")["plays"].get("shot", 0) >= 1)
         # 连拍升温：3 张后温度明显高于基准，但还没进过热态
         for _ in range(3):
             pg.click(".cam-shutter")
@@ -812,11 +831,44 @@ def main():
         check("切深色壁纸联动 mode=dark", pg.evaluate(
             "document.body.getAttribute('data-wall')") == "dark-mesh"
               and pg.evaluate("document.body.getAttribute('data-mode')") == "dark")
+        check("深色开关上屏即反映当前状态",
+              pg.evaluate("document.getElementById('swDark').classList.contains('on')"))
         pg.screenshot(path=os.path.join(SHOTS, "v2-settings-dark.png"))
         pg.click('.wall-swatch[data-wall="light-mesh"]')
         pg.wait_for_timeout(300)
         check("切回浅色", pg.evaluate("document.body.getAttribute('data-mode')") == "light")
         pg.screenshot(path=os.path.join(SHOTS, "v2-settings.png"))
+
+        # 系统音效可整体静音：开关落盘 aios_sound，静音后全系统不再发声，且跨会话保持
+        check("音效开关上屏即反映当前状态（缺省开）",
+              pg.evaluate("document.getElementById('swSound').classList.contains('on')"))
+        pg.click("#swSound")
+        pg.wait_for_timeout(200)
+        check("音效开关可静音且落盘",
+              pg.evaluate("AIOS.soundEnabled()") is False
+              and pg.evaluate("localStorage.getItem('aios_sound')") == "0"
+              and not pg.evaluate(
+                  "document.getElementById('swSound').classList.contains('on')"))
+        plays0 = pg.evaluate("AIOS.soundStats()")["plays"]["total"]
+        pg.click('.wall-swatch[data-wall="light-mesh"]')
+        pg.wait_for_timeout(200)
+        check("静音后点击不再发声（触发计数不涨）",
+              pg.evaluate("AIOS.soundStats()")["plays"]["total"] == plays0)
+        pg.reload()
+        wait_home(pg)
+        pg.locator('[aria-label="设置"]').first.click()
+        pg.wait_for_timeout(400)
+        check("静音状态跨会话保持（开关仍为关）",
+              pg.evaluate("AIOS.soundEnabled()") is False
+              and not pg.evaluate(
+                  "document.getElementById('swSound').classList.contains('on')"))
+        pg.click("#swSound")            # 恢复默认开，后续用例按「默认开」跑
+        pg.wait_for_timeout(200)
+        check("重新开启音效并落盘",
+              pg.evaluate("AIOS.soundEnabled()") is True
+              and pg.evaluate("localStorage.getItem('aios_sound')") == "1")
+        pg.click("#keyBack")
+        pg.wait_for_timeout(200)
 
         # 重置会话（最近任务不持久化，reload 即空栈），保证后续计数确定
         pg.reload()
@@ -928,8 +980,8 @@ def main():
         # 必须让顶栏之下仍有明显留白（50px 时几乎被顶栏占满，看起来"顶部没留白"）
         check("in-app 预留带 ≥70px（宿主顶栏之下仍有留白）", p2.evaluate(
             "Math.round(document.querySelector('.statusbar').getBoundingClientRect().height)") >= 70)
-        check("启动水合读取全部键", p2.evaluate(
-            "window.__xhsCalls.filter(function(c){return c.indexOf('getStorage:')===0;}).length") == 6)
+        check("启动水合读取全部键（含音效开关 aios_sound）", p2.evaluate(
+            "window.__xhsCalls.filter(function(c){return c.indexOf('getStorage:')===0;}).length") == 7)
         check("降级通道既有数据迁移进容器",
               p2.evaluate("window.__fakeXhsStorage['aios_wmask']") == "0"
               and p2.evaluate("window.__xhsCalls.indexOf('setStorage:aios_wmask')") >= 0)
@@ -970,6 +1022,23 @@ def main():
         wait_home(p6)
         check("版本号两条路都取不到按不支持处理", p6.evaluate("AIOS.storeBackend()") == "local")
         p6.close()
+
+        # 环境无 Web Audio：音效整层静音降级 —— 不抛错、不阻塞交互（交互照常、计数照记）
+        p8 = new_page("delete window.AudioContext; delete window.webkitAudioContext;")
+        errs8 = []
+        p8.on("pageerror", lambda e: errs8.append(str(e)))
+        p8.goto(url)
+        wait_home(p8)
+        p8.locator('[aria-label="计算器"]').first.click()
+        p8.wait_for_timeout(300)
+        p8.click("#keyBack")
+        p8.wait_for_timeout(200)
+        st8 = p8.evaluate("AIOS.soundStats()")
+        check("无 Web Audio 时静音降级（dead，无运行期报错）",
+              st8["dead"] is True and st8["plays"]["total"] >= 1 and len(errs8) == 0, str(st8))
+        check("无 Web Audio 时交互照常（返回键回主屏）",
+              p8.evaluate("!document.querySelector('.home').classList.contains('hidden')"))
+        p8.close()
 
         b.close()
 
