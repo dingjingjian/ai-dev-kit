@@ -1,4 +1,4 @@
-# 配图施工图 · 人类交通工具图鉴
+# 配图施工图 · 全球交通工具图鉴
 
 > 本文件由 `_dev/gen_image_prompts.py` 生成，请勿手改：条目数据改 `main.js`，配图要求改 `_dev/image-spec.md`，然后重跑 `python _dev/gen_image_prompts.py`。
 

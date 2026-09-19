@@ -23,7 +23,7 @@ OUT = Path(__file__).resolve().parent / "_shots"
 OUT.mkdir(exist_ok=True)
 
 SHOT_CARD, SHOT_COVER, SHOT_HERO = 150, 104, 210
-TITLE = "人类交通工具图鉴"
+TITLE = "全球交通工具图鉴"
 failures = []
 URL = (ROOT / "index.html").as_uri()
 

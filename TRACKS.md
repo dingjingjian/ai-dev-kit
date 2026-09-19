@@ -47,7 +47,7 @@ ai-dev-kit/
 | 工作日报 | `vibetool/daily-report/` | 从 Git 提交生成日报并写入飞书多维表格 | 自用 · 不投稿 |
 | 30 种图表速查图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色 | 已发布 |
 | UI/UX 风格画廊 | `vibetool/uiux-style-gallery/` | 67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器 | 完整（zip + 笔记） |
-| 全球交通工具图鉴 | `vibetool/vehicle-atlas/` | 48 台现役交通工具速查（汽车卡车/火车/飞机/轮船客运/轮船货运/其他六类），配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；13 项渲染自检 + 18 项打包前置校验过 | 框架就绪 · 配图待生成 |
+| 全球交通工具图鉴 | `vibetool/vehicle-atlas/` | 49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过） | 框架就绪 · 配图待生成 |
 | 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） | 自用 · 不投稿 |
 | 宣传片录制器 | `.skill/demo-video-recorder/` | Playwright 驱动真浏览器录 9:16 竖屏片，Pillow 字幕（三主题）+ edge-tts 解说（v1.2.0） | 自用 · 不投稿 |
 

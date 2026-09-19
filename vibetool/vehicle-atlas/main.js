@@ -1,4 +1,4 @@
-/* 人类交通工具图鉴 · 数据与渲染（经典脚本，ES2017 基线，无模块 / 无内联事件）
+/* 全球交通工具图鉴 · 数据与渲染（经典脚本，ES2017 基线，无模块 / 无内联事件）
  *
  * 收录口径：只讲「交通工具的类型」，不写具体型号 / 品牌，时间跨度覆盖整个人类历史。
  *
@@ -529,7 +529,7 @@ function renderTabs(){
 }
 
 function renderList(restoreY){
-  titleEl.textContent = "人类交通工具图鉴";
+  titleEl.textContent = "全球交通工具图鉴";
   fabBack.classList.remove("show");
   tabsEl.style.display = "flex";
   app.innerHTML = "";
