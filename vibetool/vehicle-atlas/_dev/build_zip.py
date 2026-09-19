@@ -99,8 +99,24 @@ if DIST.exists():
 DIST.mkdir(parents=True)
 for name in ("index.html", "main.js"):
     shutil.copy2(ROOT / name, DIST / name)
+# 只拷贝被 main.js 引用的配图：命名对不上的历史遗留图 / 下线条目图不再进包，
+# 也就不会白白撑大 zip（assets/ 下仍保留原文件，需要时自行清理）。
+copied, unreferenced = [], []
 if ASSETS.is_dir():
-    shutil.copytree(ASSETS, DIST / "assets")
+    for pth in sorted(ASSETS.rglob("*")):
+        if not pth.is_file() or pth.suffix.lower() not in ALLOWED_EXT:
+            continue
+        if pth.suffix.lower() in IMG_EXT and pth.stem not in expect:
+            unreferenced.append(pth)
+            continue
+        rel = pth.relative_to(ASSETS)
+        (DIST / "assets" / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(pth, DIST / "assets" / rel)
+        copied.append(rel.as_posix())
+if unreferenced:
+    print("\n  未引用的配图 %d 张，已排除在 dist / zip 之外（可按需清理）: %s%s"
+          % (len(unreferenced), ", ".join(p.name for p in unreferenced[:6]),
+             " …" if len(unreferenced) > 6 else ""))
 print("\ndist: %s" % sorted(p.as_posix() for p in DIST.rglob("*") if p.is_file())[:6])
 
 # ---------- 打包 ----------

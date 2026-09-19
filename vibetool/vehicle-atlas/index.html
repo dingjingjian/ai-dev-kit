@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#f4f6fa">
-<title>全球交通工具图鉴</title>
+<title>人类交通工具图鉴</title>
 <style>
 :root{
   --bg:#f4f6fa; --card:#ffffff; --ink:#14171f; --ink-2:#5b6472; --ink-3:#98a1af;
@@ -117,13 +117,19 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
   margin-top:8px; font-size:12px; font-weight:600; color:#657084;
   max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.shot-ph .fp{
-  margin-top:3px; font-size:10px; color:#9fabbe;
-  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
+
 .shot-ph .bd{
   margin-bottom:7px; font-size:10px; font-weight:600; letter-spacing:.1em;
   color:#7c8aa0; background:rgba(255,255,255,.75);
+  padding:2px 8px; border-radius:999px;
+}
+/* 图片左上角的时代徽标（列表卡片用，只显示起始时间；完整跨度见详情页）。
+   z-index 高于实图层，补图后依然可见。 */
+.shot-era{
+  position:absolute; left:8px; top:8px; z-index:2;
+  max-width:78%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:10px; font-weight:600; color:#38445a;
+  background:rgba(255,255,255,.88); border:1px solid rgba(20,23,31,.06);
   padding:2px 8px; border-radius:999px;
 }
 
@@ -148,11 +154,19 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 /* ============ 详情 ============ */
 .detail{max-width:var(--page); margin:0 auto; padding:16px 16px calc(56px + var(--safe-bottom));}
 .hero{border-radius:18px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--sh-1); margin-bottom:16px;}
+/* 详情页顶部一行：分类徽标 + 时代徽标（时间跨度覆盖整个人类历史，是这册的主线之一） */
+.badge-row{display:flex; align-items:center; flex-wrap:wrap; margin-bottom:9px;}
 .detail .cat-badge{
   display:inline-block; padding:4px 11px; border-radius:999px;
   font-size:11px; font-weight:600; background:var(--accent-soft); color:var(--accent);
-  margin-bottom:9px;
 }
+.badge-row .cat-badge{margin-bottom:0;}
+.era-pill{
+  padding:4px 11px; border-radius:999px;
+  font-size:11px; font-weight:600; color:var(--ink-2);
+  background:rgba(20,23,31,.05);
+}
+.badge-row .era-pill{margin-left:8px;}
 .detail h2{font-size:23px; font-weight:700; letter-spacing:-.025em; margin-bottom:3px;}
 .detail .en-name{font-size:13px; color:var(--ink-3);}
 .detail .tagline{font-size:13.5px; color:var(--ink-2); line-height:1.6; margin:10px 0 18px;}
@@ -201,11 +215,6 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 .copy-btn svg{width:14px; height:14px; margin-right:6px;}
 .copy-btn:active{transform:scale(.96);}
 .copy-btn.done{background:#16a34a; box-shadow:0 6px 16px -8px rgba(22,163,74,.9);}
-.file-line{
-  margin-top:11px; padding-top:10px; border-top:1px solid var(--line-2);
-  font-size:11.5px; color:var(--ink-3); line-height:1.6;
-}
-.file-line code{color:var(--ink-2); -webkit-user-select:text; user-select:text;}
 
 /* toast */
 .toast{
@@ -250,7 +259,7 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 <div class="topwrap">
   <header class="topbar">
     <span class="spacer"></span>
-    <h1 id="title">全球交通工具图鉴</h1>
+    <h1 id="title">人类交通工具图鉴</h1>
     <span class="spacer"></span>
   </header>
   <nav class="tabs" id="tabs"></nav>
