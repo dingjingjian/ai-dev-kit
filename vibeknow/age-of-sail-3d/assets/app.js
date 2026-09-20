@@ -102,7 +102,7 @@
   var DEMO=QP.has('demo');
   var DEMO_LOOP=QP.has('loop');
   var DEMO_ROUTE=(QP.get('demo')||'merchant');
-  var DEMO_ROUTE_MS=3000;    // 组建舰队页停留
+  var DEMO_ROUTE_MS=5400;    // 组建舰队页停留
   var DEMO_VOYAGE_MS=3400;   // 每站停留（含船档卡阅读 + 相机滑行，滑行最长 2.6s）
   var DEMO_LOG_MS=5200;      // 航海日志页停留
   /* ?warm=N（秒）：演示开始前先静置 N 秒。软件渲染（SwiftShader）下给着色器/
@@ -133,8 +133,8 @@
       demoAfter(500,function(){
         var max=Math.max(0,routeSec.scrollHeight-routeSec.clientHeight);
         if(max>0){
-          demoSmoothScroll(routeSec, max, 1200, function(){
-            demoAfter(200,function(){demoSmoothScroll(routeSec, 0, 700);});
+          demoSmoothScroll(routeSec, max, 2400, function(){
+            demoAfter(260,function(){demoSmoothScroll(routeSec, 0, 1100);});
           });
         }
       });
@@ -259,8 +259,8 @@
     new THREE.MeshBasicMaterial({map:starfieldTex(),side:THREE.BackSide,depthWrite:false}));
   scene.add(sky);
 
-  var ambient=new THREE.AmbientLight(0x3a4a5a,1.0);scene.add(ambient);
-  var lampLight=new THREE.PointLight(0xffd8a8,2.2,0,1.3);lampLight.position.set(18,7,14);scene.add(lampLight);
+  var ambient=new THREE.AmbientLight(0x9ab0c8,0.5);scene.add(ambient);
+  var lampLight=new THREE.PointLight(0xffd0a0,1.15,0,1.3);lampLight.position.set(18,7,14);scene.add(lampLight);
   var fillLight=new THREE.PointLight(0x4a6a7a,0.8,0,1.3);fillLight.position.set(-16,-6,-12);scene.add(fillLight);
   var candleLight=new THREE.PointLight(0xb0894a,0.7,300,1.6);candleLight.position.set(-26,-30,18);scene.add(candleLight);
 
@@ -278,12 +278,12 @@
 
   var earthTilt=new THREE.Group();earthTilt.rotation.z=23.5*Math.PI/180;scene.add(earthTilt);
   var earthGroup=new THREE.Group();earthTilt.add(earthGroup);
-  var earthMat=new THREE.MeshStandardMaterial({map:plainTex('#2a4a6a'),color:0xc4b894,roughness:.82,metalness:.06});
+  var earthMat=new THREE.MeshStandardMaterial({map:plainTex('#2a4a6a'),color:0xffffff,roughness:.82,metalness:.06});
   var earthMesh=new THREE.Mesh(new THREE.SphereGeometry(R,64,44),earthMat);earthGroup.add(earthMesh);
-  var cloudMat=new THREE.MeshStandardMaterial({map:plainTex('#ffffff'),transparent:true,alphaMap:plainTex('#ffffff'),opacity:.34,roughness:1,depthWrite:false});
+  var cloudMat=new THREE.MeshStandardMaterial({map:plainTex('#ffffff'),transparent:true,alphaMap:plainTex('#ffffff'),opacity:.14,roughness:1,depthWrite:false});
   var clouds=new THREE.Mesh(new THREE.SphereGeometry(R*1.012,48,32),cloudMat);earthTilt.add(clouds);
   var atmo=new THREE.Mesh(new THREE.SphereGeometry(R*1.06,48,32),
-    new THREE.MeshBasicMaterial({color:0x6a9ac0,side:THREE.BackSide,transparent:true,opacity:.18,blending:THREE.AdditiveBlending,depthWrite:false}));
+    new THREE.MeshBasicMaterial({color:0x6a9ac0,side:THREE.BackSide,transparent:true,opacity:.1,blending:THREE.AdditiveBlending,depthWrite:false}));
   earthTilt.add(atmo);
 
   /* ===== 标记点：全部建好，按舰队成员与选中状态决定显隐 ===== */

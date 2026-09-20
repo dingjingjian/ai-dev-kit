@@ -7,8 +7,13 @@ ai-dev-kit/
 ├── vibetool/     #vibetool 实用工具
 ├── vibegame/     #vibegame 互动游戏
 ├── vibeart/      #vibeart 数字艺术
-└── vibeknow/     #vibeknow 人文知识
+├── vibeknow/     #vibeknow 人文知识
+└── reference/    # 非参赛区：他人优秀作品归档 + 归档浏览工具（不计入下面四张赛道表）
 ```
+
+`reference/` **不是赛道分类**，里面的东西不参赛、不进下面四张表：
+- `reference/<博主-工具>/` —— 归档的他人作品（截图 + 元信息），规范见 `reference/README.md`；
+- `reference/vibecoding-gallery/` —— 浏览上面这些归档的展示小工具（非参赛作品），说明见其自身 README。
 
 换目录 = 用 `git mv` 把项目迁到目标分类目录，再同步本表与该项目 README 顶部的分类行。
 

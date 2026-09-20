@@ -5,7 +5,7 @@
 - **作者**：木渡川
 - **工具名**：文物放大镜·掌上赏珍（演示作：浙江省博物馆藏「春秋伎乐铜屋」3D 交互页，Echo of Ancient Music）
 - **类型**：h5 教程 / webapp（文物 3D 数字交互网页制作全流程拆解）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aa8a354000000002602105d
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aa226ad0000000011031465?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMt_W-xOGTmZvHKhvK6HOdds=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.jpg（春秋伎乐铜屋交互页：宣纸底色 + 朱绿双配色 + 竖排书法标题「金声古韵 / 余音绕梁」+ 功能按钮区）
 - **备注**：#国风vibecoding #小红书VibeCoding大赛 参赛内容，但形态是**教程向**（「零基础拆解全流程」），与掌上博物馆（哲学咖啡师）同为博物馆文物 3D 赛道样本。

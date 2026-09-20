@@ -5,7 +5,7 @@
 - **作者**：阿毛的脑洞
 - **工具名**：捏捏乐（电子解压捏捏宠物）
 - **类型**：h5 游戏（小红书小工具）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522?source=webshare&xhsshare=pc_web&xsec_token=ABcTHjdkq5QNPXfFz4D5TzMsSOIjq2rFkuUGpO2Oi98f8=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.jpg（⚠️ 为 AI 生成的宣传海报，非游戏实机截图——秃头中年人被双手捏脸，周围环绕饭团/牛角包/小猪/布丁四种捏捏形象）
 - **备注**：#vibegame #小红书vibecoding大赛 参赛作。游戏内 UI 与捏压交互暂无实机素材，后续刷到可补图。

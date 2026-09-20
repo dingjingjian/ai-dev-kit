@@ -5,7 +5,7 @@
 - **作者**：机器旁白
 - **工具名**：编钟演奏（可弹奏周杰伦《晴天》的虚拟编钟）
 - **类型**：h5 音乐工具（小红书小工具）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aaa94510000000026022b96
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6a969de6000000002800208c?source=webshare&xhsshare=pc_web&xsec_token=AB1omuMyMDrRAcOZGilD3vqXlNQfLL5gdHiOwFivPxaSw=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.png（三层编钟架界面：T01–T04 / M01–M04 / B01–B04，钟面标注音名，M02 触发发光态，底部引导语「轻触钟面，听一声金石」）
 - **备注**：#vibecoding #vibemusic 参赛作。⚠️ 版权提醒：笔记以周杰伦《晴天》为演示曲目，属受版权保护作品；归档仅作学习参考，自研项目应使用公版/原创/CC 授权曲目。

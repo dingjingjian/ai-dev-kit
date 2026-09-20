@@ -1,0 +1,20 @@
+// 由 _dev/make_covers.py 生成，勿手改
+window.COVER_DIMS = {
+  "01-zhexue-kafeishi-fireworks.jpg": [540, 720],
+  "02-zhexue-kafeishi-pocket-museum.jpg": [540, 720],
+  "03-maoge-suxiu.jpg": [540, 1200],
+  "04-ciyuan-ai-speed-drift.jpg": [540, 1200],
+  "05-carrytzz-doraemon-house.jpg": [540, 720],
+  "06-nide-ai-fly.jpg": [540, 1178],
+  "07-way-ai-jump-ball.jpg": [540, 722],
+  "08-haha-mini-flight.jpg": [540, 719],
+  "09-zuoshou-keer-parking.jpg": [540, 720],
+  "10-xingkong-excavator-pig.jpg": [540, 720],
+  "11-doumi-next-blue-dot.jpg": [540, 720],
+  "12-jiqi-bianzhong-qingtian.jpg": [540, 720],
+  "13-muduchuan-relic-viewer.jpg": [540, 720],
+  "14-amao-squeeze-toy.jpg": [540, 720],
+  "15-xianhua-moon-letter.jpg": [540, 720],
+  "16-mingo-bala-bala.jpg": [540, 869],
+  "17-piece-of-moonlight.jpg": [540, 1170],
+};

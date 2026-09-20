@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>vibecoding 优秀作品展</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { touch-action: manipulation; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      color: #333;
+      background: #fff;
+    }
+    button { font-family: inherit; border: 0; background: none; cursor: pointer; color: inherit; }
+    img { display: block; max-width: 100%; }
+
+    :root {
+      --brand: #ff2442;
+      --brand-2: #ff2442;
+      --grad: #ff2442;
+      --ink: #1f2329;
+      --ink-2: #55595f;
+      --ink-3: #9aa0a8;
+      --line: #eef0f3;
+      --card-r: 10px;
+      --shadow-1: 0 1px 6px rgba(31, 35, 41, 0.06);
+      --shadow-2: 0 4px 16px rgba(31, 35, 41, 0.1);
+      /* 安全区 token（参照 ai-os）：顶部净空 = 显式预留 --top-gap + 系统安全区。
+         PC 模拟器注入 --safe-area-inset-*，真机走 env()，组合写法两端都生效。
+         --safe-top 是链式 calc(var() env())，任一段失效会让整条 computed-value 失效
+         （Chrome 61 不认 env()），故所有使用处一律「先保留普通值，再用变量」
+         （css-compatibility.md §3）——否则预留带会塌陷、内容顶到宿主顶栏上。 */
+      --top-gap: 0px;
+      --safe-top: calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+      --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    }
+    /* 宿主内嵌（小红书容器）：自带顶部导航行（返回 / 分享 / 更多）压在安全区之下，
+       需再让开一条 --top-gap。自定义属性在声明它的元素上求值，只改 --top-gap
+       不会让 :root 上的 --safe-top 重算，故此处整条重声明。 */
+    body.in-app {
+      --top-gap: 50px;
+      --safe-top: calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    }
+
+    /* ===== 页面骨架 ===== */
+    #app {
+      max-width: 520px;
+      margin: 0 auto;
+      min-height: 100%;
+      background: #fff;
+      /* 顶部预留带：普通值在前、变量在后（css-compatibility.md §3） */
+      padding-top: 50px;
+      padding-top: var(--safe-top);
+      padding-bottom: 0;
+      padding-bottom: var(--safe-bottom);
+    }
+    /* 预留带遮罩：固定在最上方，盖住滚动上来的内容，不让其出现在宿主顶栏之后；
+       高度同样普通值兜底；pointer-events:none 保证不拦截任何手势。 */
+    #app::before {
+      content: "";
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 50px;
+      height: var(--safe-top);
+      background: #fff;
+      pointer-events: none;
+      z-index: 30;
+    }
+
+    /* ===== 品牌区（随页滚动） ===== */
+    .page-head {
+      display: flex;
+      align-items: center;
+      padding: 22px 16px 12px;
+    }
+    .logo {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      background: var(--grad);
+      box-shadow: 0 4px 10px rgba(255, 36, 66, 0.28);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .logo svg { width: 24px; height: 24px; }
+    .brand-text { flex: 1; min-width: 0; margin-left: 12px; }
+    .brand-text h1 {
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+      color: var(--ink);
+    }
+    @supports (-webkit-background-clip: text) {
+      .brand-text h1 {
+        background: var(--grad);
+        -webkit-background-clip: text;
+        color: transparent;
+      }
+    }
+    .brand-text p {
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--ink-3);
+      letter-spacing: 0.3px;
+    }
+    .brand-text p b { color: var(--brand); font-weight: 600; }
+
+    /* ===== 吸顶区：搜索 + 菜单 =====
+       顶部净空统一由 #app 的 padding-top（= --safe-top）预留；吸顶时改由 sticky 的
+       top 让开同一段距离（top: var(--safe-top) 减 0），避免两处叠加出空档。
+       普通值兜底：链式 --safe-top 失效时退到 50px，栏不塌到状态栏下。 */
+    .sticky-head {
+      position: sticky;
+      top: 50px;
+      top: var(--safe-top);
+      z-index: 20;
+      background: rgba(255, 255, 255, 0.97);
+      box-shadow: 0 1px 0 rgba(31, 35, 41, 0.05);
+      padding-bottom: 8px;
+    }
+    @supports ((-webkit-backdrop-filter: blur(16px)) or (backdrop-filter: blur(16px))) {
+      .sticky-head {
+        background: rgba(255, 255, 255, 0.8);
+        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(16px);
+      }
+    }
+    .search-row {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px 6px;
+    }
+    .search-box {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      background: #f2f3f5;
+      border-radius: 12px;
+      padding: 0 12px;
+      height: 36px;
+      margin-right: 10px;
+      transition: box-shadow 0.2s ease-out;
+    }
+    .search-box:focus-within {
+      background: #fff;
+      box-shadow: 0 0 0 2px rgba(255, 36, 66, 0.35);
+    }
+    .search-box svg { flex: none; width: 15px; height: 15px; }
+    .search-box input {
+      border: 0;
+      outline: 0;
+      background: none;
+      font-size: 13px;
+      color: var(--ink);
+      margin-left: 7px;
+      width: 100%;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    .search-box input::-webkit-input-placeholder { color: #b4b8bf; }
+    .gacha-btn {
+      flex: none;
+      display: flex;
+      align-items: center;
+      background: var(--grad);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 12px;
+      height: 36px;
+      padding: 0 14px;
+      box-shadow: 0 4px 12px rgba(255, 60, 52, 0.36);
+      transition: transform 0.15s ease-out;
+    }
+    .gacha-btn:active { transform: scale(0.94); opacity: 0.9; }
+    .gacha-btn svg { width: 15px; height: 15px; margin-right: 5px; }
+
+    /* ===== 赛道分段（一行放得下，等宽便于切换） ===== */
+    .chips {
+      display: flex;
+      padding: 6px 12px 2px;
+    }
+    .chip {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: #666;
+      background: #f5f5f7;
+      border-radius: 999px;
+      padding: 8px 2px;
+      margin-right: 6px;
+      border: 0;
+      white-space: nowrap;
+      transition: transform 0.15s ease-out, background 0.15s ease-out, color 0.15s ease-out;
+    }
+    .chip:last-child { margin-right: 0; }
+    .chip .cnt {
+      font-size: 10px;
+      font-weight: 700;
+      color: #9aa0a8;
+      background: rgba(0, 0, 0, 0.06);
+      border-radius: 999px;
+      padding: 1px 5px;
+      margin-left: 4px;
+      line-height: 1.5;
+    }
+    .chip:active { transform: scale(0.96); }
+    .chip.active {
+      background: var(--brand);
+      color: #fff;
+    }
+    .chip.active .cnt {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.24);
+    }
+
+    /* ===== 瀑布流 ===== */
+    .feed {
+      display: flex;
+      align-items: flex-start;
+      padding: 6px 8px 0;
+    }
+    .col { flex: 1; min-width: 0; }
+    .col + .col { margin-left: 8px; }
+    .card {
+      background: #fff;
+      border-radius: var(--card-r);
+      overflow: hidden;
+      margin-bottom: 10px;
+      box-shadow: var(--shadow-1);
+      position: relative;
+      animation: card-in 0.42s cubic-bezier(0.22, 0.9, 0.36, 1) backwards;
+      transition: transform 0.18s ease-out, box-shadow 0.18s ease-out;
+    }
+    .no-anim .card { animation: none; }
+    .card:active {
+      transform: scale(0.975);
+      box-shadow: var(--shadow-2);
+    }
+    @keyframes card-in {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .cover-box {
+      position: relative;
+      width: 100%;
+      background: #eceef1;
+      overflow: hidden;
+    }
+    .cover-box img {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      transform: scale(1.05);
+      transition: opacity 0.4s ease-out, transform 0.5s ease-out;
+    }
+    .cover-box img.loaded { opacity: 1; transform: scale(1); }
+    .track-badge {
+      position: absolute;
+      left: 8px;
+      bottom: 8px;
+      background: rgba(20, 22, 26, 0.55);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 600;
+      border-radius: 999px;
+      padding: 3px 8px;
+      z-index: 2;
+    }
+    @supports ((-webkit-backdrop-filter: blur(6px)) or (backdrop-filter: blur(6px))) {
+      .track-badge {
+        background: rgba(20, 22, 26, 0.38);
+        -webkit-backdrop-filter: blur(6px);
+        backdrop-filter: blur(6px);
+      }
+    }
+    .card-title {
+      font-size: 13.5px;
+      font-weight: 600;
+      line-height: 19px;
+      color: var(--ink);
+      padding: 9px 11px 3px;
+      height: 47px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      word-break: break-all;
+    }
+    .card-foot {
+      display: flex;
+      align-items: center;
+      padding: 0 11px 10px;
+    }
+    .avatar {
+      flex: none;
+      width: 19px;
+      height: 19px;
+      border-radius: 50%;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 0 1.5px #fff, 0 0 0 2.5px rgba(31, 35, 41, 0.08);
+    }
+    .author-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 11px;
+      color: var(--ink-3);
+      margin-left: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .like-btn {
+      flex: none;
+      font-size: 17px;
+      line-height: 1;
+      color: #c6cad1;
+      padding: 3px 2px;
+    }
+    .like-btn.liked { color: var(--brand); }
+    .like-btn.pop { animation: pop 0.42s ease-out; }
+    @keyframes pop {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.45); }
+      100% { transform: scale(1); }
+    }
+
+    /* 双击大爱心 */
+    .burst-heart {
+      position: fixed;
+      z-index: 300;
+      pointer-events: none;
+      font-size: 78px;
+      line-height: 1;
+      color: var(--brand);
+      text-shadow: 0 4px 18px rgba(255, 36, 66, 0.45);
+      animation: burst 0.65s ease-out forwards;
+    }
+    @keyframes burst {
+      0% { transform: translate(-50%, -50%) scale(0.3) rotate(-6deg); opacity: 0; }
+      25% { transform: translate(-50%, -50%) scale(1.15) rotate(4deg); opacity: 1; }
+      55% { transform: translate(-50%, -50%) scale(1) rotate(-2deg); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1.25) rotate(0deg); opacity: 0; }
+    }
+
+    /* ===== 空状态 / 页脚 ===== */
+    .empty {
+      display: none;
+      text-align: center;
+      color: var(--ink-3);
+      font-size: 13px;
+      padding: 64px 20px;
+    }
+    .empty .icon { font-size: 36px; margin-bottom: 12px; }
+    .footer {
+      text-align: center;
+      color: #c2c6cc;
+      font-size: 11px;
+      padding: 18px 20px 28px;
+      line-height: 1.9;
+    }
+
+    /* ===== 回到顶部（列表滚动后出现） ===== */
+    .back-top {
+      position: fixed;
+      right: 16px;
+      bottom: 24px;
+      bottom: calc(24px + var(--safe-bottom));
+      z-index: 40;
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #fff;
+      color: #4d525a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 10px rgba(31, 35, 41, 0.16), 0 0 0 1px rgba(31, 35, 41, 0.04);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity 0.2s ease-out, transform 0.2s ease-out;
+    }
+    .back-top svg { width: 20px; height: 20px; }
+    .back-top.show { opacity: 1; pointer-events: auto; transform: translateY(0); }
+    .back-top:active { transform: scale(0.92); }
+    /* 宽屏时贴合居中列（520px）右侧，而非贴在视口最右 */
+    @media (min-width: 552px) {
+      .back-top { right: calc(50% - 260px + 16px); }
+    }
+
+    /* ===== 覆盖层通用 ===== */
+    .overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 100;
+      display: none;
+    }
+    .overlay.open { display: block; }
+
+    /* ===== 详情页（笔记页复刻） ===== */
+    #detail {
+      background: #fff;
+      transform: translateX(100%);
+      transition: transform 0.28s cubic-bezier(0.32, 0.9, 0.35, 1);
+    }
+    #detail.slide { transform: translateX(0); }
+    .detail-scroll {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      bottom: 60px;
+      bottom: calc(60px + var(--safe-bottom));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+    }
+    .detail-cover-wrap {
+      position: relative;
+      background: #eceef1;
+    }
+    .detail-cover-wrap img { width: 100%; }
+    .back-btn {
+      position: absolute;
+      top: 14px; left: 14px;
+      /* 详情页是整屏覆盖层，返回键同样要避开顶部安全区，否则会压在状态栏下 */
+      top: calc(14px + var(--safe-top));
+      z-index: 5;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: rgba(20, 22, 26, 0.4);
+      color: #fff;
+      font-size: 18px;
+      line-height: 36px;
+      text-align: center;
+    }
+    @supports ((-webkit-backdrop-filter: blur(8px)) or (backdrop-filter: blur(8px))) {
+      .back-btn {
+        background: rgba(20, 22, 26, 0.26);
+        -webkit-backdrop-filter: blur(8px);
+        backdrop-filter: blur(8px);
+      }
+    }
+    .detail-body { padding: 16px 18px 24px; }
+    .detail-title {
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--ink);
+      line-height: 1.45;
+      word-break: break-all;
+    }
+    .author-row {
+      display: flex;
+      align-items: center;
+      margin-top: 14px;
+      padding: 10px 12px;
+      background: #f8f9fb;
+      border-radius: 12px;
+    }
+    .author-row .avatar { width: 34px; height: 34px; font-size: 14px; }
+    .author-row .meta { flex: 1; min-width: 0; margin-left: 10px; }
+    .author-row .name { font-size: 14px; font-weight: 700; color: var(--ink); }
+    .author-row .sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+    .detail-track {
+      flex: none;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fff;
+      background: var(--grad);
+      border-radius: 999px;
+      padding: 5px 11px;
+      box-shadow: 0 3px 8px rgba(255, 60, 52, 0.3);
+    }
+    .detail-intro {
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.75;
+      word-break: break-all;
+      padding: 12px 14px;
+      background: #f7f8fa;
+      border-radius: 12px;
+    }
+    .note-body {
+      font-size: 14px;
+      color: var(--ink-2);
+      line-height: 1.9;
+      white-space: pre-line;
+      word-break: break-word;
+      -webkit-user-select: text;
+      user-select: text;
+    }
+    .section-title {
+      display: flex;
+      align-items: center;
+      font-size: 14.5px;
+      font-weight: 800;
+      color: var(--ink);
+      margin: 22px 0 11px;
+    }
+    .section-title .dot {
+      width: 5px;
+      height: 16px;
+      border-radius: 3px;
+      background: var(--grad);
+      margin-right: 8px;
+    }
+    .hl-item {
+      display: flex;
+      background: #f8f9fb;
+      border-radius: 12px;
+      padding: 12px 13px;
+      margin-bottom: 9px;
+    }
+    .hl-item .num {
+      flex: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 7px;
+      background: var(--grad);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+      line-height: 20px;
+      margin-top: 1px;
+      box-shadow: 0 2px 6px rgba(255, 60, 52, 0.28);
+    }
+    .hl-item .txt {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      color: var(--ink-2);
+      line-height: 1.65;
+      margin-left: 10px;
+      word-break: break-all;
+    }
+    .link-box {
+      background: #f8f9fb;
+      border: 1px dashed #dcdee3;
+      border-radius: 12px;
+      padding: 12px 13px;
+    }
+    .link-box .tip { font-size: 11px; color: var(--ink-3); line-height: 1.6; }
+    .link-box .url {
+      font-family: Menlo, Consolas, monospace;
+      font-size: 10.5px;
+      color: #4d525a;
+      line-height: 1.65;
+      word-break: break-all;
+      -webkit-user-select: text;
+      user-select: text;
+      margin-top: 7px;
+    }
+    /* 缺分享令牌（xsec_token）的条目提示：链接原样保留，但站外可能打不开 */
+    .url-warn {
+      font-size: 10.5px;
+      color: #d9484f;
+      line-height: 1.6;
+      margin-top: 6px;
+    }
+    .detail-bar {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 60px;
+      /* 安全区是「60px 常量 + 手势条」而不是在 60px 里再挖一块：
+         高度写死 60px 时 padding-bottom 会吃掉内容区，矮屏上按钮会被压扁 */
+      height: calc(60px + var(--safe-bottom));
+      display: flex;
+      align-items: center;
+      background: #fff;
+      border-top: 1px solid var(--line);
+      padding: 0 14px;
+      padding-bottom: 0;
+      padding-bottom: var(--safe-bottom);
+    }
+    .bar-like {
+      flex: none;
+      font-size: 23px;
+      color: #c6cad1;
+      padding: 6px 12px 6px 2px;
+    }
+    .bar-like.liked { color: var(--brand); }
+    .bar-like.pop { animation: pop 0.42s ease-out; }
+    .bar-note-btn {
+      flex: 1;
+      background: var(--grad);
+      color: #fff;
+      font-size: 14.5px;
+      font-weight: 700;
+      border-radius: 999px;
+      height: 42px;
+      box-shadow: 0 5px 14px rgba(255, 60, 52, 0.36);
+      transition: transform 0.15s ease-out;
+    }
+    .bar-note-btn:active { transform: scale(0.97); }
+
+    /* ===== 扭蛋机 ===== */
+    #gacha { background: rgba(15, 17, 21, 0.66); }
+    .gacha-panel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 84%;
+      max-width: 340px;
+      max-height: 90%;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      background: #fff;
+      border-radius: 20px;
+      padding: 22px 20px 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+    }
+    .gacha-close {
+      position: absolute;
+      top: 12px; right: 14px;
+      font-size: 20px;
+      color: #c2c6cc;
+      padding: 4px 6px;
+    }
+    .gacha-title {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+    .gacha-sub {
+      text-align: center;
+      font-size: 11px;
+      color: var(--ink-3);
+      margin-top: 4px;
+    }
+    .machine {
+      position: relative;
+      height: 232px;
+      max-height: 232px;
+      margin: 18px 8px 0;
+      overflow: hidden;
+      /* 出结果：先快速淡出 + 上飘，再收起高度——避免高度被“压扁”看起来像垮掉 */
+      transition: opacity 0.22s ease, transform 0.3s ease, max-height 0.42s ease, margin-top 0.42s ease;
+    }
+    /* 机身实体：物理模拟的摇摆作用在这一层，与 .machine 的收起过渡互不干扰 */
+    .m-body {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      transform-origin: 50% 90%;
+    }
+    /* 玻璃球罩 */
+    .dome {
+      position: absolute;
+      top: 0; left: 7%; right: 7%;
+      height: 134px;
+      border-radius: 67px 67px 14px 14px;
+      background: linear-gradient(160deg, #ffffff 0%, #eef2f8 55%, #e0e7f1 100%);
+      border: 2px solid #d7dfea;
+      overflow: hidden;
+      box-shadow: inset 0 -12px 20px rgba(120, 140, 170, 0.18),
+                  0 6px 14px rgba(40, 60, 90, 0.08);
+    }
+    .dome::before {
+      content: "";
+      position: absolute;
+      top: 9%; left: 9%;
+      width: 32%; height: 15%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.92);
+      transform: rotate(-18deg);
+      filter: blur(1px);
+    }
+    .dome::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 20px;
+      background: linear-gradient(180deg, rgba(150, 168, 196, 0), rgba(150, 168, 196, 0.22));
+    }
+    .ball {
+      position: absolute;
+      left: 0;
+      top: 0;
+      border-radius: 50%;
+      /* 位置与旋转由物理模拟驱动（translate + rotate），绕自身中心转，高光跟着走 */
+      transform-origin: 50% 50%;
+      box-shadow: inset -4px -6px 10px rgba(0, 0, 0, 0.16), inset 3px 4px 6px rgba(255, 255, 255, 0.6);
+    }
+    .ball::after {
+      content: "";
+      position: absolute;
+      top: 14%; left: 20%;
+      width: 26%; height: 20%;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.85);
+      transform: rotate(-24deg);
+    }
+    /* 机身 */
+    .m-base {
+      position: absolute;
+      left: 0; right: 0; bottom: 0;
+      height: 106px;
+      border-radius: 16px 16px 18px 18px;
+      background: linear-gradient(180deg, #ff5c6f 0%, #ff2442 52%, #e01e3a 100%);
+      box-shadow: 0 12px 24px rgba(255, 36, 66, 0.26),
+                  inset 0 2px 0 rgba(255, 255, 255, 0.4);
+    }
+    .m-base::before {
+      content: "";
+      position: absolute;
+      left: 15%; right: 15%; top: 12px;
+      height: 62px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.16);
+    }
+    .m-knob {
+      position: absolute;
+      top: 22px; left: 50%;
+      width: 38px; height: 38px;
+      margin-left: -19px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #ffffff, #d5dce6 72%);
+      box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.14), 0 2px 5px rgba(0, 0, 0, 0.22);
+    }
+    .m-knob::after {
+      content: "";
+      position: absolute;
+      top: 11px; left: 11px; right: 11px; bottom: 11px;
+      border-radius: 50%;
+      border: 3px solid #aab4c4;
+    }
+    .m-slot {
+      position: absolute;
+      top: 30px; right: 20px;
+      width: 24px; height: 8px;
+      border-radius: 4px;
+      background: #7d1626;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.55);
+    }
+    .m-door {
+      position: absolute;
+      left: 50%; bottom: 14px;
+      width: 54px; height: 34px;
+      margin-left: -27px;
+      border-radius: 6px 6px 13px 13px;
+      background: #f2f5f9;
+      border: 2px solid rgba(255, 255, 255, 0.7);
+      box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.18);
+    }
+    .m-door::after {
+      content: "";
+      position: absolute;
+      left: 8px; right: 8px; top: 7px;
+      height: 4px;
+      border-radius: 2px;
+      background: #cdd6e2;
+    }
+    /* 出结果后：机身向上移动、淡出消失，面板随之变矮（既不翻页，也不突兀地“塌陷”） */
+    .gacha-panel.has-result .machine {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      transform: translateY(-42px);
+    }
+    /* 摇动与球的运动改由 JS 刚体模拟驱动（见脚本「扭蛋机」一节），
+       这里只保留出蛋阶段的两个关键帧：旋钮转动、扭蛋掉落与裂开。 */
+    .m-knob { cursor: pointer; }
+    .m-knob.turn { animation: knobturn 0.72s cubic-bezier(0.45, 0.05, 0.35, 1); }
+    @keyframes knobturn {
+      0% { transform: rotate(0deg); }
+      20% { transform: rotate(72deg); }
+      100% { transform: rotate(360deg); }
+    }
+    /* 扭蛋胶囊：出蛋时从取蛋口出现、下落弹跳，再上下两半裂开飞出 */
+    .capsule {
+      position: absolute;
+      left: 50%; bottom: 42px;
+      width: 42px; height: 42px;
+      margin-left: -21px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .capsule .cap-top,
+    .capsule .cap-bot {
+      position: absolute;
+      left: 0; right: 0;
+      height: 21px;
+      box-shadow: inset -3px -4px 8px rgba(0, 0, 0, 0.16), inset 2px 3px 5px rgba(255, 255, 255, 0.5);
+    }
+    .capsule .cap-top {
+      top: 0;
+      border-radius: 21px 21px 3px 3px;
+      background: var(--brand);
+      border-bottom: 2px solid #d81b35;
+    }
+    .capsule .cap-bot {
+      bottom: 0;
+      border-radius: 3px 3px 21px 21px;
+      background: #f6f8fb;
+      border-top: 2px solid #dfe4ec;
+    }
+    .capsule.drop { animation: capdrop 0.62s cubic-bezier(0.3, 0.6, 0.4, 1) forwards; }
+    @keyframes capdrop {
+      0%   { opacity: 0; transform: translateY(0) scale(0.72); }
+      16%  { opacity: 1; }
+      50%  { transform: translateY(26px) scale(1); }
+      64%  { transform: translateY(19px) scale(1.05, 0.94); }
+      80%  { transform: translateY(26px) scale(0.99, 1.01); }
+      100% { opacity: 1; transform: translateY(24px) scale(1); }
+    }
+    .capsule.open .cap-top { animation: capTop 0.45s ease-out forwards; }
+    .capsule.open .cap-bot { animation: capBot 0.45s ease-out forwards; }
+    @keyframes capTop {
+      to { transform: translateY(-30px) rotate(-40deg); opacity: 0; }
+    }
+    @keyframes capBot {
+      to { transform: translateY(26px) rotate(32deg); opacity: 0; }
+    }
+    .gacha-result { display: none; text-align: center; }
+    .gacha-result.show { display: block; animation: resultin 0.42s cubic-bezier(0.22, 1.1, 0.5, 1) both; }
+    @keyframes resultin {
+      0% { opacity: 0; transform: translateY(12px) scale(0.96); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* 出结果顶部那句话：两侧渐隐红细线夹住的一行小字，克制、不抢卡片风头 */
+    .gacha-line {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      /* 出结果时机身高度收起，这里补一段上间距，避免和上面的「从 N 件归档…」贴住 */
+      margin-top: 20px;
+      margin-bottom: 13px;
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: 0.4px;
+      line-height: 1.4;
+      color: var(--brand);
+    }
+    .gacha-line::before,
+    .gacha-line::after {
+      content: "";
+      flex: 1 1 auto;
+      height: 1px;
+      margin: 0 12px;
+    }
+    .gacha-line::before {
+      background: linear-gradient(90deg, rgba(255, 36, 66, 0), rgba(255, 36, 66, 0.3));
+    }
+    .gacha-line::after {
+      background: linear-gradient(90deg, rgba(255, 36, 66, 0.3), rgba(255, 36, 66, 0));
+    }
+    .gacha-card {
+      border-radius: 14px;
+      overflow: hidden;
+      background: #f7f8fa;
+      text-align: left;
+    }
+    .gacha-card .thumb {
+      width: 100%;
+      height: 210px;
+      background: #eceef1 center / cover no-repeat;
+    }
+    .gacha-card .info { padding: 12px 13px 14px; }
+    .gacha-card .t {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.4;
+    }
+    .gacha-card .a { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; }
+    .gacha-card .d {
+      font-size: 12.5px;
+      color: var(--ink-2);
+      line-height: 1.6;
+      margin-top: 9px;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      overflow: hidden;
+    }
+    .gacha-actions {
+      display: flex;
+      margin-top: 16px;
+    }
+    .gacha-actions .again {
+      flex: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink-2);
+      border: 1px solid #dcdfe4;
+      border-radius: 999px;
+      height: 40px;
+      padding: 0 17px;
+      margin-right: 10px;
+    }
+    .gacha-actions .go {
+      flex: 1;
+      background: var(--brand);
+      color: #fff;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 999px;
+      height: 40px;
+      box-shadow: 0 5px 14px rgba(255, 36, 66, 0.3);
+    }
+    .gacha-actions .again:active, .gacha-actions .go:active { opacity: 0.75; }
+    .gacha-shake-btn {
+      display: block;
+      width: 100%;
+      margin-top: 18px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      border-radius: 999px;
+      height: 46px;
+      box-shadow: 0 6px 16px rgba(255, 36, 66, 0.3);
+      transition: transform 0.15s ease-out;
+    }
+    .gacha-shake-btn:active { transform: scale(0.97); }
+    .gacha-shake-btn[disabled] { opacity: 0.5; }
+
+    /* ===== toast ===== */
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: 22%;
+      transform: translate(-50%, 0);
+      z-index: 400;
+      background: rgba(20, 22, 26, 0.82);
+      color: #fff;
+      font-size: 13px;
+      border-radius: 999px;
+      padding: 11px 19px;
+      max-width: 78%;
+      text-align: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-out;
+    }
+    #toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="page-head">
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="#fff">
+          <path d="M13.2 1.8 4.6 13.4h6.1L9.1 22.2l10.3-12.6h-6.4l1.4-7.8z"/>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>vibecoding 优秀作品展</h1>
+        <p><b id="work-count">16</b> 位创作者 · <b id="work-count2">16</b> 件大赛作品</p>
+      </div>
+    </header>
+
+    <div class="sticky-head">
+      <div class="search-row">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#9aa0a8" stroke-width="2.4" stroke-linecap="round">
+            <circle cx="10.5" cy="10.5" r="6.5"></circle>
+            <line x1="15.5" y1="15.5" x2="21" y2="21"></line>
+          </svg>
+          <input id="search-input" type="text" placeholder="搜作品 / 博主" autocomplete="off" />
+        </div>
+        <button class="gacha-btn" id="gacha-open">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="4.5"></rect>
+            <circle cx="8.5" cy="8.5" r="1.3" fill="#fff" stroke="none"></circle>
+            <circle cx="15.5" cy="15.5" r="1.3" fill="#fff" stroke="none"></circle>
+            <circle cx="12" cy="12" r="1.3" fill="#fff" stroke="none"></circle>
+          </svg>随机邂逅
+        </button>
+      </div>
+      <nav class="chips" id="chips"></nav>
+    </div>
+
+    <main class="feed">
+      <div class="col" id="col-l"></div>
+      <div class="col" id="col-r"></div>
+    </main>
+
+    <div class="empty" id="empty">
+      <div class="icon">&#128269;</div>
+      没有找到相关作品，换个关键词试试
+    </div>
+
+    <footer class="footer">
+      小红书 vibecoding 大赛优秀作品归档<br />
+      截图与简介版权归各位原作者所有
+    </footer>
+  </div>
+
+  <!-- 笔记详情页 -->
+  <div class="overlay" id="detail">
+    <div class="detail-scroll" id="detail-scroll"></div>
+    <button class="back-btn" id="detail-back">&#10094;</button>
+    <div class="detail-bar" id="detail-bar"></div>
+  </div>
+
+  <!-- 随机邂逅（扭蛋机） -->
+  <div class="overlay" id="gacha">
+    <div class="gacha-panel" id="gacha-panel">
+      <button class="gacha-close" id="gacha-close">&#10005;</button>
+      <div class="gacha-title">随机邂逅</div>
+      <div class="gacha-sub">从 <b id="gacha-count">16</b> 件归档里，摇一件好作品</div>
+      <div class="machine" id="machine">
+        <div class="m-body" id="m-body">
+          <div class="dome" id="dome"></div>
+          <div class="m-base">
+            <span class="m-knob" id="m-knob" title="扭一个"></span>
+            <span class="m-slot"></span>
+            <span class="m-door"></span>
+          </div>
+          <div class="capsule" id="capsule">
+            <span class="cap-top"></span>
+            <span class="cap-bot"></span>
+          </div>
+        </div>
+      </div>
+      <button class="gacha-shake-btn" id="gacha-shake">摇一摇</button>
+      <div class="gacha-result" id="gacha-result"></div>
+    </div>
+  </div>
+
+  <!-- 回到顶部 -->
+  <button class="back-top" id="back-top" aria-label="回到顶部">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 19V6"></path>
+      <path d="M6 12l6-6 6 6"></path>
+    </svg>
+  </button>
+
+  <div id="toast"></div>
+
+  <script src="./covers-data.js"></script>
+  <script src="./main.js"></script>
+</body>
+</html>

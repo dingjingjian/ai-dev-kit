@@ -5,7 +5,7 @@
 - **作者**：豆米AI
 - **工具名**：下一个蓝点
 - **类型**：h5 游戏（小红书小工具）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba?source=webshare&xhsshare=pc_web&xsec_token=AB9XjDaMmirGGm8W5Dc5rH1GkqfszYQJ_EplEG_4WQfGg=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.png（发射段画面：卡门线 227 km + 尺度尺 HUD）
 - **备注**：#小红书vibecoding大赛 #vibegame 参赛作——与自研 vibegame 同赛道竞品，且与 solar-voyager 同「航天/升空」母题，**相关度最高的直接竞品之一**。

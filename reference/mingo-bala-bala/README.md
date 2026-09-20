@@ -5,7 +5,7 @@
 - **作者**：Mingo 🥕
 - **工具名**：bala bala（解压球球）
 - **类型**：h5 互动工具（小红书小工具，桌面端截图可见时钟/设置/帮助界面）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b?source=webshare&xhsshare=pc_web&xsec_token=ABdAl8pX503j3i3ttrJOJ4N7GEJLepe3-I3lEmRKEbSGQ=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.png（主界面：夜空底 + 大号果冻质感笑脸球，顶部时钟 19:22 + 日期，右上角设置/帮助按钮，底部 SKU 选择栏含 7 款预设球 + 「+」自定义入口）
 - **备注**：#小红书vibecoding大赛 #vibetool 参赛作——**#vibetool 赛道竞品第 2 条**（此前仅掌上博物馆一条）。

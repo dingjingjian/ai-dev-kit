@@ -1,0 +1,9 @@
+/* 录制专用覆盖 CSS（仅注入录制浏览器，不改动 app 源码）
+   目标：等量交换——地球调小、船图调大（不变总量，保住一屏不翻页）
+   - 用 --globem 变量同时缩地球高度(h)与内容区上移(margin-top)，保持一致
+   - 保留出港页 .depart-bg 的模糊铺底（真实 GPU 可流畅渲染，关闭会露硬边显乱） */
+:root{--globem:168px !important;}
+.voyage-frame{width:204px !important;height:204px !important;max-width:204px !important;max-height:204px !important;}
+/* 隐藏系统原生滚动条（真机移动端浏览器多为叠加式/隐藏；为避免模拟环境下露出丑滚动条，录制时统一隐藏） */
+html,body{scrollbar-width:none !important;}
+*::-webkit-scrollbar{width:0 !important;height:0 !important;display:none !important;}

@@ -5,7 +5,7 @@
 - **作者**：闲话AI | 造物日记
 - **工具名**：月下寄笺局（月亮信·中秋寄信小工具）
 - **类型**：h5 互动工具（小红书小工具）
-- **原文链接**：https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2?source=webshare&xhsshare=pc_web&xsec_token=ABgyjiKnSj8-cKE2Iozok0qDqjOG9u-i57Z-4uXb7E3wo=&xsec_source=pc_share
 - **归档日期**：2026-09-20
 - **归档截图**：screenshots/cover.png（笔记头图：月下寄笺局宣传图——克莱因蓝信封 + 橙色月牙版画风格，品牌名「MOON LETTER · MID-AUTUMN」，副题「我做了一个可以真的"写一封信"的小工具」，底部引导「月下寄笺局 · 点进来，给谁都可以」）
 - **备注**：#国风vibecoding #小红书vibecoding大赛 参赛作，借中秋节点的**情绪/节令**向工具。
