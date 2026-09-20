@@ -1,12 +1,12 @@
 # 全球交通工具图鉴 · Vehicle Atlas
 
-> **分类**：`#vibetool` 实用工具　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
+> **分类**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
 
 移动端优先的全球交通史速查图鉴：收录 **49 种交通工具「类型」**，按 **地面 / 水面 / 天空 / 太空** 四类分组，每个分类内按出现时间从早到晚排列，串成一部从公元前 3000 年到今天的简明交通工具史。每种给出中英文名、时间跨度、一句话特点、介绍、关键参数、亮点与 AI 配图提示词。纯前端零依赖、离线可用，已适配小红书小工具容器。
 
 **收录口径**：只讲类型，不写具体型号与品牌（如写「集装箱船」而不是某一艘船、写「高速列车」而不是某一型车）。这样每个条目描述的是**一类事物的共性**，配图也只画类型的典型样貌，不会出现「图与型号对不上」的问题。
 
-参考：[`vibetool/uiux-style-gallery`](../uiux-style-gallery/)（设计风格图鉴）与 [`vibetool/echarts-gallery`](../echarts-gallery/)（图表图鉴），沿用同一套「列表 + 分类 tab + hash 路由详情页」框架，把纯 CSS demo 换成真实交通工具的配图。
+参考：[`vibetool/uiux-style-gallery`](../../vibetool/uiux-style-gallery/)（设计风格图鉴）与 [`vibetool/echarts-gallery`](../../vibetool/echarts-gallery/)（图表图鉴），沿用同一套「列表 + 分类 tab + hash 路由详情页」框架，把纯 CSS demo 换成真实交通工具的配图。
 
 ## 打开方式
 

@@ -244,17 +244,22 @@
     opacity:0;animation:fillOpen 7s cubic-bezier(.35,.02,.62,1) forwards}
   @keyframes fillClosed{0%{opacity:.34}30%{opacity:.34}62%{opacity:0}100%{opacity:0}}
   @keyframes fillOpen{0%{opacity:0}30%{opacity:0}62%{opacity:.34}100%{opacity:.34}}
-  /* contain 而非 cover：保证港口与桅杆永远完整可见（竖屏也不会裁掉船首尾） */
+  /* contain 而非 cover：保证港口与桅杆永远完整可见（竖屏也不会裁掉船首尾）。
+     但 contain 会在左右留出空档（竖版是 1:2，视口宽高比 > 1:2 时按高度撑满），
+     空档交给下面 .depart-bg 的**同帧模糊层**填满，所以这一层绝不能叠 harbor 兜底图：
+     16:9 的兜底图是满宽的，会在左右空档里露出一张横图，看着像两张图拼在一起。 */
   .depart-shot{position:absolute;top:0;right:0;bottom:0;left:0;
     background-size:contain;background-position:center;background-repeat:no-repeat}
   /* 两帧用同一条缓动 + 同一条缩放曲线（见下方 keyframes），
      交叉淡化期间缩放逐帧一致，合成后就是一路推近 */
-  /* 港口图只保留**竖版**一套（移动端优先）：竖版图缺失时该层 404，
-     自动落到 harbor.webp 兜底 —— 纯 CSS 回退，不用改 JS。 */
+  /* 港口图只保留**竖版**一套（移动端优先）：harbor 仅作竖版缺失时的 404 兜底，
+     <html>.has-depart-portrait（app.js 预检两张竖版都到位）一挂上就把它撤掉。 */
   .depart-shot.closed{background-image:url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp');
     animation:shotClosed 7s cubic-bezier(.35,.02,.62,1) forwards}
   .depart-shot.open{background-image:url('./assets/tex/port-sail-portrait.webp'),url('./assets/tex/harbor.webp');
     opacity:0;animation:shotOpen 7s cubic-bezier(.35,.02,.62,1) forwards}
+  html.has-depart-portrait .depart-shot.closed{background-image:url('./assets/tex/port-docked-portrait.webp')}
+  html.has-depart-portrait .depart-shot.open{background-image:url('./assets/tex/port-sail-portrait.webp')}
   @media (orientation:landscape){
     .depart-shot{background-size:cover}
     .depart-bg{display:none}}

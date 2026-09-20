@@ -816,9 +816,9 @@
    * 点「望远镜」把船图整层放大（默认 2.6 倍）并罩一圈黄铜镜筒 + 分划十字：
    * 拖动平移、滚轮微调倍率（1.8–3.6），Esc 或再点一次收起。
    * 只有船图那一层在缩放（--lens-* 自定义属性驱动 transform），
-   * 经纬网 / 纸色暗角 / 角标是同一方块里的兄弟层，原地不动 ——
+   * 纸色暗角 / 角标是同一方块里的兄弟层，原地不动 ——
    * 读起来就是「透过镜筒看船」，而不是整块画面被拉大。
-   * 海图做旧效果（经纬网/暗角/角标/图片滤镜）**默认常开**，不再提供开关。 */
+   * 海图做旧效果（暗角/角标/图片滤镜）**默认常开**，不再提供开关。 */
   var LENS_DEF=2.6,LENS_MIN=1.8,LENS_MAX=3.6;
   var LENS={z:LENS_DEF,x:50,y:50};
   var lensBtn=document.getElementById('voyageLens');
@@ -1091,6 +1091,18 @@
         try{var im3=new Image();im3.onload=hit;im3.src='./assets/tex/port-docked-portrait.webp';}catch(e){}
       };
       im2.src='./assets/tex/hero-northsea.webp';
+    }catch(e){}
+  })();
+
+  /* 出港页两张竖版港图都到位，才撤掉 crisp 层的 harbor 兜底层。
+     原因：竖版主图用 contain（不裁船首尾），在"竖屏但宽高比 > 1:2"的视口里
+     按高度撑满后会左右留空档；而 16:9 的 harbor 是满宽的，不撤掉就会从空档里
+     露出一张横图，观感像两张图拼在一起。缺任一张则保留兜底，画面不空。 */
+  (function(){
+    try{
+      var n=0, ok=function(){if(++n===2)document.documentElement.className+=' has-depart-portrait';};
+      var im4=new Image(); im4.onload=ok; im4.src='./assets/tex/port-docked-portrait.webp';
+      var im5=new Image(); im5.onload=ok; im5.src='./assets/tex/port-sail-portrait.webp';
     }catch(e){}
   })();
 

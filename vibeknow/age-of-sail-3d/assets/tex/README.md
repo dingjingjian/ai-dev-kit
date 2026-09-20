@@ -30,5 +30,8 @@
 | `hero-indian.webp` | 首页 hero 轮播·印度洋系（阿拉伯 / 印度） | 同上 | 同上 |
 | `hero-eastasia.webp` | 首页 hero 轮播·东亚系（中国 / 日本 / 朝鲜） | 同上 | 同上 |
 
-单张 ≤ 200KB（徽标 ≤ 60KB）。`port-docked-portrait` 与 `port-sail-portrait` 必须**同机位同光位**，
+> 第一轮的 `hero-eastasia`（空调外机 + 船身中文字）、`hero-mediterranean` / `hero-atlantic`（远景汽车）有现代物件残留，
+> 重出请直接用需求文档第十节的**「加固版提示词」**（排除项改正向白名单 + 远景写死三件）。
+
+单张 ≤ 200KB（徽标 ≤ 60KB）。`port-docked-portrait` 与 `port-sail-portrait` 必须**同机位同光位**（机位锁定表 + 差分法见需求文档 ⑧⑨ 节：先出停泊帧，再拿它图生图出扬帆帧，只改帆/缆/船位/尾迹），
 否则出港页的交叉淡化会跳。

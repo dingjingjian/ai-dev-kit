@@ -72,6 +72,11 @@ reference/
 | 左手 | 科目二挑战赛 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a964de100000000270080fe | 关卡制停车解谜+用时/擦撞/挪车三维结算+星级+科目二题材共鸣（#vibecoding 参赛） | 2026-09-20 | zuoshou-keer-parking/ |
 | 星空下的人 | 挖掘机抓猪 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aad360500000000270160bf | 热梗题材+玩家反馈驱动改默认视角+听劝式迭代叙事+评论投票（#vibegame 参赛） | 2026-09-20 | xingkong-excavator-pig/ |
 | 豆米AI | 下一个蓝点 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba | 三手势六阶段玩法+米到百万光年尺度尺HUD+真实系外行星结局+100KB零图片零音频（#vibegame 参赛） | 2026-09-20 | doumi-next-blue-dot/ |
+| 机器旁白 | 编钟演奏·三十秒学会弹《晴天》 | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6aaa94510000000026022b96 | 国乐编钟数字化（一钟双音/三层形制）+热门曲目嫁接+三十秒教学承诺（#vibecoding/#vibemusic 参赛，⚠️ 曲目版权仅作参考） | 2026-09-20 | jiqi-bianzhong-qingtian/ |
+| 木渡川 | 文物放大镜·掌上赏珍 | h5 教程 / webapp | https://www.xiaohongshu.com/discovery/item/6aa8a354000000002602105d | 3D 文物交互全流程教程+博物馆展签式版面+揭顶剖切/细节导览/图鉴导出完整观展动线（#国风vibecoding 参赛） | 2026-09-20 | muduchuan-relic-viewer/ |
+| 阿毛的脑洞 | 捏捏乐 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522 | 实物捏捏乐数字化+摸鱼场景定位+八种捏捏SKU化更新+评论区征集新模型（#vibegame 参赛） | 2026-09-20 | amao-squeeze-toy/ |
+| 闲话AI\|造物日记 | 月下寄笺局（月亮信） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2 | 中秋节令情绪工具+「当面太浓烈微信怕唐突」痛点文案+「寄笺局」品牌化包装+可截图分享的个人化产出（#国风vibecoding 参赛） | 2026-09-20 | xianhua-moon-letter/ |
+| Mingo 🥕 | bala bala（解压球球） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b | 戳/按/扒拉触觉解压+照片自定义球（老板球梗）+粉圈解锁密码专享彩蛋+桌面时钟陪伴形态（#vibetool 参赛） | 2026-09-20 | mingo-bala-bala/ |
 
 > 新增工具时在此表追加一行；目录列指向本目录下的子目录路径。
 
