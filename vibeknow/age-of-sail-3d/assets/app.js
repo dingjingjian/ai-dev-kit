@@ -92,14 +92,14 @@
    * 用途：小红书宣传片实机录制 + app 内「观演模式」。全程零手动操作——
    * 航路页停留数秒后自动选航路 → 出港自动播放（自带 7.1s）→ 航海页每站定时自动前进
    * → 航海日志停留后结束（带 ?loop 则回到航路页循环重播）。
-   * 地球摆头动效由 G.setPlaying 自带，无需手拖；键盘在演示模式被禁用，纯播放。
+   * 航线滑行由相机自带的 glide 完成，无需手拖；键盘在演示模式被禁用，纯播放。
    * 录制铁律：按手机逻辑尺寸（9:16）录，ffmpeg lanczos 放大，禁止 CSS zoom / transform:scale。 */
   var QP=(location.search?new URLSearchParams(location.search):new URLSearchParams(''));
   var DEMO=QP.has('demo');
   var DEMO_LOOP=QP.has('loop');
   var DEMO_ROUTE=(QP.get('demo')||'merchant');
   var DEMO_ROUTE_MS=3000;    // 航路选择页停留
-  var DEMO_VOYAGE_MS=3400;   // 每站停留（含船档卡阅读 + 地球摆头）
+  var DEMO_VOYAGE_MS=3400;   // 每站停留（含船档卡阅读 + 航线滑行，滑行最长 2.6s）
   var DEMO_LOG_MS=5200;      // 航海日志页停留
   /* ?warm=N（秒）：演示开始前先静置 N 秒。软件渲染（SwiftShader）下给着色器/
      地球组件预热时间，避免开头第一波动作掉帧；录制宣传片时用 ?demo&warm=3 */
@@ -324,11 +324,23 @@
   loadTex('./assets/earth.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;earthMat.map=t;earthMat.needsUpdate=true;});
   loadTex('./assets/clouds.png',function(t){t.anisotropy=maxA;cloudMat.map=t;cloudMat.alphaMap=t;cloudMat.needsUpdate=true;});
 
-  /* ================= 相机：始终对准当前这艘船的建造地 ================= */
+  /* ================= 相机：始终对准当前这艘船的建造地 =================
+   * camT/camP = 相机当前球坐标；baseT/baseP = 当前这艘建造地的目标坐标。
+   * 换船不再"摆头"：由 glide 按两点角距离定时长，整段平滑滑行过去（见 animate）。
+   * 滑行途中手一按就取消，让位给拖动。 */
   var baseT=0,baseP=1.2;
   var camT=0,camP=1.2,camR=5;
-  var camTG=0,camPG=1.2,camRG=5;
+  var camRG=5;
   var fitR=5,R_MIN=3,R_MAX=12,userZoomed=false,playing=false;
+  var glide=null;
+  function angDelta(a,b){var d=b-a;return ((d+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;}
+  /* 从当前视点滑到 (t1,p1)：时长随角距离增长（0.7–2.6s），取最短角路径（不绕地球背面） */
+  function glideTo(t1,p1){
+    var dT=angDelta(camT,t1),dP=p1-camP;
+    var dist=Math.sqrt(dT*dT+dP*dP);
+    if(dist<0.0025){glide=null;camT=t1;camP=p1;return;}
+    glide={t0:performance.now(),dur:Math.min(2600,700+dist*1700),T0:camT,P0:camP,T1:camT+dT,P1:p1};
+  }
 
   function fitDist(){
     var vF=camera.fov*Math.PI/180;
@@ -355,7 +367,8 @@
     var wx=local.x*cs+local.z*sn,wy=local.y,wz=-local.x*sn+local.z*cs;
     baseP=Math.acos(Math.max(-1,Math.min(1,wy)));
     baseT=Math.atan2(wx,wz);
-    if(instant){camT=baseT;camP=baseP;camTG=baseT;camPG=baseP;}
+    if(instant){glide=null;camT=baseT;camP=baseP;}
+    else glideTo(baseT,baseP);
   }
   function camPos(){
     var sp=Math.sin(camP);
@@ -370,6 +383,7 @@
   function tdist(t){return Math.hypot(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
   canvas.addEventListener('pointerdown',function(e){
     pointers[e.pointerId]={x:e.clientX,y:e.clientY};
+    glide=null;                       /* 手一按就接管：滑行立即让位给拖动 */
     if(pCount()>1){stopDrag();return;}
     dragId=e.pointerId;lx=e.clientX;ly=e.clientY;
     try{canvas.setPointerCapture(e.pointerId);}catch(_){}
@@ -470,16 +484,25 @@
     if(sizeDirty)resize();
     if(!globeVisible())return;
     if(playing){
-      camTG=baseT+0.42*Math.sin(t*0.16);
-      camPG=baseP+0.09*Math.sin(t*0.16+1.2);
-      camPG=Math.max(0.08,Math.min(Math.PI-0.08,camPG));
+      /* 航海页只让云层与星空缓慢自转。相机**不再摆动** ——
+         旧「公园走路」式左右摆头（0.42rad 正弦）已删除，
+         航线改成一站一站整段平滑滑行，见下面的 glide。 */
       clouds.rotation.y+=dt*0.02;
       stars.rotation.y+=dt*0.003;
-    }else{
-      camTG=baseT;camPG=baseP;
     }
     if(focusFlash>0)focusFlash=Math.max(0,focusFlash-dt*0.55);
-    camT+=(camTG-camT)*0.09;camP+=(camPG-camP)*0.09;camR+=(camRG-camR)*0.1;
+    if(glide){
+      var gp=Math.min(1,(performance.now()-glide.t0)/glide.dur);
+      var ge=gp<.5?4*gp*gp*gp:1-Math.pow(-2*gp+2,3)/2;   /* easeInOutCubic：起步收尾都软 */
+      camT=glide.T0+(glide.T1-glide.T0)*ge;
+      camP=glide.P0+(glide.P1-glide.P0)*ge;
+      if(gp>=1)glide=null;
+    }else{
+      /* 拖动 / 归位：跟手收敛到目标 */
+      camT+=(baseT-camT)*0.14;camP+=(baseP-camP)*0.14;
+    }
+    camP=Math.max(0.08,Math.min(Math.PI-0.08,camP));
+    camR+=(camRG-camR)*0.1;
     camPos();
     lampLight.position.copy(camera.position);lampLight.position.y+=3;
     renderer.render(scene,camera);
@@ -701,7 +724,7 @@
    * 出港过程全在两张图里，这里只负责重置动画、写入航路名，切换走完进航海页。 */
   var DEPART_MS=7100;
   var departTimer=null;
-  var DEPART_ELS='.depart-shot,.depart-caption,.depart-title,.depart-subtitle,.depart-route-name';
+  var DEPART_ELS='.depart-bg,.depart-shot,.depart-caption,.depart-title,.depart-subtitle,.depart-route-name';
   function resetDepartAnim(){
     var els=document.querySelectorAll(DEPART_ELS);
     for(var i=0;i<els.length;i++){
@@ -763,6 +786,7 @@
     capCoord.textContent=fmtCoord(f.lat,f.lon);
     if(G){G.setTag(f.yard);G.refreshMarkers();G.aimShip(false);G.fitView(false);G.markDirty();}
     voyageBodyEl.scrollTop=0;
+    lensRecenter();
   }
   function voyageNext(){
     var r=curRoute();
@@ -777,6 +801,7 @@
   }
   function quitVoyage(){
     hideToast();
+    lensClose();
     st.page='routes';
     st.route=null;
     document.body.className='mode-routes';
@@ -787,11 +812,75 @@
   vcPrevBtn.addEventListener('click',voyagePrev);
   vcNextBtn.addEventListener('click',voyageNext);
   vcQuitBtn.addEventListener('click',quitVoyage);
-  var chartBtn=document.getElementById('voyageChart');
-  chartBtn.addEventListener('click',function(){
-    var off=document.body.classList.toggle('chart-off');
-    chartBtn.textContent=off?'原色':'海图';
-  });
+  /* ================= 望远镜：放大看船体细节 =================
+   * 点「望远镜」把船图整层放大（默认 2.6 倍）并罩一圈黄铜镜筒 + 分划十字：
+   * 拖动平移、滚轮微调倍率（1.8–3.6），Esc 或再点一次收起。
+   * 只有船图那一层在缩放（--lens-* 自定义属性驱动 transform），
+   * 经纬网 / 纸色暗角 / 角标是同一方块里的兄弟层，原地不动 ——
+   * 读起来就是「透过镜筒看船」，而不是整块画面被拉大。
+   * 海图做旧效果（经纬网/暗角/角标/图片滤镜）**默认常开**，不再提供开关。 */
+  var LENS_DEF=2.6,LENS_MIN=1.8,LENS_MAX=3.6;
+  var LENS={z:LENS_DEF,x:50,y:50};
+  var lensBtn=document.getElementById('voyageLens');
+  var voyageFrameEl=document.querySelector('.voyage-frame');
+  var lensOn=false,lensDrag=null,lensLiveT=null;
+  function lensPaint(){
+    if(!voyageFrameEl)return;
+    voyageFrameEl.style.setProperty('--lens-z',(lensOn?LENS.z:1).toFixed(2));
+    voyageFrameEl.style.setProperty('--lens-x',LENS.x.toFixed(1)+'%');
+    voyageFrameEl.style.setProperty('--lens-y',LENS.y.toFixed(1)+'%');
+  }
+  function lensSet(on){
+    lensOn=!!on;
+    if(lensOn){LENS.z=LENS_DEF;LENS.x=50;LENS.y=50;}
+    document.body.classList[lensOn?'add':'remove']('lens-on');
+    lensBtn.textContent=lensOn?'收起望远镜':'望远镜';
+    lensBtn.setAttribute('aria-pressed',lensOn?'true':'false');
+    lensPaint();
+  }
+  function lensClose(){if(lensOn)lensSet(false);}
+  /* 换船时把镜筒拉回画面中心（倍率保留，接着看下一艘） */
+  function lensRecenter(){if(!lensOn)return;LENS.x=50;LENS.y=50;lensPaint();}
+  /* 滚轮调倍率期间临时关掉 transition，否则每一格都要走完一次 .34s 缓动 */
+  function lensLive(){
+    if(!voyageFrameEl)return;
+    voyageFrameEl.classList.add('lens-live');
+    if(lensLiveT)clearTimeout(lensLiveT);
+    lensLiveT=setTimeout(function(){voyageFrameEl.classList.remove('lens-live');},170);
+  }
+  lensBtn.addEventListener('click',function(){lensSet(!lensOn);});
+  if(voyageFrameEl){
+    voyageFrameEl.addEventListener('pointerdown',function(e){
+      if(!lensOn||e.target===lensBtn)return;
+      lensDrag={id:e.pointerId,x:e.clientX,y:e.clientY,ox:LENS.x,oy:LENS.y};
+      voyageFrameEl.classList.add('lens-drag');
+      try{voyageFrameEl.setPointerCapture(e.pointerId);}catch(_){}
+      if(e.preventDefault)e.preventDefault();
+    });
+    voyageFrameEl.addEventListener('pointermove',function(e){
+      if(!lensDrag||e.pointerId!==lensDrag.id)return;
+      var r=voyageFrameEl.getBoundingClientRect();
+      if(r.width<10)return;
+      /* 图放大 z 倍后，屏幕拖动 1px 对应原点位移 1/(宽*z)：向右拖＝原点左移 */
+      var k=100/(r.width*LENS.z);
+      LENS.x=Math.max(0,Math.min(100,lensDrag.ox-(e.clientX-lensDrag.x)*k));
+      LENS.y=Math.max(0,Math.min(100,lensDrag.oy-(e.clientY-lensDrag.y)*k));
+      lensPaint();
+    });
+    function lensDragEnd(e){
+      if(!lensDrag||(e&&e.pointerId!==lensDrag.id))return;
+      lensDrag=null;voyageFrameEl.classList.remove('lens-drag');
+      try{voyageFrameEl.releasePointerCapture(e.pointerId);}catch(_){}
+    }
+    voyageFrameEl.addEventListener('pointerup',lensDragEnd);
+    voyageFrameEl.addEventListener('pointercancel',lensDragEnd);
+    voyageFrameEl.addEventListener('wheel',function(e){
+      if(!lensOn)return;
+      e.preventDefault();
+      LENS.z=Math.max(LENS_MIN,Math.min(LENS_MAX,LENS.z*(1+(e.deltaY>0?-0.12:0.12))));
+      lensLive();lensPaint();
+    },{passive:false});
+  }
 
   /* ================= 航海日志（总结页）================= */
   /* 六维性能图谱（内联 SVG，零依赖） */
@@ -882,6 +971,7 @@
   function showLog(){
     var r=curRoute();
     var order=r.ships;
+    lensClose();
     st.page='log';
     document.body.className='mode-log';
     document.body.removeAttribute('data-route');
@@ -951,7 +1041,8 @@
   window.addEventListener('keydown',function(e){
     if(DEMO)return; /* 演示模式纯播放，不接受键盘 */
     if(e.key==='Escape'){
-      if(st.page==='builder')exitBuilder();
+      if(lensOn&&st.page==='voyage')lensClose();   /* 先收望远镜，再谈退出这一页 */
+      else if(st.page==='builder')exitBuilder();
       else if(st.page!=='routes')backToRoutes();
     }else if(st.page==='voyage'){
       if(e.key==='ArrowLeft')voyagePrev();
@@ -989,13 +1080,17 @@
     }catch(e){}
   })();
 
-  /* 港口图到位才撤掉首屏的海图兜底层（经纬网 + 罗盘玫瑰水印），
-     免得那层压在做好的出图上 */
+  /* 首屏港口图到位才撤掉海图兜底层（经纬网 + 罗盘玫瑰水印），免得那层压在做好的出图上。
+     轮播第一张（北海）没出图时，退到所有轮播层共用的第二层竖版港图再判一次。 */
   (function(){
     try{
+      var hit=function(){document.documentElement.className+=' has-hero-img';};
       var im2=new Image();
-      im2.onload=function(){document.documentElement.className+=' has-hero-img';};
-      im2.src='./assets/tex/port-docked.webp';
+      im2.onload=hit;
+      im2.onerror=function(){
+        try{var im3=new Image();im3.onload=hit;im3.src='./assets/tex/port-docked-portrait.webp';}catch(e){}
+      };
+      im2.src='./assets/tex/hero-northsea.webp';
     }catch(e){}
   })();
 

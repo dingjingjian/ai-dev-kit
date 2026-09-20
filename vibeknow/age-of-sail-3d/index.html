@@ -11,15 +11,15 @@
      配色：深海蓝 / 羊皮纸米白 / 黄铜金 / 酒红 / 橡木棕 / 炮铜铁灰 / 海图黄。
      五页：航路选择 / 自选航路 / 起锚出港 / 航海页 / 航海日志。
      视觉口径：主视觉一律用 AI 出图（徽标 / 港口两帧 / 航路横幅），页面只做排版与
-     一层可读性暗化 + 方画框上的海图经纬网叠层，不画 CSS 或 SVG 形状。
+     一层可读性暗化 + 方画框上的纸色暗角与角标，不画 CSS 或 SVG 形状。
      地球为「建造地定位组件」，仅航海页内嵌。
 
   /* ===== 图片素材图位（逐项规格见 docs/ 下两份配图需求）=====
      原则：页面里不再画任何 CSS/SVG 装饰，缺什么图就退到什么底，不留手绘替代图形。
      ① 帆船图 ×30   assets/ships/<slug>.webp   512×512，航海页大图，缺图回退色卡
      ② 航海徽标      assets/tex/logo.webp       透明底罗盘帆船徽标，缺图则整块隐藏
-     ③ 港口停泊      assets/tex/port-docked.webp 首页 hero + 出港页第一帧
-     ④ 扬帆出港      assets/tex/port-sail.webp   出港页第二帧（与 ③ 同机位同光位）
+     ③ 港口停泊·竖版 assets/tex/port-docked-portrait.webp 首页 hero + 出港页第一帧
+     ④ 扬帆出港·竖版 assets/tex/port-sail-portrait.webp   出港页第二帧（与 ③ 同机位同光位）
      ⑤ 旧港兜底      assets/tex/harbor.webp      ③④ 的兜底图
      ⑥ 海图纸纹      assets/tex/chart.webp       卡片与控制栏底纹，缺图回退纯色
      ⑦ 航路横幅 ×5   assets/tex/route-<key>.webp 航路卡片背景，缺图回退纸纹 → 主题渐变
@@ -107,9 +107,22 @@
   /* 顶部港口视觉区：整块交给 AI 出的图，只叠一层暗化保文字可读，不做任何 CSS 绘制 */
   .fleet-hero{flex:none;position:relative;height:calc(var(--hero-h) + 150px + var(--sattop));padding-top:var(--sattop);overflow:hidden;
     background:radial-gradient(ellipse 90% 70% at 50% 30%,var(--sea-5),var(--sea-8) 70%,var(--sea-9))}
-  .fleet-hero::before{content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
-    background-image:url('./assets/tex/port-docked.webp'),url('./assets/tex/harbor.webp');
-    background-size:cover,cover;background-position:center 50%,center 40%;background-repeat:no-repeat,no-repeat}
+  /* 首页 hero = 五大海域**地区风格轮播**（移动端优先，全竖版 1080×2160）：
+     8s 一格、纯 CSS 循环交叉淡化，无 JS 定时器；每层自带
+     「地区图 → 竖版港图 → harbor」回退链，缺哪张都不空底。 */
+  .hero-shots{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
+  .hero-shot{position:absolute;top:0;right:0;bottom:0;left:0;opacity:0;
+    background-size:cover,cover,cover;background-position:center 44%,center 44%,center 40%;
+    background-repeat:no-repeat;animation:heroCycle 40s linear infinite}
+  .hero-shot:nth-child(1){background-image:url('./assets/tex/hero-northsea.webp'),url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp')}
+  .hero-shot:nth-child(2){animation-delay:8s;background-image:url('./assets/tex/hero-mediterranean.webp'),url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp')}
+  .hero-shot:nth-child(3){animation-delay:16s;background-image:url('./assets/tex/hero-atlantic.webp'),url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp')}
+  .hero-shot:nth-child(4){animation-delay:24s;background-image:url('./assets/tex/hero-indian.webp'),url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp')}
+  .hero-shot:nth-child(5){animation-delay:32s;background-image:url('./assets/tex/hero-eastasia.webp'),url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp')}
+  @keyframes heroCycle{0%{opacity:0}2%{opacity:1}18%{opacity:1}20%{opacity:0}100%{opacity:0}}
+  @media (prefers-reduced-motion:reduce){
+    .hero-shot{animation:none}
+    .hero-shot:nth-child(1){opacity:1}}
   .fleet-hero::after{content:"";position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
     background:linear-gradient(180deg,rgba(4,8,14,.34) 0%,rgba(4,8,14,.10) 24%,rgba(4,8,14,.34) 62%,rgba(4,8,14,.72) 84%,var(--sea-9) 100%)}
   /* 海图叠层：港口图**未到位**时的兜底，让首屏不是一片空底——
@@ -215,31 +228,36 @@
      两帧 AI 出图交叉淡化 + 缓慢推近：① 泊在港内的船队 → ② 帆已张满、驶出港口。
      不做任何 CSS 绘制：出港由两张图本身表达，这里只负责切换与 Ken Burns 推近。 */
   .page-depart{background:var(--sea-9);align-items:center;justify-content:center;overflow:hidden}
-  .depart-stage{position:relative;width:100%;height:100%;max-width:760px;margin:0 auto;overflow:hidden}
-  /* 模糊铺底：contain 留出的信箱边用它填满，画面不空 */
+  /* 舞台占满视口，不再限宽 760px —— 限宽会让横屏桌面出现"竖形栏位里塞一张横图"，
+     两侧留黑边、上下再垫两截虚化带。铺满之后横图按 contain 铺到接近满屏，
+     信箱边只剩薄薄一条，读起来就是一张图 + 一圈虚化延伸。 */
+  .depart-stage{position:relative;width:100%;height:100%;margin:0 auto;overflow:hidden}
+  /* 模糊铺底：contain 留出的信箱边用它填满，画面不空。
+     两帧**各铺一层**，用与 crisp 层完全相同的透明度曲线同步交叉淡化 ——
+     否则第二帧主图已经换成"扬帆离港"，上下虚化带还停在"泊港"，看着像两张图拼在一起。 */
   .depart-bg{position:absolute;top:-5%;right:-5%;bottom:-5%;left:-5%;
-    background-image:url('./assets/tex/port-docked.webp'),url('./assets/tex/harbor.webp');
     background-size:cover;background-position:center;background-repeat:no-repeat;
-    filter:blur(26px) saturate(.75);opacity:.42}
+    filter:blur(64px) saturate(.7)}
+  .depart-bg.closed{background-image:url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp');
+    animation:fillClosed 7s cubic-bezier(.35,.02,.62,1) forwards}
+  .depart-bg.open{background-image:url('./assets/tex/port-sail-portrait.webp'),url('./assets/tex/harbor.webp');
+    opacity:0;animation:fillOpen 7s cubic-bezier(.35,.02,.62,1) forwards}
+  @keyframes fillClosed{0%{opacity:.34}30%{opacity:.34}62%{opacity:0}100%{opacity:0}}
+  @keyframes fillOpen{0%{opacity:0}30%{opacity:0}62%{opacity:.34}100%{opacity:.34}}
   /* contain 而非 cover：保证港口与桅杆永远完整可见（竖屏也不会裁掉船首尾） */
   .depart-shot{position:absolute;top:0;right:0;bottom:0;left:0;
     background-size:contain;background-position:center;background-repeat:no-repeat}
   /* 两帧用同一条缓动 + 同一条缩放曲线（见下方 keyframes），
      交叉淡化期间缩放逐帧一致，合成后就是一路推近 */
-  .depart-shot.closed{background-image:url('./assets/tex/port-docked.webp'),url('./assets/tex/harbor.webp');
+  /* 港口图只保留**竖版**一套（移动端优先）：竖版图缺失时该层 404，
+     自动落到 harbor.webp 兜底 —— 纯 CSS 回退，不用改 JS。 */
+  .depart-shot.closed{background-image:url('./assets/tex/port-docked-portrait.webp'),url('./assets/tex/harbor.webp');
     animation:shotClosed 7s cubic-bezier(.35,.02,.62,1) forwards}
-  .depart-shot.open{background-image:url('./assets/tex/port-sail.webp'),url('./assets/tex/harbor.webp');
+  .depart-shot.open{background-image:url('./assets/tex/port-sail-portrait.webp'),url('./assets/tex/harbor.webp');
     opacity:0;animation:shotOpen 7s cubic-bezier(.35,.02,.62,1) forwards}
-  /* 竖屏优先用竖版港口图：港景在竖构图里能铺满整屏，不再上下留大片信箱边。
-     竖版图缺失时该层 404，自动落到后面的横版层 —— 纯 CSS 兜底，不用改 JS。 */
-  @media (orientation:portrait){
-    .depart-bg{background-image:url('./assets/tex/port-docked-portrait.webp'),
-      url('./assets/tex/port-docked.webp'),url('./assets/tex/harbor.webp')}
-    .depart-shot.closed{background-image:url('./assets/tex/port-docked-portrait.webp'),
-      url('./assets/tex/port-docked.webp'),url('./assets/tex/harbor.webp')}
-    .depart-shot.open{background-image:url('./assets/tex/port-sail-portrait.webp'),
-      url('./assets/tex/port-sail.webp'),url('./assets/tex/harbor.webp')}
-  }
+  @media (orientation:landscape){
+    .depart-shot{background-size:cover}
+    .depart-bg{display:none}}
   /* 两帧共用同一条「一路推近」曲线，只有透明度不同 ——
      交叉淡化时缩放完全同步，读起来是船队持续驶向远处，不再一进一退 */
   @keyframes shotClosed{
@@ -325,17 +343,19 @@
      卡片因此始终完整留在屏内（不翻页），被让出的空间由画框边长承担。 */
   .voyage-frame{position:relative;flex:0 1 auto;overflow:hidden;
     width:24vh;height:24vh;min-width:88px;min-height:88px;max-width:190px;max-height:190px;
-    border-radius:2px;box-shadow:0 0 0 1px rgba(176,137,74,.6),0 12px 30px rgba(0,0,0,.6)}
+    border-radius:2px;box-shadow:0 0 0 1px rgba(176,137,74,.6),0 12px 30px rgba(0,0,0,.6);
+    --lens-z:1;--lens-x:50%;--lens-y:50%}
   /* contain + 深色底：万一画框被 flex 挤成非方形（极矮视口），
      也只会在两侧留深色边（读作海图边框），绝不裁图 */
   .voyage-img{width:100%;height:100%;border-radius:2px;
     background-color:var(--iron-8);background-size:contain;background-repeat:no-repeat;background-position:center;
-    filter:saturate(.82) contrast(1.06) brightness(.98) sepia(.14)}
-  /* 海图经纬网 / 罗经测线 / 纸色暗角 / 角标 —— 叠在图上，不额外占位 */
-  .voyage-grid{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;border-radius:2px;opacity:.42;
-    background-image:
-      repeating-linear-gradient(0deg,rgba(226,196,132,.30) 0 1px,transparent 1px 22px),
-      repeating-linear-gradient(90deg,rgba(226,196,132,.30) 0 1px,transparent 1px 22px)}
+    filter:saturate(.82) contrast(1.06) brightness(.98) sepia(.14);
+    /* 望远镜只缩放这一层：平移＝改 --lens-x/--lens-y 原点，倍率＝改 --lens-z。
+       1:1 方图 contain 进方框正好铺满，任何原点配放大都不会露底 */
+    transform-origin:var(--lens-x) var(--lens-y);transform:scale(var(--lens-z));
+    transition:transform .34s cubic-bezier(.35,.02,.2,1)}
+  /* 原「海图经纬网」叠层已删除：细密网格压在船图上会读成"马赛克 / 扫描线"，喧宾夺主。
+     纸色暗角与角标保留，做旧只靠它们。 */
   /* 原「下扫光带」（电视扫描线）已删除：图鉴是纸面的，不该有电子扫描感 */
   .voyage-vig{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;border-radius:2px;
     background:radial-gradient(ellipse 78% 74% at 50% 48%,transparent 42%,rgba(38,22,8,.60) 100%)}
@@ -347,15 +367,34 @@
   .voyage-hud .seal{width:5px;height:5px;margin-right:4px;background:var(--chart-2);transform:rotate(45deg)}
   .voyage-hud .hud-tr{position:absolute;right:6px;top:5px}
   .voyage-hud .hud-br{position:absolute;right:6px;bottom:5px;color:rgba(255,236,196,.75)}
-  /* 海图效果开关：叠在画面左下角，关闭后隐藏经纬网/测线/暗角/HUD 并复原图片滤镜 */
-  .voyage-chart{position:absolute;left:6px;bottom:5px;z-index:6;
+  /* 望远镜：左下角按钮 + 一层黄铜镜筒。船图放大由 --lens-z 驱动（见 .voyage-img），
+     镜筒是纯 CSS 的圆环 + 分划十字，不占布局、不盖按钮。
+     海图做旧（纸色暗角 / 角标 / 图片滤镜）**默认常开，不设开关**。 */
+  .voyage-lens{position:absolute;left:6px;bottom:5px;z-index:6;
     font-family:var(--sans);font-size:8.5px;font-weight:700;letter-spacing:1px;
     color:rgba(255,236,196,.92);background:rgba(0,0,0,.42);border:1px solid rgba(255,236,196,.4);
     padding:1px 7px;border-radius:2px;cursor:pointer;transition:.15s}
-  .voyage-chart:hover{background:rgba(255,236,196,.18)}
-  body.chart-off .voyage-chart{color:var(--ink-4);border-color:var(--line-2);background:rgba(0,0,0,.42)}
-  body.chart-off .voyage-grid,body.chart-off .voyage-vig,body.chart-off .voyage-hud{display:none}
-  body.chart-off .voyage-img{filter:none}
+  .voyage-lens:hover{background:rgba(255,236,196,.18)}
+  body.lens-on .voyage-lens{color:#1c1206;background:rgba(216,176,106,.92);border-color:rgba(255,246,222,.8)}
+  .voyage-lens-veil{position:absolute;top:0;right:0;bottom:0;left:0;z-index:5;pointer-events:none;
+    opacity:0;transition:opacity .28s}
+  body.lens-on .voyage-lens-veil{opacity:1}
+  /* 镜筒：80% 见方的圆 + 1.5px 黄铜细环 + 环外整片压暗 + 环内侧暗角 */
+  .voyage-lens-veil::before{content:"";position:absolute;left:50%;top:50%;width:80%;height:80%;
+    transform:translate(-50%,-50%);border-radius:50%;
+    box-shadow:0 0 0 1.5px rgba(216,176,106,.92),0 0 0 4px rgba(0,0,0,.5),0 0 0 240px rgba(3,6,10,.74),
+      inset 0 0 20px rgba(0,0,0,.66)}
+  /* 分划十字：两条 1px 线，长度恰为镜筒直径（80%），不越出圆外 */
+  .voyage-lens-veil::after{content:"";position:absolute;left:50%;top:50%;width:80%;height:80%;
+    transform:translate(-50%,-50%);
+    background-image:linear-gradient(rgba(255,236,196,.5),rgba(255,236,196,.5)),
+      linear-gradient(rgba(255,236,196,.5),rgba(255,236,196,.5));
+    background-size:100% 1px,1px 100%;background-position:50% 50%;background-repeat:no-repeat}
+  /* 镜筒里拖动手感：touch-action 关掉，免得手指一拖整页跟着滚 */
+  body.lens-on .voyage-frame{touch-action:none;cursor:grab}
+  body.lens-on .voyage-frame.lens-drag{cursor:grabbing}
+  body.lens-on .voyage-frame.lens-drag .voyage-img,
+  body.lens-on .voyage-frame.lens-live .voyage-img{transition:none}
   /* 船档卡 = 航海日志的一页：左侧一道黄铜装订边 + 四角铆钉，卡内一律左对齐 */
   .voyage-card{position:relative;width:100%;max-width:540px;margin-top:20px;padding:11px 13px 12px 19px;text-align:left;
     background:linear-gradient(180deg,rgba(6,11,18,.84),rgba(4,8,13,.8));
@@ -635,6 +674,14 @@
 <!-- 航路选择页 -->
 <main class="page page-routes" id="pageRoutes">
   <header class="fleet-hero">
+    <!-- 地区风格轮播（五大海域各一张）：图位与回退链见 CSS 的 .hero-shot -->
+    <div class="hero-shots" aria-hidden="true">
+      <span class="hero-shot"></span>
+      <span class="hero-shot"></span>
+      <span class="hero-shot"></span>
+      <span class="hero-shot"></span>
+      <span class="hero-shot"></span>
+    </div>
     <div class="fleet-chart" aria-hidden="true">
       <svg class="fleet-rose" viewBox="0 0 200 200">
         <circle cx="100" cy="100" r="94"/>
@@ -684,7 +731,8 @@
 <!-- 出港过渡页 · 起锚扬帆 -->
 <section class="page page-depart" id="pageDepart">
   <div class="depart-stage">
-    <div class="depart-bg" aria-hidden="true"></div>
+    <div class="depart-bg closed" aria-hidden="true"></div>
+    <div class="depart-bg open" aria-hidden="true"></div>
     <div class="depart-shot closed"></div>
     <div class="depart-shot open"></div>
     <div class="depart-scrim" aria-hidden="true"></div>
@@ -707,14 +755,14 @@
       <div class="voyage-stage">
         <div class="voyage-frame">
           <div class="voyage-img" id="voyageImg"></div>
-          <div class="voyage-grid" aria-hidden="true"></div>
           <div class="voyage-vig" aria-hidden="true"></div>
           <div class="voyage-hud" aria-hidden="true">
             <div class="hud-tl"><span class="seal"></span><span id="voyageNo">图鉴 NO.01</span></div>
             <div class="hud-tr" id="voyageYear">AD 1492</div>
             <div class="hud-br" id="voyageTons">排水量 120 吨</div>
           </div>
-          <button class="voyage-chart" id="voyageChart" type="button">海图</button>
+          <div class="voyage-lens-veil" aria-hidden="true"></div>
+          <button class="voyage-lens" id="voyageLens" type="button" aria-pressed="false">望远镜</button>
         </div>
         <div class="voyage-card">
           <div class="voyage-head">
