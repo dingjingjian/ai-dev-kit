@@ -1,6 +1,6 @@
 # AI Dev Kit 工作区
 
-本目录是一个 AI 开发工具集合，包含多个独立子项目，按用途分为四个顶层目录（`vibetool/`、`vibegame/`、`vibeart/`、`vibeknow/`）。多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。
+本目录是一个 AI 开发工具集合，包含多个独立子项目，按用途分为四个自研顶层目录（`vibetool/`、`vibegame/`、`vibeart/`、`vibeknow/`），另设 `reference/` 归档他人优秀作品作参考资料。多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。
 
 本文件为**通用 AI 编程助手**（Claude、Codex、Gemini、CodeBuddy 等任何代码智能体）提供工作区导航与协作约定。子项目各自的 `README.md` / `CLAUDE.md` / `SKILL.md` 包含更具体的用法与约束，处理对应目录前请先查阅。
 
@@ -8,12 +8,16 @@
 
 完整的项目清单（分类、一句话定位、物料状态）以根目录 [`TRACKS.md`](TRACKS.md) 为**唯一真源**，本文件不再重复罗列，避免多套维护分叉。
 
-工作区按用途分为四个顶层目录，与 `TRACKS.md` 的分类一一对应：
+工作区按用途分为四个自研顶层目录，与 `TRACKS.md` 的分类一一对应：
 
 - `vibetool/` —— `#vibetool` 实用工具
 - `vibegame/` —— `#vibegame` 互动游戏
 - `vibeart/` —— `#vibeart` 数字艺术
 - `vibeknow/` —— `#vibeknow` 人文知识
+
+另设一个非自研顶层目录，**不参与 `TRACKS.md` 自研分类体系**：
+
+- `reference/` —— 他人优秀小工具归档（参考资料）。扁平按 `<博主名-工具名>/` 分子目录，每个子目录放 `README.md`（博主、原文链接、简介、亮点、技术栈）+ `screenshots/`（截图）。仅作学习借鉴与图文笔记素材来源，**不存放他人源代码**，不混入自研四分类。规范与总索引见 [`reference/README.md`](reference/README.md)。
 
 ## 协作约定（供 AI 助手）
 
