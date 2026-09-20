@@ -336,5 +336,62 @@
       "7 种合成音色 + 4 种主题色 + 月相谱卡可保存分享，成品能带走"
     ],
     "noteExcerpt": ""
+  },
+  {
+    "dir": "vibegame/defcon",
+    "title": "核战危机 DEFCON",
+    "author": "人工智能Ding🥕",
+    "link": "https://www.xiaohongshu.com/discovery/item/6aa53b220000000011036fb1?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv5hz5qYL-CrtVSjn7-d1dX8=&xsec_source=pc_share",
+    "noteId": "6aa53b220000000011036fb1",
+    "toolType": "h5 游戏（本人作品，#vibegame 参赛）",
+    "tech": "3D 球面策略，复用 vibeknow/earth-3d 球面引擎",
+    "archived": "2026-09-20",
+    "contestTags": ["#vibegame"],
+    "intro": "3D 球面核战策略：危机博弈推高 DEFCON 等级，核弹有限、死得少的赢——一场没有赢家的博弈，愿世界和平。",
+    "highlights": [
+      "最用心的作品：把冷战核威慑做成可玩的球面策略，每一次升级都在赌对方的克制",
+      "核弹数量有限、胜负按伤亡结算——比的是「谁死得更少」，不是「谁打得更多」",
+      "立意反战：「没有赢家、愿世界和平」不是装饰文案，而是这套机制推出来的结论"
+    ],
+    "noteExcerpt": "战争策略游戏 | 核战危机 DEFCON 🌏\n一场没有赢家的博弈，愿世界和平🕊️",
+    "mine": true
+  },
+  {
+    "dir": "vibeknow/earth-3d",
+    "title": "口袋地球",
+    "author": "人工智能Ding🥕",
+    "link": "https://www.xiaohongshu.com/discovery/item/6a9cd74300000000290186bf?source=webshare&xhsshare=pc_web&xsec_token=AB5XVOySMnaRoqvFrY33XFy4oSfyUGfiu3UEZw2Js9CUk=&xsec_source=pc_share",
+    "noteId": "6a9cd74300000000290186bf",
+    "toolType": "h5 科普（本人作品，#vibeknow 参赛）",
+    "tech": "Three.js 3D 地球",
+    "archived": "2026-09-20",
+    "contestTags": ["#vibeknow"],
+    "intro": "把地球装进口袋：3D 地球科普，昼夜交替、四季成因、月相变化、地球内部结构，近 5000 人玩过。",
+    "highlights": [
+      "最受用户欢迎：近 5000 人玩过，是这轮参赛人气最高的作品",
+      "把抽象的天文地理做成能转、能看的直观演示：昼夜 / 四季 / 月相 / 内部圈层",
+      "框架复用度最高：寰宇小馆、恐龙地球、帆船图鉴等后续作品都由它派生"
+    ],
+    "noteExcerpt": "把地球装进口袋！太绝了🌍\n3D 地球科普，近 5000 人玩过🌍",
+    "mine": true
+  },
+  {
+    "dir": "vibeknow/jurassic-park-3d",
+    "title": "恐龙地球（侏罗纪公园）",
+    "author": "人工智能Ding🥕",
+    "link": "https://www.xiaohongshu.com/discovery/item/6aaa7730000000002802eff1?source=webshare&xhsshare=pc_web&xsec_token=ABOhlrW8243-oy4otWhFmVyDvZKrdMkFvwvnhZiFLrKp8=&xsec_source=pc_share",
+    "noteId": "6aaa7730000000002802eff1",
+    "toolType": "h5 科普（本人作品，#vibeknow 参赛）",
+    "tech": "Three.js，复用 world-food-3d 框架",
+    "archived": "2026-09-20",
+    "contestTags": ["#vibeknow"],
+    "intro": "手机沉浸式逛侏罗纪公园：坐巡逻车探访史前恐龙，30 只恐龙 / 4 条主题路线，行进途中在地球上标注化石发现地。",
+    "highlights": [
+      "最受欢迎笔记：第一人称巡逻车视角逛公园，沉浸感就是传播点",
+      "30 只恐龙 + 4 条主题路线（可自选），内容量撑得起反复游玩",
+      "行进中把化石发现地标注到地球上，让「游览」和「科普坐标」绑在一起"
+    ],
+    "noteExcerpt": "手机沉浸式逛侏罗纪公园！太上头了🦖\n坐巡逻车探访史前恐龙🦕",
+    "mine": true
   }
 ]

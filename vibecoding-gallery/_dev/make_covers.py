@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-从 ../../reference/<dir>/screenshots/ 取最新一张图片（jpg/png/webp 均可），
-生成 ../covers/{NN}-{dir}.jpg（宽 540、JPEG q80、白底）与 ../covers-data.js（尺寸表）。
+从 reference/<dir>/screenshots/ 取最新一张图片（jpg/png/webp 均可），
+生成 covers/{NN}-{dir}.jpg（宽 540、JPEG q80、白底）与 covers-data.js（尺寸表）。
 截图更新后重跑本脚本即可，main.js 通过 COVER_DIMS 自动取新尺寸。
+
+本目录位于仓库根时 reference/ 是同级目录；若把本目录放进 reference/ 内，
+脚本也能自动定位到上一层级的 reference/，两种摆法都不用改代码。
 用法：python _dev/make_covers.py
 """
 import sys
@@ -17,13 +20,29 @@ ORDER = [
     "muduchuan-relic-viewer", "amao-squeeze-toy", "xianhua-moon-letter",
     "mingo-bala-bala", "piece-of-moonlight",
 ]
+# 自己的作品：素材不在 reference/ 内，直接从各自项目目录取（路径相对仓库根）
+SELF = [
+    {"slug": "defcon",        "src": "vibegame/defcon/docs/xhs-v3-1-cover.png"},
+    {"slug": "earth-3d",      "src": "vibeknow/earth-3d/xiaohongshu/screenshots/01-overview.png"},
+    {"slug": "jurassic-park", "src": "vibeknow/jurassic-park-3d/xiaohongshu/01_封面.jpg"},
+]
 TARGET_W = 540
 QUALITY = 80
 IMG_EXT = {".jpg", ".jpeg", ".png", ".webp"}
 
 sys.stdout.reconfigure(encoding="utf-8")
 root = Path(__file__).resolve().parent.parent
-ref = root.parent.parent / "reference"
+
+
+def find_ref(base):
+    """定位归档目录：本目录在仓库根时是同级 reference/；本目录若被放进 reference/ 内，则在其上两层。"""
+    for cand in (base.parent / "reference", base.parent.parent / "reference"):
+        if cand.is_dir():
+            return cand
+    raise SystemExit("未找到 reference/ 归档目录，请检查项目位置")
+
+
+ref = find_ref(root)
 out_dir = root / "covers"
 out_dir.mkdir(exist_ok=True)
 
@@ -35,8 +54,10 @@ def pick_cover(ss_dir):
 
 total = 0
 dims = {}
-for i, d in enumerate(ORDER, 1):
-    src = pick_cover(ref / d / "screenshots")
+
+
+def emit(src, name):
+    """把 src 压成 TARGET_W 宽的 JPEG 写进 covers/，记下尺寸，返回体积（KB）。"""
     img = Image.open(src)
     if img.mode in ("RGBA", "P", "LA"):
         img = img.convert("RGBA")
@@ -47,13 +68,22 @@ for i, d in enumerate(ORDER, 1):
         img = img.convert("RGB")
     h = round(img.height * TARGET_W / img.width)
     img = img.resize((TARGET_W, h), Image.LANCZOS)
-    name = f"{i:02d}-{d}.jpg"
     dst = out_dir / name
     img.save(dst, "JPEG", quality=QUALITY, optimize=True, progressive=True)
     dims[name] = [TARGET_W, h]
     kb = dst.stat().st_size / 1024
-    total += kb
     print(f"{name}  {TARGET_W}x{h}  {kb:.0f}KB  <- {src.name}")
+    return kb
+
+
+repo = ref.parent
+for i, d in enumerate(ORDER, 1):
+    total += emit(pick_cover(ref / d / "screenshots"), f"{i:02d}-{d}.jpg")
+for j, item in enumerate(SELF, len(ORDER) + 1):
+    src = repo / item["src"]
+    if not src.is_file():
+        raise SystemExit(f"未找到自有作品封面：{src}")
+    total += emit(src, f"{j:02d}-{item['slug']}.jpg")
 
 lines = ["// 由 _dev/make_covers.py 生成，勿手改",
          "window.COVER_DIMS = {"]

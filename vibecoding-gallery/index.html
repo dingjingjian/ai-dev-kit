@@ -272,17 +272,32 @@
       transition: opacity 0.4s ease-out, transform 0.5s ease-out;
     }
     .cover-box img.loaded { opacity: 1; transform: scale(1); }
-    .track-badge {
+    /* 封面左下角标：本人作品的「我的」与赛道标签并排，避免两层绝对定位互相压 */
+    .badges {
       position: absolute;
       left: 8px;
       bottom: 8px;
+      z-index: 2;
+      display: flex;
+      align-items: center;
+    }
+    .badges span { margin-right: 6px; }
+    .badges span:last-child { margin-right: 0; }
+    .mine-badge {
+      background: var(--brand);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 3px 7px;
+    }
+    .track-badge {
       background: rgba(20, 22, 26, 0.55);
       color: #fff;
       font-size: 10px;
       font-weight: 600;
       border-radius: 999px;
       padding: 3px 8px;
-      z-index: 2;
     }
     @supports ((-webkit-backdrop-filter: blur(6px)) or (backdrop-filter: blur(6px))) {
       .track-badge {
@@ -483,6 +498,18 @@
     .author-row .meta { flex: 1; min-width: 0; margin-left: 10px; }
     .author-row .name { font-size: 14px; font-weight: 700; color: var(--ink); }
     .author-row .sub { font-size: 11px; color: var(--ink-3); margin-top: 3px; }
+    /* 本人作品标记（详情页作者名后） */
+    .mine-tag {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: var(--brand);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      vertical-align: 1px;
+    }
     .detail-track {
       flex: none;
       font-size: 11px;

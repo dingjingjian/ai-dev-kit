@@ -12,7 +12,8 @@
     "sub_tracking": 3.5,
     "rise_px": 16,
     "fade_in": 0.45,
-    "fade_out": 0.32
+    "fade_out": 0.32,
+    "volume": 2.5
   },
   "cues": [
     {

@@ -191,6 +191,8 @@ def main():
     asyncio.run(gen())
 
     # ---- 3) 混音：每段 adelay 到起点 + apad 补齐 + amix，再与字幕视频封装 ----
+    # 默认 TTS 响度偏低，amix 又不做增益，故补 volume 提升听感，并串 alimiter 防爆音
+    VOLUME = float(st.get("volume", 2.5))
     n = len(cues)
     fc_parts = []
     for i, c in enumerate(cues):
@@ -198,8 +200,9 @@ def main():
         fc_parts.append("[a{i}p]adelay=delays={d}:all=1[d{i}]".format(
             i=i, d=int(c["start"] * 1000)))
     mix = "".join("[d{i}]".format(i=i) for i in range(n))
-    fc_mix = ",".join(fc_parts) + ";{mix}amix=inputs={n}:duration=longest[outa]".format(
+    fc_mix = ",".join(fc_parts) + ";{mix}amix=inputs={n}:duration=longest[a1]".format(
         mix=mix, n=n)
+    fc_mix += ";[a1]volume={vol},alimiter=limit=0.95:level=false[outa]".format(vol=VOLUME)
 
     cmd = [FF, "-y"]
     for i in range(n):

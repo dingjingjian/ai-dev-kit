@@ -7,12 +7,11 @@
 ```
 reference/
 ├── README.md                           # 本文件：总索引与规范说明
-├── <博主名-工具名>/                    # 单个工具归档目录（扁平一级）
-│   ├── README.md                       # 元信息：博主、原文链接、简介、亮点、技术栈
-│   └── screenshots/                   # 截图目录
-│       ├── cover.png                  # 封面图（必填，总索引与笔记封面取用）
-│       └── *.png                      # 关键交互截图（按需多张）
-└── vibecoding-gallery/                # 归档浏览工具（非参赛作品，本目录唯一含代码的目录）
+└── <博主名-工具名>/                    # 单个工具归档目录（扁平一级）
+    ├── README.md                       # 元信息：博主、原文链接、简介、亮点、技术栈
+    └── screenshots/                   # 截图目录
+        ├── cover.png                  # 封面图（必填，总索引与笔记封面取用）
+        └── *.png                      # 关键交互截图（按需多张）
 ```
 
 ## 命名规范
@@ -90,13 +89,14 @@ reference/
 4. 回到本文件「总索引」表格追加一行。
 5. 积累到一定数量后，从本索引中选品，基于截图与亮点撰写图文笔记（笔记产物放对应自研项目的 `xiaohongshu/` 目录，不放本目录）。
 
-## 归档浏览工具（vibecoding-gallery/）
+## 归档浏览工具（仓库根 `../vibecoding-gallery/`）
 
 `vibecoding-gallery/` 把本目录归档的作品做成**复刻小红书信息流形态**的展示小工具：双列瀑布流 + 笔记详情页 + 扭蛋机「随机邂逅」彩蛋。
-它**不是参赛作品**，不占四个赛道目录，也不在 `TRACKS.md` 的赛道清单里，只是归档数据的“浏览器”，所以放在这里与数据同生共死。
+它**不是参赛作品**，位于仓库根（与本目录同级），不占四个赛道目录，也不在 `TRACKS.md` 的赛道清单里。
+它会自动定位本目录 `reference/`，所以放在根或在 `reference/` 内都能直接跑。
 
 ```bash
-cd reference/vibecoding-gallery
+cd ../vibecoding-gallery
 python _dev/make_covers.py   # 归档截图有变时重跑：重生成 covers/ 与 covers-data.js
 python _dev/build_zip.py     # 前置校验 → 构建 dist/ → 打包 vibecoding-gallery.zip
 ```
@@ -109,6 +109,6 @@ python _dev/build_zip.py     # 前置校验 → 构建 dist/ → 打包 vibecodi
 
 - 本目录**只归档他人作品**，不放自研产出。
 - **不存放源代码**：仅留截图与元信息，避免版权与仓库体积问题。如需拆解源码，另行 clone 到本地工作目录之外。
-  - **唯一例外**：`vibecoding-gallery/`——它是浏览本目录归档的展示小工具，**不是参赛作品**；因为要跟着截图更新直接重跑构建，才与归档数据放在一起。详见 `vibecoding-gallery/README.md`（它不占 `vibetool/` 等赛道目录，也不在 `TRACKS.md` 的赛道清单里）。
+- **本目录不含任何代码**：浏览这些归档的展示小工具在**仓库根** `../vibecoding-gallery/`（非参赛作品），归档更新后到那里重跑构建即可。
 - 截图优先保留**原图分辨率**，便于后期笔记裁切。
 - 涉及商用/付费工具，在 `README.md` 里标注授权情况，截图仅作学习引用。

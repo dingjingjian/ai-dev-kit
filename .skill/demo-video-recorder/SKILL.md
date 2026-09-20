@@ -151,8 +151,8 @@ python caption/make_preview.py                     # 四版对照短片 + 字幕
 - `cues[]`：`start`/`end` 该段出现的起止秒数；`title`/`subtitle` 字幕；`narration` 解说语音文本
 - `style.theme`：`scrim`（默认）/ `plaque` / `side`，见下表
 - `style.*`：字号 `title_size`/`sub_size`、字距 `title_tracking`/`sub_tracking`、
-  动画 `rise_px`/`fade_in`/`fade_out`、版面上边界 `top`；`title_color`/`sub_color`/`line_color`
-  可传 `"#E9C36B"`。
+  动画 `rise_px`/`fade_in`/`fade_out`、版面上边界 `top`、解说音量 `volume`（默认 2.5）；
+  `title_color`/`sub_color`/`line_color` 可传 `"#E9C36B"`。
 
 ### 三套主题（`style.theme`）
 
@@ -199,9 +199,13 @@ v2 改成 **Pillow 渲染整幅透明 PNG → ffmpeg overlay**：两段式渐变
 - **解说依赖**：edge-tts 需联网；未装时脚本自动降级为「仅字幕」并提示 `pip install edge-tts`。
 - **收尾要验**：末段字幕结束后 overlay 必须彻底消失且画面不冻结（`eof_action=pass` 若写错会重现字幕）。
   抽末段帧 + 比对相邻帧指纹确认「在动、无字幕」。
-- **解说响度直出偏轻，要做一次音频-only 后期**：edge-tts 直出的解说整轨 mean 约 −37dB
-  （max 约 −20dB），手机外放明显偏小。混完后 `-c:v copy -af volume=6dB -c:a aac`
-  把 mean 抬到 −31dB 左右即可，别全片重编码（2026-09-16 cat-globe-3d 实测）。
+- **解说响度直出偏轻，脚本内置 `style.volume` 增益**：edge-tts 直出的解说整轨 mean 约 −37dB
+  （max 约 −20dB），手机外放明显偏小。混音段现在默认补 `volume=2.5` 再串 `alimiter=limit=0.95`
+  防爆音（必要时把 config 里 `style.volume` 调到 3 上下，峰值即可抬到约 −9dB），
+  无需再手动 `-af volume=6dB` 重编码（2026-09-21 age-of-sail-3d 实测）。
+- **解说重叠排查**：每段语音按 cue 起点 `adelay` 对齐后 `amix`，若某段朗读时长超过到下段起点的
+  间隔，两句话会叠着念。改文案要让每段 `narration` 实际朗读长度**收进 [start, 下段 start) 区间**
+  并留约 1s 余量；可用 `ffmpeg -i nN.mp3` 量真实时长核对，别只凭字数猜。
 - **字幕时间轴必须按成片实测，不能照抄探针 console 打点**：正式录制时（视频编码 +
   SwiftShader 渲染双负载）rAF 驱动的「到达检测」逐段滞后累积，成片比探针打点整体拉长且
   **各段拉伸不均**（实测 44s 流程录成 51s，进基因页打点差 4s+）。录完先用

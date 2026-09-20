@@ -17,4 +17,7 @@ window.COVER_DIMS = {
   "15-xianhua-moon-letter.jpg": [540, 720],
   "16-mingo-bala-bala.jpg": [540, 869],
   "17-piece-of-moonlight.jpg": [540, 1170],
+  "18-defcon.jpg": [540, 720],
+  "19-earth-3d.jpg": [540, 502],
+  "20-jurassic-park.jpg": [540, 720],
 };

@@ -1,14 +1,14 @@
 # AI Dev Kit
 
-本目录是一个 AI 开发工具集合，包含多个独立子项目，按用途分为四个顶层目录（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`）。多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。
+本目录是一个 AI 开发工具集合。自研项目按用途分为四个顶层目录（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`），多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。另有两个**非赛道目录**：`reference/`（他人优秀作品归档，参考资料）与 `vibecoding-gallery/`（浏览这些归档的展示工具），均不计入下面的项目清单。仓库级可复用技能在 `.skill/`。
 
 每个子项目可能带有各自的 `README.md` 或 `CLAUDE.md`/`SKILL.md`；工作区级协作约定见 `AGENTS.md`，详细用法请参阅对应文件。
 
 ## 项目列表
 
-按目录分组，与顶层目录一一对应。各目录的定位与维护约定见 [`TRACKS.md`](TRACKS.md)。
+按目录分组，与顶层目录一一对应。各目录的定位与维护约定见 [`TRACKS.md`](TRACKS.md)（唯一真源，本表与其同步）。
 
-### #vibetool　实用工具
+### #vibetool　实用工具（14）
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
@@ -24,8 +24,10 @@
 | 心情日记 | `vibetool/mood-diary/` | 浏览器端心情记录工具，五种心情颜色一键打卡，GitHub 式热力图回看半年情绪 |
 | 图表图鉴 | `vibetool/echarts-gallery/` | 30 种常用图表速查图鉴，卡片真实渲染缩略图 + 详情页含介绍/主题配色/AI 提示词/适用场景，块内点选 5 套主题整站换色 |
 | UI/UX 风格画廊 | `vibetool/uiux-style-gallery/` | 67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器 |
+| 小工具打包器 | `.skill/minitool-zip-builder/` | 把 H5 页面打包成符合小红书容器规范的离线小工具 zip（v1.6.0） |
+| 宣传片录制器 | `.skill/demo-video-recorder/` | Playwright 驱动真浏览器录 9:16 竖屏片，Pillow 字幕（三主题）+ edge-tts 解说（v1.2.0） |
 
-### #vibegame　互动游戏
+### #vibegame　互动游戏（11）
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
@@ -41,14 +43,14 @@
 | 航空大亨 | `vibegame/air-tycoon/` | 3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈判断，60 回合做到全球巨企 |
 | 倒车入库 | `vibegame/reverse-parking/` | 第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分 |
 
-### #vibeart　数字艺术
+### #vibeart　数字艺术（2）
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
 | 泰坦尼克号 | `vibeart/Titanic/` | 照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，可旋转观赏的 3D 船模 |
 | 郑和宝船 | `vibeart/zhenghe-treasure-ship/` | Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏 |
 
-### #vibeknow　人文知识
+### #vibeknow　人文知识（13）
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
@@ -63,6 +65,19 @@
 | 世界美食大百科 | `vibeknow/world-food-3d/` | 复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍 |
 | 3D 登月全程 | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） |
 | 侏罗纪公园 3D | `vibeknow/jurassic-park-3d/` | 侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地 |
+| 大航海时代 · 帆船图鉴 | `vibeknow/age-of-sail-3d/` | 大航海时代帆船图鉴：30 艘帆船 / 5 大海域家族，5 支主题舰队 + 自选，舰队沿岸航行时地球标注每艘的建造地 |
+| 全球交通工具图鉴 | `vibeknow/vehicle-atlas/` | 49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史 |
+
+## 其他目录
+
+以下目录**不属于四个赛道分类**，不进上面的项目清单：
+
+| 目录 | 说明 |
+|------|------|
+| `reference/` | 他人优秀小工具归档（截图 + 元信息），仅作学习借鉴与笔记素材，规范见 `reference/README.md` |
+| `vibecoding-gallery/` | 浏览 `reference/` 归档的展示小工具（非参赛作品），见 `vibecoding-gallery/README.md` |
+| `.skill/` | 仓库级可复用技能：小工具打包器、宣传片录制器 |
+| `docs/` | 工作区级文档与素材：大赛官方启动文案、参赛总结、应用清单 |
 
 ## 快速开始
 
@@ -71,6 +86,7 @@
 ## 环境要求
 
 - Node.js（服务端及构建类项目依赖，如 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibeknow/molecule/`、`vibeknow/rocket-launch/`）
+- Python 3（构建/打包/配图/录制脚本，如 `.skill/demo-video-recorder/` 需 `playwright`、`imageio-ffmpeg`，解说需 `edge-tts`；`.skill/minitool-zip-builder/`）
 - 飞书 API 配置（飞书集成相关项目：`vibetool/daily-report/`、`vibetool/ai-news/`）
 - 现代浏览器（浏览器端工具）
 

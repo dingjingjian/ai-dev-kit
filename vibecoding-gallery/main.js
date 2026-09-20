@@ -233,10 +233,51 @@ var WORKS = [
       '7 种合成音色 + 4 种主题色 + 月相谱卡可保存分享，成品能带走'
     ],
     tech: 'h5 · 互动音乐工具 · 推测 Web Audio'
+  },
+  /* ===== 以下为本人（人工智能Ding🥕）的作品：mine=true 会打「我的」角标 ===== */
+  {
+    id: 'defcon', title: '核战危机 DEFCON', author: '人工智能Ding🥕', track: 'game',
+    cover: '18-defcon.jpg',
+    noteId: '6aa53b220000000011036fb1',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa53b220000000011036fb1?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv5hz5qYL-CrtVSjn7-d1dX8=&xsec_source=pc_share',
+    intro: '3D 球面核战策略：危机博弈推高 DEFCON 等级，核弹有限、死得少的赢——一场没有赢家的博弈，愿世界和平。',
+    highlights: [
+      '最用心的作品：把冷战核威慑做成可玩的球面策略，每一次升级都在赌对方的克制',
+      '核弹数量有限、胜负按伤亡结算——比的是「谁死得更少」，不是「谁打得更多」',
+      '立意反战：「没有赢家、愿世界和平」不是装饰文案，而是这套机制推出来的结论'
+    ],
+    tech: 'h5 · 3D 球面策略 · 复用 vibeknow/earth-3d 球面引擎',
+    mine: true
+  },
+  {
+    id: 'earth-3d', title: '口袋地球', author: '人工智能Ding🥕', track: 'tool',
+    cover: '19-earth-3d.jpg',
+    noteId: '6a9cd74300000000290186bf',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a9cd74300000000290186bf?source=webshare&xhsshare=pc_web&xsec_token=AB5XVOySMnaRoqvFrY33XFy4oSfyUGfiu3UEZw2Js9CUk=&xsec_source=pc_share',
+    intro: '把地球装进口袋：3D 地球科普，昼夜交替、四季成因、月相变化、地球内部结构，近 5000 人玩过。',
+    highlights: [
+      '最受用户欢迎：近 5000 人玩过，是这轮参赛人气最高的作品',
+      '把抽象的天文地理做成能转、能看的直观演示：昼夜 / 四季 / 月相 / 内部圈层',
+      '框架复用度最高：寰宇小馆、恐龙地球、帆船图鉴等后续作品都由它派生'
+    ],
+    tech: 'h5 · Three.js 3D 地球',
+    mine: true
+  },
+  {
+    id: 'jurassic-park', title: '恐龙地球（侏罗纪公园）', author: '人工智能Ding🥕', track: 'tool',
+    cover: '20-jurassic-park.jpg',
+    noteId: '6aaa7730000000002802eff1',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aaa7730000000002802eff1?source=webshare&xhsshare=pc_web&xsec_token=ABOhlrW8243-oy4otWhFmVyDvZKrdMkFvwvnhZiFLrKp8=&xsec_source=pc_share',
+    intro: '手机沉浸式逛侏罗纪公园：坐巡逻车探访史前恐龙，30 只恐龙 / 4 条主题路线，行进途中在地球上标注化石发现地。',
+    highlights: [
+      '最受欢迎笔记：第一人称巡逻车视角逛公园，沉浸感就是传播点',
+      '30 只恐龙 + 4 条主题路线（可自选），内容量撑得起反复游玩',
+      '行进中把化石发现地标注到地球上，让「游览」和「科普坐标」绑在一起'
+    ],
+    tech: 'h5 · Three.js · 复用 world-food-3d 框架',
+    mine: true
   }
 ];
-
-var ARCHIVED = '2026-09-20';
 
 /* 原笔记正文摘录：来源 reference/<目录>/README.md 的「笔记原文摘录」，
    仅用于详情页「原笔记摘录」展示，版权归各位原作者所有。
@@ -257,7 +298,11 @@ var NOTES = {
   'relic-viewer': '「文物放大镜·掌上赏珍」这类 3D 数字交互项目的流程逻辑其实都大同小异，跟着视频拆解的步骤操作，带你跑通这类型项目的全流程。\n技术其实已经不难了，未来重要的是想法和创意，以及审美 sense。\n不用纠结工具，任意一款编程工具使用得当都可以做出效果不错的创意内容，但好的作品需要小步迭代、慢慢打磨，不要急于求成。\n赶紧做起来，一起探索尝试更多历史人文数字可视化交互的有趣创意！',
   'squeeze-toy': '在小红书上随时可以捏的电子宠物！摸鱼时捏一捏很解压！\n目前做了八种捏捏，宝子们有想做的模型可以聊聊哦\n#捏捏乐 #小游戏 #解压小游戏 #摸鱼神器 #vibegame #小红书vibecoding大赛',
   'moon-letter': '中秋，把没来得及说的话寄给月亮。\n有些话，当面说太浓烈，发微信又怕唐突。于是，借着今晚的月色，悄悄寄出去。\n点笔记下方的「用一用」，寄一封你的月亮信。\n#国风vibecoding #小红书vibecoding大赛 #中秋 #vibecoding #中秋赏月 #中秋节文案 #月亮是一种隐喻',
-  'bala-bala': '给中秋前上班的你做一个解压小工具。压力大的时候不妨来戳一戳，按一按，扒拉扒拉。\n可以上传照片，定制属于你自己的球球。比如上传你老板的照片，然后狠狠旋转它。\n如果你解锁了好玩的球球，评论区分享给大家看看。\n如果你是同担，输入解锁密码，还可以有专享同担五球哦。\n如果你喜欢这个小工具，欢迎点个关注哦。\n#小红书vibecoding大赛 #vibetool #wmls #5525'
+  'bala-bala': '给中秋前上班的你做一个解压小工具。压力大的时候不妨来戳一戳，按一按，扒拉扒拉。\n可以上传照片，定制属于你自己的球球。比如上传你老板的照片，然后狠狠旋转它。\n如果你解锁了好玩的球球，评论区分享给大家看看。\n如果你是同担，输入解锁密码，还可以有专享同担五球哦。\n如果你喜欢这个小工具，欢迎点个关注哦。\n#小红书vibecoding大赛 #vibetool #wmls #5525',
+  /* 本人作品：手头只有笔记标题 + 自己的一句话简介，没有原文全文，故不往下补话题标签 */
+  'defcon': '战争策略游戏 | 核战危机 DEFCON 🌏\n一场没有赢家的博弈，愿世界和平🕊️',
+  'earth-3d': '把地球装进口袋！太绝了🌍\n3D 地球科普，近 5000 人玩过🌍',
+  'jurassic-park': '手机沉浸式逛侏罗纪公园！太上头了🦖\n坐巡逻车探访史前恐龙🦕'
 };
 
 /* ===================== 工具函数 ===================== */
@@ -548,7 +593,10 @@ function makeCard(w, idx) {
   card.innerHTML =
     '<div class="cover-box" style="padding-top:' + (d[1] / d[0] * 100).toFixed(3) + '%">' +
       '<img alt="' + esc(w.title) + '" data-src="./covers/' + w.cover + '">' +
-      '<span class="track-badge">' + esc(TRACKS[w.track].tag) + '</span>' +
+      '<div class="badges">' +
+        (w.mine ? '<span class="mine-badge">我的</span>' : '') +
+        '<span class="track-badge">' + esc(TRACKS[w.track].tag) + '</span>' +
+      '</div>' +
     '</div>' +
     '<div class="card-title">' + esc(w.title) + '</div>' +
     '<div class="card-foot">' +
@@ -671,8 +719,9 @@ function openDetail(id) {
       '<div class="author-row">' +
         '<span class="avatar" style="background:' + avatarColor(w.author) + '">' + esc(firstChar(w.author)) + '</span>' +
         '<div class="meta">' +
-          '<div class="name">' + esc(w.author) + '</div>' +
-          '<div class="sub">' + esc(w.tech) + ' · 归档于 ' + ARCHIVED + '</div>' +
+          '<div class="name">' + esc(w.author) +
+            (w.mine ? '<span class="mine-tag">本人作品</span>' : '') + '</div>' +
+          '<div class="sub">' + esc(w.tech) + '</div>' +
         '</div>' +
         '<span class="detail-track">' + esc(TRACKS[w.track].tag) + '</span>' +
       '</div>' +
@@ -698,10 +747,12 @@ function openDetail(id) {
   $('detail-bar').innerHTML =
     '<span class="bar-like' + (isLiked(id) ? ' liked' : '') + '" data-like="' + id + '">&#9829;</span>' +
     '<button class="bar-note-btn">复制链接去打开</button>';
-  $('detail-scroll').scrollTop = 0;
   var overlay = $('detail');
   overlay.classList.add('open');
+  /* 必须在 overlay 可见之后再复位滚动：display:none 时给 scrollTop 赋值无效，
+     否则第二次打开详情会停在上一篇的滚动位置 */
   void overlay.offsetWidth;
+  $('detail-scroll').scrollTop = 0;
   overlay.classList.add('slide');
 }
 
@@ -985,7 +1036,7 @@ function revealGacha() {
       '<div class="thumb" style="background-image:url(./covers/' + w.cover + ')"></div>' +
       '<div class="info">' +
         '<div class="t">' + esc(w.title) + '</div>' +
-        '<div class="a">' + esc(w.author) + ' · ' + esc(TRACKS[w.track].label) + ' · 归档于 ' + esc(ARCHIVED) + '</div>' +
+        '<div class="a">' + esc(w.author) + ' · ' + esc(TRACKS[w.track].label) + '</div>' +
         '<div class="d">' + esc(w.intro) + '</div>' +
       '</div>' +
     '</div>' +
