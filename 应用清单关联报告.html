@@ -1,0 +1,325 @@
+<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小红书小工具发布清单 · 项目关联报告</title>
+<style>
+*{box-sizing:border-box} body{font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;margin:0;background:#f5f6f8;color:#1f2329;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:24px;margin:0 0 4px} .sub{color:#6b7280;font-size:13px;margin-bottom:18px}
+.kpis{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.kpi{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px 18px;min-width:130px}
+.kpi .v{font-size:26px;font-weight:700} .kpi .l{font-size:12px;color:#6b7280}
+.badges{margin:6px 0 22px} .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;margin-right:6px;font-weight:600}
+.badge.cat-vibetool{background:#e2efda;color:#2e6b1f} .badge.cat-vibegame{background:#fce4d6;color:#b45309}
+.badge.cat-vibeknow{background:#ddebf7;color:#1f5fa8} .badge.cat-未关联{background:#f2f2f2;color:#666}
+.card{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:18px 20px;margin-bottom:22px}
+.card h2{font-size:17px;margin:0 0 14px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid #eee;padding:8px 9px;text-align:left;vertical-align:top}
+th{background:#f0f2f5;position:sticky;top:0;font-weight:600}
+td.nm{font-weight:600} td.num{text-align:right;font-variant-numeric:tabular-nums}
+.cat-vibetool{background:#f7fcf4} .cat-vibegame{background:#fff8f3} .cat-vibeknow{background:#f6fafe}
+td.ok{color:#1a7f37;font-weight:600} td.no{color:#c00000;font-weight:700}
+td.cat{font-weight:600}
+a{color:#0563c1;text-decoration:none} a:hover{text-decoration:underline}
+.bars{margin-top:4px} .bar-row{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:13px}
+.bar-name{width:170px;flex:none;text-align:right;color:#374151} .bar-track{flex:1;background:#eef0f3;border-radius:6px;height:16px;overflow:hidden}
+.bar-fill{display:block;height:100%;background:linear-gradient(90deg,#4f8cff,#1f4e78)} .bar-val{width:64px;flex:none;font-variant-numeric:tabular-nums;color:#374151}
+.note{font-size:12px;color:#6b7280;margin-top:8px}
+ul.gaps li{margin:6px 0;font-size:13.5px}
+footer{color:#9aa0a6;font-size:12px;margin-top:30px;text-align:center}
+</style></head><body><div class="wrap">
+<h1>小红书小工具发布清单 · 项目关联报告</h1>
+<div class="sub">数据真源：<code>应用清单.xlsx</code>（26 个已发布工具）+ 仓库 <code>TRACKS.md</code>（目录/分类/物料状态）。生成时间自动。</div>
+<div class="kpis">
+  <div class="kpi"><div class="v">27</div><div class="l">已发布工具</div></div>
+  <div class="kpi"><div class="v">26</div><div class="l">已关联仓库项目</div></div>
+  <div class="kpi"><div class="v">23</div><div class="l">已有小红书物料</div></div>
+  <div class="kpi"><div class="v" style="color:#c00000">4</div><div class="l">物料缺口</div></div>
+</div>
+<div class="badges"><span class='badge cat-vibeknow'>vibeknow: 12</span><span class='badge cat-vibetool'>vibetool: 5</span><span class='badge cat-vibegame'>vibegame: 9</span><span class='badge cat-未关联'>未关联: 1</span></div>
+
+<div class="card"><h2>使用人数排行（Top，含「无数据」除外）</h2>
+<div class="bars"><div class="bar-row">
+      <span class="bar-name">口袋地球</span>
+      <span class="bar-track"><span class="bar-fill" style="width:100.0%"></span></span>
+      <span class="bar-val">4,660</span></div><div class="bar-row">
+      <span class="bar-name">核战危机DEFCON</span>
+      <span class="bar-track"><span class="bar-fill" style="width:63.2%"></span></span>
+      <span class="bar-val">2,947</span></div><div class="bar-row">
+      <span class="bar-name">口袋太阳系</span>
+      <span class="bar-track"><span class="bar-fill" style="width:55.7%"></span></span>
+      <span class="bar-val">2,596</span></div><div class="bar-row">
+      <span class="bar-name">星航者：太阳系漫游</span>
+      <span class="bar-track"><span class="bar-fill" style="width:53.0%"></span></span>
+      <span class="bar-val">2,470</span></div><div class="bar-row">
+      <span class="bar-name">恐龙地球</span>
+      <span class="bar-track"><span class="bar-fill" style="width:43.0%"></span></span>
+      <span class="bar-val">2,005</span></div><div class="bar-row">
+      <span class="bar-name">拼豆城市</span>
+      <span class="bar-track"><span class="bar-fill" style="width:27.9%"></span></span>
+      <span class="bar-val">1,302</span></div><div class="bar-row">
+      <span class="bar-name">国风拼豆坊</span>
+      <span class="bar-track"><span class="bar-fill" style="width:10.9%"></span></span>
+      <span class="bar-val">506</span></div><div class="bar-row">
+      <span class="bar-name">为了小猫我飞遍全球</span>
+      <span class="bar-track"><span class="bar-fill" style="width:9.8%"></span></span>
+      <span class="bar-val">455</span></div><div class="bar-row">
+      <span class="bar-name">人工智能计算器</span>
+      <span class="bar-track"><span class="bar-fill" style="width:9.7%"></span></span>
+      <span class="bar-val">454</span></div><div class="bar-row">
+      <span class="bar-name">口袋登月</span>
+      <span class="bar-track"><span class="bar-fill" style="width:6.1%"></span></span>
+      <span class="bar-val">286</span></div><div class="bar-row">
+      <span class="bar-name">坐上火车去旅行</span>
+      <span class="bar-track"><span class="bar-fill" style="width:5.5%"></span></span>
+      <span class="bar-val">255</span></div><div class="bar-row">
+      <span class="bar-name">寰宇小馆·世界美食</span>
+      <span class="bar-track"><span class="bar-fill" style="width:5.3%"></span></span>
+      <span class="bar-val">246</span></div><div class="bar-row">
+      <span class="bar-name">人工智能OS</span>
+      <span class="bar-track"><span class="bar-fill" style="width:5.0%"></span></span>
+      <span class="bar-val">233</span></div><div class="bar-row">
+      <span class="bar-name">口袋火箭</span>
+      <span class="bar-track"><span class="bar-fill" style="width:3.2%"></span></span>
+      <span class="bar-val">150</span></div><div class="bar-row">
+      <span class="bar-name">设计风格图鉴</span>
+      <span class="bar-track"><span class="bar-fill" style="width:2.7%"></span></span>
+      <span class="bar-val">127</span></div><div class="bar-row">
+      <span class="bar-name">中秋拼豆坊</span>
+      <span class="bar-track"><span class="bar-fill" style="width:1.8%"></span></span>
+      <span class="bar-val">86</span></div><div class="bar-row">
+      <span class="bar-name">人工智能OS 2.0</span>
+      <span class="bar-track"><span class="bar-fill" style="width:1.5%"></span></span>
+      <span class="bar-val">70</span></div><div class="bar-row">
+      <span class="bar-name">拼豆设计神器</span>
+      <span class="bar-track"><span class="bar-fill" style="width:1.4%"></span></span>
+      <span class="bar-val">65</span></div><div class="bar-row">
+      <span class="bar-name">今天我准时下班了吗？</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.8%"></span></span>
+      <span class="bar-val">39</span></div><div class="bar-row">
+      <span class="bar-name">初高中函数可视化</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.7%"></span></span>
+      <span class="bar-val">34</span></div><div class="bar-row">
+      <span class="bar-name">分子空间构型可视化</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.5%"></span></span>
+      <span class="bar-val">24</span></div><div class="bar-row">
+      <span class="bar-name">十二生肖拼豆坊</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.5%"></span></span>
+      <span class="bar-val">22</span></div><div class="bar-row">
+      <span class="bar-name">火箭发射·逐梦星空</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.4%"></span></span>
+      <span class="bar-val">19</span></div><div class="bar-row">
+      <span class="bar-name">心情日记</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.1%"></span></span>
+      <span class="bar-val">6</span></div><div class="bar-row">
+      <span class="bar-name">Chart可视化图鉴</span>
+      <span class="bar-track"><span class="bar-fill" style="width:0.1%"></span></span>
+      <span class="bar-val">3</span></div></div>
+<div class="note">注：「全球交通工具图鉴」在原表中为「无数据」，未计入排行。</div>
+</div>
+
+<div class="card"><h2>物料缺口（笔记可挂载对应的小工具 — 以下尚未就绪）</h2>
+<ul class="gaps"><li><b>火箭发射·逐梦星空</b> — 分类 vibeknow，关联 vibeknow/rocket-launch；2D 火箭发射演示</li><li><b>分子空间构型可视化</b> — 分类 vibeknow，关联 vibeknow/molecule；TRACKS 标注缺笔记</li><li><b>初高中函数可视化</b> — 分类 vibeknow，关联 vibeknow/function-visualization；</li><li><b>坐上火车去旅行</b> — 分类 未关联，未关联项目；仓库内未找到对应项目（外部/未入库）</li></ul>
+<div class="note">提示：其中「坐上火车去旅行」在仓库内未找到对应源码，可能为外部/未入库工具；其余 3 个已在仓库但缺小红书物料目录，可优先补笔记。</div>
+</div>
+
+<div class="card"><h2>明细总表（含关联项目 / 分类 / 物料状态）</h2>
+<div style="overflow:auto;max-height:620px">
+<table><thead><tr>
+<th>序号</th><th>应用名称</th><th>应用描述</th><th>使用人数</th><th>版本号</th><th>发布状态</th><th>历史版本</th>
+<th>关联项目目录</th><th>分类</th><th>小红书物料</th><th>物料状态</th><th>备注</th>
+</tr></thead><tbody><tr class="cat-vibeknow">
+      <td>1</td><td class="nm">口袋地球</td>
+      <td>3D地球科普，尽在指尖</td><td class="num">4660</td>
+      <td>V1.0.3</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/earth-3d">vibeknow/earth-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 物料）</td><td></td></tr><tr class="cat-vibetool">
+      <td>2</td><td class="nm">拼豆设计神器</td>
+      <td>拼豆图案设计，一键生成图纸</td><td class="num">65</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibetool/perler-bead-designer">vibetool/perler-bead-designer</a></td>
+      <td class="cat">vibetool</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>3</td><td class="nm">火箭发射·逐梦星空</td>
+      <td>亲眼见证一枚78吨的火箭升空</td><td class="num">19</td>
+      <td>V1.0.2</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/rocket-launch">vibeknow/rocket-launch</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="no">无 ✗</td>
+      <td>已发布</td><td>2D 火箭发射演示</td></tr><tr class="cat-vibegame">
+      <td>4</td><td class="nm">人工智能OS</td>
+      <td>包含5个&quot;人工智能&quot;应用</td><td class="num">233</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/ai-os">vibegame/ai-os</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>5</td><td class="nm">分子空间构型可视化</td>
+      <td>可拖拽旋转观察立体结构</td><td class="num">24</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/molecule">vibeknow/molecule</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="no">无 ✗</td>
+      <td>已打包·缺笔记</td><td>TRACKS 标注缺笔记</td></tr><tr class="cat-vibeknow">
+      <td>6</td><td class="nm">初高中函数可视化</td>
+      <td>观察函数图像变化与关键特征</td><td class="num">34</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/function-visualization">vibeknow/function-visualization</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="no">无 ✗</td>
+      <td>已发布</td><td></td></tr><tr class="cat-未关联">
+      <td>7</td><td class="nm">坐上火车去旅行</td>
+      <td>铁道长歌·山河入梦</td><td class="num">255</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td>—</td>
+      <td class="cat">未关联</td>
+      <td class="no">无 ✗</td>
+      <td>—</td><td>仓库内未找到对应项目（外部/未入库）</td></tr><tr class="cat-vibegame">
+      <td>8</td><td class="nm">人工智能计算器</td>
+      <td>一款可以锻炼心算能力的计算器</td><td class="num">454</td>
+      <td>V1.0.4</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/ai-calculator">vibegame/ai-calculator</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>9</td><td class="nm">全球交通工具图鉴</td>
+      <td>含地面、水面、天空、太空载具</td><td class="num">无数据</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/vehicle-atlas">vibeknow/vehicle-atlas</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>框架就绪·配图待生成</td><td></td></tr><tr class="cat-vibegame">
+      <td>10</td><td class="nm">人工智能OS 2.0</td>
+      <td>大升级，更聪明，更好用（吗）</td><td class="num">70</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/ai-os">vibegame/ai-os</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td>与「人工智能OS」同目录，v2 迭代</td></tr><tr class="cat-vibeknow">
+      <td>11</td><td class="nm">寰宇小馆·世界美食</td>
+      <td>世界美食大百科</td><td class="num">246</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/world-food-3d">vibeknow/world-food-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td>「寰宇小馆」</td></tr><tr class="cat-vibegame">
+      <td>12</td><td class="nm">中秋拼豆坊</td>
+      <td>月满中秋，豆聚成圆</td><td class="num">86</td>
+      <td>V1.0.2</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/perler-mid-autumn">vibegame/perler-mid-autumn</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibegame">
+      <td>13</td><td class="nm">国风拼豆坊</td>
+      <td>二十幅国风纹样等你拼</td><td class="num">506</td>
+      <td>V1.0.4</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/perler-bead-game">vibegame/perler-bead-game</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 图）</td><td>「拼豆游戏」国风纹样</td></tr><tr class="cat-vibegame">
+      <td>14</td><td class="nm">十二生肖拼豆坊</td>
+      <td>来拼一只属于你的生肖萌兽</td><td class="num">22</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/perler-zodiac">vibegame/perler-zodiac</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 导出闭环冒烟过）</td><td></td></tr><tr class="cat-vibegame">
+      <td>15</td><td class="nm">核战危机DEFCON</td>
+      <td>这场博弈没有赢家，愿世界和平</td><td class="num">2947</td>
+      <td>V1.0.4</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/defcon">vibegame/defcon</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>16</td><td class="nm">口袋登月</td>
+      <td>3D登月模拟器</td><td class="num">286</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/moon-landing-3d">vibeknow/moon-landing-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td>「奔月」3D 登月模拟器</td></tr><tr class="cat-vibeknow">
+      <td>17</td><td class="nm">口袋火箭</td>
+      <td>3D火箭发射模拟器</td><td class="num">150</td>
+      <td>V1.0.2</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/rocket-launch-3d">vibeknow/rocket-launch-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 物料）</td><td>「掌心里的航天梦」</td></tr><tr class="cat-vibeknow">
+      <td>18</td><td class="nm">口袋太阳系</td>
+      <td>掌上3D漫游太阳系</td><td class="num">2596</td>
+      <td>V1.0.3</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/solar-system-3d">vibeknow/solar-system-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 物料）</td><td>「太阳系 3D」</td></tr><tr class="cat-vibetool">
+      <td>19</td><td class="nm">设计风格图鉴</td>
+      <td>67种UI风格配色提示词速查</td><td class="num">127</td>
+      <td>V1.0.4</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibetool/uiux-style-gallery">vibetool/uiux-style-gallery</a></td>
+      <td class="cat">vibetool</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 笔记）</td><td>67 种 UI/UX 风格</td></tr><tr class="cat-vibetool">
+      <td>20</td><td class="nm">心情日记</td>
+      <td>今天你开心了吗？</td><td class="num">6</td>
+      <td>V1.0.2</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibetool/mood-diary">vibetool/mood-diary</a></td>
+      <td class="cat">vibetool</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibetool">
+      <td>21</td><td class="nm">今天我准时下班了吗？</td>
+      <td>我再也不要²委屈自己一秒</td><td class="num">39</td>
+      <td>V1.0.3</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibetool/offwork-heatmap">vibetool/offwork-heatmap</a></td>
+      <td class="cat">vibetool</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td>「准时下班热力图」</td></tr><tr class="cat-vibetool">
+      <td>22</td><td class="nm">Chart可视化图鉴</td>
+      <td>30种图表速查</td><td class="num">3</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibetool/echarts-gallery">vibetool/echarts-gallery</a></td>
+      <td class="cat">vibetool</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td>30 种图表速查</td></tr><tr class="cat-vibeknow">
+      <td>23</td><td class="nm">为了小猫我飞遍全球</td>
+      <td>心动哪只猫，就飞去见它</td><td class="num">455</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/cat-globe-3d">vibeknow/cat-globe-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>24</td><td class="nm">恐龙地球</td>
+      <td>坐巡逻车探访史前恐龙</td><td class="num">2005</td>
+      <td>V1.0.1</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/jurassic-park-3d">vibeknow/jurassic-park-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>已打包（zip + 物料）</td><td></td></tr><tr class="cat-vibegame">
+      <td>25</td><td class="nm">拼豆城市</td>
+      <td>拼豆×模拟城市！亲手拼城</td><td class="num">1302</td>
+      <td>V1.0.3</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/perler-city">vibegame/perler-city</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>完整（zip + 海报）</td><td></td></tr><tr class="cat-vibegame">
+      <td>26</td><td class="nm">星航者：太阳系漫游</td>
+      <td>我们的征途是星辰大海</td><td class="num">2470</td>
+      <td>V1.0.3</td><td>已发布</td><td>是</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibegame/solar-voyager">vibegame/solar-voyager</a></td>
+      <td class="cat">vibegame</td>
+      <td class="ok">有 ✓</td>
+      <td>已发布</td><td></td></tr><tr class="cat-vibeknow">
+      <td>27</td><td class="nm">大航海时代 · 帆船图鉴</td>
+      <td>组建自己的舰队探索这个世界吧。</td><td class="num">无数据</td>
+      <td>V1.0.0</td><td>已发布</td><td>否</td>
+      <td><a href="file:///C:/Users/ASUS/Documents/git/ai-dev-kit/vibeknow/age-of-sail-3d">vibeknow/age-of-sail-3d</a></td>
+      <td class="cat">vibeknow</td>
+      <td class="ok">有 ✓</td>
+      <td>代码完成·待出图</td><td>TRACKS 标注代码完成·待出图</td></tr></tbody></table>
+</div>
+<div class="note">点击「关联项目目录」「小红书物料」可在资源管理器中打开对应路径（需在本机打开此文件）。</div>
+</div>
+<footer>由 WorkBuddy 生成 · 真源：应用清单.xlsx + TRACKS.md</footer>
+</div></body></html>

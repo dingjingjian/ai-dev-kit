@@ -6,11 +6,11 @@
 <title>大航海时代 · 帆船图鉴</title>
 <style>
   /* ===== 大航海时代 · 帆船图鉴 app =====
-     以大航海时代（Age of Sail，约 1200–1700）为背景：选一条航路 → 起锚出港 →
-     船队沿岸航行，逐艘检阅帆船 → 航海日志。
+     以大航海时代（Age of Sail，约 1200–1700）为背景：组建一支舰队 → 起锚出港 →
+     舰队沿岸航行，逐艘检阅帆船 → 航海日志。
      配色：深海蓝 / 羊皮纸米白 / 黄铜金 / 酒红 / 橡木棕 / 炮铜铁灰 / 海图黄。
-     五页：航路选择 / 自选航路 / 起锚出港 / 航海页 / 航海日志。
-     视觉口径：主视觉一律用 AI 出图（徽标 / 港口两帧 / 航路横幅），页面只做排版与
+     五页：组建舰队 / 自选舰队 / 起锚出港 / 航海页 / 航海日志。
+     视觉口径：主视觉一律用 AI 出图（徽标 / 港口两帧 / 舰队横幅），页面只做排版与
      一层可读性暗化 + 方画框上的纸色暗角与角标，不画 CSS 或 SVG 形状。
      地球为「建造地定位组件」，仅航海页内嵌。
 
@@ -22,8 +22,8 @@
      ④ 扬帆出港·竖版 assets/tex/port-sail-portrait.webp   出港页第二帧（与 ③ 同机位同光位）
      ⑤ 旧港兜底      assets/tex/harbor.webp      ③④ 的兜底图
      ⑥ 海图纸纹      assets/tex/chart.webp       卡片与控制栏底纹，缺图回退纯色
-     ⑦ 航路横幅 ×5   assets/tex/route-<key>.webp 航路卡片背景，缺图回退纸纹 → 主题渐变
-     ②③④ + 自选航路横幅 规格见 docs/场景与横幅配图需求.md */
+     ⑦ 舰队横幅 ×6   assets/tex/route-<key>.webp 舰队卡片背景，缺图回退纸纹 → 主题渐变
+     ②③④ + 自选舰队横幅 规格见 docs/场景与横幅配图需求.md */
 
   :root{
     /* 深海蓝系（真实海域 / 页面主底） */
@@ -38,7 +38,7 @@
     --oak-9:#150c05;--oak-8:#241409;--oak-7:#37200f;--oak-6:#4c2c15;--oak-5:#633b1d;
     /* 炮铜铁灰系（舰炮 / 仪表 / 画框） */
     --iron-9:#07090b;--iron-8:#0e1216;--iron-7:#181e24;--iron-6:#242c34;--iron-5:#333d47;
-    /* 海图黄（羊皮纸经纬线 / 自选航路） */
+    /* 海图黄（羊皮纸经纬线 / 自选舰队） */
     --chart:#c9a227;--chart-2:#e0bc4a;--chart-glow:rgba(201,162,39,.30);
     /* 船坞苔绿（绳索 / 帆布旧色） */
     --kelp:#4a6a52;--kelp-2:#6a8a68;
@@ -46,7 +46,7 @@
     --ink:#14120e;--ink-2:#4a453a;--ink-3:#7d7666;--ink-4:#a89e88;
     /* 线条 */
     --line:rgba(176,137,74,.30);--line-2:rgba(176,137,74,.45);
-    /* 航路主题色（默认 = 深海本体，由 app.js 按 route 切换） */
+    /* 舰队主题色（默认 = 深海本体，由 app.js 按 route 切换） */
     --route-dark:var(--sea-7);--route-mid:var(--sea-5);--route-light:var(--sea-3);
     --route-accent:var(--wine);--route-accent-2:var(--wine-3);
     --route-banner:url('./assets/tex/route-merchant.webp');
@@ -62,28 +62,33 @@
     :root{--sat:env(safe-area-inset-top,0px);--sattop:calc(8px + env(safe-area-inset-top,0px));--sab:env(safe-area-inset-bottom,0px)}
   }
 
-  /* ===== 航路主题（4 套，由 body[data-route] 切换）===== */
-  /* 商船航路：琥珀金 */
+  /* ===== 舰队主题（5 套，由 body[data-route] 切换）===== */
+  /* 商船舰队：琥珀金 */
   body[data-route="merchant"]{
     --route-dark:#1a1206;--route-mid:#3d2a0c;--route-light:#8a6a1a;
     --route-accent:#c9a227;--route-accent-2:#e0bc4a;
     --route-banner:url('./assets/tex/route-merchant.webp')}
-  /* 战舰航路：炮铜红 */
+  /* 战舰舰队：炮铜红 */
   body[data-route="warship"]{
     --route-dark:#200806;--route-mid:#4a120c;--route-light:#8a2a1a;
     --route-accent:#c0392b;--route-accent-2:#e05a45;
     --route-banner:url('./assets/tex/route-warship.webp')}
-  /* 探险航路：深海青 */
+  /* 探险舰队：深海青 */
   body[data-route="explorer"]{
     --route-dark:#04121a;--route-mid:#0d2c3d;--route-light:#205a75;
     --route-accent:#2f8fb0;--route-accent-2:#57b8d4;
     --route-banner:url('./assets/tex/route-explorer.webp')}
-  /* 风帆谱系：海绿黄铜 */
+  /* 巡礼舰队：海绿黄铜 */
   body[data-route="lineage"]{
     --route-dark:#0a1410;--route-mid:#16301f;--route-light:#2f5a3a;
     --route-accent:#5a9a6a;--route-accent-2:#7fc08a;
     --route-banner:url('./assets/tex/route-lineage.webp')}
-  /* 自选航路：羊皮纸橙（船长自定的航线） */
+  /* 东方舰队：藤紫（紫气东来：印度洋与东亚的另一半海洋） */
+  body[data-route="east"]{
+    --route-dark:#150a1e;--route-mid:#3a1245;--route-light:#6a2a80;
+    --route-accent:#8f4ab0;--route-accent-2:#b98ad6;
+    --route-banner:url('./assets/tex/route-east.webp')}
+  /* 自选舰队：羊皮纸橙（船长自定的一支舰队） */
   body[data-route="custom"]{
     --route-dark:#1a0c06;--route-mid:#4a220c;--route-light:#8a4a1a;
     --route-accent:#cc6a2a;--route-accent-2:#e08a4a;
@@ -101,7 +106,7 @@
   body.mode-voyage .page-voyage{display:flex}
   body.mode-log .page-log{display:flex}
 
-  /* ===== 航路选择页 =====
+  /* ===== 组建舰队页 =====
      版式同 jurassic-park-3d 的路线页：通栏横幅固定在顶，列表区自己滚动，横幅不会被带走 */
   .page-routes{overflow:hidden}
   /* 顶部港口视觉区：整块交给 AI 出的图，只叠一层暗化保文字可读，不做任何 CSS 绘制 */
@@ -149,13 +154,13 @@
   .fleet-sub{font-size:11.5px;color:var(--brass-2);margin-top:7px;letter-spacing:3.5px;text-shadow:0 1px 5px rgba(0,0,0,.85)}
 
 
-  /* 航路列表（船坞告示牌） */
+  /* 舰队列表（船坞告示牌） */
   .route-section{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
     width:100%;max-width:820px;margin:0 auto;padding:16px 16px calc(96px + var(--sab))}
   .route-section-title{display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--brass-2);letter-spacing:4px;margin-bottom:18px}
   .route-section-title::before,.route-section-title::after{content:"";flex:1;height:1px;margin:0 12px;
     background:repeating-linear-gradient(90deg,var(--line-2) 0 6px,transparent 6px 12px)}
-  /* ---- 航路告示牌：钉在海图上的黄铜框木牌 ---- */
+  /* ---- 舰队告示牌：钉在海图上的黄铜框木牌 ---- */
   .route-card{display:block;width:100%;margin-bottom:14px;padding:0;border:none;background:transparent;cursor:pointer;text-align:left;
     text-decoration:none;color:inherit;position:relative;overflow:hidden;
     box-shadow:0 6px 18px rgba(0,0,0,.5),
@@ -181,13 +186,13 @@
     background-repeat:no-repeat,no-repeat,repeat,no-repeat}
   .route-card-inner{position:relative;z-index:1;padding:26px 34px 22px 22px;
     box-shadow:inset 0 0 0 1px rgba(176,137,74,.18)}
-  /* 左上的航路登记号：刻在牌角的一行小字 */
+  /* 左上的舰队登记号：刻在牌角的一行小字 */
   .route-tab{position:absolute;left:22px;top:9px;z-index:2;
     font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:2.6px;color:rgba(216,176,106,.6)}
   .route-card-head{display:flex;align-items:baseline;justify-content:space-between}
   .route-card-head > * + *{margin-left:12px}
   .route-name{font-size:22px;font-weight:700;color:var(--bone);letter-spacing:3px}
-  /* 航路徽章：一枚压铸小铜牌，色随航路主题 */
+  /* 舰队徽章：一枚压铸小铜牌，色随舰队主题 */
   .route-badge{flex:none;font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:1.4px;color:var(--ink);
     padding:2px 8px;background:linear-gradient(180deg,var(--rc-accent-2),var(--rc-accent));
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.28),inset 0 -2px 4px rgba(0,0,0,.22),0 2px 6px rgba(0,0,0,.4)}
@@ -200,7 +205,7 @@
   .route-intensity{display:inline-flex;align-items:center;margin-left:1px}
   .route-intensity i{margin-left:2px;width:3px;height:11px;background:var(--bone-4);opacity:.28}
   .route-intensity i.on{background:var(--rc-accent);opacity:1;box-shadow:0 0 5px var(--rc-accent)}
-  /* 卡底一笔虚线航线，不占位 */
+  /* 卡底一笔虚线航迹，不占位 */
   .route-card-inner::after{content:"";position:absolute;left:22px;right:22px;bottom:9px;height:1px;
     background:repeating-linear-gradient(90deg,rgba(216,176,106,.45) 0 7px,transparent 7px 15px)}
   /* 罗盘玫瑰水印：半枚压出牌右缘（overflow 裁掉外半），撑住"海图"的气口 */
@@ -209,12 +214,12 @@
   .route-card:hover .route-compass{opacity:.4}
   .route-compass .long{fill:var(--rc-accent);fill-opacity:.38}
   .route-compass .short{fill:var(--rc-accent);fill-opacity:.16}
-  /* 自选航路：换成船长火漆印（外双环 + 桅帆纹） */
+  /* 自选舰队：换成船长火漆印（外双环 + 桅帆纹） */
   .route-compass.wax{stroke-width:1.5}
   .route-compass.wax path{fill:var(--rc-accent);fill-opacity:.22;stroke:none}
   .route-cta{display:none}
 
-  /* 航路选择页底栏 */
+  /* 组建舰队页底栏 */
   .routes-bar{position:fixed;left:0;right:0;bottom:0;z-index:20;
     padding:10px 16px calc(10px + var(--sab));text-align:center;
     background-image:
@@ -225,7 +230,7 @@
 
 
   /* ===== 出港过渡页 · 起锚扬帆 =====
-     两帧 AI 出图交叉淡化 + 缓慢推近：① 泊在港内的船队 → ② 帆已张满、驶出港口。
+     两帧 AI 出图交叉淡化 + 缓慢推近：① 泊在港内的舰队 → ② 帆已张满、驶出港口。
      不做任何 CSS 绘制：出港由两张图本身表达，这里只负责切换与 Ken Burns 推近。 */
   .page-depart{background:var(--sea-9);align-items:center;justify-content:center;overflow:hidden}
   /* 舞台占满视口，不再限宽 760px —— 限宽会让横屏桌面出现"竖形栏位里塞一张横图"，
@@ -264,7 +269,7 @@
     .depart-shot{background-size:cover}
     .depart-bg{display:none}}
   /* 两帧共用同一条「一路推近」曲线，只有透明度不同 ——
-     交叉淡化时缩放完全同步，读起来是船队持续驶向远处，不再一进一退 */
+     交叉淡化时缩放完全同步，读起来是舰队持续驶向远处，不再一进一退 */
   @keyframes shotClosed{
     0%{opacity:1;transform:scale(1)}
     30%{opacity:1;transform:scale(1.15)}
@@ -321,9 +326,9 @@
   .globe-down .gd-ttl{font-size:14px;color:var(--bone);letter-spacing:3px}
   .globe-down .gd-sub{margin-top:9px;font-size:11.5px;line-height:1.9;color:var(--ink-3);letter-spacing:1px}
 
-  /* ===== 航海页（船队沿岸航行）===== */
+  /* ===== 航海页（舰队沿岸航行）===== */
   .page-voyage{background:radial-gradient(ellipse 92% 64% at 50% 26%,var(--route-mid),var(--route-dark) 60%,var(--sea-9))}
-  /* 顶栏：只留航路一条 */
+  /* 顶栏：只留舰队一条 */
   .voyage-bar{position:relative;flex:none;height:calc(var(--topbar) + var(--sattop));padding:var(--sattop) 14px 0;
     display:flex;align-items:center;justify-content:center;
     background:linear-gradient(180deg,rgba(36,20,9,.97),rgba(36,20,9,.62) 74%,rgba(36,20,9,0));
@@ -521,7 +526,7 @@
   .sum-ship .sum-dmeta{flex:1;min-width:12px;font-size:11.5px;color:var(--ink-3);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sum-ship .sum-dtags{flex:none;font-size:12px;color:var(--wine-3);letter-spacing:1px;font-variant-numeric:tabular-nums}
 
-  /* ===== 自选航路页 ===== */
+  /* ===== 自选舰队页 ===== */
   .page-builder{background:radial-gradient(ellipse 86% 56% at 50% 8%,var(--route-mid),var(--route-dark) 58%,var(--sea-9))}
   .builder-bar{flex:none;height:calc(var(--topbar) + var(--sattop));padding:var(--sattop) 14px 0;
     display:flex;align-items:center;justify-content:center;
@@ -538,8 +543,8 @@
       repeating-linear-gradient(90deg,rgba(0,0,0,.12) 0 1px,transparent 1px 6px),
       linear-gradient(180deg,rgba(76,44,21,.42),rgba(21,12,5,.52));
     box-shadow:inset 0 0 0 1px var(--line),inset 3px 0 0 rgba(176,137,74,.4)}
-  /* 已选航路（可调序） */
-  /* 我的船队：一块钉在海图上的航线板（斜向航线纹） */
+  /* 已选舰队（可调序） */
+  /* 我的舰队：一块钉在海图上的编队板（斜向编队纹） */
   .bd-picked{min-height:44px;padding:8px;
     background-image:
       repeating-linear-gradient(135deg,rgba(176,137,74,.07) 0 8px,transparent 8px 16px),
@@ -598,7 +603,7 @@
     white-space:normal;text-align:center;line-height:1.6;width:max-content;max-width:calc(100% - 36px);
     background:linear-gradient(174deg,var(--wine-3),var(--wine) 80%);border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 6px 18px rgba(120,20,10,.45)}
   .hint.show{opacity:1}
-  /* 航路选择页的提示改贴底栏上方，避免压住 hero 的标题 */
+  /* 组建舰队页的提示改贴底栏上方，避免压住 hero 的标题 */
   body.mode-routes .hint{top:auto;bottom:calc(58px + var(--sab))}
   body.mode-voyage .hint,
   body.mode-builder .hint{top:calc(var(--topbar) + var(--sattop) + 12px)}
@@ -676,7 +681,7 @@
   <div class="globe-cap"><span class="gname" id="capName"></span><span class="gcoord" id="capCoord"></span></div>
 </div>
 
-<!-- 航路选择页 -->
+<!-- 组建舰队页 -->
 <main class="page page-routes" id="pageRoutes">
   <header class="fleet-hero">
     <!-- 地区风格轮播（五大海域各一张）：图位与回退链见 CSS 的 .hero-shot -->
@@ -704,23 +709,23 @@
     </div>
   </header>
   <div class="route-section">
-    <div class="route-section-title">选择航路</div>
+    <div class="route-section-title">组建舰队</div>
     <div id="routeList"></div>
   </div>
   <div class="routes-bar">
-    <div class="routes-bar-text">* 船队沿岸航行 · 每艘帆船的建造地实时标注于地球 · 谨防逆风与浅滩</div>
+    <div class="routes-bar-text">* 舰队沿岸航行 · 每艘帆船的建造地实时标注于地球 · 谨防逆风与浅滩</div>
   </div>
 </main>
 
-<!-- 自选航路页 -->
+<!-- 自选舰队页 -->
 <section class="page page-builder" id="pageBuilder">
   <div class="builder-bar">
-    <div class="builder-ttl" id="builderTtl">自选航路 · 船长航线</div>
+    <div class="builder-ttl" id="builderTtl">自选舰队 · 船长编成</div>
   </div>
   <div class="builder-body" id="builderBody">
     <div class="builder-wrap">
-      <div class="builder-note">按自己的心意排一条航线：点名录中的帆船即可编入船队，用 ↑ ↓ 调整顺序、× 解除编队。<br>航线会存在本机，下次出海还在。</div>
-      <div class="sec">我的船队<span class="secnote">按编入顺序依次检阅</span></div>
+      <div class="builder-note">按自己的心意组建一支舰队：点名录中的帆船即可编入舰队，用 ↑ ↓ 调整顺序、× 解除编队。<br>舰队会存在本机，下次出海还在。</div>
+      <div class="sec">我的舰队<span class="secnote">按编入顺序依次检阅</span></div>
       <div class="bd-picked" id="bdPicked"></div>
       <div class="sec">船舶名录<span class="secnote">按海域家族分组 · 共 30 艘</span></div>
       <div id="bdPool"></div>
@@ -806,13 +811,13 @@
       <div class="log-brief" id="logBrief"></div>
       <div class="sec">性能图谱<span class="secnote">六维 · 本次均值 · 满分 5</span></div>
       <div id="logBars"></div>
-      <div class="sec">船队名册<span class="secnote">各艘最突出的两维</span></div>
+      <div class="sec">舰队名册<span class="secnote">各艘最突出的两维</span></div>
       <div id="logShips"></div>
     </div>
   </div>
   <div class="log-controls">
     <button class="bar-btn bar-btn-ghost" id="lcAgain">再航一次</button>
-    <button class="bar-btn bar-btn-primary" id="lcBack">返回选择航路</button>
+    <button class="bar-btn bar-btn-primary" id="lcBack">返回组建舰队</button>
   </div>
 </section>
 

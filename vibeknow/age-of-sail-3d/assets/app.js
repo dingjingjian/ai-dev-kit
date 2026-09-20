@@ -49,31 +49,35 @@
   var builderBodyEl=document.getElementById('builderBody');
   var hintEl=document.getElementById('hint');
 
-  /* ================= 航路数据 =================
-   * 每条航路精选若干帆船，按船队检阅顺序排列（顺序即「海图上的停靠点序号」）。
-   * 配色与 index.html 的 body[data-route] 一致，同时作为航路卡片的内联主题。 */
+  /* ================= 舰队数据 =================
+   * 每支舰队精选若干帆船，按检阅顺序排列（顺序即「海图上的停靠点序号」）。
+   * 配色与 index.html 的 body[data-route] 一致，同时作为舰队卡片的内联主题。 */
   var ROUTES=[
-    {key:'merchant',name:'商船航路',badge:'贸易',intensity:2,
+    {key:'merchant',name:'商船舰队',badge:'贸易',intensity:2,
      desc:'沿舱容递增走一遭：从阿拉伯海的轻快船到西班牙大帆船，看清每一档载重背后的船身代价。',
      ships:[20,1,2,24,14,15,16,17],
      dark:'#1a1206',mid:'#3d2a0c',light:'#8a6a1a',accent:'#c9a227',accent2:'#e0bc4a'},
-    {key:'warship',name:'战舰航路',badge:'海战',intensity:5,
+    {key:'warship',name:'战舰舰队',badge:'海战',intensity:5,
      desc:'从单列炮的加莱桨帆船，到三层炮甲板的战列舰，一路看炮位怎么长满整条舷侧。',
      ships:[7,29,8,4,28,17,9,5],
      dark:'#200806',mid:'#4a120c',light:'#8a2a1a',accent:'#c0392b',accent2:'#e05a45'},
-    {key:'explorer',name:'探险航路',badge:'远洋',intensity:3,
-     desc:'轻船身、深吃风、能逆风返航——这条路上全是把海岸线推远的船，从独桅三角帆船到卡拉维尔。',
+    {key:'explorer',name:'探险舰队',badge:'远洋',intensity:3,
+     desc:'轻船身、深吃风、能逆风返航——这支舰队里全是把海岸线推远的船，从独桅三角帆船到卡拉维尔。',
      ships:[18,6,12,13,3,23,26,11],
      dark:'#04121a',mid:'#0d2c3d',light:'#205a75',accent:'#2f8fb0',accent2:'#57b8d4'},
-    {key:'lineage',name:'风帆谱系',badge:'通史',intensity:2,
-     desc:'按年代走完一部船型演化史：柯克船 → 卡拉维尔 → 卡拉克 → 拿屋 → 盖伦 → 大帆船 → 护航舰 → 战列舰。',
+    {key:'lineage',name:'巡礼舰队',badge:'通史',intensity:2,
+     desc:'八艘按年代依次编入：柯克船 → 卡拉维尔 → 卡拉克 → 拿屋 → 盖伦 → 大帆船 → 护航舰 → 战列舰，一趟巡礼看尽三百年船型更替。',
      ships:[0,12,14,15,16,17,4,5],
-     dark:'#0a1410',mid:'#16301f',light:'#2f5a3a',accent:'#5a9a6a',accent2:'#7fc08a'}
+     dark:'#0a1410',mid:'#16301f',light:'#2f5a3a',accent:'#5a9a6a',accent2:'#7fc08a'},
+    {key:'east',name:'东方舰队',badge:'季风',intensity:3,
+     desc:'从阿拉伯海缝合船板的季风帆船，到明清的火器水军：硬帆、铁甲与龟背——看欧洲之外的另一半海洋。',
+     ships:[18,19,25,21,27,28,22,29],
+     dark:'#150a1e',mid:'#3a1245',light:'#6a2a80',accent:'#8f4ab0',accent2:'#b98ad6'}
   ];
 
-  /* 自选航路：船长自己排的航线，同样进航海/日志全流程 */
-  var CUSTOM_ROUTE={key:'custom',name:'自选航路',badge:'自定义',intensity:3,custom:true,
-    desc:'船长自己排的一条航线：点名录编入船队，按编入顺序依次检阅。',
+  /* 自选舰队：船长自己组建的一支舰队，同样进航海/日志全流程 */
+  var CUSTOM_ROUTE={key:'custom',name:'自选舰队',badge:'自定义',intensity:3,custom:true,
+    desc:'船长自己组建的一支舰队：点名录编入舰队，按编入顺序依次检阅。',
     ships:[],
     dark:'#1a0c06',mid:'#4a220c',light:'#8a4a1a',accent:'#cc6a2a',accent2:'#e08a4a'};
 
@@ -90,16 +94,16 @@
 
   /* ================= 自动播放演示模式（?demo / ?demo=warship / ?loop）=================
    * 用途：小红书宣传片实机录制 + app 内「观演模式」。全程零手动操作——
-   * 航路页停留数秒后自动选航路 → 出港自动播放（自带 7.1s）→ 航海页每站定时自动前进
-   * → 航海日志停留后结束（带 ?loop 则回到航路页循环重播）。
-   * 航线滑行由相机自带的 glide 完成，无需手拖；键盘在演示模式被禁用，纯播放。
+   * 组建舰队页停留数秒后自动选一支舰队 → 出港自动播放（自带 7.1s）→ 航海页每站定时自动前进
+   * → 航海日志停留后结束（带 ?loop 则回到组建舰队页循环重播）。
+   * 相机滑行由相机自带的 glide 完成，无需手拖；键盘在演示模式被禁用，纯播放。
    * 录制铁律：按手机逻辑尺寸（9:16）录，ffmpeg lanczos 放大，禁止 CSS zoom / transform:scale。 */
   var QP=(location.search?new URLSearchParams(location.search):new URLSearchParams(''));
   var DEMO=QP.has('demo');
   var DEMO_LOOP=QP.has('loop');
   var DEMO_ROUTE=(QP.get('demo')||'merchant');
-  var DEMO_ROUTE_MS=3000;    // 航路选择页停留
-  var DEMO_VOYAGE_MS=3400;   // 每站停留（含船档卡阅读 + 航线滑行，滑行最长 2.6s）
+  var DEMO_ROUTE_MS=3000;    // 组建舰队页停留
+  var DEMO_VOYAGE_MS=3400;   // 每站停留（含船档卡阅读 + 相机滑行，滑行最长 2.6s）
   var DEMO_LOG_MS=5200;      // 航海日志页停留
   /* ?warm=N（秒）：演示开始前先静置 N 秒。软件渲染（SwiftShader）下给着色器/
      地球组件预热时间，避免开头第一波动作掉帧；录制宣传片时用 ?demo&warm=3 */
@@ -107,7 +111,7 @@
   var demoTimers=[];
   function demoAfter(ms,fn){var id=setTimeout(fn,ms);demoTimers.push(id);return id;}
   function demoClear(){for(var i=0;i<demoTimers.length;i++)clearTimeout(demoTimers[i]);demoTimers=[];}
-  /* 演示模式下平滑滚动元素到指定位置（用于航路页/日志页一屏放不下时，
+  /* 演示模式下平滑滚动元素到指定位置（用于组建舰队页/日志页一屏放不下时，
      让录屏能带出完整内容而不是只卡顶部） */
   function demoSmoothScroll(el, to, duration, cb){
     if(!el)return cb&&cb();
@@ -123,7 +127,7 @@
     requestAnimationFrame(step);
   }
   function startDemo(){
-    // 航路页一屏放不下，演示时先向下扫一眼再回顶，再起锚出港
+    // 组建舰队页一屏放不下，演示时先向下扫一眼再回顶，再起锚出港
     var routeSec=document.querySelector('.route-section');
     if(routeSec){
       demoAfter(500,function(){
@@ -155,7 +159,7 @@
     if(DEMO_LOOP){backToRoutes();demoAfter(1600,startDemo);}
   }
 
-  /* ================= 自选航路存档（localStorage，失败即静默降级）================= */
+  /* ================= 自选舰队存档（localStorage，失败即静默降级）================= */
   function loadCustom(){
     try{
       var raw=window.localStorage.getItem(STORE_KEY);
@@ -174,7 +178,7 @@
     try{window.localStorage.setItem(STORE_KEY,JSON.stringify(st.custom));}catch(e){}
   }
 
-  /* 当前航路对象：预设 4 条，或船长自选那条 */
+  /* 当前舰队对象：预设 5 支，或船长自选那支 */
   function curRoute(){return st.route||ROUTES[0];}
 
   /* ================= 工具函数 ================= */
@@ -215,7 +219,7 @@
 
   /* ================= 3D 地球组件（可降级）=================
    * 三层能力检测，任一不过就降级——地球在这里只是「标建造地」的组件，
-   * 它跑不起来不该连累整页（航路选择 / 出港 / 航海 / 日志全部照常）：
+   * 它跑不起来不该连累整页（组建舰队 / 出港 / 航海 / 日志全部照常）：
    *   ① 拿得到 WebGL 上下文吗（webgl2 或 webgl）；
    *   ② three.min.js 加载上了吗（typeof THREE）；
    *   ③ 建场景这一段会不会抛异常（外面用 try/catch 兜住）。
@@ -282,7 +286,7 @@
     new THREE.MeshBasicMaterial({color:0x6a9ac0,side:THREE.BackSide,transparent:true,opacity:.18,blending:THREE.AdditiveBlending,depthWrite:false}));
   earthTilt.add(atmo);
 
-  /* ===== 标记点：全部建好，按航路成员与选中状态决定显隐 ===== */
+  /* ===== 标记点：全部建好，按舰队成员与选中状态决定显隐 ===== */
   var markerGroup=new THREE.Group();earthGroup.add(markerGroup);
   var glowTex=radialTex('rgba(255,220,180,.95)','rgba(255,150,60,.45)','rgba(255,100,30,0)');
   var ringTex=radialTex('rgba(255,200,140,.7)','rgba(255,150,60,.25)','rgba(255,100,30,0)');
@@ -439,7 +443,7 @@
   }
 
   /* ================= 标记点显隐与脉动 =================
-   * 航海页：航路上全部帆船的建造地标出，当前这艘高亮脉动，同航路其余压暗作上下文。
+   * 航海页：舰队里全部帆船的建造地标出，当前这艘高亮脉动，同舰队其余压暗作上下文。
    * 其余页面：标记点全隐（地球也不渲染）。 */
   function refreshMarkers(){
     var routeShips=st.route?st.route.ships:[];
@@ -486,7 +490,7 @@
     if(playing){
       /* 航海页只让云层与星空缓慢自转。相机**不再摆动** ——
          旧「公园走路」式左右摆头（0.42rad 正弦）已删除，
-         航线改成一站一站整段平滑滑行，见下面的 glide。 */
+         相机改成一站一站整段平滑滑行，见下面的 glide。 */
       clouds.rotation.y+=dt*0.02;
       stars.rotation.y+=dt*0.003;
     }
@@ -542,9 +546,9 @@
     if(gd)gd.className='globe-down show';
   }
 
-  /* ================= 航路选择页渲染 ================= */
-  /* 牌右缘的水印印记：预设航路 = 罗盘玫瑰；自选航路 = 船长火漆印（桅帆纹）。
-     两枚都是内联 SVG，随航路主题色上色，不依赖任何图片。 */
+  /* ================= 组建舰队页渲染 ================= */
+  /* 牌右缘的水印印记：预设舰队 = 罗盘玫瑰；自选舰队 = 船长火漆印（桅帆纹）。
+     两枚都是内联 SVG，随舰队主题色上色，不依赖任何图片。 */
   function cardSeal(isCustom){
     if(isCustom){
       return '<svg class="route-compass wax" viewBox="0 0 100 100" aria-hidden="true">'+
@@ -562,7 +566,7 @@
       '<path class="short" d="M50 26 L55 50 L50 74 L45 50 Z" transform="rotate(135 50 50)"/>'+
     '</svg>';
   }
-  /* 一张航路告示牌：主题色来自航路对象，横幅缺图自动回退纸纹与渐变 */
+  /* 一张舰队告示牌：主题色来自舰队对象，横幅缺图自动回退纸纹与渐变 */
   function routeCardHTML(r,ride,tab,cta,extra){
     var n=r.ships.length,fams={},cns={},i,dots='',theme=
       '--rc-dark:'+r.dark+';--rc-mid:'+r.mid+';--rc-light:'+r.light+
@@ -594,8 +598,8 @@
     for(i=0;i<ROUTES.length;i++)html+=routeCardHTML(ROUTES[i],i,'LOG-'+('0'+(i+1)).slice(-2),'起锚出港','');
     CUSTOM_ROUTE.ships=st.custom;
     CUSTOM_ROUTE.desc=st.custom.length
-      ?'船长自己排的一条航线：按「我的船队」里的顺序，一艘一艘检阅。'
-      :'还没有航线。进名录挑船，按自己的顺序排一条横穿海域的航线——先看哪艘，你说了算。';
+      ?'船长自己组建的一支舰队：按「我的舰队」里的顺序，一艘一艘检阅。'
+      :'还没有舰队。进名录挑船，按自己的顺序组建一支横穿海域的舰队——先看哪艘，你说了算。';
     html+=routeCardHTML(CUSTOM_ROUTE,'custom','MY LINE',st.custom.length?'起锚出港':'去挑船',' is-custom');
     routeListEl.innerHTML=html;
   }
@@ -610,9 +614,9 @@
     enterDepart(ROUTES[idx]);
   });
 
-  /* ================= 自选航路页 =================
-   * 从 30 艘帆船里挑，按挑选顺序排出一条航线；存档在本机 localStorage。
-   * 排完后走与预设航路完全相同的「出港 → 航海 → 日志」流程。 */
+  /* ================= 自选舰队页 =================
+   * 从 30 艘帆船里挑，按挑选顺序组建一支舰队；存档在本机 localStorage。
+   * 组完后走与预设舰队完全相同的「出港 → 航海 → 日志」流程。 */
   function closestAttr(el,attr,root){
     while(el&&el!==root){
       if(el.getAttribute&&el.getAttribute(attr)!==null)return el;
@@ -627,7 +631,7 @@
   function renderPicked(){
     var h='',i;
     if(!st.custom.length){
-      h='<div class="bd-picked-empty">还没选船 · 从下面的名录里点「＋」编入船队</div>';
+      h='<div class="bd-picked-empty">还没选船 · 从下面的名录里点「＋」编入舰队</div>';
     }else{
       for(i=0;i<st.custom.length;i++){
         var f=SHIPS[st.custom[i]];
@@ -643,7 +647,7 @@
       }
     }
     bdPickedEl.innerHTML=h;
-    bdTitleEl.textContent='自选航路 · 船长航线（已编入 '+st.custom.length+' 艘）';
+    bdTitleEl.textContent='自选舰队 · 船长编成（已编入 '+st.custom.length+' 艘）';
     bdStartBtn.disabled=!st.custom.length;
   }
   function renderPool(){
@@ -674,7 +678,7 @@
     document.body.setAttribute('data-route','custom');
     renderBuilder();
     builderBodyEl.scrollTop=0;
-    toast('点「＋」把帆船编入船队 · 顺序即检阅顺序');
+    toast('点「＋」把帆船编入舰队 · 顺序即检阅顺序');
   }
   function exitBuilder(){
     hideToast();
@@ -721,7 +725,7 @@
 
   /* ================= 出港过渡页 · 起锚扬帆 =================
    * 两帧 AI 出图交叉淡化（.depart-shot.closed → .depart-shot.open）+ 细微推近，
-   * 出港过程全在两张图里，这里只负责重置动画、写入航路名，切换走完进航海页。 */
+   * 出港过程全在两张图里，这里只负责重置动画、写入舰队名，切换走完进航海页。 */
   var DEPART_MS=7100;
   var departTimer=null;
   var DEPART_ELS='.depart-bg,.depart-shot,.depart-caption,.depart-title,.depart-subtitle,.depart-route-name';
@@ -746,7 +750,7 @@
     departTimer=setTimeout(enterVoyage,DEPART_MS);
   }
 
-  /* ================= 航海页（船队沿岸航行）================= */
+  /* ================= 航海页（舰队沿岸航行）================= */
   function enterVoyage(){
     var r=st.route;
     if(!r||!r.ships.length){quitVoyage();return;}
@@ -758,7 +762,7 @@
     if(G)G.setPlaying(true);
     showVoyageShip();
     if(DEMO)demoVoyageStep();
-    toast(G?'船队已离港 · 拖动地球可转动':'船队已离港 · 建造地见地球标注');
+    toast(G?'舰队已离港 · 拖动地球可转动':'舰队已离港 · 建造地见地球标注');
   }
   function showVoyageShip(){
     var r=curRoute();
@@ -1008,7 +1012,7 @@
     logBodyEl.scrollTop=0;
     if(G)G.markDirty();
     if(DEMO){
-      // 日志页内容也常超出一屏，演示时自动下滑到底再回顶，录屏能看到全部船队名册
+      // 日志页内容也常超出一屏，演示时自动下滑到底再回顶，录屏能看到全部舰队名册
       demoAfter(600,function(){
         var max=Math.max(0,logBodyEl.scrollHeight-logBodyEl.clientHeight);
         if(max>0){
@@ -1020,7 +1024,7 @@
       demoAfter(DEMO_LOG_MS,demoEnd);
     }
   }
-  /* 回港口（各页统一的「回航路选择」出口） */
+  /* 回港口（各页统一的「回组建舰队」出口） */
   function backToRoutes(){
     hideToast();
     if(departTimer){clearTimeout(departTimer);departTimer=null;}
@@ -1065,7 +1069,7 @@
   renderRoutes();
   if(G){G.refreshMarkers();}
   document.body.className='mode-routes';
-  toast('选一条航路 · 船队会带你沿岸驶过一整个时代');
+  toast('组建一支舰队 · 沿岸驶过一整个时代');
   setTimeout(function(){if(G)G.markDirty();document.getElementById('loader').classList.add('hide');},520);
   if(G)G.start();
   if(DEMO)demoAfter(DEMO_WARM_MS,startDemo);
