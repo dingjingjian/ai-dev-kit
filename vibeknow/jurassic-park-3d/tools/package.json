@@ -1,0 +1,1 @@
+﻿{"name":"jp3d-tools","private":true,"type":"module","description":"BGM 构建工具依赖（仅重编码音频时需要）","dependencies":{"mpg123-decoder":"^1.0.3","@breezystack/lamejs":"^1.2.7"}}

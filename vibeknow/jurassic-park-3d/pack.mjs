@@ -11,7 +11,18 @@ const out = path.join(root, 'jurassic-park-3d.zip');
 // 需要纳入打包的项（相对 root）
 const includes = ['index.html', 'assets'];
 
+// 不纳入打包的项（相对 root）：
+//   assets/audio/bgm.mp3 —— 源曲目，只是构建输入（tools/make-bgm.mjs 读它生成 bgm.js）。
+//   容器上传白名单不收任何音频扩展名，放进 zip 会被上传页直接打回；
+//   运行时用的是 bgm.js（base64）。
+//   assets/audio/README.md —— 素材留档说明，容器不支持 .md 类型。
+const excludes = new Set([
+  'assets/audio/bgm.mp3',
+  'assets/audio/README.md',
+]);
+
 function collect(baseRel) {
+  if (excludes.has(baseRel)) return [];
   const abs = path.join(root, baseRel);
   const out2 = [];
   const st = fs.statSync(abs);

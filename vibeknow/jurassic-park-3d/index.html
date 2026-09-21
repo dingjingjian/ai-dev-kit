@@ -22,7 +22,9 @@
      ⑥ 丛林背景      assets/tex/jungle.webp       首页 hero 兜底
      ⑦ 路线横幅 ×5   assets/tex/route-<key>.webp  路线卡片背景，缺图回退木纹 → 主题渐变
      ⑧ 木纹纹理      assets/tex/wood.webp         卡片与控制栏底纹，缺图回退纯色
-     ②③④ + 自选路线横幅 规格见 docs/场景配图需求.md */
+     ⑨ 背景音乐      assets/audio/bgm.js          base64 音频（源曲目是构建输入，不打进包）
+     ②③④ + 自选路线横幅 规格见 docs/场景配图需求.md
+     ⑨ 规格（乐句 / 码率 / 循环点 / 版权）见 docs/背景音乐需求.md */
 
   :root{
     /* 丛林深绿系（公园本体） */
@@ -54,11 +56,25 @@
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --shadow:0 10px 34px rgba(0,0,0,.45);
     --dishbar:52px;--globem:218px;
+    /* 右上角音乐开关：贴在地球槽右上角那一带、**顶栏之下** —— 不占顶栏空间，
+       顶栏就不必为它留右侧空白，标题才能真居中。
+       --bgmgap = 开关顶边在地球槽顶边之下多少（要挪位置就改这一个数） */
+    --bgmgap:12px;
     --hero-h:140px;
-    --sat:0px;--sattop:8px;--sab:0px;
+    /* 安全区：基线取容器可注入的 --safe-area-inset-*（PC 模拟器就是靠注入这几个变量
+       模拟安全区），增强层再退 env()。两级都不写死固定值，否则模拟器 / 刘海机上
+       顶栏与右上角浮层会被状态栏压住。基线层刻意不写 env()：Chrome 61 不支持它，
+       写进去会让整条 top 值失效。 */
+    --sat:var(--safe-area-inset-top,0px);
+    --sattop:calc(8px + var(--safe-area-inset-top,0px));
+    --sab:var(--safe-area-inset-bottom,0px);
   }
   @supports (top:env(safe-area-inset-top)){
-    :root{--sat:env(safe-area-inset-top,0px);--sattop:calc(8px + env(safe-area-inset-top,0px));--sab:env(safe-area-inset-bottom,0px)}
+    :root{
+      --sat:var(--safe-area-inset-top,env(safe-area-inset-top,0px));
+      --sattop:calc(8px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)));
+      --sab:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+    }
   }
 
   /* ===== 路线主题（4 套，由 body[data-route] 切换）===== */
@@ -461,6 +477,64 @@
   body.mode-tour .hint,
   body.mode-builder .hint{top:calc(var(--dishbar) + var(--sattop) + 12px)}
 
+  /* ===== 背景音乐开关（音频数据：assets/audio/bgm.js）=====
+     容器上传白名单不收音频扩展名、CSP 又禁 data:/blob: 媒体源，所以音频以 base64
+     藏在 bgm.js（白名单类型）里，运行时用 Web Audio 解码播放 —— 详见 app.js 的 BGM 段。
+     decodeAudioData 成功后才给 <html> 挂 has-bgm，开关才显形；解不出＝整块隐藏，五页照常。
+     开 / 关两枚图标是内联 SVG（音符 / 音符＋斜杠），由 .on 换显，不依赖任何图片。 */
+  .bgm-btn{position:fixed;right:10px;z-index:24;display:none;align-items:center;
+    /* 高度落在地球槽的右上角那一带（地球槽顶边 = --dishbar + --sattop），
+       不在顶栏里跟标题并排 —— 所以顶栏右侧**不需要留白**，标题天然居中。
+       --bgmgap 默认 12px：让开关与地球槽的铜边框（5px 环）拉开一点，互不压。 */
+    top:calc(var(--dishbar) + var(--sattop) + var(--bgmgap));
+    border-radius:2px;cursor:pointer;white-space:nowrap;transition:.15s;line-height:1;
+    font-family:var(--sans);font-size:9.5px;font-weight:700;letter-spacing:1px;
+    padding:4px 8px;color:var(--brass-2);background:rgba(6,11,18,.62);border:1px solid var(--line-2);
+    box-shadow:0 2px 8px rgba(0,0,0,.45)}
+  html.has-bgm .bgm-btn{display:inline-flex}
+  html.is-demo .bgm-btn{display:none}      /* 演示模式录屏不留开关 */
+  .bgm-btn:hover{color:var(--bone);background:rgba(176,137,74,.24);border-color:var(--brass-2)}
+  /* 出声中＝一块压铸黄铜小牌（与围栏徽章、主按钮同一套"亮起"语汇） */
+  .bgm-btn.on{color:var(--ink);background:linear-gradient(180deg,var(--brass-3),var(--brass));
+    border-color:rgba(255,246,222,.8);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.32),0 2px 8px rgba(0,0,0,.45)}
+  .bgm-btn:focus{outline:2px solid var(--brass);outline-offset:1px}
+  .bgm-ico{flex:none;width:14px;height:14px;overflow:visible}
+  .bgm-ico ellipse{fill:currentColor}
+  .bgm-ico path{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .bgm-ico .slash{stroke-width:1.9}
+  /* 关闭：同一枚音符压到半透明，再压一道斜杠 */
+  .bgm-ico-off{display:none}
+  .bgm-ico-off ellipse,.bgm-ico-off path{opacity:.45}
+  .bgm-ico-off .slash{opacity:1}
+  .bgm-btn:not(.on) .bgm-ico-on{display:none}
+  .bgm-btn:not(.on) .bgm-ico-off{display:inline-block}
+  /* 开关已经挪到地球槽右上角（在顶栏之下），三条顶栏**不留右侧空白** ——
+     顶栏本来就 justify-content:center，标题因此真正居中。 */
+
+  /* ===== 笔记分享（端能力 postNote，容器文档 §3.3）=====
+     两处入口：游览页详情（交恐龙原图）、总结页（交同款样式的总结卡片）。
+     只有容器注入了 window.xhs.miniTool.postNote 才显形：桌面直接打开 index.html、
+     以及 ?demo 录屏时都不会出现（能力检测，不做 UA 判断）。 */
+  .share-btn{display:none}
+  html.has-share .share-btn{display:inline-block}
+  html.is-demo .share-btn{display:none}
+  .share-btn:disabled{opacity:.5;cursor:progress}
+  /* 详情页分享：小图标按钮，落在**地图（地球槽）右上角**、音乐开关的左边 */
+  .dino-share-btn{position:fixed;right:52px;z-index:24;display:none;width:32px;height:24px;
+    padding:0;border-radius:2px;cursor:pointer;transition:.15s;align-items:center;justify-content:center;
+    top:calc(var(--dishbar) + var(--sattop) + var(--bgmgap));
+    color:var(--brass-2);background:rgba(6,11,18,.62);border:1px solid var(--line-2);
+    box-shadow:0 2px 8px rgba(0,0,0,.45)}
+  html.has-share body.mode-tour .dino-share-btn{display:flex}
+  html.has-share body.mode-tour .dino-share-btn.off{display:none}
+  html.is-demo .dino-share-btn{display:none}
+  .dino-share-btn:hover{color:var(--bone);background:rgba(176,137,74,.24);border-color:var(--brass-2)}
+  .dino-share-btn:focus{outline:2px solid var(--brass);outline-offset:1px}
+  .dino-share-btn:disabled{opacity:.5;cursor:progress}
+  .dino-share-ico{flex:none;width:13px;height:13px;overflow:visible}
+  .dino-share-ico path{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
   /* ===== 加载 ===== */
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s;
     background:radial-gradient(ellipse 70% 50% at 50% 40%,var(--jungle-6),var(--jungle-8) 60%,var(--jungle-9))}
@@ -646,15 +720,43 @@
   </div>
   <div class="summary-controls">
     <button class="bar-btn bar-btn-ghost" id="scAgain">再游一次</button>
+    <button class="bar-btn bar-btn-ghost share-btn" id="scShare">分享</button>
     <button class="bar-btn bar-btn-primary" id="scBack">返回选择路线</button>
   </div>
 </section>
 
 <div class="hint" id="hint"></div>
+<!-- 音乐开关：显示的是**当前有没有在出声**，不是"用户想不想听"。
+     autoplay 策略要求用户手势，所以首屏一定还没出声，初始态就写成未播放的样子
+     （不带 .on、aria-pressed=false、斜杠音符），由 app.js 在真正起播 / 停声时改写。
+     两枚图标都常驻 DOM，由 CSS 的 .on 换显，不做 innerHTML 拼装。 -->
+<button class="bgm-btn" id="bgmBtn" type="button" aria-pressed="false" aria-label="背景音乐" title="背景音乐">
+  <svg class="bgm-ico bgm-ico-on" viewBox="0 0 16 16" aria-hidden="true">
+    <ellipse cx="4.8" cy="12.4" rx="3.3" ry="2.6"/>
+    <path d="M8.1 12.4V2.9c2.3.7 4.1 2 4.3 4.3"/>
+  </svg>
+  <svg class="bgm-ico bgm-ico-off" viewBox="0 0 16 16" aria-hidden="true">
+    <ellipse cx="4.8" cy="12.4" rx="3.3" ry="2.6"/>
+    <path d="M8.1 12.4V2.9c2.3.7 4.1 2 4.3 4.3"/>
+    <path class="slash" d="M1.6 1.6 14.4 14.4"/>
+  </svg>
+</button>
+<!-- 详情页分享：把当前这只恐龙的**原图**直接交给 POSTNOTE（不走 canvas 重绘，保住原图字节）。
+     只在游览页、且该恐龙原图加载成功、且容器注入了端能力时显形。 -->
+<button class="dino-share-btn off" id="dinoShareBtn" type="button" aria-label="分享这只恐龙" title="分享这只恐龙">
+  <svg class="dino-share-ico" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.4 6.5h2.1v7H2.5v-7h2.1"/>
+    <path d="M8 9.6V1.9"/>
+    <path d="M5.2 4.7 8 1.9l2.8 2.8"/>
+  </svg>
+</button>
 <div id="loader"><div class="spin"></div><p>正在开园</p></div>
 
 <script src="./assets/dinos.js"></script>
 <script src="./assets/three.min.js"></script>
+<!-- 音频数据（base64）必须在 app.js 之前就位：容器上传白名单不收音频扩展名，
+     所以音频藏在 .js 里，由 app.js 交给 Web Audio 解码播放。 -->
+<script src="./assets/audio/bgm.js"></script>
 <script src="./assets/app.js"></script>
 </body>
 </html>
