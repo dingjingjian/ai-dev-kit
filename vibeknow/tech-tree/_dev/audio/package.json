@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "mpg123-decoder": "^1.0.3"
+  }
+}

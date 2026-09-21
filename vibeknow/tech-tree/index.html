@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f5f0e3">
+<title>人类科技树</title>
+<style>
+/* ============================================================
+   纸面编年史风格：暖纸底色、墨色细线、衬线标题、直角线框、无投影无毛玻璃。
+   刻意避开「圆角卡片 + 胶囊徽标 + 软投影 + 玻璃拟态」的通用应用观感，
+   向印刷图录 / 编年史靠拢：分隔靠 1px 规则线，强调靠反色与衬线数字。
+   ============================================================ */
+:root{
+  --bg:#f5f0e3; --card:#fbf8ee; --ink:#29241a; --ink-2:#635b4b; --ink-3:#978e78;
+  --line:#d8d1bc; --line-2:#e7e1cf;
+  --accent:#8a6a4c; --accent-soft:#efe7d6;
+  --serif:Georgia,"Times New Roman","Songti SC","STSong",SimSun,serif;
+  /* 顶部预留带（与 vibegame/ai-os 同一套写法）：
+     容器自带那行「返回 / 分享 / 更多」按钮压在最上面，而 env() 与容器注入的
+     --safe-area-inset-top 只覆盖状态栏、不含这条按钮行 —— 只吃 env 的话宿主按钮
+     会直接盖住本页内容。所以自己显式留出 --top-gap。
+     无宿主时 50px（让纯浏览器渲染与容器内观感一致），容器内嵌时加大到 70px。
+     这条带子左右被宿主按钮占着，**中间是空的**，正好把标题放进去 —— 因此第二行
+     只需要放副标题 / 视图切换 / 音乐开关，总高比「标题也挤在第二行」省约 16px。 */
+  --inset-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --top-gap:50px;
+  --safe-top:calc(var(--top-gap) + var(--inset-top));
+  --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-l:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-r:var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --page:680px; --nav-h:92px;
+  --ease:cubic-bezier(.2,.7,.3,1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;touch-action:manipulation;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  color:var(--ink); background:var(--bg); min-height:100%;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  padding-left:var(--safe-l); padding-right:var(--safe-r);
+}
+/* 容器内嵌：宿主顶栏（返回 / 分享 / 更多）整条压在预留带里，50px 几乎被它占满，
+   加大到 70px，让带子下方仍留出明显空白。
+   注意必须在 body 上**重新声明 --safe-top**：自定义属性在声明它的元素上求值，
+   只覆盖 --top-gap 不会让 :root 上那条 --safe-top 重算。 */
+body.in-app{
+  --top-gap:70px;
+  --safe-top:calc(var(--top-gap) + var(--inset-top));
+}
+button,input{font-family:inherit;font-size:inherit;color:inherit;}
+button{cursor:pointer;border:none;outline:none;background:none;text-align:left;}
+code{font-family:"SF Mono",Menlo,Consolas,monospace;}
+
+/* ============ 顶栏：纸面 + 一道墨色粗规线 ============
+   两段：① 预留带（宿主按钮行的高度，中间放标题）② 窄行（副标题 / 视图切换 / 音乐开关）。 */
+.topwrap{
+  position:sticky; top:0; z-index:40;
+  background:var(--bg);
+  border-bottom:2px solid var(--ink);
+}
+/* 预留带：高度 = --top-gap（无宿主 50px / 容器内 70px）+ 状态栏；
+   padding-top 只把状态栏让出来，标题就在剩下那 50/70px 里垂直居中 —— 与宿主按钮同一行。
+   min-height 是兜底：--safe-top 是链式 calc(var() env())，任一段失效会让 height 整条
+   失效，有 min-height 在就仍保住一条带子，不会塌成 0。 */
+.topband{
+  min-height:50px;
+  height:var(--safe-top);
+  padding-top:var(--inset-top);
+  display:flex; align-items:center; justify-content:center;
+  /* 左右各让开宿主按钮（返回 / 分享 / 更多）的位置；两侧等量内缩，标题因此仍然居中 */
+  padding-left:calc(72px + var(--safe-l));
+  padding-right:calc(72px + var(--safe-r));
+}
+.topband h1{
+  font-family:var(--serif); font-size:21px; font-weight:700; letter-spacing:.04em;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+/* 第二行：标题已经上移，这里只放副标题与右侧控件，不再有换行风险 */
+.topbar{max-width:var(--page); margin:0 auto; display:flex; align-items:center; height:38px; padding:0 14px;}
+.topbar .sub{
+  flex:1; min-width:0;
+  font-size:10.5px; color:var(--ink-3); letter-spacing:.05em;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+/* 背景音乐开关：方形细框，与顶栏其他控件同一语言。
+   解码成功才由 html.has-bgm 放出来；on = 此刻在响（墨底纸音符），否则纸底灰音符 + 斜杠。 */
+.topbar .bgm{
+  display:none; flex-shrink:0; align-self:center;
+  width:30px; height:30px; margin-left:13px;
+  align-items:center; justify-content:center;
+  border:1px solid var(--line); background:transparent; color:var(--ink-3);
+  transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease);
+}
+html.has-bgm .topbar .bgm{display:flex;}
+.topbar .bgm svg{width:17px; height:17px;}
+.topbar .bgm .ic-on{display:none;}
+.topbar .bgm.on{border-color:var(--ink); background:var(--ink); color:var(--bg);}
+.topbar .bgm.on .ic-on{display:block;}
+.topbar .bgm.on .ic-off{display:none;}
+.topbar .bgm:active{border-color:var(--ink);}
+
+/* 视图切换：文字 + 墨线下划线，不用胶囊 */
+.seg{display:flex; flex-shrink:0; align-items:center;}
+.seg button{
+  padding:4px 0; margin-left:16px; font-size:13.5px; font-weight:600; color:var(--ink-3);
+  border-bottom:2px solid transparent;
+  transition:color .18s var(--ease), border-color .18s var(--ease);
+}
+.seg button.active{color:var(--ink); border-bottom-color:var(--ink);}
+
+/* ============ 通用 ============ */
+.view{max-width:var(--page); margin:0 auto; padding:18px 14px calc(64px + var(--safe-bottom));}
+
+/* ============ 科技树视图 ============ */
+.tree-intro{border:1px solid var(--line); background:var(--card); padding:14px 16px; margin-bottom:16px;}
+.tree-intro h2{font-family:var(--serif); font-size:18px; font-weight:700; margin-bottom:9px;}
+/* 题引：卡片里唯一一段文字（后面只跟一行统计，没有说明段）。
+   衬线 + 左侧一道主题色规线，像编年史开篇的题引；「」标明是引用。 */
+.tree-intro .lead{
+  font-family:var(--serif); font-size:13.5px; line-height:1.9; color:var(--ink);
+  border-left:2px solid var(--accent); padding-left:11px; margin:0 0 11px;
+}
+.tree-stats{margin-top:11px; font-size:11.5px; color:var(--ink-2); letter-spacing:.03em;}
+.tree-stats b{font-family:var(--serif); font-weight:700; color:var(--ink);}
+.tools{display:flex; align-items:stretch; margin-bottom:8px;}
+.search{
+  flex:1; min-width:0; display:flex; align-items:center;
+  background:var(--card); border:1px solid var(--ink-3); padding:0 11px; height:38px;
+}
+.search svg{width:14px; height:14px; color:var(--ink-3); flex-shrink:0; margin-right:8px;}
+.search input{
+  flex:1; min-width:0; border:none; outline:none; background:none; font-size:13.5px;
+  -webkit-user-select:text; user-select:text;
+}
+.search input::placeholder{color:var(--ink-3);}
+.tools .clear{flex-shrink:0; margin-left:8px; font-size:12.5px; font-weight:600; color:var(--ink-2); padding:0 12px; border:1px solid var(--line);}
+.tools .clear.hide{display:none;}
+.legend{margin:2px 2px 18px; font-size:11px; color:var(--ink-2); line-height:1.8;}
+.legend i{display:inline-block; font-style:normal; margin-right:18px; white-space:nowrap;}
+.legend i b{display:inline-block; width:22px; height:0; border-top:1.5px solid var(--ink); vertical-align:middle; margin-right:6px;}
+.legend i.dash b{border-top-style:dashed; border-top-color:var(--ink-3);}
+.legend i.sel b{border-top:3px solid var(--ink);}
+
+/* ============ 画布与时代（关键结构改动） ============
+   时代不再是横在节点区中间的「横幅」——那会盖住跨时代连线。
+   改成左侧一根窄立柱（罗马数字 + 名称 + 年代，随滚动吸顶），
+   节点网格占右侧全部宽度，时代之间的空档只留空白给连线横铺，
+   于是整棵树的连线从头到尾可见。
+   层级：连线 z:1 < 节点与立柱 z:2，线会从节点卡片背后穿过。 */
+.board{position:relative; z-index:0;}
+.edges{position:absolute; left:0; top:0; z-index:1; pointer-events:none; overflow:visible;}
+.edges path{fill:none; stroke-linecap:round;}
+.edges path.hot{stroke-width:2.4;}
+.era{position:relative; display:flex; margin-bottom:44px; padding-top:16px; border-top:1px solid var(--line);}
+.era:first-child{padding-top:0; border-top:none;}
+.era:last-child{margin-bottom:0;}
+.era.dim{opacity:.35;}
+.era-rail{
+  flex:0 0 74px; position:sticky; top:calc(var(--nav-h) + 12px); z-index:2;
+  padding:2px 10px 0 1px;
+}
+.era-rom{
+  font-family:var(--serif); font-size:26px; font-weight:700; line-height:1;
+  color:var(--era-accent,var(--ink));
+}
+.era-zh{font-family:var(--serif); font-size:11.5px; font-weight:700; line-height:1.45; margin-top:7px;}
+/* 年代跨度很长，在窄立柱里最多给 3 行，超出截断（完整跨度在图鉴与详情页） */
+.era-span{
+  font-size:9.5px; color:var(--ink-3); line-height:1.55; margin-top:6px;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
+}
+.era-cnt{font-size:9.5px; color:var(--ink-2); letter-spacing:.12em; margin-top:7px;}
+
+.era-grid{flex:1; min-width:0; display:grid; grid-template-columns:1fr 1fr; grid-gap:9px 30px;}
+@media(min-width:520px){.era-grid{grid-template-columns:1fr 1fr 1fr;}}
+
+/* 节点：直角、细墨框、时代色只在左侧一道；选中反色成墨块，像书页上的记号 */
+.node{
+  position:relative; z-index:2; background:var(--card);
+  border:1px solid rgba(41,36,26,.38); border-left:2px solid var(--era-accent,var(--accent));
+  padding:7px 9px 7px 10px; min-width:0;
+  transition:opacity .18s var(--ease), background .18s var(--ease), color .18s var(--ease);
+}
+.node:active{background:var(--accent-soft);}
+.node .n-row{display:flex; align-items:center;}
+.node .n-year{font-size:10px; font-weight:600; color:var(--era-accent,var(--accent)); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:.02em;}
+.node .n-tag{
+  margin-left:auto; flex-shrink:0; font-size:9px; font-weight:700; letter-spacing:.1em;
+  color:var(--ink-2); border:1px solid var(--line); padding:1px 5px;
+}
+.node .n-tag.root{color:var(--card); background:var(--era-accent,var(--accent)); border-color:var(--era-accent,var(--accent));}
+.node .n-tag.future{color:var(--ink-2); border-style:dashed;}
+.node .n-name{font-size:12.5px; font-weight:600; line-height:1.4; margin-top:3px; overflow-wrap:break-word;}
+.node .n-en{font-size:9.5px; color:var(--ink-3); margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; letter-spacing:.02em;}
+.node.future{border-left-style:dashed;}
+.node.hit{border-color:var(--era-accent,var(--accent)); box-shadow:inset 0 0 0 1px var(--era-accent,var(--accent));}
+.node.direct{border-color:var(--era-accent,var(--accent)); border-left-width:2px; background:#f8f3e4;}
+.node.dim{opacity:.26;}
+/* 选中：整块反色。像印刷品上的高亮记号，而不是一层光晕。 */
+.node.sel{background:var(--ink); border-color:var(--ink); border-left-color:var(--era-accent,var(--accent));}
+.node.sel .n-name{color:var(--bg);}
+.node.sel .n-year{color:var(--era-accent,var(--accent)); filter:brightness(1.7) saturate(1.2);}
+.node.sel .n-en{color:rgba(245,240,227,.55);}
+.node.sel .n-tag{color:var(--bg); border-color:rgba(245,240,227,.4);}
+.node.sel .n-tag.root{background:var(--era-accent,var(--accent)); border-color:transparent; color:var(--ink);}
+
+/* 选中科技后的底部操作条 */
+.selbar{
+  position:fixed; left:0; right:0; bottom:0; z-index:30;
+  margin:0; padding:0 var(--safe-r) 0 var(--safe-l);
+  transform:translateY(120%); opacity:0; pointer-events:none;
+  transition:transform .26s var(--ease), opacity .26s var(--ease);
+}
+.selbar.show{transform:translateY(0); opacity:1; pointer-events:auto;}
+.selbar-wrap{
+  max-width:var(--page); margin:0 auto;
+  padding:10px 14px calc(10px + var(--safe-bottom));
+  background:var(--bg); border-top:2px solid var(--ink);
+  display:flex; align-items:center;
+}
+.selbar-wrap .info{flex:1; min-width:0;}
+.selbar-wrap .nm{font-family:var(--serif); font-size:14.5px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.selbar-wrap .mt{font-size:11px; color:var(--ink-2); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+.selbar-wrap .go{
+  flex-shrink:0; margin-left:12px; padding:9px 16px;
+  background:var(--ink); color:var(--bg); font-size:13px; font-weight:600; letter-spacing:.04em;
+}
+.selbar-wrap .go:active{opacity:.85;}
+
+/* ============ 图鉴视图 ============ */
+.list{padding-top:0;}
+.section{margin-bottom:34px;}
+.section-head{display:flex; align-items:baseline; margin:0 2px 8px; border-bottom:1px solid var(--ink); padding-bottom:7px;}
+.section-head h2{font-family:var(--serif); font-size:17px; font-weight:700; letter-spacing:.02em;}
+.section-head .en{font-size:10.5px; color:var(--ink-3); letter-spacing:.04em;}
+.section-head .cnt{margin-left:auto; font-size:10.5px; color:var(--ink-2); letter-spacing:.08em;}
+.section-head > * + *{margin-left:9px;}
+.cat-note{font-size:12px; color:var(--ink-2); margin:0 2px 12px; line-height:1.6;}
+.cat-cover{border:1px solid var(--line); margin-bottom:12px;}
+.grid{display:grid; grid-template-columns:1fr; grid-gap:14px;}
+@media(min-width:560px){.grid{grid-template-columns:1fr 1fr;}}
+
+/* ============ 图片框（占位 / 实图共用） ============
+   底线布局用固定高度（Chrome 61 无 aspect-ratio），实图 object-fit:cover 填充。 */
+.shot{position:relative; overflow:hidden; background:#ece6d4; border-bottom:1px solid var(--line-2); height:150px;}
+.shot.sm{height:104px;}
+.shot.lg{height:210px; border-bottom:none;}
+.shot-img{position:absolute; top:0;right:0;bottom:0;left:0; width:100%; height:100%; object-fit:cover; display:block;}
+.shot-ph{
+  position:absolute; top:0;right:0;bottom:0;left:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:0 14px;
+  background:repeating-linear-gradient(135deg,#f3eede,#f3eede 7px,#eee8d6 7px,#eee8d6 14px);
+}
+.shot-ph::after{
+  content:""; position:absolute; top:6px;right:6px;bottom:6px;left:6px;
+  border:1px dashed rgba(110,98,74,.45); pointer-events:none;
+}
+.shot-ph .bd{
+  margin-bottom:8px; font-size:9.5px; font-weight:600; letter-spacing:.14em;
+  color:var(--ink-2); background:rgba(251,248,238,.85); padding:2px 8px; border:1px solid var(--line);
+}
+.shot-ph .ic{width:28px; height:28px; color:var(--ink-3); display:block;}
+.shot-ph .nm{
+  margin-top:8px; font-size:11.5px; font-weight:600; color:var(--ink-2);
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.shot-era{
+  position:absolute; left:0; top:0; z-index:2;
+  max-width:78%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:9.5px; font-weight:600; color:var(--ink);
+  background:var(--card); border-right:1px solid var(--line); border-bottom:1px solid var(--line);
+  padding:3px 8px;
+}
+
+/* ============ 卡片：直角细框，无投影，悬停只压一道底色 ============ */
+.card{
+  background:var(--card); overflow:hidden; cursor:pointer;
+  border:1px solid rgba(41,36,26,.32); border-top:2px solid var(--era-accent,var(--accent));
+  transition:background .18s var(--ease);
+}
+@media(hover:hover){
+  .card:hover{background:#f8f3e4;}
+  .card:hover .chev{color:var(--ink); transform:translateX(2px);}
+}
+.card:active{background:var(--accent-soft);}
+.card-info{padding:12px 14px 14px;}
+.card-head{display:flex; align-items:center;}
+.card-head .name{font-size:15px; font-weight:600; letter-spacing:-.01em; flex:1; min-width:0;}
+.chev{width:15px; height:15px; color:var(--ink-3); flex-shrink:0; transition:transform .22s var(--ease), color .22s var(--ease);}
+.card-info .en{font-size:11px; color:var(--ink-3); margin-top:3px; letter-spacing:.02em;}
+.card-info .desc{font-size:12.5px; color:var(--ink-2); margin-top:7px; line-height:1.6;}
+.card-head > * + *{margin-left:6px;}
+
+/* ============ 详情 ============ */
+.detail{max-width:var(--page); margin:0 auto; padding:18px 16px calc(56px + var(--safe-bottom));}
+.hero{border:1px solid var(--line); margin-bottom:16px;}
+.badge-row{display:flex; align-items:center; flex-wrap:wrap; margin-bottom:10px;}
+.detail .cat-badge{
+  display:inline-block; padding:3px 10px;
+  font-size:11px; font-weight:600; letter-spacing:.04em;
+  color:var(--era-accent,var(--accent)); border:1px solid var(--era-accent,var(--accent));
+}
+.badge-row .era-pill{
+  padding:3px 10px; font-size:11px; font-weight:600;
+  color:var(--ink-2); border:1px solid var(--line);
+}
+.badge-row > * + *{margin-left:8px;}
+/* 分享到小红书：只在容器里（拿得到 postNote）才由 JS 建出来 */
+.actions{display:flex; margin:0 0 16px;}
+.share{
+  display:inline-flex; align-items:center;
+  border:1px solid var(--ink); background:var(--card); color:var(--ink);
+  padding:9px 15px; font-size:13px; font-weight:600; letter-spacing:.03em;
+  transition:background .18s var(--ease), color .18s var(--ease);
+}
+.share svg{width:15px; height:15px; margin-right:7px; flex-shrink:0;}
+.share:active{background:var(--ink); color:var(--bg);}
+/* 原图还没就位 / 正在唤起发布页时压暗，避免点了没反应 */
+.share.off{opacity:.38; border-color:var(--line); color:var(--ink-3);}
+
+.detail h2{font-family:var(--serif); font-size:24px; font-weight:700; letter-spacing:.01em; margin-bottom:4px;}
+.detail .en-name{font-size:12px; color:var(--ink-3); letter-spacing:.03em;}
+.detail .tagline{font-size:13.5px; color:var(--ink-2); line-height:1.7; margin:11px 0 18px;}
+.block{border:1px solid var(--line); background:var(--card); padding:15px 16px; margin-bottom:13px;}
+.block h3{
+  font-family:var(--serif); font-size:14.5px; font-weight:700; margin-bottom:11px;
+  display:flex; align-items:center;
+}
+/* 方形墨点作小节标记（衬线标题 + 方点，像图录的章节符号）；
+   margin 而非 flex gap：Chrome <84 无 flex gap，且 ::before 与匿名 flex 文本
+   无法被 `> * + *` 兜底规则命中。 */
+.block h3::before{content:""; width:8px; height:8px; background:var(--accent); flex-shrink:0; margin-right:9px;}
+.h3-b::before{background:#4a7c59 !important;}
+.h3-c::before{background:#6b5b95 !important;}
+.h3-d::before{background:#b4632c !important;}
+.h3-e::before{background:#2f6f7f !important;}
+.block p{font-size:14px; line-height:1.75; color:var(--ink);}
+.block p.hint{font-size:12.5px; color:var(--ink-2); line-height:1.6;}
+
+.specs{display:grid; grid-template-columns:1fr 1fr; grid-gap:10px;}
+.spec{border:1px solid var(--line-2); padding:9px 11px; min-width:0;}
+.spec .k{font-size:10.5px; color:var(--ink-3); display:block; margin-bottom:4px; letter-spacing:.04em;}
+.spec .v{font-size:13px; font-weight:600; color:var(--ink); line-height:1.45; display:block; overflow-wrap:break-word;}
+
+/* 前置 / 后续：方形小签，墨框直角 */
+.rel-list{display:flex; flex-wrap:wrap;}
+.rel{
+  display:flex; align-items:center;
+  border:1px solid rgba(41,36,26,.4); background:var(--card);
+  padding:7px 11px; margin:0 8px 8px 0;
+  font-size:12.5px; font-weight:600; color:var(--ink);
+  transition:background .16s var(--ease);
+}
+.rel:active{background:var(--accent-soft);}
+.rel .yr{font-size:10px; font-weight:500; color:var(--ink-3); margin-left:7px; letter-spacing:.02em;}
+.rel .dot{width:7px; height:7px; margin-right:8px;}
+.rel.none{color:var(--ink-3); font-weight:500; background:transparent; border-style:dashed;}
+
+.feats{list-style:none;}
+.feats li{position:relative; padding-left:16px; font-size:13.5px; line-height:1.7; color:var(--ink);}
+.feats li::before{content:""; position:absolute; left:1px; top:9px; width:6px; height:6px; background:var(--accent);}
+.feats li + li{margin-top:9px;}
+
+.prompt-box{background:#211d15; padding:13px; margin-top:10px; border:1px solid #211d15;}
+.prompt-box pre{
+  color:#e8e2d2; font-size:12px; line-height:1.7;
+  white-space:pre-wrap; overflow-wrap:break-word;
+  -webkit-user-select:text; user-select:text; -webkit-touch-callout:default;
+}
+.copy-btn{
+  margin-top:10px; padding:9px 17px;
+  background:var(--ink); color:var(--bg); font-size:13px; font-weight:600; letter-spacing:.04em;
+  display:inline-flex; align-items:center;
+}
+.copy-btn svg{width:14px; height:14px; margin-right:7px;}
+.copy-btn:active{opacity:.85;}
+.copy-btn.done{background:#4a7c59;}
+
+.toast{
+  position:fixed; left:50%; bottom:calc(30px + var(--safe-bottom));
+  transform:translateX(-50%) translateY(16px);
+  background:var(--ink); color:var(--bg); padding:10px 18px;
+  font-size:13px; opacity:0; pointer-events:none; z-index:100; max-width:80%; text-align:center;
+  transition:opacity .3s var(--ease), transform .3s var(--ease);
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* 悬浮按钮：方形墨框，纸底墨箭头 */
+.fab{
+  position:fixed; right:calc(16px + var(--safe-r)); z-index:50;
+  width:44px; height:44px;
+  display:flex; align-items:center; justify-content:center;
+  background:var(--bg); color:var(--ink); border:2px solid var(--ink);
+  opacity:0; pointer-events:none; transform:translateY(12px);
+  transition:opacity .25s var(--ease), transform .25s var(--ease);
+}
+.fab.show{opacity:1; pointer-events:auto; transform:translateY(0);}
+.fab:active{background:var(--ink); color:var(--bg);}
+.fab svg{width:20px; height:20px;}
+.fab-top{bottom:calc(18px + var(--safe-bottom));}
+.fab-back{left:calc(16px + var(--safe-l)); right:auto; bottom:calc(18px + var(--safe-bottom));}
+/* 底部操作条出现（选中某个科技）时，两个悬浮按钮整体上移，
+   否则「回到顶部」会盖住操作条上的「查看详情」按钮点不到。 */
+.has-selbar .fab-top{bottom:calc(20px + var(--selbar-h, 76px) + var(--safe-bottom));}
+.has-selbar .fab-back{bottom:calc(20px + var(--selbar-h, 76px) + var(--safe-bottom));}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;}
+}
+</style>
+</head>
+<body>
+<div class="topwrap" id="topwrap">
+  <!-- 预留带：宿主「返回 / 分享 / 更多」按钮那一行的高度，中间是空的，正好放标题 -->
+  <div class="topband"><h1 id="title">人类科技树</h1></div>
+  <header class="topbar">
+    <span class="sub" id="subtitle"></span>
+    <div class="seg" id="seg"></div>
+    <button class="bgm" id="bgmBtn" type="button" aria-label="背景音乐" aria-pressed="false">
+      <svg class="ic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.8 17.2V5.6l9.2-1.9v11.5"/><ellipse cx="6.2" cy="17.9" rx="2.6" ry="2.2"/><ellipse cx="15.4" cy="16.2" rx="2.6" ry="2.2"/>
+      </svg>
+      <svg class="ic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8.8 17.2V5.6l9.2-1.9v11.5"/><ellipse cx="6.2" cy="17.9" rx="2.6" ry="2.2"/><ellipse cx="15.4" cy="16.2" rx="2.6" ry="2.2"/><path d="M4.2 3.8l15.6 16.4"/>
+      </svg>
+    </button>
+  </header>
+</div>
+<main id="app"></main>
+<div class="selbar" id="selbar">
+  <div class="selbar-wrap">
+    <div class="info">
+      <div class="nm" id="selName"></div>
+      <div class="mt" id="selMeta"></div>
+    </div>
+    <button class="go" id="selGo">查看详情</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<button class="fab fab-back" id="fabBack" aria-label="返回">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+</button>
+<button class="fab fab-top" id="fabTop" aria-label="回到顶部">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+<script src="./data.js"></script>
+<!-- 背景音乐：base64 载荷（由 _dev/audio/make-bgm.mjs 生成，定义 window.TT_BGM），
+     必须在 main.js 之前加载。容器不收音频扩展名、CSP 禁 data:/blob: 媒体源，
+     所以音频只能以字符串藏在 .js 里，运行时解成 ArrayBuffer 交给 Web Audio。 -->
+<script src="./assets/audio/bgm.js"></script>
+<script src="./main.js"></script>
+</body>
+</html>
