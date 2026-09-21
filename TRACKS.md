@@ -98,11 +98,11 @@ ai-dev-kit/
 | 掌心里的航天梦（口袋火箭） | `vibeknow/rocket-launch-3d/` | 发射/拆解双模式，实时遥测 | 完整（zip + 物料） |
 | 奔月（3D 登月全程模拟器） | `vibeknow/moon-landing-3d/` | 长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案） | 已发布 |
 | 3D 月球科普 | `vibeknow/moon-3d/` | 月相变化、潮汐锁定、起源假说 | 均未 |
-| 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已打包 · 缺笔记 |
+| 分子空间构型 | `vibeknow/molecule/` | 分子结构 3D 可视化 | 已发布（笔记已归档 xiaohongshu/） |
 | 函数可视化 | `vibeknow/function-visualization/` | 初高中数学函数图像绘制 | 已发布 |
 | 火箭发射 | `vibeknow/rocket-launch/` | 2D 火箭发射演示，含遥测与倒计时 | 已发布 |
 | 恐龙地球 | `vibeknow/jurassic-park-3d/` | 侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架 | 已打包（zip + 物料） |
-| 大航海时代 · 帆船图鉴 | `vibeknow/age-of-sail-3d/` | 大航海时代（Age of Sail）帆船图鉴：30 艘帆船 / 5 大海域家族，5 支主题舰队 + 自选，舰队沿岸航行时地球标注每艘的建造地，复用 jurassic-park-3d 框架 | 代码完成 · 待出图（图位与提示词已备） |
+| 大航海时代 · 帆船图鉴 | `vibeknow/age-of-sail-3d/` | 大航海时代（Age of Sail）帆船图鉴：30 艘帆船 / 5 大海域家族，5 支主题舰队 + 自选，舰队沿岸航行时地球标注每艘的建造地，复用 jurassic-park-3d 框架 | 已完成 · 待发布 |
 | 全球交通工具图鉴 | `vibeknow/vehicle-atlas/` | 49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过） | 框架就绪 · 配图待生成 |
 
 ## 维护约定

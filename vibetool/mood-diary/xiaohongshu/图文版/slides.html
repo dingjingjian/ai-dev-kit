@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>心情日记热力图 · 图文笔记配图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: #fdf9f3;
+    color: #3d3428;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide {
+    width: 1080px;
+    height: 1440px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(160deg, #fdf3f5 0%, #fdf9f3 40%, #eef6f2 100%);
+  }
+  .pad { position:absolute; inset:0; padding: 90px 80px; }
+
+  /* 漂浮彩点装饰 */
+  .bubble {
+    position:absolute; border-radius:50%;
+    filter: blur(2px); opacity:.55; pointer-events:none;
+  }
+
+  /* 通用 */
+  .tag {
+    display:inline-flex; align-items:center; gap:10px;
+    font-size: 26px; letter-spacing: 4px; color:#c25a8a; font-weight:700;
+  }
+  .tag::before { content:""; width:34px; height:2px; background:#c25a8a; border-radius:2px; }
+  .h1 { margin-top: 28px; font-size: 86px; font-weight: 800; line-height: 1.14; letter-spacing: 1px; color:#2d2420;}
+  .h1 .o { color:#e0883a; }
+  .h1 .g { color:#2fa26b; }
+  .h1 .b { color:#3b8db8; }
+  .h1 .y { color:#c2900a; }
+  .h1 .p { color:#8b6bb1; }
+  .h1 .r { color:#e0554b; }
+  .lead { margin-top: 26px; font-size: 33px; line-height: 1.55; color:#6b5f58; font-weight:400;}
+
+  .foot {
+    position:absolute; left:80px; right:80px; bottom:64px;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:23px; color:#b0a49b; letter-spacing:2px;
+  }
+  .foot .dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#e0883a; margin-right:12px; vertical-align:middle;}
+
+  /* 心情色变量 */
+  :root {
+    --m1:#ff8c42; --m2:#3fb950; --m3:#58a6ff; --m4:#d29922; --m5:#bc8cff; --m6:#f85149;
+  }
+
+  /* ============ 1 封面 ============ */
+  .s1 { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;}
+  .s1 .badge {
+    font-size:25px; letter-spacing:6px; color:#a8507a; font-weight:700;
+    background: rgba(255,255,255,.7); border:1px solid rgba(194,90,138,.25);
+    border-radius:999px; padding:13px 30px;
+    box-shadow: 0 4px 18px rgba(194,90,138,.12);
+  }
+  .s1 h1 { margin-top:38px; font-size:128px; font-weight:900; line-height:1.05; letter-spacing:3px; color:#2d2420;}
+  .s1 h1 .p { color:#8b6bb1; }
+  .s1 .sub { margin-top:28px; font-size:37px; color:#6b5f58; letter-spacing:2px;}
+
+  /* 六色圆点环绕 */
+  .orbit { position:relative; width:520px; height:520px; margin-top:60px; }
+  .orbit .center {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:220px; height:220px; border-radius:50%;
+    background: radial-gradient(circle at 35% 30%, #fff5d6, #f7d66e);
+    box-shadow: 0 16px 50px rgba(210,153,34,.35), inset 0 -8px 20px rgba(180,120,0,.15);
+    display:flex; align-items:center; justify-content:center;
+    font-size:90px;
+  }
+  .orbit .ball {
+    position:absolute; width:110px; height:110px; border-radius:50%;
+    box-shadow: 0 10px 26px rgba(0,0,0,.12), inset 0 -6px 12px rgba(0,0,0,.12), inset 0 4px 8px rgba(255,255,255,.4);
+  }
+  .orbit .ball small {
+    position:absolute; left:50%; top:120%; transform:translateX(-50%);
+    font-size:22px; color:#6b5f58; white-space:nowrap; font-weight:600; letter-spacing:1px;
+  }
+
+  /* ============ 2 痛点 ============ */
+  .pain-list { margin-top: 56px; display:flex; flex-direction:column; gap:24px;}
+  .pain {
+    display:flex; align-items:center; gap:26px;
+    background: rgba(255,255,255,.78); border:1px solid rgba(61,52,40,.07);
+    border-radius: 26px; padding: 30px 34px;
+    box-shadow: 0 8px 24px rgba(83,66,38,.08);
+  }
+  .pain .ico {
+    flex:none; width:72px; height:72px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:36px;
+  }
+  .pain .txt { font-size:33px; line-height:1.4; color:#4a3f38;}
+  .pain .txt b { color:#2d2420; }
+
+  /* ============ 3 灵感 ============ */
+  .compare { margin-top: 56px; display:flex; gap:30px;}
+  .cmp {
+    flex:1; background:#ffffff; border:1px solid rgba(61,52,40,.08); border-radius:26px;
+    padding:32px 28px; box-shadow: 0 10px 28px rgba(83,66,38,.1);
+  }
+  .cmp h3 { font-size:27px; color:#8a7c66; font-weight:700; margin-bottom:22px; letter-spacing:1px;}
+  .cmp.hl { border-color: rgba(139,107,177,.3); box-shadow: 0 14px 36px rgba(139,107,177,.18);}
+  .cmp.hl h3 { color:#8b6bb1;}
+  .cmp .cap { margin-top:22px; font-size:23px; color:#8a7c66; line-height:1.5;}
+  .arrow {
+    position:absolute; left:50%; top:540px; transform:translateX(-50%);
+    width:84px; height:84px; border-radius:50%;
+    background: linear-gradient(135deg,#bc8cff,#8957ff); color:#fff;
+    display:flex; align-items:center; justify-content:center;
+    font-size:44px; font-weight:900; box-shadow:0 12px 30px rgba(137,87,255,.4);
+  }
+
+  /* 圆点日历 */
+  .dots { display:grid; grid-template-columns: repeat(10, 1fr); gap:12px;}
+  .dots i { width:100%; aspect-ratio:1; border-radius:50%; background:#ece4d6; display:block;}
+
+  /* ============ 4 六色心情 ============ */
+  .mood-grid { margin-top:56px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:24px;}
+  .mood {
+    background:#fff; border-radius:26px; padding:34px 24px; text-align:center;
+    box-shadow: 0 8px 22px rgba(83,66,38,.08); border:1px solid rgba(61,52,40,.05);
+  }
+  .mood .c {
+    width:90px; height:90px; border-radius:50%; margin:0 auto;
+    box-shadow: inset 0 -8px 16px rgba(0,0,0,.15), inset 0 6px 10px rgba(255,255,255,.45), 0 10px 22px rgba(0,0,0,.1);
+  }
+  .mood .em { font-size:40px; margin-top:-66px; position:relative; }
+  .mood .nm { margin-top:14px; font-size:28px; font-weight:800; color:#2d2420;}
+  .mood .en { margin-top:4px; font-size:20px; color:#a89a90; letter-spacing:1px;}
+
+  .hint {
+    margin-top:44px; background: rgba(255,255,255,.7); border:1px dashed rgba(194,90,138,.4);
+    border-radius:22px; padding:28px 34px; font-size:28px; color:#6b5f58; line-height:1.5; text-align:center;
+  }
+  .hint b { color:#a8507a; }
+
+  /* ============ 5 日历 ============ */
+  .cal-card {
+    margin-top:52px; background:#fff; border-radius:28px; padding:38px 34px;
+    box-shadow: 0 12px 32px rgba(83,66,38,.1); border:1px solid rgba(61,52,40,.06);
+  }
+  .cal-card .ttl { font-size:30px; font-weight:800; display:flex; justify-content:space-between; align-items:center; margin-bottom:26px;}
+  .cal-card .ttl .nav span {
+    display:inline-flex; width:46px; height:46px; border-radius:50%;
+    background:#f5efe6; color:#8a7c66; align-items:center; justify-content:center; font-size:24px; margin-left:10px;
+  }
+  .cal { display:grid; grid-template-columns: repeat(24, 1fr); gap:9px;}
+  .cal i { width:100%; aspect-ratio:1; border-radius:50%; background:#ece4d6; display:block;}
+  .cal i.today { outline:3px solid #2d2420; outline-offset:2px;}
+  .legend { display:flex; flex-wrap:wrap; gap:20px 28px; margin-top:26px; font-size:21px; color:#8a7c66; justify-content:center;}
+  .legend .sw { display:inline-block; width:20px; height:20px; border-radius:50%; margin-right:8px; vertical-align:-3px;}
+
+  /* ============ 6 比例 + 统计 ============ */
+  .mix-card {
+    margin-top:52px; background:#fff; border-radius:28px; padding:36px 34px;
+    box-shadow: 0 12px 32px rgba(83,66,38,.1);
+  }
+  .mix-card .ttl { font-size:28px; font-weight:800; margin-bottom:20px;}
+  .bar { display:flex; gap:5px; height:46px; border-radius:23px; overflow:hidden;}
+  .bar i { display:block; height:100%;}
+  .mix-legend { display:flex; flex-wrap:wrap; gap:14px 26px; margin-top:20px; font-size:20px; color:#8a7c66;}
+  .mix-legend .sw { display:inline-block; width:18px; height:18px; border-radius:50%; margin-right:7px; vertical-align:-2px;}
+
+  .stats-4 { margin-top:30px; display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:18px;}
+  .st {
+    background:#fff; border-radius:22px; padding:26px 18px; text-align:center;
+    box-shadow: 0 8px 22px rgba(83,66,38,.08);
+  }
+  .st .n { font-size:48px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums;}
+  .st .n .u { font-size:20px; font-weight:600; color:#a89a90; margin-left:3px;}
+  .st .l { margin-top:10px; font-size:20px; color:#8a7c66; line-height:1.3;}
+
+  /* ============ 7 主题 ============ */
+  .theme-grid { margin-top:50px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;}
+  .th { border-radius:22px; padding:26px 22px; border:1px solid rgba(61,52,40,.06); box-shadow: 0 6px 18px rgba(83,66,38,.08);}
+  .th .dots { display:flex; gap:6px; margin-bottom:14px;}
+  .th .dots i { width:20px; height:20px; border-radius:50%;}
+  .th .nm { font-size:25px; font-weight:800;}
+  .th.dark { background:#0d1117;} .th.dark .nm { color:#e6edf3;}
+  .th.light { background:#f2f4f7;} .th.light .nm { color:#1b2129;}
+  .th.sepia { background:#f6f0e4;} .th.sepia .nm { color:#3d3428;}
+  .th.mint { background:#eef6f4;} .th.mint .nm { color:#12312c;}
+  .th.sakura { background:#fdf3f5;} .th.sakura .nm { color:#3d2530;}
+  .th.auto { background: linear-gradient(135deg,#0d1117 50%,#f2f4f7 50%);} .th.auto .nm { color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.4);}
+
+  .privacy {
+    margin-top:40px; background: rgba(63,185,80,.08); border:1px solid rgba(47,162,107,.25);
+    border-radius:22px; padding:28px 34px; display:flex; gap:22px; align-items:center;
+  }
+  .privacy .shield {
+    flex:none; width:64px; height:64px; border-radius:18px; background:rgba(47,162,107,.16); color:#12855a;
+    display:flex; align-items:center; justify-content:center; font-size:34px;
+  }
+  .privacy .t { font-size:27px; line-height:1.5; color:#3d3428;}
+  .privacy .t b { color:#12855a;}
+
+  /* ============ 8 收尾 ============ */
+  .s8 { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;}
+  .s8 .big { font-size:106px; font-weight:900; line-height:1.15; letter-spacing:2px; color:#2d2420;}
+  .s8 .big .p { color:#8b6bb1;}
+  .s8 .line { margin-top:40px; font-size:35px; color:#6b5f58; line-height:1.65; max-width:840px;}
+  .s8 .cta {
+    margin-top:64px; padding:26px 56px; border-radius:999px;
+    background: linear-gradient(135deg,#bc8cff,#8957ff); color:#fff;
+    font-size:33px; font-weight:800; letter-spacing:2px;
+    box-shadow:0 16px 44px rgba(137,87,255,.4);
+  }
+  .s8 .tags { margin-top:46px; font-size:23px; color:#b0a49b; letter-spacing:2px;}
+
+</style>
+</head>
+<body>
+
+<!-- ============ 1 封面 ============ -->
+<section class="slide s1">
+  <div class="bubble" style="width:360px;height:360px;background:#ffd9a8;top:-80px;left:-100px;"></div>
+  <div class="bubble" style="width:300px;height:300px;background:#c8e6ff;bottom:-60px;right:-80px;"></div>
+  <div class="bubble" style="width:200px;height:200px;background:#e2d4ff;top:200px;right:120px;opacity:.4;"></div>
+
+  <div class="badge">#vibetool · 实用工具</div>
+  <h1>心情日记<br><span class="p">热力图</span></h1>
+  <div class="sub">不用写字，点一下，看见自己</div>
+
+  <div class="orbit">
+    <div class="center">😊</div>
+    <div class="ball" style="background:linear-gradient(135deg,#ff8c42,#f66a0a);left:0;top:30px;"><small>😆 兴奋</small></div>
+    <div class="ball" style="background:linear-gradient(135deg,#3fb950,#2ea043);right:0;top:30px;"><small>😊 开心</small></div>
+    <div class="ball" style="background:linear-gradient(135deg,#58a6ff,#1f6feb);left:-10px;top:200px;"><small>😌 平静</small></div>
+    <div class="ball" style="background:linear-gradient(135deg,#d29922,#bb8009);right:-10px;top:200px;"><small>😐 一般</small></div>
+    <div class="ball" style="background:linear-gradient(135deg,#bc8cff,#8957ff);left:60px;bottom:0;"><small>😟 难过</small></div>
+    <div class="ball" style="background:linear-gradient(135deg,#f85149,#da3633);right:60px;bottom:0;"><small>😡 愤怒</small></div>
+  </div>
+
+  <div class="foot" style="position:absolute;left:80px;right:80px;bottom:60px;display:flex;justify-content:space-between;font-size:23px;color:#b0a49b;">
+    <span><span class="dot"></span>六种颜色 · 装下你的一天</span>
+    <span>第 1 张 / 共 8 张</span>
+  </div>
+</section>
+
+<!-- ============ 2 背景痛点 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">01 / 为什么做</div>
+    <div class="h1">想记点什么<br>却<span class="p">一个字都敲不出</span>？</div>
+    <div class="lead">心里翻江倒海，落到纸上只剩「今天还行」。下了好几个记录 App，最后都躺在手机里吃灰。</div>
+
+    <div class="pain-list">
+      <div class="pain"><div class="ico" style="background:#ffe0c2;">📝</div><div class="txt">打开日记，光标闪了半天，<b>一个字也写不出来</b></div></div>
+      <div class="pain"><div class="ico" style="background:#e2d4ff;">🌀</div><div class="txt">情绪翻涌到胸口，<b>说不出来也没人可说</b></div></div>
+      <div class="pain"><div class="ico" style="background:#c8e6ff;">📱</div><div class="txt">记账、手账、打卡 App 下了一圈，<b>三天就放弃</b></div></div>
+      <div class="pain"><div class="ico" style="background:#ffd6d6;">💜</div><div class="txt">其实只想知道：<b>这个月，我过得还好吗？</b></div></div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>于是我做了一个不用写字的心情记录工具</span><span>02 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 3 灵感 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">02 / 灵感来源</div>
+    <div class="h1">GitHub 热力图<br>的<span class="p">心情版</span></div>
+    <div class="lead">每个程序员都熟悉那张格子图——颜色越深，这周越高产。我把它改成：每个颜色，就是今天的心情。</div>
+
+    <div class="compare">
+      <div class="cmp">
+        <h3>🌐 GitHub 提交热力图</h3>
+        <div class="dots" id="dotsGH"></div>
+        <div class="cap">绿色深浅<br>= 这周代码提交量</div>
+      </div>
+      <div class="cmp hl">
+        <h3>💜 心情日记热力图</h3>
+        <div class="dots" id="dotsMood"></div>
+        <div class="cap"><b style="color:#8b6bb1">每个圆点一种心情</b><br>六色 = 你的情绪光谱</div>
+      </div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>把「心情」变成看得见的一片颜色</span><span>03 / 08</span></div>
+  </div>
+  <div class="arrow">→</div>
+</section>
+
+<!-- ============ 4 六色心情 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">03 / 核心功能</div>
+    <div class="h1">六种心情<br><span class="p">点一下就好</span></div>
+
+    <div class="mood-grid">
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#ff8c42,#f66a0a);"></div><div class="em">😆</div><div class="nm">兴奋</div><div class="en">橙</div></div>
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#3fb950,#2ea043);"></div><div class="em">😊</div><div class="nm">开心</div><div class="en">绿</div></div>
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#58a6ff,#1f6feb);"></div><div class="em">😌</div><div class="nm">平静</div><div class="en">蓝</div></div>
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#d29922,#bb8009);"></div><div class="em">😐</div><div class="nm">一般</div><div class="en">黄</div></div>
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#bc8cff,#8957ff);"></div><div class="em">😟</div><div class="nm">难过</div><div class="en">紫</div></div>
+      <div class="mood"><div class="c" style="background:linear-gradient(135deg,#f85149,#da3633);"></div><div class="em">😡</div><div class="nm">愤怒</div><div class="en">红</div></div>
+    </div>
+
+    <div class="hint">不写小作文、不逼你复盘。心情差的那天，<b>点一个紫色，也是一种放过自己</b>。</div>
+
+    <div class="foot"><span><span class="dot"></span>2 秒完成，点错了随时撤销</span><span>04 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 5 心情日历 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">04 / 核心功能</div>
+    <div class="h1">26 周圆点日历<br><span class="p">一眼看见情绪脉络</span></div>
+
+    <div class="cal-card">
+      <div class="ttl"><span>近半年心情日历</span><span class="nav"><span>‹</span><span>›</span></span></div>
+      <div class="cal" id="calBig"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:#ece4d6"></i>未记</span>
+        <span><i class="sw" style="background:#ff8c42"></i>兴奋</span>
+        <span><i class="sw" style="background:#3fb950"></i>开心</span>
+        <span><i class="sw" style="background:#58a6ff"></i>平静</span>
+        <span><i class="sw" style="background:#d29922"></i>一般</span>
+        <span><i class="sw" style="background:#bc8cff"></i>难过</span>
+        <span><i class="sw" style="background:#f85149"></i>愤怒</span>
+      </div>
+    </div>
+
+    <div class="hint" style="margin-top:36px;">点任意圆点可以<b>改判那天的心情</b>——人对自己的感受，本来就允许被重新理解。</div>
+
+    <div class="foot"><span><span class="dot"></span>成片暖色，是被好好生活过的证据</span><span>05 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 6 比例 + 统计 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">05 / 核心功能</div>
+    <div class="h1">本月心情<br><span class="p">一眼看清配比</span></div>
+
+    <div class="mix-card">
+      <div class="ttl">本月心情构成</div>
+      <div class="bar">
+        <i style="width:12%; background:linear-gradient(135deg,#ff8c42,#f66a0a);"></i>
+        <i style="width:38%; background:linear-gradient(135deg,#3fb950,#2ea043);"></i>
+        <i style="width:20%; background:linear-gradient(135deg,#58a6ff,#1f6feb);"></i>
+        <i style="width:15%; background:linear-gradient(135deg,#d29922,#bb8009);"></i>
+        <i style="width:10%; background:linear-gradient(135deg,#bc8cff,#8957ff);"></i>
+        <i style="width:5%; background:linear-gradient(135deg,#f85149,#da3633);"></i>
+      </div>
+      <div class="mix-legend">
+        <span><i class="sw" style="background:#ff8c42"></i>兴奋 3 天 · 12%</span>
+        <span><i class="sw" style="background:#3fb950"></i>开心 9 天 · 38%</span>
+        <span><i class="sw" style="background:#58a6ff"></i>平静 5 天 · 20%</span>
+        <span><i class="sw" style="background:#d29922"></i>一般 4 天 · 15%</span>
+        <span><i class="sw" style="background:#bc8cff"></i>难过 2 天 · 10%</span>
+        <span><i class="sw" style="background:#f85149"></i>愤怒 1 天 · 5%</span>
+      </div>
+    </div>
+
+    <div class="stats-4">
+      <div class="st"><div class="n" style="color:#2fa26b;">12<span class="u">天</span></div><div class="l">连续好心情</div></div>
+      <div class="st"><div class="n" style="color:#2fa26b;">70<span class="u">%</span></div><div class="l">本月好心情率</div></div>
+      <div class="st"><div class="n" style="color:#3b8db8;">24<span class="u">天</span></div><div class="l">本月记录</div></div>
+      <div class="st"><div class="n" style="color:#8b6bb1;">3<span class="u">天</span></div><div class="l">本月低落</div></div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>好心情 = 兴奋+开心+平静 · 低落 = 难过+愤怒</span><span>06 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 7 主题与隐私 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">06 / 细节</div>
+    <div class="h1">6 套主题<br><span class="p">心情只在你本机</span></div>
+
+    <div class="theme-grid">
+      <div class="th dark"><div class="dots"><i style="background:#0d1117"></i><i style="background:#bc8cff"></i></div><div class="nm">深夜</div></div>
+      <div class="th light"><div class="dots"><i style="background:#f2f4f7"></i><i style="background:#2f81f7"></i></div><div class="nm">明亮</div></div>
+      <div class="th sepia"><div class="dots"><i style="background:#f6f0e4"></i><i style="background:#d9705c"></i></div><div class="nm">暖阳纸张</div></div>
+      <div class="th mint"><div class="dots"><i style="background:#eef6f4"></i><i style="background:#2fa26b"></i></div><div class="nm">薄荷</div></div>
+      <div class="th sakura"><div class="dots"><i style="background:#fdf3f5"></i><i style="background:#e0703a"></i></div><div class="nm">樱粉</div></div>
+      <div class="th auto"><div class="dots"><i style="background:#0d1117"></i><i style="background:#f2f4f7"></i></div><div class="nm">跟随系统</div></div>
+    </div>
+
+    <div class="privacy">
+      <div class="shield">🔒</div>
+      <div class="t"><b>数据不上传、不联网、离线可用。</b>心情是最私密的东西，也应该是最自由的。支持 JSON 导出备份。</div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>零依赖 · 20KB · 打开就能用</span><span>07 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 8 收尾 ============ -->
+<section class="slide s8">
+  <div class="bubble" style="width:500px;height:500px;background:#e2d4ff;top:-100px;left:50%;transform:translateX(-50%);opacity:.5;"></div>
+  <div class="tag" style="margin-bottom:40px;">写在最后</div>
+  <div class="big">愿你的心情图<br>暖色<span class="p">越来越多</span> 💜</div>
+  <div class="line">我们总习惯把情绪藏起来，好像「说出来」才算数。<br>可有时候，只是看见它，就已经被治愈了。</div>
+  <div class="cta">评论区聊聊：你最近一周，心情是什么颜色？</div>
+  <div class="tags">#小红书vibecoding大赛　#vibetool　#心情日记　#拒绝内耗</div>
+</section>
+
+<script>
+function seededRand(seed){ return function(){ seed = (seed*9301+49297)%233280; return seed/233280; }; }
+var MOODS = ['#ff8c42','#3fb950','#58a6ff','#d29922','#bc8cff','#f85149'];
+
+// 封面对比：GitHub 版（深浅绿）
+function buildGH(id, cols, rows, seed){
+  var el = document.getElementById(id); if(!el) return;
+  var rnd = seededRand(seed);
+  el.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+  for(var i=0;i<cols*rows;i++){
+    var c = document.createElement('i');
+    var r = rnd();
+    var depth = 0.25 + r*0.75;
+    c.style.background = 'rgba(63,185,80,'+depth.toFixed(2)+')';
+    el.appendChild(c);
+  }
+}
+// 心情版：六色随机
+function buildMood(id, cols, rows, seed){
+  var el = document.getElementById(id); if(!el) return;
+  var rnd = seededRand(seed);
+  el.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+  for(var i=0;i<cols*rows;i++){
+    var c = document.createElement('i');
+    var r = rnd();
+    if(r < 0.12) c.style.background = '#ece4d6';
+    else {
+      var idx = Math.floor(rnd()*6);
+      c.style.background = MOODS[idx];
+    }
+    el.appendChild(c);
+  }
+}
+// 大日历：24 列 x 7 行
+function buildCal(id, cols, rows, seed){
+  var el = document.getElementById(id); if(!el) return;
+  var rnd = seededRand(seed);
+  el.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+  var total = cols*rows;
+  for(var i=0;i<total;i++){
+    var c = document.createElement('i');
+    var r = rnd();
+    if(r < 0.10) c.style.background = '#ece4d6';
+    else {
+      // 好心情占多数：绿/橙/蓝/黄 多，紫/红 少
+      var pick = rnd();
+      if(pick < 0.34) c.style.background = MOODS[1];      // 开心绿
+      else if(pick < 0.50) c.style.background = MOODS[0];  // 兴奋橙
+      else if(pick < 0.62) c.style.background = MOODS[2];  // 平静蓝
+      else if(pick < 0.74) c.style.background = MOODS[3];  // 一般黄
+      else if(pick < 0.86) c.style.background = MOODS[4];  // 难过紫
+      else c.style.background = MOODS[5];                 // 愤怒红
+    }
+    if(i === total-3) c.className = 'today';
+    el.appendChild(c);
+  }
+}
+buildGH('dotsGH', 10, 5, 11);
+buildMood('dotsMood', 10, 5, 23);
+buildCal('calBig', 24, 7, 77);
+</script>
+
+</body>
+</html>

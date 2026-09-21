@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>准时下班热力图 · 图文笔记配图</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    background: #0a0e14;
+    color: #e6edf3;
+    -webkit-font-smoothing: antialiased;
+  }
+  .slide {
+    width: 1080px;
+    height: 1440px;
+    position: relative;
+    overflow: hidden;
+    background: radial-gradient(120% 80% at 50% 0%, #14324a 0%, #0f2c22 45%, #0a0e14 100%);
+  }
+  /* 细网格纹理 */
+  .slide::before {
+    content:""; position:absolute; inset:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+    background-size: 46px 46px;
+    pointer-events:none;
+  }
+  .pad { position:absolute; inset:0; padding: 90px 80px; }
+
+  /* 通用：顶部小标签 */
+  .tag {
+    display:inline-flex; align-items:center; gap:10px;
+    font-size: 26px; letter-spacing: 4px; color:#7ee09a; font-weight:600;
+  }
+  .tag::before {
+    content:""; width:34px; height:2px; background:#3fb950;
+  }
+  .h1 {
+    margin-top: 28px;
+    font-size: 88px; font-weight: 800; line-height: 1.12; letter-spacing: 1px;
+  }
+  .h1 .accent { color:#3fb950; }
+  .lead {
+    margin-top: 26px; font-size: 34px; line-height: 1.55; color:#9aa7b4; font-weight:400;
+  }
+
+  /* 底部页脚 */
+  .foot {
+    position:absolute; left:80px; right:80px; bottom:70px;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:24px; color:#5b6673; letter-spacing:2px;
+  }
+  .foot .dot { display:inline-block; width:10px; height:10px; border-radius:50%; background:#3fb950; margin-right:12px; vertical-align:middle;}
+
+  /* ============ Slide 1 封面 ============ */
+  .s1 { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center; }
+  .s1 .badge {
+    font-size:26px; letter-spacing:6px; color:#7ee09a; font-weight:600;
+    border:1px solid rgba(63,185,80,.4); border-radius:999px; padding:14px 30px;
+    background: rgba(63,185,80,.08);
+  }
+  .s1 h1 {
+    margin-top: 40px; font-size: 132px; font-weight: 900; line-height:1.05; letter-spacing:4px;
+  }
+  .s1 h1 .g { color:#3fb950; }
+  .s1 .sub {
+    margin-top: 30px; font-size: 38px; color:#9aa7b4; letter-spacing:3px;
+  }
+  .s1 .phone-wrap { margin-top: 60px; }
+
+  /* 手机外框 */
+  .phone {
+    width: 460px; border-radius: 46px; padding: 14px;
+    background: linear-gradient(160deg, #2a323d, #0d1117);
+    box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 2px rgba(255,255,255,.06);
+  }
+  .screen {
+    border-radius: 34px; overflow:hidden; background:#0d1117; padding: 26px 24px 30px;
+  }
+  .scr-top { display:flex; justify-content:space-between; align-items:center; font-size:18px; color:#9aa7b4;}
+  .scr-date { font-size:20px; color:#8b949e; margin-top:22px; letter-spacing:1px;}
+  .scr-verdict { font-size:40px; font-weight:800; color:#3fb950; margin-top:8px;}
+  .scr-btns { display:flex; gap:14px; margin-top:22px;}
+  .scr-btn {
+    flex:1; text-align:center; padding:18px 0; border-radius:16px; font-size:24px; font-weight:700;
+  }
+  .scr-btn.ok { background: linear-gradient(135deg,#3fb950,#2ea043); color:#06210f;}
+  .scr-btn.ot { background: rgba(255,255,255,.06); color:#f0a13c; border:1px solid rgba(255,255,255,.15);}
+  .scr-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:18px;}
+  .scr-stat { background:#161b22; border:1px solid #2a323d; border-radius:14px; padding:14px 16px;}
+  .scr-stat .n { font-size:30px; font-weight:800; color:#3fb950;}
+  .scr-stat .n.o { color:#f0a13c;}
+  .scr-stat .l { font-size:16px; color:#8b949e; margin-top:4px;}
+  .scr-hm-title { font-size:18px; font-weight:700; margin:18px 2px 10px; color:#e6edf3;}
+
+  /* 热力图小格子 */
+  .hm { display:grid; grid-template-columns: repeat(20, 1fr); gap:5px; }
+  .hm i { width:100%; aspect-ratio:1; border-radius:3px; background:#1b222c; display:block;}
+  .hm i.g { background:#26a641; }
+  .hm i.r { background:#e5534b; }
+  .hm i.t { outline:2px solid #e6edf3; outline-offset:1px;}
+
+  /* ============ Slide 2 痛点 ============ */
+  .pain-list { margin-top: 60px; display:flex; flex-direction:column; gap:26px;}
+  .pain {
+    display:flex; align-items:flex-start; gap:26px;
+    background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+    border-radius: 22px; padding: 30px 34px;
+  }
+  .pain .ico {
+    flex:none; width:64px; height:64px; border-radius:16px;
+    background: rgba(240,161,60,.12); color:#f0a13c;
+    display:flex; align-items:center; justify-content:center; font-size:34px; font-weight:800;
+  }
+  .pain .txt { font-size:34px; line-height:1.4; color:#d4dce4; padding-top:10px;}
+  .pain .txt b { color:#fff; }
+
+  /* ============ Slide 3 灵感 ============ */
+  .compare { margin-top: 60px; display:flex; gap:30px;}
+  .cmp {
+    flex:1; background:#161b22; border:1px solid #2a323d; border-radius:22px; padding:30px 26px;
+  }
+  .cmp h3 { font-size:28px; color:#9aa7b4; font-weight:600; margin-bottom:20px; letter-spacing:1px;}
+  .cmp.hl { border-color: rgba(63,185,80,.5); background: linear-gradient(180deg, rgba(63,185,80,.08), #161b22);}
+  .cmp.hl h3 { color:#7ee09a;}
+  .cmp .hm { grid-template-columns: repeat(10, 1fr); gap:7px; }
+  .cmp .cap { margin-top:20px; font-size:24px; color:#8b949e; line-height:1.5;}
+  .arrow {
+    position:absolute; left:50%; top:520px; transform:translateX(-50%);
+    width:80px; height:80px; border-radius:50%;
+    background:#3fb950; color:#06210f; display:flex; align-items:center; justify-content:center;
+    font-size:44px; font-weight:900; box-shadow:0 0 40px rgba(63,185,80,.5);
+  }
+
+  /* ============ Slide 4 打卡 ============ */
+  .demo-card {
+    margin-top: 60px;
+    background: linear-gradient(135deg, #14324a 0%, #123a2e 55%, #0f2c22 100%);
+    border:1px solid rgba(38,166,65,.3); border-radius:28px; padding:44px 40px;
+  }
+  .demo-card .d-date { font-size:26px; color:#9fb4c0; letter-spacing:2px;}
+  .demo-card .d-verdict { font-size:64px; font-weight:800; color:#3fb950; margin-top:14px;}
+  .demo-card .d-sub { font-size:24px; color:#9fb4c0; margin-top:8px;}
+  .demo-card .d-btns { display:flex; gap:22px; margin-top:36px;}
+  .demo-card .d-btn {
+    flex:1; text-align:center; padding:28px 0; border-radius:18px; font-size:38px; font-weight:800;
+  }
+  .demo-card .d-btn.ok { background: linear-gradient(135deg,#3fb950,#2ea043); color:#06210f; box-shadow:0 10px 30px rgba(63,185,80,.35);}
+  .demo-card .d-btn.ot { background: rgba(255,255,255,.07); color:#f0a13c; border:1px solid rgba(255,255,255,.18);}
+  .demo-card .d-undo { text-align:center; margin-top:24px; font-size:22px; color:#9fb4c0; text-decoration:underline;}
+
+  .feat-list { margin-top:50px; display:grid; grid-template-columns:1fr 1fr; gap:22px;}
+  .feat {
+    background: rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+    border-radius:18px; padding:26px 28px; display:flex; gap:18px; align-items:center;
+  }
+  .feat .chk {
+    flex:none; width:40px; height:40px; border-radius:50%; background:rgba(63,185,80,.18); color:#3fb950;
+    display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800;
+  }
+  .feat .t { font-size:28px; color:#d4dce4; line-height:1.35;}
+
+  /* ============ Slide 5 热力图 ============ */
+  .hm-big {
+    margin-top:50px; background:#161b22; border:1px solid #2a323d; border-radius:24px; padding:36px 32px;
+  }
+  .hm-big .hm-title { font-size:30px; font-weight:700; margin-bottom:24px; display:flex; justify-content:space-between; align-items:center;}
+  .hm-big .hm-title .nav { display:flex; gap:10px;}
+  .hm-big .hm-title .nav span {
+    width:46px; height:46px; border-radius:12px; background:#1c2330; border:1px solid #2a323d;
+    display:flex; align-items:center; justify-content:center; color:#8b949e; font-size:24px;
+  }
+  .hm-big .hm { grid-template-columns: repeat(24, 1fr); gap:6px; }
+  .legend { display:flex; gap:28px; margin-top:24px; font-size:22px; color:#8b949e; justify-content:flex-end;}
+  .legend .sw { display:inline-block; width:20px; height:20px; border-radius:4px; margin-right:8px; vertical-align:-3px;}
+
+  /* ============ Slide 6 统计 ============ */
+  .stats-4 { margin-top:60px; display:grid; grid-template-columns:1fr 1fr; gap:26px;}
+  .statx {
+    background:#161b22; border:1px solid #2a323d; border-radius:24px; padding:36px 34px;
+  }
+  .statx .n { font-size:76px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums;}
+  .statx .n .u { font-size:28px; color:#8b949e; font-weight:500; margin-left:6px;}
+  .statx .n.g { color:#3fb950;} .statx .n.o { color:#f0a13c;} .statx .n.b { color:#e6edf3;}
+  .statx .l { margin-top:14px; font-size:26px; color:#8b949e;}
+
+  /* ============ Slide 7 主题 ============ */
+  .theme-grid { margin-top:56px; display:grid; grid-template-columns:1fr 1fr 1fr; gap:22px;}
+  .th {
+    border-radius:20px; padding:24px 22px; border:1px solid rgba(255,255,255,.1);
+  }
+  .th .dots { display:flex; gap:6px; margin-bottom:14px;}
+  .th .dots i { width:22px; height:22px; border-radius:50%; border:1px solid rgba(255,255,255,.2);}
+  .th .nm { font-size:26px; font-weight:700;}
+  .th.dark { background:#0d1117; } .th.dark .nm { color:#e6edf3;}
+  .th.light { background:#f2f4f7; } .th.light .nm { color:#1b2129;}
+  .th.sepia { background:#f6f0e4; } .th.sepia .nm { color:#3d3428;}
+  .th.mint { background:#eef6f4; } .th.mint .nm { color:#12312c;}
+  .th.sunset { background:#2a1d14; } .th.sunset .nm { color:#f0e6d8;}
+  .th.auto { background: linear-gradient(135deg,#0d1117 50%,#f2f4f7 50%);} .th.auto .nm { color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.4);}
+
+  .privacy {
+    margin-top:46px; background: rgba(63,185,80,.08); border:1px solid rgba(63,185,80,.25);
+    border-radius:20px; padding:30px 34px; display:flex; gap:24px; align-items:center;
+  }
+  .privacy .shield {
+    flex:none; width:64px; height:64px; border-radius:16px; background:rgba(63,185,80,.18); color:#3fb950;
+    display:flex; align-items:center; justify-content:center; font-size:34px;
+  }
+  .privacy .t { font-size:28px; line-height:1.5; color:#d4dce4;}
+  .privacy .t b { color:#7ee09a;}
+
+  /* ============ Slide 8 收尾 ============ */
+  .s8 { display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;}
+  .s8 .big { font-size:110px; font-weight:900; line-height:1.15; letter-spacing:3px;}
+  .s8 .big .g { color:#3fb950;}
+  .s8 .line { margin-top:40px; font-size:36px; color:#9aa7b4; line-height:1.6; max-width:820px;}
+  .s8 .cta {
+    margin-top:70px; padding:26px 60px; border-radius:999px;
+    background: linear-gradient(135deg,#3fb950,#2ea043); color:#06210f;
+    font-size:34px; font-weight:800; letter-spacing:2px;
+    box-shadow:0 16px 50px rgba(63,185,80,.4);
+  }
+  .s8 .tags { margin-top:50px; font-size:24px; color:#5b6673; letter-spacing:2px;}
+
+  /* 角落装饰 */
+  .glow { position:absolute; border-radius:50%; filter:blur(80px); pointer-events:none;}
+</style>
+</head>
+<body>
+
+<!-- ============ 1 封面 ============ -->
+<section class="slide s1">
+  <div class="glow" style="width:600px;height:600px;background:rgba(63,185,80,.18);top:-100px;left:-100px;"></div>
+  <div class="glow" style="width:500px;height:500px;background:rgba(20,80,120,.25);bottom:-120px;right:-100px;"></div>
+  <div class="badge">#vibetool · 实用工具</div>
+  <h1>准时下班<br><span class="g">热力图</span></h1>
+  <div class="sub">把每天的下班时刻，画成一张绿色地图</div>
+
+  <div class="phone-wrap">
+    <div class="phone"><div class="screen">
+      <div class="scr-top"><span>今天我准时下班了吗？</span><span>⚙</span></div>
+      <div class="scr-date">2026·09·18　周四</div>
+      <div class="scr-verdict">今天准时下班！</div>
+      <div class="scr-btns">
+        <div class="scr-btn ok">准时下班</div>
+        <div class="scr-btn ot">加班了</div>
+      </div>
+      <div class="scr-stats">
+        <div class="scr-stat"><div class="n">12<span style="font-size:16px;color:#8b949e">天</span></div><div class="l">连续准时</div></div>
+        <div class="scr-stat"><div class="n">86<span style="font-size:16px;color:#8b949e">%</span></div><div class="l">本月准时率</div></div>
+        <div class="scr-stat"><div class="n o">3<span style="font-size:16px;color:#8b949e">天</span></div><div class="l">本月加班</div></div>
+        <div class="scr-stat"><div class="n">87<span style="font-size:16px;color:#8b949e">天</span></div><div class="l">打卡总天数</div></div>
+      </div>
+      <div class="scr-hm-title">近半年打卡热力图</div>
+      <div class="hm" id="hmCover"></div>
+    </div></div>
+  </div>
+
+  <div class="foot" style="position:absolute;left:80px;right:80px;bottom:60px;display:flex;justify-content:space-between;font-size:24px;color:#5b6673;">
+    <span><span class="dot"></span>不记时间 · 只看准不准时</span>
+    <span>第 1 张 / 共 8 张</span>
+  </div>
+</section>
+
+<!-- ============ 2 背景痛点 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">01 / 为什么做</div>
+    <div class="h1">想准时下班<br>为什么这么<span class="accent">难</span>？</div>
+    <div class="lead">刚入职场那几年，默认「加班＝努力」。等回过神，生活已经被工作悄悄填满。</div>
+
+    <div class="pain-list">
+      <div class="pain"><div class="ico">⏰</div><div class="txt">领导没走，<b>不敢起身</b>；同事还在，不好意思先走</div></div>
+      <div class="pain"><div class="ico">📚</div><div class="txt">健身卡静静过期，书架上的书<b>积满了灰</b></div></div>
+      <div class="pain"><div class="ico">🍜</div><div class="txt">和朋友约饭，永远只能说一句：<b>下次吧</b></div></div>
+      <div class="pain"><div class="ico">🌙</div><div class="txt">到点下班，反而像做错事——<b>准时，成了奢侈品</b></div></div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>于是我做了一个只回答一个问题的小工具</span><span>02 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 3 灵感 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">02 / 灵感来源</div>
+    <div class="h1">GitHub 热力图<br>的<span class="accent">下班版</span></div>
+    <div class="lead">每个程序员都熟悉那张绿色格子图——格子越绿，这周写了多少代码一目了然。我把它换了个含义：</div>
+
+    <div class="compare">
+      <div class="cmp">
+        <h3>🌐 GitHub 提交热力图</h3>
+        <div class="hm" id="hmGH"></div>
+        <div class="cap">绿色越深<br>这周代码提交越多</div>
+      </div>
+      <div class="cmp hl">
+        <h3>🌿 准时下班热力图</h3>
+        <div class="hm" id="hmOff"></div>
+        <div class="cap"><b style="color:#7ee09a">绿色 = 今天准时下班</b><br>红色 = 今天加班了</div>
+      </div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>把「准时下班」变成看得见的绿色</span><span>03 / 08</span></div>
+  </div>
+  <div class="arrow">→</div>
+</section>
+
+<!-- ============ 4 功能：一键打卡 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">03 / 核心功能</div>
+    <div class="h1">下班点一下<br><span class="accent">就这么简单</span></div>
+
+    <div class="demo-card">
+      <div class="d-date">2026·09·18　周四</div>
+      <div class="d-verdict">今天准时下班！</div>
+      <div class="d-sub">把准时下班，当成一场胜利 ✦</div>
+      <div class="d-btns">
+        <div class="d-btn ok">准时下班</div>
+        <div class="d-btn ot">加班了</div>
+      </div>
+      <div class="d-undo">撤销今天的打卡</div>
+    </div>
+
+    <div class="feat-list">
+      <div class="feat"><div class="chk">✓</div><div class="t">不记几点几分</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">不设标准下班时间</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">只回答：今天准不准时</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">点错了随时撤销</div></div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>2 秒完成，不用想</span><span>04 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 5 功能：热力图 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">04 / 核心功能</div>
+    <div class="h1">26 周热力图<br><span class="accent">一眼看清节奏</span></div>
+
+    <div class="hm-big">
+      <div class="hm-title"><span>近半年打卡热力图</span><span class="nav"><span>‹</span><span>›</span></span></div>
+      <div class="hm" id="hmBig"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:#1b222c"></i>未打卡</span>
+        <span><i class="sw" style="background:#26a641"></i>准时下班</span>
+        <span><i class="sw" style="background:#e5534b"></i>加班</span>
+      </div>
+    </div>
+
+    <div class="feat-list" style="margin-top:40px;">
+      <div class="feat"><div class="chk">✓</div><div class="t">点任意格子，改判历史</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">左右滑动看更早的周</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">不维护节假日表</div></div>
+      <div class="feat"><div class="chk">✓</div><div class="t">调休、周末加班都算对</div></div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>连片的绿，就是你的生活节奏</span><span>05 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 6 功能：统计 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">05 / 核心功能</div>
+    <div class="h1">4 组数据<br>读懂你的<span class="accent">职场节奏</span></div>
+
+    <div class="stats-4">
+      <div class="statx"><div class="n g">12<span class="u">天</span></div><div class="l">连续准时下班</div></div>
+      <div class="statx"><div class="n g">86<span class="u">%</span></div><div class="l">本月准时率</div></div>
+      <div class="statx"><div class="n o">3<span class="u">天</span></div><div class="l">本月加班天数</div></div>
+      <div class="statx"><div class="n b">87<span class="u">天</span></div><div class="l">打卡总天数</div></div>
+    </div>
+
+    <div class="lead" style="margin-top:50px;">连续准时像闯关打卡，准时率是「真正属于你的时间」，加班天数悄悄提醒你——该心疼自己一点了。</div>
+
+    <div class="foot"><span><span class="dot"></span>它不评判好坏，只是安静记录</span><span>06 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 7 主题与隐私 ============ -->
+<section class="slide">
+  <div class="pad">
+    <div class="tag">06 / 细节</div>
+    <div class="h1">6 套主题<br><span class="accent">数据只在你本机</span></div>
+
+    <div class="theme-grid">
+      <div class="th dark"><div class="dots"><i style="background:#0d1117"></i><i style="background:#26a641"></i><i style="background:#e5534b"></i></div><div class="nm">深夜</div></div>
+      <div class="th light"><div class="dots"><i style="background:#f2f4f7"></i><i style="background:#2da44e"></i><i style="background:#d64545"></i></div><div class="nm">明亮</div></div>
+      <div class="th sepia"><div class="dots"><i style="background:#f6f0e4"></i><i style="background:#4f8a5b"></i><i style="background:#c25a4a"></i></div><div class="nm">暖阳纸张</div></div>
+      <div class="th mint"><div class="dots"><i style="background:#eef6f4"></i><i style="background:#2fa26b"></i><i style="background:#e0554b"></i></div><div class="nm">薄荷</div></div>
+      <div class="th sunset"><div class="dots"><i style="background:#2a1d14"></i><i style="background:#e89530"></i><i style="background:#d64545"></i></div><div class="nm">落日</div></div>
+      <div class="th auto"><div class="dots"><i style="background:#0d1117"></i><i style="background:#f2f4f7"></i></div><div class="nm">跟随系统</div></div>
+    </div>
+
+    <div class="privacy">
+      <div class="shield">🔒</div>
+      <div class="t"><b>数据不上传、不联网、离线可用。</b>支持导出 JSON 备份，你的下班记录是隐私，更是属于你的自由。</div>
+    </div>
+
+    <div class="foot"><span><span class="dot"></span>零依赖 · 20KB · 打开就能用</span><span>07 / 08</span></div>
+  </div>
+</section>
+
+<!-- ============ 8 收尾 ============ -->
+<section class="slide s8">
+  <div class="glow" style="width:700px;height:700px;background:rgba(63,185,80,.15);top:-150px;left:50%;transform:translateX(-50%);"></div>
+  <div class="tag" style="margin-bottom:40px;">写在最后</div>
+  <div class="big">愿你的热力图<br>长满<span class="g">绿色格子</span> 🌿</div>
+  <div class="line">工作永远做不完，但生活是自己的。<br>如果不主动划清边界，工作就会慢慢吞掉全部私人时间。</div>
+  <div class="cta">评论区聊聊：你这周准时下班了几天？</div>
+  <div class="tags">#小红书vibecoding大赛　#vibetool　#准时下班　#打工人自救</div>
+</section>
+
+<script>
+// 生成伪随机热力图格子（种子固定，保证每次截图一致）
+function seededRand(seed){ return function(){ seed = (seed*9301+49297)%233280; return seed/233280; }; }
+function buildHM(elId, cols, rows, seed, redRatio, todayPos){
+  var el = document.getElementById(elId);
+  if(!el) return;
+  var rnd = seededRand(seed);
+  el.style.gridTemplateColumns = 'repeat('+cols+',1fr)';
+  for(var i=0;i<cols*rows;i++){
+    var c = document.createElement('i');
+    var r = rnd();
+    if(r < redRatio) c.className = 'r';
+    else if(r < redRatio + 0.82) c.className = 'g';
+    // else 保持灰
+    if(todayPos !== undefined && i === todayPos) c.className += ' t';
+    el.appendChild(c);
+  }
+}
+buildHM('hmCover', 20, 6, 7, 0.06, 119);
+buildHM('hmGH', 10, 5, 11, 0.0, 13); // GitHub 版：全绿深浅不一，这里简化为绿色
+buildHM('hmOff', 10, 5, 23, 0.12, 31);
+buildHM('hmBig', 24, 7, 99, 0.08, 165);
+</script>
+
+</body>
+</html>
