@@ -1,0 +1,1643 @@
+{
+ "station-08": {
+  "name": "北京南站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-08-01.jpg",
+    "title": "File:Southern façade of Beijing South Railway Station (20170523113230).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Southern_fa%C3%A7ade_of_Beijing_South_Railway_Station_(20170523113230).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 142,
+    "quality": "lapvar 1064 mean 108"
+   },
+   {
+    "file": "station-08-02.jpg",
+    "title": "File:South basement entrance of Beijing South Railway Station (20180112151021).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:South_basement_entrance_of_Beijing_South_Railway_Station_(20180112151021).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4608x3072",
+    "kb": 143,
+    "quality": "lapvar 776 mean 119"
+   },
+   {
+    "file": "station-08-03.jpg",
+    "title": "File:Northern façade of Beijing South Railway Station (20180722170555).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Northern_fa%C3%A7ade_of_Beijing_South_Railway_Station_(20180722170555).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4608x3072",
+    "kb": 150,
+    "quality": "lapvar 1433 mean 110"
+   }
+  ]
+ },
+ "loco-01": {
+  "name": "龙号机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-01-01.jpg",
+    "title": "File:龙号机车景观模型.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:%E9%BE%99%E5%8F%B7%E6%9C%BA%E8%BD%A6%E6%99%AF%E8%A7%82%E6%A8%A1%E5%9E%8B.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "董辰兴",
+    "orig": "4032x3016",
+    "kb": 175,
+    "quality": "lapvar 915 mean 63"
+   }
+  ]
+ },
+ "loco-03": {
+  "name": "前进型蒸汽机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-03-01.jpg",
+    "title": "File:China Railways QJ steam locomotive at Marcin Technik Museum Speyer.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_QJ_steam_locomotive_at_Marcin_Technik_Museum_Speyer.jpg",
+    "license": "CC BY 2.0",
+    "author": "Clemens Vasters from Viersen, Germany",
+    "orig": "5184x3456",
+    "kb": 178,
+    "quality": "lapvar 1579 mean 139"
+   },
+   {
+    "file": "loco-03-02.jpg",
+    "title": "File:QJ-6924 at Hengdaohezi Locomotive Depot (Jul 2026).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:QJ-6924_at_Hengdaohezi_Locomotive_Depot_(Jul_2026).jpg",
+    "license": "CC BY 4.0",
+    "author": "雫曌",
+    "orig": "4000x3071",
+    "kb": 223,
+    "quality": "lapvar 1444 mean 105"
+   },
+   {
+    "file": "loco-03-03.jpg",
+    "title": "File:QJ 0004 Steam locomotive.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:QJ_0004_Steam_locomotive.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "choo chin nian",
+    "orig": "3960x2475",
+    "kb": 158,
+    "quality": "lapvar 1066 mean 95"
+   }
+  ]
+ },
+ "pax-01": {
+  "name": "21 型客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-01-01.jpg",
+    "title": "File:21 hard seat train.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:21_hard_seat_train.JPG",
+    "license": "CC BY-SA 3.0",
+    "author": "Jucember",
+    "orig": "5616x3744",
+    "kb": 142,
+    "quality": "lapvar 708 mean 99"
+   }
+  ]
+ },
+ "pax-04": {
+  "name": "25G 型客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-04-01.jpg",
+    "title": "File:China Railways 25G passenger coaches 20141009 211530.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25G_passenger_coaches_20141009_211530.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Qa003qa003",
+    "orig": "4096x2304",
+    "kb": 86,
+    "quality": "lapvar 360 mean 109"
+   },
+   {
+    "file": "pax-04-02.jpg",
+    "title": "File:China Railways 25G passenger coaches 20141009 211517.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25G_passenger_coaches_20141009_211517.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Qa003qa003",
+    "orig": "4096x2304",
+    "kb": 87,
+    "quality": "lapvar 290 mean 65"
+   }
+  ]
+ },
+ "cover-pax": {
+  "name": "客运车厢 · 分类封面",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "cover-pax-01.jpg",
+    "title": "File:25T passenger coaches in Hung Hom Station 20130728.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:25T_passenger_coaches_in_Hung_Hom_Station_20130728.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "颐园新居",
+    "orig": "2560x1600",
+    "kb": 146,
+    "quality": "lapvar 599 mean 57"
+   },
+   {
+    "file": "cover-pax-02.jpg",
+    "title": "File:China Railways 25G passenger coaches 20141111.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25G_passenger_coaches_20141111.JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "颐园新居",
+    "orig": "2560x1600",
+    "kb": 160,
+    "quality": "lapvar 1294 mean 128"
+   }
+  ]
+ },
+ "cover-station": {
+  "name": "著名车站 · 分类封面",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "cover-station-01.jpg",
+    "title": "File:Dali Yunnan China Gate-in-front-of-railway-station-01.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Dali_Yunnan_China_Gate-in-front-of-railway-station-01.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "CEphoto, Uwe Aranas",
+    "orig": "4272x2848",
+    "kb": 168,
+    "quality": "lapvar 1239 mean 141"
+   },
+   {
+    "file": "cover-station-02.jpg",
+    "title": "File:The Station Building of Licheng Railway Station, Shanxi, China 202402.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Station_Building_of_Licheng_Railway_Station,_Shanxi,_China_202402.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Kmchang28",
+    "orig": "4032x3024",
+    "kb": 179,
+    "quality": "lapvar 1206 mean 134"
+   }
+  ]
+ },
+ "loco-02": {
+  "name": "解放型蒸汽机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-02-01.jpg",
+    "title": "File:JF304 and JF1191.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:JF304_and_JF1191.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "choo chin nian",
+    "orig": "4288x2848",
+    "kb": 240,
+    "quality": "lapvar 1992 mean 127"
+   },
+   {
+    "file": "loco-02-02.jpg",
+    "title": "File:JF-2101 and KD5-373.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:JF-2101_and_KD5-373.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "choo chin nian",
+    "orig": "4288x2848",
+    "kb": 214,
+    "quality": "lapvar 1575 mean 109"
+   },
+   {
+    "file": "loco-02-03.jpg",
+    "title": "File:JF-1191 and JF-304.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:JF-1191_and_JF-304.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "choo chin nian",
+    "orig": "4288x2848",
+    "kb": 223,
+    "quality": "lapvar 1740 mean 104"
+   }
+  ]
+ },
+ "loco-04": {
+  "name": "人民型蒸汽机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-04-01.jpg",
+    "title": "File:China Railways RM-1001 steam locomotive 01.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_RM-1001_steam_locomotive_01.JPG",
+    "license": "CC BY-SA 3.0",
+    "author": "Siyuwj",
+    "orig": "5472x3648",
+    "kb": 169,
+    "quality": "lapvar 1167 mean 95"
+   },
+   {
+    "file": "loco-04-02.jpg",
+    "title": "File:China Railways RM-1001 steam locomotive 02.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_RM-1001_steam_locomotive_02.JPG",
+    "license": "CC BY-SA 3.0",
+    "author": "Siyuwj",
+    "orig": "5472x3648",
+    "kb": 112,
+    "quality": "lapvar 572 mean 75"
+   },
+   {
+    "file": "loco-04-03.jpg",
+    "title": "File:China Railways RM-1001 steam locomotive 03.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_RM-1001_steam_locomotive_03.JPG",
+    "license": "CC BY-SA 3.0",
+    "author": "Siyuwj",
+    "orig": "5472x3648",
+    "kb": 109,
+    "quality": "lapvar 438 mean 90"
+   }
+  ]
+ },
+ "loco-05": {
+  "name": "上游型蒸汽机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-05-01.jpg",
+    "title": "File:China Railways SY 0652 in Dalian - 2014.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_SY_0652_in_Dalian_-_2014.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "JesseW900",
+    "orig": "5184x3456",
+    "kb": 185,
+    "quality": "lapvar 1433 mean 139"
+   },
+   {
+    "file": "loco-05-02.jpg",
+    "title": "File:China Railways SY 1000 20171127.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_SY_1000_20171127.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Changzhensky",
+    "orig": "4160x3120",
+    "kb": 231,
+    "quality": "lapvar 1630 mean 114"
+   },
+   {
+    "file": "loco-05-03.jpg",
+    "title": "File:China Railways SY 1702 20160723 03.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_SY_1702_20160723_03.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Changzhensky",
+    "orig": "3200x2400",
+    "kb": 250,
+    "quality": "lapvar 1642 mean 138"
+   }
+  ]
+ },
+ "loco-06": {
+  "name": "东风型内燃机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-06-01.jpg",
+    "title": "File:China Railways Dongfeng DF Diesel-Electric Locomotive (10553306094).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_Dongfeng_DF_Diesel-Electric_Locomotive_(10553306094).jpg",
+    "license": "CC0",
+    "author": "Gary Todd from Xinzheng, China",
+    "orig": "4752x3168",
+    "kb": 102,
+    "quality": "lapvar 618 mean 138"
+   },
+   {
+    "file": "loco-06-02.jpg",
+    "title": "File:China Railways Dongfeng DF Diesel-Electric Locomotive (10553465753).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_Dongfeng_DF_Diesel-Electric_Locomotive_(10553465753).jpg",
+    "license": "CC0",
+    "author": "Gary Todd from Xinzheng, China",
+    "orig": "4752x3168",
+    "kb": 125,
+    "quality": "lapvar 677 mean 124"
+   },
+   {
+    "file": "loco-06-03.jpg",
+    "title": "File:Chengdu 1991- China Railways Dongfeng DF Diesel-Electric Locomotive.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Chengdu_1991-_China_Railways_Dongfeng_DF_Diesel-Electric_Locomotive.jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "4937x3139",
+    "kb": 90,
+    "quality": "lapvar 300 mean 119"
+   }
+  ]
+ },
+ "loco-07": {
+  "name": "东风4型内燃机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-07-01.jpg",
+    "title": "File:China Railways DF4B 2212.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_DF4B_2212.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "Mark Fischer",
+    "orig": "4288x2848",
+    "kb": 176,
+    "quality": "lapvar 719 mean 86"
+   },
+   {
+    "file": "loco-07-02.jpg",
+    "title": "File:China Rail Dongfeng DF4B Diesel-Electric Locomotive - (9870774926).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Rail_Dongfeng_DF4B_Diesel-Electric_Locomotive_-_(9870774926).jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "3888x2592",
+    "kb": 216,
+    "quality": "lapvar 1154 mean 118"
+   },
+   {
+    "file": "loco-07-03.jpg",
+    "title": "File:China Railways DF4B 3462 20150305.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_DF4B_3462_20150305.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Changzhensky",
+    "orig": "3200x2400",
+    "kb": 247,
+    "quality": "lapvar 2012 mean 136"
+   }
+  ]
+ },
+ "loco-08": {
+  "name": "东风5型内燃机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-08-01.jpg",
+    "title": "File:20201002 DF5-2019 at Zhangping Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20201002_DF5-2019_at_Zhangping_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Lhy123456",
+    "orig": "4496x3000",
+    "kb": 163,
+    "quality": "lapvar 704 mean 106"
+   },
+   {
+    "file": "loco-08-02.jpg",
+    "title": "File:DF5 1371 Bogie 20111117.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:DF5_1371_Bogie_20111117.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "Tyg728",
+    "orig": "3200x2400",
+    "kb": 235,
+    "quality": "lapvar 1866 mean 111"
+   },
+   {
+    "file": "loco-08-03.jpg",
+    "title": "File:China Railways DF5 1134 Shenzhen 20170922.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_DF5_1134_Shenzhen_20170922.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Alancrh",
+    "orig": "2500x1667",
+    "kb": 227,
+    "quality": "lapvar 1841 mean 122"
+   }
+  ]
+ },
+ "loco-09": {
+  "name": "东风11型内燃机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-09-01.jpg",
+    "title": "File:DF11 0418 with 0T17@BJI (20250718110947).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:DF11_0418_with_0T17@BJI_(20250718110947).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "5794x3863",
+    "kb": 265,
+    "quality": "lapvar 2566 mean 139"
+   },
+   {
+    "file": "loco-09-02.jpg",
+    "title": "File:China Railways DF11 0363.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_DF11_0363.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Mark Fischer",
+    "orig": "4288x2848",
+    "kb": 180,
+    "quality": "lapvar 1273 mean 138"
+   },
+   {
+    "file": "loco-09-03.jpg",
+    "title": "File:201907 DF11-0156 hauls T7785 at Jinhua Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:201907_DF11-0156_hauls_T7785_at_Jinhua_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "MNXANL",
+    "orig": "4032x3024",
+    "kb": 203,
+    "quality": "lapvar 1515 mean 127"
+   }
+  ]
+ },
+ "loco-10": {
+  "name": "东风8B型内燃机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-10-01.jpg",
+    "title": "File:DF8B 5623@NXH (20180630052819).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:DF8B_5623@NXH_(20180630052819).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4040x2692",
+    "kb": 182,
+    "quality": "lapvar 1348 mean 107"
+   },
+   {
+    "file": "loco-10-02.jpg",
+    "title": "File:DF8B 5397@LXI (20180630070929).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:DF8B_5397@LXI_(20180630070929).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4608x3072",
+    "kb": 196,
+    "quality": "lapvar 873 mean 90"
+   },
+   {
+    "file": "loco-10-03.jpg",
+    "title": "File:DF8B 5620@NXH (20151224091002).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:DF8B_5620@NXH_(20151224091002).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "3962x2598",
+    "kb": 157,
+    "quality": "lapvar 839 mean 128"
+   }
+  ]
+ },
+ "loco-11": {
+  "name": "韶山1型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-11-01.jpg",
+    "title": "File:SS1 008@CRM (20150709135627).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:SS1_008@CRM_(20150709135627).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "3264x2448",
+    "kb": 190,
+    "quality": "lapvar 1521 mean 105"
+   },
+   {
+    "file": "loco-11-02.jpg",
+    "title": "File:China Railways SS10681 20170817.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_SS10681_20170817.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "LuisRichmond",
+    "orig": "3264x2448",
+    "kb": 172,
+    "quality": "lapvar 998 mean 97"
+   },
+   {
+    "file": "loco-11-03.jpg",
+    "title": "File:SS1 0681 at China Railway Museum.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:SS1_0681_at_China_Railway_Museum.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Tyg728",
+    "orig": "2880x1920",
+    "kb": 167,
+    "quality": "lapvar 1548 mean 129"
+   }
+  ]
+ },
+ "loco-12": {
+  "name": "韶山3型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-12-01.jpg",
+    "title": "File:China Railways SS3 0450 20160704.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_SS3_0450_20160704.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Changzhensky",
+    "orig": "3200x2400",
+    "kb": 216,
+    "quality": "lapvar 1870 mean 137"
+   },
+   {
+    "file": "loco-12-02.jpg",
+    "title": "File:China Railway SS3 Electrical Locomotive of HO Scale.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railway_SS3_Electrical_Locomotive_of_HO_Scale.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "Leonid Winter",
+    "orig": "2700x1389",
+    "kb": 92,
+    "quality": "lapvar 1423 mean 156"
+   },
+   {
+    "file": "loco-12-03.jpg",
+    "title": "File:SS3 2013 in Central South University Railway Campus.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:SS3_2013_in_Central_South_University_Railway_Campus.jpg",
+    "license": "CC0",
+    "author": "Huangdan2060",
+    "orig": "2592x1944",
+    "kb": 181,
+    "quality": "lapvar 910 mean 139"
+   }
+  ]
+ },
+ "loco-13": {
+  "name": "韶山4型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-13-01.jpg",
+    "title": "File:SS4 6149 approaching Huangcun (20260110133436).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:SS4_6149_approaching_Huangcun_(20260110133436).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "5663x3775",
+    "kb": 211,
+    "quality": "lapvar 1400 mean 136"
+   },
+   {
+    "file": "loco-13-02.jpg",
+    "title": "File:SS4 6149 approaching Huangcun (20260110133439).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:SS4_6149_approaching_Huangcun_(20260110133439).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6410x4273",
+    "kb": 240,
+    "quality": "lapvar 1753 mean 120"
+   },
+   {
+    "file": "loco-13-03.jpg",
+    "title": "File:SS4 Electric Locomotive, Beijing to Zhengzhou by Rail, 20080419.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:SS4_Electric_Locomotive,_Beijing_to_Zhengzhou_by_Rail,_20080419.jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "3888x2592",
+    "kb": 129,
+    "quality": "lapvar 498 mean 116"
+   }
+  ]
+ },
+ "loco-14": {
+  "name": "韶山8型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-14-01.jpg",
+    "title": "File:China Rail Shaoshan SS8 Electric Locomotive.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Rail_Shaoshan_SS8_Electric_Locomotive.jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "4752x3168",
+    "kb": 218,
+    "quality": "lapvar 1218 mean 123"
+   },
+   {
+    "file": "loco-14-02.jpg",
+    "title": "File:China Rail Shaoshan SS8 Electric Locomotive - 21880581646.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Rail_Shaoshan_SS8_Electric_Locomotive_-_21880581646.jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "4752x3168",
+    "kb": 228,
+    "quality": "lapvar 1101 mean 105"
+   },
+   {
+    "file": "loco-14-03.jpg",
+    "title": "File:Beijing to Zhengzhou by Rail, 2008, Shaoshan SS8 Electric Locomotive.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Beijing_to_Zhengzhou_by_Rail,_2008,_Shaoshan_SS8_Electric_Locomotive.jpg",
+    "license": "CC0",
+    "author": "Gary Lee Todd, Ph.D.",
+    "orig": "3888x2592",
+    "kb": 108,
+    "quality": "lapvar 378 mean 129"
+   }
+  ]
+ },
+ "loco-15": {
+  "name": "和谐电3型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-15-01.jpg",
+    "title": "File:HXD3 0145.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3_0145.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "Jucember",
+    "orig": "5616x3744",
+    "kb": 77,
+    "quality": "lapvar 536 mean 160"
+   },
+   {
+    "file": "loco-15-02.jpg",
+    "title": "File:HXD3 0495@BJI (20160307160207).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3_0495@BJI_(20160307160207).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 237,
+    "quality": "lapvar 1202 mean 114"
+   },
+   {
+    "file": "loco-15-03.jpg",
+    "title": "File:HXD3 0495@BJI (20160307160217).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3_0495@BJI_(20160307160217).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 251,
+    "quality": "lapvar 1426 mean 110"
+   }
+  ]
+ },
+ "loco-16": {
+  "name": "和谐电3D型电力机车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-16-01.jpg",
+    "title": "File:HXD3D 0529@BJX (20220620171311).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3D_0529@BJX_(20220620171311).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6255x4170",
+    "kb": 281,
+    "quality": "lapvar 3022 mean 132"
+   },
+   {
+    "file": "loco-16-02.jpg",
+    "title": "File:HXD3D 0001@BJI (20231006112230).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3D_0001@BJI_(20231006112230).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6309x4206",
+    "kb": 303,
+    "quality": "lapvar 2611 mean 117"
+   },
+   {
+    "file": "loco-16-03.jpg",
+    "title": "File:HXD3D 0609 with K498@BJI (20231107124446).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3D_0609_with_K498@BJI_(20231107124446).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "5853x3902",
+    "kb": 230,
+    "quality": "lapvar 1678 mean 126"
+   }
+  ]
+ },
+ "loco-17": {
+  "name": "CRH380A 型动车组",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-17-01.jpg",
+    "title": "File:CRH380A-2921 and 2922@BJX (20170917180414).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CRH380A-2921_and_2922@BJX_(20170917180414).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4608x3072",
+    "kb": 276,
+    "quality": "lapvar 1845 mean 90"
+   },
+   {
+    "file": "loco-17-02.jpg",
+    "title": "File:CR400AF-2007 and CRH380A-2800@FTP (20220620141416).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2007_and_CRH380A-2800@FTP_(20220620141416).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6949x4633",
+    "kb": 216,
+    "quality": "lapvar 2074 mean 146"
+   },
+   {
+    "file": "loco-17-03.jpg",
+    "title": "File:202309 CRH380A-2657 after arrival at Nanningdong as G418.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:202309_CRH380A-2657_after_arrival_at_Nanningdong_as_G418.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Limsn Shusia Ysmarpoo",
+    "orig": "4000x3000",
+    "kb": 164,
+    "quality": "lapvar 1551 mean 102"
+   }
+  ]
+ },
+ "loco-18": {
+  "name": "CR400AF 复兴号动车组",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-18-01.jpg",
+    "title": "File:CR400AF-2022@BJX (20171017100036).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022@BJX_(20171017100036).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "7192x4672",
+    "kb": 239,
+    "quality": "lapvar 1471 mean 69"
+   },
+   {
+    "file": "loco-18-02.jpg",
+    "title": "File:CR400AF-2022 at Shoupakou (20171017091039).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022_at_Shoupakou_(20171017091039).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4324x2786",
+    "kb": 189,
+    "quality": "lapvar 1221 mean 106"
+   },
+   {
+    "file": "loco-18-03.jpg",
+    "title": "File:CR400AF-2022 at Shoupakou (20171017091040).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022_at_Shoupakou_(20171017091040).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "5943x3849",
+    "kb": 186,
+    "quality": "lapvar 1332 mean 115"
+   }
+  ]
+ },
+ "loco-19": {
+  "name": "CR200J 型动车组",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-19-01.jpg",
+    "title": "File:Double-heading CR200J EMU train.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Double-heading_CR200J_EMU_train.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "CaiDie",
+    "orig": "4000x3000",
+    "kb": 169,
+    "quality": "lapvar 991 mean 116"
+   },
+   {
+    "file": "loco-19-02.jpg",
+    "title": "File:CR200J-6002 (D127) Train in Xi'an Railway Station, Sep 18 2024.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR200J-6002_(D127)_Train_in_Xi%27an_Railway_Station,_Sep_18_2024.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "P. K. Koo",
+    "orig": "4032x3024",
+    "kb": 260,
+    "quality": "lapvar 1854 mean 108"
+   },
+   {
+    "file": "loco-19-03.jpg",
+    "title": "File:CR200J-2015 at Taicangnan Railway Station 20251026.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR200J-2015_at_Taicangnan_Railway_Station_20251026.jpg",
+    "license": "CC BY 4.0",
+    "author": "4084470 0.smil",
+    "orig": "4096x3072",
+    "kb": 194,
+    "quality": "lapvar 1360 mean 144"
+   }
+  ]
+ },
+ "loco-20": {
+  "name": "上海磁浮列车",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-20-01.jpg",
+    "title": "File:The Shanghai Transrapid maglev train.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:The_Shanghai_Transrapid_maglev_train.jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "Lars Plougmann",
+    "orig": "5437x3624",
+    "kb": 181,
+    "quality": "lapvar 995 mean 111"
+   },
+   {
+    "file": "loco-20-02.jpg",
+    "title": "File:Shanghai Maglev Line from platform of Longyang Road Station (Shanghai Maglev) 2.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Shanghai_Maglev_Line_from_platform_of_Longyang_Road_Station_(Shanghai_Maglev)_2.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "そらみみ",
+    "orig": "4007x3005",
+    "kb": 124,
+    "quality": "lapvar 771 mean 136"
+   },
+   {
+    "file": "loco-20-03.jpg",
+    "title": "File:Train of Shanghai Maglev at Longyang Road Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Train_of_Shanghai_Maglev_at_Longyang_Road_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "そらみみ",
+    "orig": "4032x3024",
+    "kb": 158,
+    "quality": "lapvar 984 mean 117"
+   }
+  ]
+ },
+ "pax-02": {
+  "name": "22 型客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-02-01.jpg",
+    "title": "File:201606 China Railways UZ22 at 798.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:201606_China_Railways_UZ22_at_798.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "MNXANL",
+    "orig": "4912x3264",
+    "kb": 157,
+    "quality": "lapvar 1057 mean 138"
+   },
+   {
+    "file": "pax-02-03.jpg",
+    "title": "File:China Railways YZ22 336250 in 2678 Ordinary Fast Train 20131001.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_YZ22_336250_in_2678_Ordinary_Fast_Train_20131001.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "DF4D3273",
+    "orig": "2592x1952",
+    "kb": 223,
+    "quality": "lapvar 1415 mean 125"
+   }
+  ]
+ },
+ "pax-03": {
+  "name": "双层客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-03-01.jpg",
+    "title": "File:Railroad passenger car of China SRZ25B.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Railroad_passenger_car_of_China_SRZ25B.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "Yaohua2000",
+    "orig": "1360x1020",
+    "kb": 171,
+    "quality": "lapvar 696 mean 121"
+   },
+   {
+    "file": "pax-03-02.jpg",
+    "title": "File:Railroad passenger car of China, SYW25B.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Railroad_passenger_car_of_China,_SYW25B.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "Yaohua2000",
+    "orig": "1360x1020",
+    "kb": 186,
+    "quality": "lapvar 1333 mean 131"
+   }
+  ]
+ },
+ "pax-05": {
+  "name": "25K 型客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-05-01.jpg",
+    "title": "File:China Railways 25K 20111102.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25K_20111102.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "颐园新居",
+    "orig": "2048x1280",
+    "kb": 253,
+    "quality": "lapvar 2039 mean 122"
+   },
+   {
+    "file": "pax-05-02.jpg",
+    "title": "File:201104 25K coaches in Urumqi West Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:201104_25K_coaches_in_Urumqi_West_Station.jpg",
+    "license": "CC BY 3.0",
+    "author": "罗布泊",
+    "orig": "1920x1080",
+    "kb": 126,
+    "quality": "lapvar 557 mean 103"
+   },
+   {
+    "file": "pax-05-03.jpg",
+    "title": "File:HXD3D-0539 Locomotive dragging Double Decker 25K coach (K1001, -4) Approaching Yinzhen Railway Station, Mar 1 2024.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:HXD3D-0539_Locomotive_dragging_Double_Decker_25K_coach_(K1001,_-4)_Approaching_Yinzhen_Railway_Station,_Mar_1_2024.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "P. K. Koo",
+    "orig": "4032x3024",
+    "kb": 218,
+    "quality": "lapvar 2145 mean 151"
+   }
+  ]
+ },
+ "pax-06": {
+  "name": "25T 型客车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-06-01.jpg",
+    "title": "File:Guangzhou-Kowloon Through Train-qingdao sifang CSR 25T Internal.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Guangzhou-Kowloon_Through_Train-qingdao_sifang_CSR_25T_Internal.JPG",
+    "license": "CC BY-SA 3.0",
+    "author": "Nissangeniss",
+    "orig": "5184x3456",
+    "kb": 109,
+    "quality": "lapvar 662 mean 94"
+   },
+   {
+    "file": "pax-06-02.jpg",
+    "title": "File:China Railways 25T passenger coaches 20141121 072229.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25T_passenger_coaches_20141121_072229.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Qa003qa003",
+    "orig": "4096x2304",
+    "kb": 68,
+    "quality": "lapvar 215 mean 130"
+   },
+   {
+    "file": "pax-06-03.jpg",
+    "title": "File:China Railways 25T passenger coaches 20141121 083115.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25T_passenger_coaches_20141121_083115.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Qa003qa003",
+    "orig": "4096x2304",
+    "kb": 76,
+    "quality": "lapvar 383 mean 151"
+   }
+  ]
+ },
+ "pax-07": {
+  "name": "硬卧车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-07-01.jpg",
+    "title": "File:YW25G 683055@BJN (20250311141722).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:YW25G_683055@BJN_(20250311141722).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6540x4360",
+    "kb": 192,
+    "quality": "lapvar 1951 mean 160"
+   },
+   {
+    "file": "pax-07-02.jpg",
+    "title": "File:YW25G 683051@BJN (20250311141725).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:YW25G_683051@BJN_(20250311141725).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6250x4167",
+    "kb": 195,
+    "quality": "lapvar 2029 mean 157"
+   },
+   {
+    "file": "pax-07-03.jpg",
+    "title": "File:YW25G 683069@BJN (20250311141724).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:YW25G_683069@BJN_(20250311141724).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6487x4325",
+    "kb": 196,
+    "quality": "lapvar 1931 mean 157"
+   }
+  ]
+ },
+ "pax-08": {
+  "name": "软卧车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-08-01.jpg",
+    "title": "File:RW25T 554455@ZWJ (20151229065627).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:RW25T_554455@ZWJ_(20151229065627).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 96,
+    "quality": "lapvar 397 mean 53"
+   },
+   {
+    "file": "pax-08-02.jpg",
+    "title": "File:RW25T 555748 at Lianyuqiao (20250603102629).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:RW25T_555748_at_Lianyuqiao_(20250603102629).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "5075x3383",
+    "kb": 286,
+    "quality": "lapvar 3230 mean 110"
+   },
+   {
+    "file": "pax-08-03.jpg",
+    "title": "File:RW25T 554063 at Dongguantou Nanqiao (20250606135111).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:RW25T_554063_at_Dongguantou_Nanqiao_(20250606135111).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6071x4047",
+    "kb": 237,
+    "quality": "lapvar 2386 mean 140"
+   }
+  ]
+ },
+ "pax-09": {
+  "name": "餐车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-09-01.jpg",
+    "title": "File:CA25 890344 entering Sungang (20160813153512).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CA25_890344_entering_Sungang_(20160813153512).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 237,
+    "quality": "lapvar 1576 mean 132"
+   },
+   {
+    "file": "pax-09-02.jpg",
+    "title": "File:Dining car board of T168 (20150118131134).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Dining_car_board_of_T168_(20150118131134).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 79,
+    "quality": "lapvar 394 mean 172"
+   },
+   {
+    "file": "pax-09-03.jpg",
+    "title": "File:Chinese dining car (11636368576).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Chinese_dining_car_(11636368576).jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "Clay Gilliland",
+    "orig": "1024x768",
+    "kb": 135,
+    "quality": "lapvar 703 mean 110"
+   }
+  ]
+ },
+ "pax-10": {
+  "name": "空调发电车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-10-01.jpg",
+    "title": "File:KD25K 998455@Shoupakou (20150915105422).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:KD25K_998455@Shoupakou_(20150915105422).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2248",
+    "kb": 109,
+    "quality": "lapvar 784 mean 114"
+   },
+   {
+    "file": "pax-10-02.jpg",
+    "title": "File:KD25K 998843@XZH (20151005124006).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:KD25K_998843@XZH_(20151005124006).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 221,
+    "quality": "lapvar 1427 mean 150"
+   },
+   {
+    "file": "pax-10-03.jpg",
+    "title": "File:KD25K 998713@BJI (20150701164011).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:KD25K_998713@BJI_(20150701164011).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 229,
+    "quality": "lapvar 1336 mean 108"
+   }
+  ]
+ },
+ "freight-01": {
+  "name": "C62 型敞车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-01-01.jpg",
+    "title": "File:C62 749369 at Liuzhou Railway Vacational Technical College 20160412.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:C62_749369_at_Liuzhou_Railway_Vacational_Technical_College_20160412.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Changzhensky",
+    "orig": "3200x2400",
+    "kb": 194,
+    "quality": "lapvar 1655 mean 121"
+   }
+  ]
+ },
+ "freight-02": {
+  "name": "G60 型罐车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-02-01.jpg",
+    "title": "File:China railways GHK.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_railways_GHK.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "DF7C5200",
+    "orig": "4429x2953",
+    "kb": 261,
+    "quality": "lapvar 1706 mean 94"
+   },
+   {
+    "file": "freight-02-02.jpg",
+    "title": "File:China railways GLBK.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_railways_GLBK.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "DF7C5200",
+    "orig": "5184x3456",
+    "kb": 202,
+    "quality": "lapvar 1657 mean 101"
+   },
+   {
+    "file": "freight-02-03.jpg",
+    "title": "File:China railways GH40LK.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_railways_GH40LK.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "DF7C5200",
+    "orig": "4514x3009",
+    "kb": 209,
+    "quality": "lapvar 1382 mean 105"
+   }
+  ]
+ },
+ "freight-03": {
+  "name": "N17 型平车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-03-01.jpg",
+    "title": "File:N17G P030406@YSN (20150105104300).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:N17G_P030406@YSN_(20150105104300).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 159,
+    "quality": "lapvar 697 mean 117"
+   }
+  ]
+ },
+ "freight-04": {
+  "name": "K18 型漏斗车",
+  "cat": "freight",
+  "photos": []
+ },
+ "freight-05": {
+  "name": "C64 型敞车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-05-01.jpg",
+    "title": "File:China Railways C64 for Meistell.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_C64_for_Meistell.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "DF7C5200",
+    "orig": "5184x3456",
+    "kb": 186,
+    "quality": "lapvar 1096 mean 113"
+   }
+  ]
+ },
+ "freight-06": {
+  "name": "P64 型棚车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-06-01.jpg",
+    "title": "File:P70-3816977 Boxcar at Liulihe (20141203133235).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:P70-3816977_Boxcar_at_Liulihe_(20141203133235).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2592x1936",
+    "kb": 193,
+    "quality": "lapvar 698 mean 105"
+   }
+  ]
+ },
+ "freight-07": {
+  "name": "X2K 型集装箱平车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-07-01.jpg",
+    "title": "File:201612 Hamburg Süd containers on X70 in Jinhua.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:201612_Hamburg_S%C3%BCd_containers_on_X70_in_Jinhua.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "MNXANL",
+    "orig": "4912x3264",
+    "kb": 109,
+    "quality": "lapvar 516 mean 131"
+   },
+   {
+    "file": "freight-07-02.jpg",
+    "title": "File:X70 5234678@SJN (20150929120002).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:X70_5234678@SJN_(20150929120002).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 162,
+    "quality": "lapvar 972 mean 152"
+   },
+   {
+    "file": "freight-07-03.jpg",
+    "title": "File:X70 5226573@SJN (20150929120025).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:X70_5226573@SJN_(20150929120025).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 180,
+    "quality": "lapvar 989 mean 136"
+   }
+  ]
+ },
+ "freight-08": {
+  "name": "C70 型敞车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-08-01.jpg",
+    "title": "File:C70 1658252@MYN (20150106163223).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:C70_1658252@MYN_(20150106163223).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 126,
+    "quality": "lapvar 618 mean 126"
+   },
+   {
+    "file": "freight-08-02.jpg",
+    "title": "File:C70 1658252@MYN (20150106163247).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:C70_1658252@MYN_(20150106163247).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 149,
+    "quality": "lapvar 724 mean 128"
+   },
+   {
+    "file": "freight-08-03.jpg",
+    "title": "File:C70 1618678@MYN (20150106163052).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:C70_1618678@MYN_(20150106163052).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2816x1880",
+    "kb": 180,
+    "quality": "lapvar 554 mean 110"
+   }
+  ]
+ },
+ "freight-09": {
+  "name": "P70 型棚车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-09-01.jpg",
+    "title": "File:P70-3816977 Boxcar at Liulihe (20141203133235).JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:P70-3816977_Boxcar_at_Liulihe_(20141203133235).JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "2592x1936",
+    "kb": 193,
+    "quality": "lapvar 698 mean 105"
+   },
+   {
+    "file": "freight-09-02.jpg",
+    "title": "File:P70 3808323@QHE (20151118151715).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:P70_3808323@QHE_(20151118151715).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "3264x2448",
+    "kb": 147,
+    "quality": "lapvar 1010 mean 120"
+   },
+   {
+    "file": "freight-09-03.jpg",
+    "title": "File:P70 3808323@QHE (20151118152532).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:P70_3808323@QHE_(20151118152532).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "3264x2448",
+    "kb": 136,
+    "quality": "lapvar 810 mean 108"
+   }
+  ]
+ },
+ "freight-10": {
+  "name": "D26 型长大货物车",
+  "cat": "freight",
+  "photos": [
+   {
+    "file": "freight-10-01.jpg",
+    "title": "File:China Railways DQ45.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_DQ45.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "DF7C5200",
+    "orig": "5184x3456",
+    "kb": 299,
+    "quality": "lapvar 1644 mean 109"
+   }
+  ]
+ },
+ "station-01": {
+  "name": "哈尔滨站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-01-01.jpg",
+    "title": "File:South facade of Harbin Railway Station (20230721081450).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:South_facade_of_Harbin_Railway_Station_(20230721081450).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "7173x4782",
+    "kb": 161,
+    "quality": "lapvar 1332 mean 151"
+   },
+   {
+    "file": "station-01-02.jpg",
+    "title": "File:South facade of Harbin Railway Station (20230721081239).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:South_facade_of_Harbin_Railway_Station_(20230721081239).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "7201x4801",
+    "kb": 172,
+    "quality": "lapvar 1499 mean 152"
+   }
+  ]
+ },
+ "station-02": {
+  "name": "郑州站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-02-01.jpg",
+    "title": "File:20201102 Area around Zhengzhou Railway Station 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20201102_Area_around_Zhengzhou_Railway_Station_02.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Windmemories",
+    "orig": "1800x1200",
+    "kb": 173,
+    "quality": "lapvar 1625 mean 155"
+   },
+   {
+    "file": "station-02-02.jpg",
+    "title": "File:20250109 Zhengzhou Railway Station (Metro) - Entrance C.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20250109_Zhengzhou_Railway_Station_(Metro)_-_Entrance_C.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Windmemories",
+    "orig": "1800x1200",
+    "kb": 151,
+    "quality": "lapvar 607 mean 47"
+   },
+   {
+    "file": "station-02-03.jpg",
+    "title": "File:20250109 Zhengzhou Railway Station (Metro) - Entrance G.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:20250109_Zhengzhou_Railway_Station_(Metro)_-_Entrance_G.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Windmemories",
+    "orig": "1800x1200",
+    "kb": 154,
+    "quality": "lapvar 701 mean 58"
+   }
+  ]
+ },
+ "station-03": {
+  "name": "青龙桥站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-03-01.jpg",
+    "title": "File:Main building of Qinglongqiao Railway Station (20170329104940).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Main_building_of_Qinglongqiao_Railway_Station_(20170329104940).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 225,
+    "quality": "lapvar 1194 mean 98"
+   },
+   {
+    "file": "station-03-02.jpg",
+    "title": "File:Qinglongqiao Railway Station DJI 0217.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Qinglongqiao_Railway_Station_DJI_0217.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "David290",
+    "orig": "4000x3000",
+    "kb": 270,
+    "quality": "lapvar 728 mean 111"
+   },
+   {
+    "file": "station-03-03.jpg",
+    "title": "File:Qinglongqiao Railway Station DJI 0229.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Qinglongqiao_Railway_Station_DJI_0229.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "David290",
+    "orig": "4000x3000",
+    "kb": 278,
+    "quality": "lapvar 1266 mean 133"
+   }
+  ]
+ },
+ "station-04": {
+  "name": "北京站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-04-01.jpg",
+    "title": "File:Beijing Railway Station (20210521181346).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Beijing_Railway_Station_(20210521181346).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "7360x4912",
+    "kb": 160,
+    "quality": "lapvar 1530 mean 180"
+   },
+   {
+    "file": "station-04-02.jpg",
+    "title": "File:Beijing Railway Station (20210521181025).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Beijing_Railway_Station_(20210521181025).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "6985x4657",
+    "kb": 170,
+    "quality": "lapvar 1523 mean 158"
+   },
+   {
+    "file": "station-04-03.jpg",
+    "title": "File:Beijing Railway Station from East Footbridge (20210521183213).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Beijing_Railway_Station_from_East_Footbridge_(20210521183213).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "7160x4773",
+    "kb": 174,
+    "quality": "lapvar 1688 mean 167"
+   }
+  ]
+ },
+ "station-05": {
+  "name": "广州站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-05-01.jpg",
+    "title": "File:201906 Main entrance of Guangzhou Railway Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:201906_Main_entrance_of_Guangzhou_Railway_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Jonashtand",
+    "orig": "6000x4000",
+    "kb": 141,
+    "quality": "lapvar 754 mean 113"
+   },
+   {
+    "file": "station-05-02.jpg",
+    "title": "File:Guangzhou Railway Station 2013.11.16 07-27-58.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Guangzhou_Railway_Station_2013.11.16_07-27-58.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Zhangzhugang",
+    "orig": "5472x3648",
+    "kb": 133,
+    "quality": "lapvar 960 mean 167"
+   },
+   {
+    "file": "station-05-03.jpg",
+    "title": "File:Guangzhou Railway Station 01.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Guangzhou_Railway_Station_01.jpg",
+    "license": "CC BY 2.0",
+    "author": "Rain Rannu",
+    "orig": "3888x2592",
+    "kb": 177,
+    "quality": "lapvar 1601 mean 159"
+   }
+  ]
+ },
+ "station-06": {
+  "name": "上海站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-06-01.jpg",
+    "title": "File:201510 Shanghai Railway Station.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:201510_Shanghai_Railway_Station.JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "MNXANL",
+    "orig": "4912x2760",
+    "kb": 143,
+    "quality": "lapvar 729 mean 74"
+   },
+   {
+    "file": "station-06-02.jpg",
+    "title": "File:Moling Road to Shanghai Railway Station (20151004101914).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Moling_Road_to_Shanghai_Railway_Station_(20151004101914).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 184,
+    "quality": "lapvar 1139 mean 79"
+   },
+   {
+    "file": "station-06-03.jpg",
+    "title": "File:Baggage check at Shanghai Railway Station (20151004101930).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Baggage_check_at_Shanghai_Railway_Station_(20151004101930).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "N509FZ",
+    "orig": "4000x2664",
+    "kb": 128,
+    "quality": "lapvar 1149 mean 173"
+   }
+  ]
+ },
+ "station-07": {
+  "name": "拉萨站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-07-01.jpg",
+    "title": "File:Lhasa Railway Station (23835981495).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Lhasa_Railway_Station_(23835981495).jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "Laika ac from UK",
+    "orig": "4447x3341",
+    "kb": 103,
+    "quality": "lapvar 453 mean 88"
+   },
+   {
+    "file": "station-07-02.jpg",
+    "title": "File:Lhasa Railway Station (23468038179).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Lhasa_Railway_Station_(23468038179).jpg",
+    "license": "CC BY-SA 2.0",
+    "author": "Laika ac from UK",
+    "orig": "4147x3110",
+    "kb": 162,
+    "quality": "lapvar 798 mean 95"
+   },
+   {
+    "file": "station-07-03.jpg",
+    "title": "File:Lhasa Railway Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Lhasa_Railway_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "钉钉",
+    "orig": "4128x2322",
+    "kb": 147,
+    "quality": "lapvar 1667 mean 109"
+   }
+  ]
+ },
+ "station-09": {
+  "name": "武汉站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-09-01.jpg",
+    "title": "File:Wuhan Railway Station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Wuhan_Railway_Station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Arnie97",
+    "orig": "5488x4112",
+    "kb": 146,
+    "quality": "lapvar 869 mean 142"
+   },
+   {
+    "file": "station-09-02.jpg",
+    "title": "File:Atrium of Wuhan Railway Station (February 2024).jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Atrium_of_Wuhan_Railway_Station_(February_2024).jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Zheng Zhou",
+    "orig": "4032x2268",
+    "kb": 202,
+    "quality": "lapvar 1695 mean 90"
+   },
+   {
+    "file": "station-09-03.jpg",
+    "title": "File:Wuhan railway station.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Wuhan_railway_station.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Rc1959",
+    "orig": "4000x3000",
+    "kb": 141,
+    "quality": "lapvar 772 mean 127"
+   }
+  ]
+ },
+ "station-10": {
+  "name": "上海虹桥站",
+  "cat": "station",
+  "photos": [
+   {
+    "file": "station-10-01.jpg",
+    "title": "File:Shanghai Hongqiao Railway Station 01 2015-09.JPG",
+    "source": "https://commons.wikimedia.org/wiki/File:Shanghai_Hongqiao_Railway_Station_01_2015-09.JPG",
+    "license": "CC BY-SA 4.0",
+    "author": "猫猫的日记本",
+    "orig": "4912x3264",
+    "kb": 109,
+    "quality": "lapvar 394 mean 29"
+   },
+   {
+    "file": "station-10-02.jpg",
+    "title": "File:Shanghai Hongqiao Railway Station 20150512 125117.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Shanghai_Hongqiao_Railway_Station_20150512_125117.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Qa003qa003",
+    "orig": "4160x3120",
+    "kb": 137,
+    "quality": "lapvar 559 mean 155"
+   },
+   {
+    "file": "station-10-03.jpg",
+    "title": "File:Shanghai Hongqiao Station-20150519-RM-110424.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Shanghai_Hongqiao_Station-20150519-RM-110424.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "Ermell",
+    "orig": "4608x3456",
+    "kb": 198,
+    "quality": "lapvar 1051 mean 102"
+   }
+  ]
+ }
+}

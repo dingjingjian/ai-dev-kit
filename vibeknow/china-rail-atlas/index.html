@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#f5f4f0">
+<title>中国铁路图鉴</title>
+<style>
+:root{
+  --bg:#f5f4f0; --card:#ffffff; --ink:#16181d; --ink-2:#5c636f; --ink-3:#989faa;
+  --line:#e6e4dd; --line-2:#efeee9;
+  --accent:#1f6f4f; --accent-soft:#e8f2ec;
+  --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-l:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+  --safe-r:var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --bar-h:54px; --page:640px; --radius:14px;
+  --ease:cubic-bezier(.2,.7,.3,1);
+  --sh-1:0 1px 2px rgba(20,22,28,.04), 0 10px 24px -16px rgba(20,22,28,.24);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;touch-action:manipulation;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  color:var(--ink); background:var(--bg); min-height:100%;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
+  padding-left:var(--safe-l); padding-right:var(--safe-r);
+}
+button{font-family:inherit;cursor:pointer;border:none;outline:none;background:none;color:inherit;font-size:inherit;}
+code{font-family:"SF Mono",Menlo,Consolas,monospace;}
+
+/* ============ 顶栏（吸顶容器：topbar + tabs 合一，免硬编码偏移） ============
+   基线为 Chrome 61：不写 backdrop-filter 也能用，模糊只作增强层。 */
+.topwrap{
+  position:sticky; top:0; z-index:20;
+  padding-top:var(--safe-top);
+  background:rgba(245,244,240,.97);
+  border-bottom:1px solid var(--line);
+}
+@supports ((-webkit-backdrop-filter:blur(18px)) or (backdrop-filter:blur(18px))){
+  .topwrap{
+    background:rgba(245,244,240,.82);
+    -webkit-backdrop-filter:saturate(180%) blur(18px);
+    backdrop-filter:saturate(180%) blur(18px);
+  }
+}
+.topbar{
+  max-width:var(--page); margin:0 auto;
+  display:flex; align-items:center;
+  height:var(--bar-h); padding:0 12px;
+}
+.topbar h1{font-size:17px; font-weight:600; letter-spacing:-.02em; flex:1; text-align:center;}
+.topbar .spacer{width:36px; flex-shrink:0;}
+
+/* 分类 tab：2 字短名 + 自动换行，不用横向滚动。
+   理由（沿用 vehicle-atlas 结论）：吸顶栏里套横向滚动容器，低端 Android 上渲染残缺，
+   且右侧 tab 点不到；换行后 5 个 tab 任何时候都点得到。
+   间距走子项 margin：Chrome <84 没有 flex gap。 */
+.tabs{
+  max-width:var(--page); margin:0 auto;
+  display:flex; flex-wrap:wrap;
+  padding:0 12px 4px;
+}
+.tab{
+  flex-shrink:0; margin:0 5px 8px 0; padding:6px 10px; border-radius:999px;
+  font-size:13px; font-weight:500; color:var(--ink-2);
+  background:var(--card); border:1px solid var(--line); white-space:nowrap;
+  transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+}
+.tab:active{transform:scale(.95);}
+.tab.active{
+  background:var(--ink); color:#fff; border-color:var(--ink);
+  box-shadow:0 3px 10px -4px rgba(0,0,0,.5);
+}
+
+/* ============ 列表 ============ */
+.list{max-width:var(--page); margin:0 auto; padding:16px 16px calc(40px + var(--safe-bottom));}
+.section{margin-bottom:30px;}
+.cat-cover{border-radius:var(--radius); overflow:hidden; border:1px solid var(--line); margin-bottom:12px;}
+.section-head{display:flex; align-items:baseline; margin:0 4px 6px;}
+.section-head h2{font-size:16px; font-weight:600; letter-spacing:-.01em;}
+.section-head .en{font-size:12px; color:var(--ink-3);}
+.section-head .cnt{
+  margin-left:auto; font-size:11px; font-weight:500; color:var(--ink-2);
+  background:rgba(22,24,29,.05); padding:3px 9px; border-radius:999px;
+}
+.cat-note{font-size:12px; color:var(--ink-2); margin:0 4px 12px; line-height:1.5;}
+.grid{display:grid; grid-template-columns:1fr; grid-gap:14px;}
+@media(min-width:560px){.grid{grid-template-columns:1fr 1fr;}}
+
+/* ============ 图片框（占位 / 实图共用） ============
+   底图布局用固定高度（Chrome 61 无 aspect-ratio），实图 object-fit:cover 填充。
+   图片未就位时 .shot-ph 显示「配图待生成 + 期望文件名」，加载成功后覆盖其上。
+   补图不需要改代码：按同名文件放进 assets/img/ 即可。 */
+.shot{position:relative; overflow:hidden; background:#eeece6; border-bottom:1px solid var(--line-2); height:150px;}
+.shot.sm{height:104px;}
+.shot.lg{height:210px; border-bottom:none;}
+.shot-img{
+  position:absolute; top:0;right:0;bottom:0;left:0;
+  width:100%; height:100%; object-fit:cover; display:block;
+}
+.shot-ph{
+  position:absolute; top:0;right:0;bottom:0;left:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:0 14px;
+  background:linear-gradient(135deg,#f1f0ea,#e6e4dc);
+}
+.shot-ph::after{
+  content:""; position:absolute; top:5px;right:5px;bottom:5px;left:5px;
+  border:1px dashed rgba(31,111,79,.26); border-radius:10px; pointer-events:none;
+}
+.shot-ph .ic{width:30px; height:30px; color:#9aa08c; display:block;}
+.shot-ph .nm{
+  margin-top:8px; font-size:12px; font-weight:600; color:#6a7060;
+  max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.shot-ph .bd{
+  margin-bottom:7px; font-size:10px; font-weight:600; letter-spacing:.1em;
+  color:#7f8574; background:rgba(255,255,255,.75);
+  padding:2px 8px; border-radius:999px;
+}
+/* 图片左上角年代徽标（列表卡片只标出厂年份，完整跨度见详情页）。
+   z-index 高于实图层，补图后依然可见。 */
+.shot-era{
+  position:absolute; left:8px; top:8px; z-index:2;
+  max-width:78%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  font-size:10px; font-weight:600; color:#3a4032;
+  background:rgba(255,255,255,.9); border:1px solid rgba(22,24,29,.06);
+  padding:2px 8px; border-radius:999px;
+}
+
+/* ============ 卡片 ============ */
+.card{
+  background:var(--card); border-radius:var(--radius); overflow:hidden;
+  border:1px solid var(--line); box-shadow:var(--sh-1); cursor:pointer;
+  transition:transform .22s var(--ease), box-shadow .22s var(--ease);
+}
+@media(hover:hover){
+  .card:hover{transform:translateY(-3px); box-shadow:0 2px 6px rgba(20,22,28,.06), 0 18px 40px -18px rgba(20,22,28,.28);}
+  .card:hover .chev{color:var(--accent); transform:translateX(2px);}
+}
+.card:active{transform:scale(.985);}
+.card-info{padding:12px 14px 14px;}
+.card-head{display:flex; align-items:center;}
+.card-head .name{font-size:15px; font-weight:600; letter-spacing:-.01em; flex:1; min-width:0;}
+.chev{width:15px; height:15px; color:var(--ink-3); flex-shrink:0; transition:transform .22s var(--ease), color .22s var(--ease);}
+.card-info .meta{font-size:11.5px; color:var(--ink-3); margin-top:2px;}
+.card-info .desc{font-size:12.5px; color:var(--ink-2); margin-top:6px; line-height:1.55;}
+
+/* ============ 详情 ============ */
+.detail{max-width:var(--page); margin:0 auto; padding:16px 16px calc(56px + var(--safe-bottom));}
+.hero{border-radius:16px; overflow:hidden; border:1px solid var(--line); box-shadow:var(--sh-1); margin-bottom:16px;}
+.badge-row{display:flex; align-items:center; flex-wrap:wrap; margin-bottom:9px;}
+.detail .cat-badge{
+  display:inline-block; padding:4px 11px; border-radius:999px;
+  font-size:11px; font-weight:600; background:var(--accent-soft); color:var(--accent);
+}
+.badge-row .cat-badge{margin-bottom:8px;}
+.era-pill{
+  padding:4px 11px; border-radius:999px;
+  font-size:11px; font-weight:600; color:var(--ink-2);
+  background:rgba(22,24,29,.05);
+  margin-bottom:8px;
+}
+.badge-row .era-pill{margin-left:8px;}
+.badge-row .kind-pill{
+  padding:4px 11px; border-radius:999px;
+  font-size:11px; font-weight:600; color:#4b5260;
+  background:rgba(22,24,29,.05);
+  margin-left:8px; margin-bottom:8px;
+}
+.detail h2{font-size:23px; font-weight:700; letter-spacing:-.025em; margin-bottom:3px;}
+.detail .en-name{font-size:13px; color:var(--ink-3);}
+.detail .tagline{font-size:13.5px; color:var(--ink-2); line-height:1.6; margin:10px 0 18px;}
+.block{
+  background:var(--card); border-radius:14px; border:1px solid var(--line);
+  box-shadow:0 1px 2px rgba(20,22,28,.03);
+  padding:15px; margin-bottom:13px;
+}
+.block h3{font-size:14px; font-weight:600; margin-bottom:10px; display:flex; align-items:center;}
+/* 竖线与标题的间距直接写在 ::before 的 margin 上：flex gap 在 Chrome<84 无效，
+   且 ::before 与文字（匿名 flex item）无法被 `> * + *` 兜底规则命中。 */
+.block h3::before{content:""; width:3px; height:14px; border-radius:2px; background:var(--accent); flex-shrink:0; margin-right:8px;}
+.h3-b::before{background:#9a5b1f !important;}
+.h3-c::before{background:#2f5f9e !important;}
+.h3-d::before{background:#6c4fa8 !important;}
+.block p{font-size:14px; line-height:1.68; color:var(--ink);}
+.block p.hint{font-size:12.5px; color:var(--ink-2); line-height:1.55;}
+
+/* 关键参数 */
+.specs{display:grid; grid-template-columns:1fr 1fr; grid-gap:9px;}
+.spec{background:#f8f8f4; border:1px solid var(--line-2); border-radius:11px; padding:9px 11px; min-width:0;}
+.spec .k{font-size:11px; color:var(--ink-3); display:block; margin-bottom:3px;}
+.spec .v{font-size:13px; font-weight:600; color:var(--ink); line-height:1.4; display:block; overflow-wrap:break-word;}
+
+/* 亮点 */
+.feats{list-style:none;}
+.feats li{position:relative; padding-left:15px; font-size:13.5px; line-height:1.65; color:var(--ink);}
+.feats li::before{content:""; position:absolute; left:2px; top:9px; width:5px; height:5px; border-radius:50%; background:var(--accent);}
+.feats li + li{margin-top:8px;}
+
+/* AI 配图提示词 */
+.prompt-box{background:#16181d; border-radius:11px; padding:13px; margin-top:10px; border:1px solid rgba(255,255,255,.07);}
+.prompt-box pre{
+  color:#e9ebef; font-size:12px; line-height:1.68;
+  white-space:pre-wrap; overflow-wrap:break-word;
+  -webkit-user-select:text; user-select:text; -webkit-touch-callout:default;
+}
+.copy-btn{
+  margin-top:10px; padding:9px 17px; border-radius:999px;
+  background:var(--accent); color:#fff; font-size:13px; font-weight:500;
+  display:inline-flex; align-items:center;
+  box-shadow:0 6px 16px -8px rgba(31,111,79,.9);
+  transition:transform .18s var(--ease), background .18s var(--ease);
+}
+/* 图标与文字之间也靠 margin 留白（`> * + *` 命不中文字节点） */
+.copy-btn svg{width:14px; height:14px; margin-right:6px;}
+.copy-btn:active{transform:scale(.96);}
+.copy-btn.done{background:#2f7a54; box-shadow:0 6px 16px -8px rgba(47,122,84,.9);}
+
+/* toast */
+.toast{
+  position:fixed; left:50%; bottom:calc(30px + var(--safe-bottom));
+  transform:translateX(-50%) translateY(16px);
+  background:rgba(22,24,29,.92); color:#fff; padding:10px 18px; border-radius:12px;
+  font-size:13px; opacity:0; pointer-events:none; z-index:100; max-width:80%; text-align:center;
+  transition:opacity .3s var(--ease), transform .3s var(--ease);
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* ============ Flex 间距基线（Chrome <84 没有 flex gap，基线为 Chrome 61） ============
+   所有横向间距一律用子项 margin 形成，不引入 flex gap，也就不需要行为检测。 */
+.topbar > * + *{margin-left:6px;}
+.section-head > * + *{margin-left:8px;}
+.card-head > * + *{margin-left:6px;}
+.copy-btn > * + *{margin-left:6px;}
+.block h3 > * + *{margin-left:8px;}
+
+/* 悬浮操作按钮 */
+.fab{
+  position:fixed; right:calc(16px + var(--safe-r)); z-index:50;
+  width:44px; height:44px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  background:rgba(22,24,29,.88); color:#fff;
+  box-shadow:0 4px 14px rgba(0,0,0,.22);
+  opacity:0; pointer-events:none; transform:translateY(12px);
+  transition:opacity .25s var(--ease), transform .25s var(--ease);
+}
+.fab.show{opacity:1; pointer-events:auto; transform:translateY(0);}
+.fab:active{transform:scale(.92);}
+.fab svg{width:21px; height:21px;}
+.fab-top{bottom:calc(18px + var(--safe-bottom));}
+.fab-back{left:calc(16px + var(--safe-l)); right:auto; bottom:calc(18px + var(--safe-bottom));}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;}
+}
+</style>
+</head>
+<body>
+<div class="topwrap">
+  <header class="topbar">
+    <span class="spacer"></span>
+    <h1 id="title">中国铁路图鉴</h1>
+    <span class="spacer"></span>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+</div>
+<main id="app"></main>
+<div class="toast" id="toast"></div>
+<button class="fab fab-back" id="fabBack" aria-label="返回列表">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+</button>
+<button class="fab fab-top" id="fabTop" aria-label="回到顶部">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
+</button>
+<script src="./main.js"></script>
+</body>
+</html>
