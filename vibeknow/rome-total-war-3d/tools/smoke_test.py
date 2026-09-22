@@ -1,7 +1,7 @@
 # 无头冒烟：走通 阵营选择 → 过渡页（即将检阅）→ 检阅 → 军团志，外加自选军团分支。
 # 用法：python tools/smoke_test.py
 # 判据：全程无 JS 异常 / console.error；五页 DOM 关键点逐一落到预期。
-import os, sys, pathlib
+import os, sys, pathlib, time
 from playwright.sync_api import sync_playwright
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -31,8 +31,14 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
     page.on('console', lambda m: (errors.append('console.error: ' + m.text)
                                   if m.type == 'error' else None))
-    reqs = []   # 页面请求过的 URL：用来判「兵种图取哪一套」「有没有碰已退役的图」
-    page.on('request', lambda r: reqs.append(r.url))
+    reqs = []    # 页面请求过的 URL：用来判「兵种图取哪一套」「有没有碰已退役的图」
+    req_at = {}  # URL -> 第一次被请求的时刻：判「过渡画面是预热来的，还是进页才当场下载」
+
+    def on_req(r):
+        reqs.append(r.url)
+        req_at.setdefault(r.url, time.time())
+
+    page.on('request', on_req)
 
     def mode():
         """body 上还有可能挂别的状态类，
@@ -60,6 +66,9 @@ with sync_playwright() as p:
     n_cards = page.locator('#routeList .route-card').count()
     check(n_cards == 9, '阵营卡 9 张（8 阵营 + 自选），实际 ' + str(n_cards))
     check('罗马军团图鉴' in page.inner_text('.park-ttl'), 'hero 标题已渲染')
+    # hero 副标题走英文：中文那行「ROMA · 兵种志」中英混排，夹在拉丁字母里很突兀
+    sub = page.inner_text('.park-sub')
+    check('LEGION CODEX' in sub and '兵种志' not in sub, 'hero 副标题为英文：' + sub)
     # 首页 hero 轮播：八大军团横幅各一层（纯 CSS 交叉淡化，无 JS 定时器）
     n_shots = page.locator('.park-shots .park-shot').count()
     check(n_shots == 8, '首页 hero 轮播 8 层（八大军团横幅），实际 ' + str(n_shots))
@@ -69,6 +78,7 @@ with sync_playwright() as p:
     check(page.evaluate("!document.getElementById('globeSlot')"), '3D 地球组件已移除（无 #globeSlot）')
 
     # 2. 点阵营 → 过渡页（即将检阅）
+    t_pick = time.time()
     page.locator('#routeList .route-card').nth(0).click()
     page.wait_for_timeout(400)
     check(mode() == 'mode-gate', '进入过渡页')
@@ -83,6 +93,12 @@ with sync_playwright() as p:
         "getComputedStyle(document.querySelector('.gate-stage')).getPropertyValue('--gate-art')")
     check('gate-rome.webp' in gate_art, '⑨ 过渡画面按阵营取图（罗马）：' + gate_art[:80])
     check('faction-rome.webp' in gate_art, '⑨ 第一层兜底是该阵营横幅：' + gate_art[:80])
+    # 而这张图必须**在点阵营之前**就已经请求过（启动期预热 warmGateArt + 就绪才进页）。
+    # 否则进页那一刻才开始下载，画面链下一层的阵营横幅会先顶上来 ——
+    # 也就是「先显示别的图，再切到过渡图」那一下闪。
+    gate_url = next((u for u in reqs if u.endswith('/assets/tex/gate-rome.webp')), None)
+    check(gate_url is not None and req_at.get(gate_url, 1e9) < t_pick,
+          '⑨ 过渡画面在进页前已预热（进页不会先闪一张横幅）')
     # 通用凯旋门 ③⑤⑥ 已整组退役：既不能出现在页面里，也不能被请求
     # （它们是「上下信箱边露出原来大门」的来源 —— 图里还画着一台现代相机）
     check('gate-front' not in gate_art and '/tex/gate.webp' not in gate_art,
@@ -145,6 +161,10 @@ with sync_playwright() as p:
     check(page.inner_text('#sumCount') == '6', '军团志计 6 个兵种')
     check(page.inner_text('#sumKind') != '0', '军团志统计兵种类型：' + page.inner_text('#sumKind'))
     check(page.locator('#sumBars svg.radar').count() == 1, '六维战力雷达图已画出')
+    # 雷达图的数据层取 --f-accent*，靠的正是这一页**仍挂着阵营主题**（回阵营页时才摘）。
+    # 摘掉的话它就退回 :root 的默认值，于是不管刚检阅的是哪一支军团，图都是罗马红。
+    check(page.get_attribute('body', 'data-faction') == 'rome',
+          '军团志保留阵营主题（雷达图取当前阵营色，不是写死的帝国红）')
     check(page.locator('#sumDishes .sum-dish').count() == 6, '兵种档案 6 行')
     brief = page.inner_text('#sumBrief')
     check('编制合计' in brief, '检阅简报：' + brief[:40] + '…')
@@ -178,6 +198,17 @@ with sync_playwright() as p:
     check(wait_page('mode-review'), '自选军团进入检阅')
     check(page.get_attribute('body', 'data-faction') == 'custom', '自选军团挂 custom 主题')
     check(page.inner_text('#tourCrumb').endswith('第 1 / 2 队'), '自选军团只检阅 2 队')
+    # 换了阵营，雷达图必须跟着换色：罗马档是红（#d0433a），自选军团是金（#c9a93e）。
+    # 判据取**页面上真画出来的颜色**，不认 CSS 里写了什么。
+    steps2 = 0
+    while mode() == 'mode-review' and steps2 < 5:
+        page.locator('#tcNext').click()
+        page.wait_for_timeout(180)
+        steps2 += 1
+    face_custom = page.evaluate(
+        "getComputedStyle(document.querySelector('#sumBars .radar .face')).fill")
+    check(mode() == 'mode-summary' and face_custom.replace(' ', '') == 'rgb(201,169,62)',
+          '换阵营后雷达图配色跟着换（custom 金 ' + face_custom + '）')
 
     # 6. 背景音乐（base64 藏在 assets/audio/bgm.js，运行时 atob → Web Audio 解码）
     # 开关能翻转即说明整条链路通了：注入 → 解码 → 起播。若解码失败，

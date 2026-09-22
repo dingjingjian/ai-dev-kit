@@ -423,10 +423,55 @@
    *   ⑨ gate-<key> → 该阵营横幅 ⑧
    * 前一层 404 就露出下一层，JS 不参与判定 —— 没有「素材加载 / 起播失败」这类会卡住的
    * 状态分支，页面永远停在这 7.1s 上，不存在提前或在原地卡死的可能。
-   * （旧的「通用凯旋门」③⑤⑥ 已整组退役：图里画进了现代相机，且只会在信箱边里露出来。） */
+   * （旧的「通用凯旋门」③⑤⑥ 已整组退役：图里画进了现代相机，且只会在信箱边里露出来。）
+   *
+   * ⚠️ 这一页的图**必须先就绪再进页**（2026-09-22 修）：⑨ 是整屏主素材、也是整包里最重的一批，
+   * 原先点阵营才把 --gate-art 写上去，浏览器得先下载 ⑨ 才能画，于是画面链下一层的
+   * 该阵营横幅 ⑧ 先顶上来，图到了再换：用户看到的就是「先显示别的图，再切到过渡图」。
+   * 现在 warmGateArt() 启动期就把九张灌进缓存，enterGate() 再等到该阵营那张就绪
+   * （最多 GATE_WAIT_MS）才换页 + 起播 —— 换页那一刻 ⑨ 已在缓存里，全程只有一张图。
+   * 就绪判定只决定「什么时候进页」，画面链本身仍是 ⑨ → ⑧，缺图照旧退横幅。 */
   var GATE_MS=7100;
-  var gateTimer=null;
+  /* 图没进缓存时最多等这么久；等不到就按缺图照常起播 —— 流程不能被一张图卡住。 */
+  var GATE_WAIT_MS=2000;
+  var gateTimer=null,gateWaitT=null,gateToken=0;
   var GATE_ELS='.gate-shot,.gate-caption,.gate-title,.gate-subtitle,.gate-route-name';
+  /* ⑨ 九张过渡画面是这一页的整屏主素材，也是整包里最重的一批图。
+     启动期就把字节灌进缓存 —— 否则点阵营那一刻才开始下载，浏览器只能先拿画面链的
+     下一层（该阵营横幅 ⑧）顶上，图到了再换成 ⑨：用户看到的就是
+     「先显示别的图，再切到过渡图」那一下闪。
+     gateProbes 只在请求在飞时留一份强引用（防 GC 掐掉回调），读完即摘，不留解码位图。 */
+  var GATE_OK={};        /* key -> undefined 未探 / null 在飞 / true 已就绪 / false 缺失 */
+  var gateProbes=[];
+  function gateArtUrl(key){return './assets/tex/gate-'+key+'.webp';}
+  function gateAsk(key,cb){
+    if(GATE_OK[key]===true||GATE_OK[key]===false){cb(GATE_OK[key]);return;}
+    var im=new Image();
+    gateProbes.push(im);
+    function done(ok){
+      GATE_OK[key]=ok;
+      for(var i=0;i<gateProbes.length;i++){
+        if(gateProbes[i]===im){gateProbes.splice(i,1);break;}
+      }
+      cb(ok);
+    }
+    im.onload=function(){done(true);};
+    im.onerror=function(){done(false);};
+    im.src=gateArtUrl(key);
+  }
+  function warmGateArt(){
+    var keys=[],i;
+    for(i=0;i<FACTIONS.length;i++)keys.push(FACTIONS[i].key);
+    keys.push(CUSTOM_FACTION.key);
+    for(i=0;i<keys.length;i++){
+      (function(k){
+        if(GATE_OK[k]!==undefined)return;
+        GATE_OK[k]=null;
+        gateAsk(k,function(){});
+      })(keys[i]);
+    }
+  }
+  warmGateArt();
   function resetGateAnim(){
     var els=document.querySelectorAll(GATE_ELS);
     for(var i=0;i<els.length;i++){
@@ -461,27 +506,44 @@
   }
   function leaveGate(){
     if(gateTimer){clearTimeout(gateTimer);gateTimer=null;}
+    if(gateWaitT){clearTimeout(gateWaitT);gateWaitT=null;}
+    gateToken++;   /* 作废仍在等图的这一次进场 */
   }
   function enterGate(faction){
     hideToast();
     st.faction=faction;
     st.page='gate';
-    document.body.className='mode-gate';
-    document.body.setAttribute('data-faction',faction.key);
-    /* 这一页写的是**你选中的这个阵营**，不是 app 的名字：
-       标题＝阵营名，副标题＝它的拉丁名。「SPQR · LEGIONVM CODEX」是罗马专属的国号与书名，
-       只留给罗马那一档，别的阵营挂上它就是张冠李戴。
-       底下那行改成队数——阵营名已经在标题上了，再写一遍是重复。 */
-    gateTitleEl.textContent=faction.name;
-    gateSubtitleEl.textContent=(faction.key==='rome')
-      ? 'SPQR · LEGIONVM CODEX'
-      : (faction.latin||'');
-    gateRouteNameEl.textContent='即将检阅 · '+faction.unitIdx.length+' 队';
-    setGateArt(faction.key);
-    if(gateTimer)clearTimeout(gateTimer);
-    resetGateAnim();
-    setGateTiming(GATE_MS);
-    gateTimer=setTimeout(enterReview,GATE_MS);
+    if(gateTimer){clearTimeout(gateTimer);gateTimer=null;}
+    if(gateWaitT){clearTimeout(gateWaitT);gateWaitT=null;}
+    var token=++gateToken;
+    var key=faction.key;
+    var started=false;
+    /* 换页 + 起播：只在图就绪（或确认缺图 / 等超时）之后跑，且一次进场只跑一次。
+       图没到之前**根本不进这一页** —— 于是「⑧ 先顶上来、⑨ 再替换上去」那一下没有了。 */
+    function play(){
+      if(started||token!==gateToken)return;
+      started=true;
+      if(gateWaitT){clearTimeout(gateWaitT);gateWaitT=null;}
+      document.body.className='mode-gate';
+      document.body.setAttribute('data-faction',key);
+      /* 这一页写的是**你选中的这个阵营**，不是 app 的名字：
+         标题＝阵营名，副标题＝它的拉丁名。「SPQR · LEGIONVM CODEX」是罗马专属的国号与书名，
+         只留给罗马那一档，别的阵营挂上它就是张冠李戴。
+         底下那行改成队数——阵营名已经在标题上了，再写一遍是重复。 */
+      gateTitleEl.textContent=faction.name;
+      gateSubtitleEl.textContent=(key==='rome')
+        ? 'SPQR · LEGIONVM CODEX'
+        : (faction.latin||'');
+      gateRouteNameEl.textContent='即将检阅 · '+faction.unitIdx.length+' 队';
+      setGateArt(key);
+      resetGateAnim();
+      setGateTiming(GATE_MS);
+      gateTimer=setTimeout(enterReview,GATE_MS);
+    }
+    /* 先挂封顶计时器、再问图：图已在缓存里时 gateAsk 会**同步**回调，
+       play() 顺手把这个计时器清掉；两种时序都不会留下野计时器。 */
+    gateWaitT=setTimeout(play,GATE_WAIT_MS);
+    gateAsk(key,play);
   }
 
   /* ================= 检阅页 ================= */
@@ -608,7 +670,9 @@
     var order=f.unitIdx;
     st.page='summary';
     document.body.className='mode-summary';
-    document.body.removeAttribute('data-faction');
+    /* 阵营主题色要一直留到这一页：雷达图的数据层与简报里的数字都取 --f-accent*，
+       颜色一致靠的就是 <body data-faction>。回阵营页时才摘掉（backToFactions / quitReview）。 */
+    document.body.setAttribute('data-faction',f.key);
     var n=order.length,i,k;
     var avg=[0,0,0,0,0,0];
     for(i=0;i<n;i++){
@@ -654,7 +718,9 @@
   }
   function backToFactions(){
     hideToast();
-    if(gateTimer){clearTimeout(gateTimer);gateTimer=null;}
+    /* 走 leaveGate() 而不是只清 gateTimer：它还会作废「等图进场」那一次挂起
+       （否则中途退出后，图一到又会把页面拽回过渡页）。 */
+    leaveGate();
     st.page='factions';
     st.faction=null;
     document.body.className='mode-factions';
