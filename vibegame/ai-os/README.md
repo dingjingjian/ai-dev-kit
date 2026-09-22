@@ -50,6 +50,7 @@ python .skill/minitool-zip-builder/scripts/audit_artifact.py vibegame/ai-os/ai-o
 | `_dev/build.py` | 唯一真源构建脚本 |
 | `assets/three.min.js` / `assets/moon.jpg` | 月球天气的运行时资源（本地 Three.js + 月面贴图，随 zip 分发） |
 | `assets/cam/food-*.webp` | 相机取景素材（36 张美食图，借自 `vibeknow/world-food-3d`，由 `_dev/make_cam_photos.py` 派生，随 zip 分发） |
+| `assets/gallery/*.jpg` | 作品展封面图（20 张，借自仓库根 `vibecoding-gallery/covers/`，随 zip 分发） |
 | `_dev/make_cam_photos.py` | 相机取景素材派生脚本（唯一入口，产物入库） |
 | `_dev/build_zip.py` | 前置门禁 + 打包小红书规范 zip |
 | `_dev/smoke_test.py` | 无头自检与兼容扫描 |
@@ -65,7 +66,8 @@ python .skill/minitool-zip-builder/scripts/audit_artifact.py vibegame/ai-os/ai-o
 | 存储合规 | 已（容器 Storage JS API 优先 + `localStorage` 降级，见 DESIGN.md §5） |
 | 系统音效 | 已（Web Audio 合成 25 个系统语义音效，零音频文件；全系统可整体静音，见 DESIGN.md §4.11） |
 | 应用商店 | 已（主屏第 7 格；介绍 ai-dev-kit 全部小工具，清单构建期由仓库根 `TRACKS.md` 派生、四分类分组、可筛选；副标题与上架标签也在构建期折出，目录与状态原文不上屏，见 DESIGN.md §4.12） |
-| 小工具 zip 打包 | 已（`_dev/build_zip.py` → `ai-os.zip`，~1.5 MB（含本地 Three.js + 月面贴图 + 36 张美食素材，共 41 文件）；`audit_artifact.py` PASS 0 warning） |
+| 作品展 | 已（主屏第 8 格；vibecoding 大赛优秀作品展：双列瀑布流 + 搜索 + 赛道筛选 + 双击点赞 + 笔记详情页 + 扭蛋机彩蛋；数据构建期由仓库根 `vibecoding-gallery/main.js` 派生注入，封面图随包分发，见 DESIGN.md §4.14） |
+| 小工具 zip 打包 | 已（`_dev/build_zip.py` → `ai-os.zip`，~2.6 MB（含本地 Three.js + 月面贴图 + 36 张美食素材 + 20 张作品展封面，共 61 文件）；`audit_artifact.py` PASS 0 warning） |
 | 上架图标 | 未（需补 512×512 PNG，不随 zip 打包） |
 | 笔记 / 文案 | 未 |
 | 游戏玩法 | 已（计算器/闹钟/日历/助手/日程/统计/电话/短信/相机；机制与恶搞文案按 v1 逆向还原，见 DESIGN.md §4.7–4.8） |
@@ -76,6 +78,7 @@ python .skill/minitool-zip-builder/scripts/audit_artifact.py vibegame/ai-os/ai-o
 
 - v1 为 React 构建产物归档，无源码；已整体移入 `archive/v1/` 只读保留，v2 在其旁重建。
 - **构建依赖仓库根 `TRACKS.md`**（应用商店的数据真源，只读解析、不写回）：把 ai-os 目录单独拷出去构建会因缺该文件而**拒绝构建** —— 这是刻意的，避免手抄清单与上游分叉；改了 `TRACKS.md` 的新项目 / 定位 / 物料状态要**重跑 `_dev/build.py`**，否则 `_dev/build_zip.py` 的门禁会把 zip 拦下。
+- **构建依赖仓库根 `vibecoding-gallery/`**（作品展的数据真源，只读解析、不写回）：`_dev/build.py` 的 `gallery_data()` 在构建期从 `vibecoding-gallery/main.js` 与 `covers-data.js` 提取作品数据注入 `main.js`；封面图从 `vibecoding-gallery/covers/` 复制到 `assets/gallery/`。把 ai-os 目录单独拷出去构建会因缺该目录而**拒绝构建**。
 - 相机素材是本仓库内**跨项目借用**：目前只从 `vibeknow/world-food-3d` 的美食图读原图（早先借过的猫咪 / 恐龙图已按用户口径删除），产物落 `assets/cam/`，**不改动也不删除上游项目文件**；重生成只跑 `_dev/make_cam_photos.py`（不要在 `assets/cam/` 里手工增删改名，否则与 `build.py` 扫描出的清单口径打架）。体积按小工具门禁（10 MiB 上限 / 2 MiB 建议）控制，**加来源前先算账**。
 - 容器与兼容细则引用仓库内 Skill：`.skill/minitool-zip-builder/`（SKILL.md 及 references）。
 - 打包产物（`dist/`、`ai-os.zip`）默认被根 `.gitignore` 的 `dist/` 与 `*.zip` 忽略，**不入库**；若要随仓库分发，需 `git add -f`，由用户决定。

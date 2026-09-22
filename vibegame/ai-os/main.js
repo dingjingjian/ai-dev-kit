@@ -16,6 +16,8 @@
     moon: '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>',
     /* 购物袋：袋身（圆角矩形）+ 提手（弧线）—— 手绘简单几何，不写复杂单 path */
     bag: '<svg viewBox="0 0 24 24"><path d="M5.4 7.6h13.2a1.6 1.6 0 0 1 1.6 1.7l-.9 10a2 2 0 0 1-2 1.8H6.7a2 2 0 0 1-2-1.8l-.9-10a1.6 1.6 0 0 1 1.6-1.7z"/><path d="M8.8 7.6V6.1a3.2 3.2 0 0 1 6.4 0v1.5" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
+    /* 作品展：双列瀑布流卡片（两张错落卡片 + 顶部小图）—— 手绘简单几何 */
+    gallery: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="10" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="15.5" width="7" height="5" rx="1.6"/><rect x="13.5" y="12.5" width="7" height="8" rx="1.6"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
@@ -29,7 +31,11 @@
     { id: 'stats',     name: '统计',     slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 },
     /* 应用商店的色相取青柠绿（黄绿，hue≈92）—— 主屏其余图标里没有这个色区，
      * 与日程/电话的春绿、统计/助手的青蓝都拉得开（DESIGN §4.3 色相不重复）。 */
-    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 }
+    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 },
+    /* 作品展：vibecoding 大赛优秀作品展（瀑布流 + 详情页 + 扭蛋机彩蛋）。
+     * 色相取品红（hue≈345），与应用商店青柠、统计青蓝、闹钟紫都拉得开。
+     * 数据构建期由仓库根 vibecoding-gallery/main.js 派生注入（见 GALLERY_DATA 占位符）。 */
+    { id: 'gallery',   name: '作品展',   slogan: 'vibecoding 优秀作品展', g: 'gallery', c: ['#FF6B9D', '#D62972'], deg: 135 }
   ];
   var DOCK = [
     { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
@@ -44,10 +50,10 @@
                       g: 'moon', c: ['#8FA6D8', '#3A4A7A'], deg: 135 };
 
   /* ---------- 应用商店数据（§4.12） ----------
-   * 由 _dev/build.py 在构建期解析仓库根 TRACKS.md 后注入（占位符 [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班热力图", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + 格子式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，格子式热力图回看半年情绪"}, {"n": "拼豆设计工具（拼豆神器）", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "文档转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + 桌面端双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/反爬校验/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、在线文档写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从提交记录生成日报并写入在线表格"}, {"n": "30 种图表速查图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}, {"n": "全球交通工具图鉴", "d": "vibetool/vehicle-atlas/", "t": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过）", "s": "框架就绪 · 配图待生成", "st": "开发中", "tone": "warn", "tag": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆小游戏", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照积木参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "3D 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "口袋地球", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "寰宇小馆", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "掌心里的航天梦（口袋火箭）", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "奔月（3D 登月全程模拟器）", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已打包 · 缺笔记", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "恐龙地球", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}]}]）——
+   * 由 _dev/build.py 在构建期解析仓库根 TRACKS.md 后注入（占位符 [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班热力图", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + 格子式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，格子式热力图回看半年情绪"}, {"n": "拼豆设计工具（拼豆神器）", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "文档转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + 桌面端双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/反爬校验/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、在线文档写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从提交记录生成日报并写入在线表格"}, {"n": "30 种图表速查图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆小游戏", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照积木参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "3D 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "口袋地球", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "寰宇小馆", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "掌心里的航天梦（口袋火箭）", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "奔月（3D 登月全程模拟器）", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已发布（笔记已归档 xiaohongshu/）", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "恐龙地球", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}, {"n": "大航海时代 · 帆船图鉴", "d": "vibeknow/age-of-sail-3d/", "t": "大航海时代（Age of Sail）帆船图鉴：30 艘帆船 / 5 大海域家族，5 支主题舰队 + 自选，舰队沿岸航行时地球标注每艘的建造地，复用 jurassic-park-3d 框架", "s": "已完成 · 待发布", "st": "开发中", "tone": "warn", "tag": "大航海时代"}, {"n": "全球交通工具图鉴", "d": "vibeknow/vehicle-atlas/", "t": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史"}]}]）——
    * 与小工具包体无关，全部在包内，运行时不读任何外部文件；手抄清单会与 TRACKS.md 分叉，
    * 故这里只声明、不维护内容。结构：[{tag, name, items:[{n 名称, d 目录, t 定位, s 状态}]}] */
-  var STORE_GROUPS = [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班热力图", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + 格子式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，格子式热力图回看半年情绪"}, {"n": "拼豆设计工具（拼豆神器）", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "文档转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + 桌面端双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/反爬校验/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、在线文档写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从提交记录生成日报并写入在线表格"}, {"n": "30 种图表速查图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}, {"n": "全球交通工具图鉴", "d": "vibetool/vehicle-atlas/", "t": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过）", "s": "框架就绪 · 配图待生成", "st": "开发中", "tone": "warn", "tag": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆小游戏", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照积木参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "3D 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "口袋地球", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "寰宇小馆", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "掌心里的航天梦（口袋火箭）", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "奔月（3D 登月全程模拟器）", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已打包 · 缺笔记", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "恐龙地球", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}]}];
+  var STORE_GROUPS = [{"tag": "vibetool", "name": "实用工具", "items": [{"n": "准时下班热力图", "d": "vibetool/offwork-heatmap/", "t": "上下班打卡 + GitHub 式热力图看每日准时情况", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "上下班打卡 + 格子式热力图看每日准时情况"}, {"n": "心情日记", "d": "vibetool/mood-diary/", "t": "每天一种颜色记心情，GitHub 式热力图回看半年情绪", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "每天一种颜色记心情，格子式热力图回看半年情绪"}, {"n": "拼豆设计工具（拼豆神器）", "d": "vibetool/perler-bead-designer/", "t": "48 色标准色卡的拼豆图纸设计与导出", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "48 色标准色卡的拼豆图纸设计与导出"}, {"n": "像素画编辑器", "d": "vibetool/pixel-art-editor/", "t": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "16–256 画布，笔刷/图层/撤销，导出 SVG+PNG"}, {"n": "文档转 Markdown", "d": "vibetool/word-to-md/", "t": "浏览器端 .docx 转 Markdown", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "浏览器端 .docx 转 Markdown"}, {"n": "密码管理器", "d": "vibetool/password-manager/", "t": "AES 加密本地密码库，Web + Electron 双模式", "s": "已发布（自用）", "st": "已上架", "tone": "ok", "tag": "AES 加密本地密码库，Web + 桌面端双模式"}, {"n": "AI 网关", "d": "vibetool/ai_gateway/", "t": "本地 LLM API 统一网关，智能体只需配置一次", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "本地 LLM API 统一网关，智能体只需配置一次"}, {"n": "网站截图", "d": "vibetool/screenshot/", "t": "多网站批量截图，处理懒加载/Cloudflare/字体", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "多网站批量截图，处理懒加载/反爬校验/字体"}, {"n": "AI 新闻日报", "d": "vibetool/ai-news/", "t": "AI 新闻采集、飞书写入、HTML 日报生成", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "AI 新闻采集、在线文档写入、HTML 日报生成"}, {"n": "工作日报", "d": "vibetool/daily-report/", "t": "从 Git 提交生成日报并写入飞书多维表格", "s": "自用 · 不投稿", "st": "内部自用", "tone": "dim", "tag": "从提交记录生成日报并写入在线表格"}, {"n": "30 种图表速查图鉴", "d": "vibetool/echarts-gallery/", "t": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "30 种常用图表速查，卡片真实渲染缩略图 + 详情页介绍/提示词/主题配色/场景，块内点选 5 套主题整站换色"}, {"n": "UI/UX 风格画廊", "d": "vibetool/uiux-style-gallery/", "t": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页（中文介绍/AI 提示词/配色/场景），零依赖离线、适配小红书容器", "s": "完整（zip + 笔记）", "st": "已上架", "tone": "ok", "tag": "67 种主流 UI/UX 设计风格速查，纯 CSS 迷你示例卡片 + 详情页"}]}, {"tag": "vibegame", "name": "互动游戏", "items": [{"n": "拼豆城市", "d": "vibegame/perler-city/", "t": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政", "s": "完整（zip + 海报）", "st": "已上架", "tone": "ok", "tag": "拼豆 × 模拟城市，RCI 三需求 + 水电环卫三市政"}, {"n": "拼豆游戏", "d": "vibegame/perler-bead-game/", "t": "国风纹样逐格填豆，拼成即过关（已含导出图纸）", "s": "完整（zip + 图）", "st": "已上架", "tone": "ok", "tag": "国风纹样逐格填豆，拼成即过关"}, {"n": "中秋拼豆小游戏", "d": "vibegame/perler-mid-autumn/", "t": "中秋版拼豆：月夜纹样 + 猜灯谜（已含导出图纸）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "中秋版拼豆"}, {"n": "十二生肖拼豆坊", "d": "vibegame/perler-zodiac/", "t": "12 生肖拼豆 + 一键导出线下制作图纸（PNG/打印 PDF）", "s": "完整（zip + 导出闭环冒烟过）", "st": "已上架", "tone": "ok", "tag": "12 生肖拼豆 + 一键导出线下制作图纸"}, {"n": "AI 计算器", "d": "vibegame/ai-calculator/", "t": "会故意算错的计算器，判断对错得分、连对加成", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "会故意算错的计算器，判断对错得分、连对加成"}, {"n": "星航者·太阳系漫游", "d": "vibegame/solar-voyager/", "t": "太阳系探索策略：基地运营→火箭设计→发射探索，8 星球 + 11 任务 + 程序化 Canvas/BGM", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "太阳系探索策略"}, {"n": "人工智能 OS", "d": "vibegame/ai-os/", "t": "移动端 AI 操作系统桌面模拟（v2 单源 vanilla JS）：主屏壁纸/Dock/金刚键 + 9 个恶搞应用，容器存储走 Storage JS API；点主屏天气组件进「月球天气」（整合 `vibeknow/moon-3d`：本地 Three.js 原版场景 + 实时月相、不自转，只留天气）；相机取景借 `vibeknow/world-food-3d` 的 36 张美食图（`_dev/make_cam_photos.py` 派生）每 3s 随机轮播、拍完即换，连拍会过热封锁快门；主屏第 7 格「应用商店」介绍全仓已开发的小工具（清单在构建期由本文件 TRACKS.md 派生，四分类分组、可筛选）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "移动端 AI 操作系统桌面模拟"}, {"n": "倒车入库", "d": "vibegame/reverse-parking/", "t": "第一人称倒车入库模拟：三面后视镜 + 后窗判断车身姿态，滑动控方向盘/油门入库停正并评分", "s": "设计就绪 · 待落地", "st": "开发中", "tone": "warn", "tag": "第一人称倒车入库模拟"}, {"n": "核战危机", "d": "vibegame/defcon/", "t": "3D 球面核战策略：危机博弈推高 DEFCON，核弹有限、死得少的赢", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "3D 球面核战策略"}, {"n": "流浪地球·逃出太阳系", "d": "vibegame/wandering-earth-3d/", "t": "滑屏点火推动地球，穿越太阳系：被行星吸走或撞毁即失败，飞出太阳系即胜利", "s": "可玩（headless 16 项过，待物料）", "st": "已上架", "tone": "ok", "tag": "滑屏点火推动地球，穿越太阳系"}, {"n": "航空大亨", "d": "vibegame/air-tycoon/", "t": "3D 球面航空经营：开辟航线带动城市经济升级，双瓶颈（需求/槽位）判断，60 回合做到全球巨企", "s": "修掉「飞机倒着飞」（朝向改由周期相位推出的 `AT.geo.legAt`，每个航段原有 49.9% 相位倒飞）；修掉三处静默失效（价格战从未进结算、地区需求修正永不命中、事件现金双倍扣除）；八层验证：headless 97 + 契约 43 + 音频 67 + 朝向（离线 30 场景 0 倒飞 / 实机 1571 样本 0 倒飞）+ 打包核验 56 + Chrome61 静态 91 + 降级 18 项过", "st": "开发中", "tone": "warn", "tag": "3D 球面航空经营"}]}, {"tag": "vibeart", "name": "数字艺术", "items": [{"n": "泰坦尼克号", "d": "vibeart/Titanic/", "t": "照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模", "s": "模型完成 · 待 H5", "st": "开发中", "tone": "warn", "tag": "照积木参考图逐像素丈量建模的泰坦尼克号，四烟囱双桅十六艇，可旋转观赏的 3D 船模"}, {"n": "郑和宝船", "d": "vibeart/zhenghe-treasure-ship/", "t": "Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏", "s": "骨架就绪 · 待建模", "st": "开发中", "tone": "warn", "tag": "3D 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏"}]}, {"tag": "vibeknow", "name": "人文知识", "items": [{"n": "口袋地球", "d": "vibeknow/earth-3d/", "t": "昼夜交替、四季成因、月相、地球内部结构", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "昼夜交替、四季成因、月相、地球内部结构"}, {"n": "寰宇小馆", "d": "vibeknow/world-food-3d/", "t": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "复用 earth-3d 框架，35 道世界美食钉在地球上，点红点看介绍"}, {"n": "为了小猫我飞遍全球", "d": "vibeknow/cat-globe-3d/", "t": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "世界猫咪图鉴，心动后飞机第一视角沿地球飞行去见小猫，生成爱猫基因解析"}, {"n": "太阳系 3D", "d": "vibeknow/solar-system-3d/", "t": "行星轨道、土星环、点击追踪天体", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "行星轨道、土星环、点击追踪天体"}, {"n": "掌心里的航天梦（口袋火箭）", "d": "vibeknow/rocket-launch-3d/", "t": "发射/拆解双模式，实时遥测", "s": "完整（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "发射/拆解双模式，实时遥测"}, {"n": "奔月（3D 登月全程模拟器）", "d": "vibeknow/moon-landing-3d/", "t": "长征十号双箭发射→环月交会对接→揽月着陆器落月（中国载人登月真实方案）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "长征十号双箭发射→环月交会对接→揽月着陆器落月"}, {"n": "3D 月球科普", "d": "vibeknow/moon-3d/", "t": "月相变化、潮汐锁定、起源假说", "s": "均未", "st": "开发中", "tone": "warn", "tag": "月相变化、潮汐锁定、起源假说"}, {"n": "分子空间构型", "d": "vibeknow/molecule/", "t": "分子结构 3D 可视化", "s": "已发布（笔记已归档 xiaohongshu/）", "st": "已上架", "tone": "ok", "tag": "分子结构 3D 可视化"}, {"n": "函数可视化", "d": "vibeknow/function-visualization/", "t": "初高中数学函数图像绘制", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "初高中数学函数图像绘制"}, {"n": "火箭发射", "d": "vibeknow/rocket-launch/", "t": "2D 火箭发射演示，含遥测与倒计时", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "2D 火箭发射演示，含遥测与倒计时"}, {"n": "恐龙地球", "d": "vibeknow/jurassic-park-3d/", "t": "侏罗纪公园游览导航：30 只恐龙 / 4 主题路线 + 自选，巡逻车行进时地球标注化石发现地，复用 world-food-3d 框架", "s": "已打包（zip + 物料）", "st": "已上架", "tone": "ok", "tag": "侏罗纪公园游览导航"}, {"n": "大航海时代 · 帆船图鉴", "d": "vibeknow/age-of-sail-3d/", "t": "大航海时代（Age of Sail）帆船图鉴：30 艘帆船 / 5 大海域家族，5 支主题舰队 + 自选，舰队沿岸航行时地球标注每艘的建造地，复用 jurassic-park-3d 框架", "s": "已完成 · 待发布", "st": "开发中", "tone": "warn", "tag": "大航海时代"}, {"n": "全球交通工具图鉴", "d": "vibeknow/vehicle-atlas/", "t": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史（只讲类型不写型号与品牌；配图占位块直写期望文件名，逐张 AI 配图提示词由 `main.js` 派生到 `_dev/IMAGE_PROMPTS.md` 交图片 agent；16 项渲染自检 + 18 项打包前置校验过）", "s": "已发布", "st": "已上架", "tone": "ok", "tag": "49 种交通工具「类型」速查，按地面 / 水面 / 天空 / 太空四类分组、类内按出现时间从早到晚排列，串成从公元前 3000 年至今的交通史"}]}];
   /* 货架图标色板：8 组身份色按序轮转，同分类相邻两张卡片必不同色 —— 商店里的图标是
    * 「每个应用自己的招牌色」（与主屏图标同一性质），属身份色而非 §4.5 的语义色，
    * 故可以多色并列；色值直接复用主屏那套，商店与桌面看起来是同一个世界的应用。 */
@@ -92,7 +98,7 @@
   var XHS_CALL_TIMEOUT = 800;              /* 端能力超时即当失败，由镜像通道兜住 */
   var INJECT_WAIT = 1500;                  /* 等 SDK 注入的上限，官方未承诺注入时机 */
   var INJECT_POLL = 100;                   /* 等注入时的轮询间隔 */
-  var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages'];
+  var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages', 'gallery_likes'];
 
   var storeCache = {};        /* 短 key -> 字符串值 */
   var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
@@ -739,8 +745,8 @@
 
   /* ---------- 主屏 ---------- */
   var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
-  var WALLET_BAL = '￥ -99,999';
-  var WALLET_MASKED = '￥ -****';
+  var WALLET_BAL = '￥ 9,999,999';
+  var WALLET_MASKED = '￥ ****';
 
   function buildWidgets() {
     var wrap = el('div', 'widgets');
@@ -786,11 +792,11 @@
     wtop.appendChild(el('span', 'w-bank', '灵光银行 · 数字卡'));
     wtop.appendChild(el('span', 'w-chip'));
     wallet.appendChild(wtop);
-    wallet.appendChild(el('div', 'w-bal-lbl', '余额（透支中）'));
+    wallet.appendChild(el('div', 'w-bal-lbl', '余额（收入中）'));
     var bal = el('div', 'w-bal', masked ? WALLET_MASKED : WALLET_BAL);
     wallet.appendChild(bal);
     var wrow = el('div', 'w-wrow');
-    wrow.appendChild(el('span', 'w-spend', '今日支出 ￥9,999'));
+    wrow.appendChild(el('span', 'w-spend', '今日收入 ￥9,999'));
     wrow.appendChild(el('span', 'w-cardno', '**** 2333'));
     wallet.appendChild(wrow);
     wallet.addEventListener('click', function () {
@@ -3164,7 +3170,650 @@
     return v;
   }
 
-  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore };
+  /* ---------- 作品展（§4.14）：vibecoding 大赛优秀作品展 ----------
+   * 数据由 _dev/build.py 在构建期从仓库根 vibecoding-gallery/main.js 派生注入
+   * （GALLERY_DATA 占位符 → GALLERY_WORKS / GALLERY_NOTES / GALLERY_TRACKS / GALLERY_COVER_DIMS）。
+   * 封面图在 ./assets/gallery/（随 zip 分发）。点赞复用 ai-os 存储层（aios_gallery_likes）。
+   * 结构复用三段式骨架（phead + pbody），详情页 / 扭蛋机用应用内覆盖层（不盖金刚键）。 */
+  var GALLERY_WORKS = [
+  {
+    id: 'fireworks', title: '我的户外烟花秀', author: '哲学咖啡师', track: 'tool',
+    cover: '01-zhexue-kafeishi-fireworks.jpg',
+    noteId: '6aaeafa10000000028035c68',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aaeafa10000000028035c68?source=webshare&xhsshare=pc_web&xsec_token=ABASlAyw-oFk4DQ1E09kO4pGBCPEdt7uDgxP3uotmSgyI=&xsec_source=pc_share',
+    intro: '虚拟夜景下放烟花的互动工具：六座城市背景任选，还能沿轮廓抠出你站过的江边、窗边、天台，铺进夜空再按下开关。',
+    highlights: [
+      '六座城市 + 自定义照片背景，「贴地对齐」或「铺满整片天」两种贴合模式',
+      '沿轮廓手绘一圈即可抠出猫、人像等主体，强情感化个人化体验',
+      '实体感「按下」打火器开关作为核心触发，仪式感交互动线清晰'
+    ],
+    tech: 'h5 · 推测 Canvas/WebGL 夜景渲染'
+  },
+  {
+    id: 'pocket-museum', title: '掌上博物馆', author: '哲学咖啡师', track: 'tool',
+    cover: '02-zhexue-kafeishi-pocket-museum.jpg',
+    noteId: '6aa680510000000027017115',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa680510000000027017115?source=webshare&xhsshare=pc_web&xsec_token=ABsDDQqKSCJ6ra2Jw8P6hzv0mMskfKsXFV1i5aJ8DZnx0=&xsec_source=pc_share',
+    intro: '把博物馆展品缩小到手机里的 3D 展品浏览器：首件展品 T-72B3 坦克可 360° 旋转放大看细节，按「第 N 件展品」持续连载。',
+    highlights: [
+      '360° 旋转 / 缩放 / 自转开关 / 复位 / 展签，移动端 3D 手势操作完整',
+      '编号部件导览点选聚焦对应结构，「看得懂」的教育价值设计',
+      '「第 N 件展品」连载 + 评论区征集选题，CC BY 4.0 授权标注规范'
+    ],
+    tech: 'h5 · 推测 WebGL/Three.js'
+  },
+  {
+    id: 'suxiu', title: '丝丝入扣 · TI同款苏绣', author: '猫哥（@TeamMooLab）', track: 'guofeng',
+    cover: '03-maoge-suxiu.jpg',
+    noteId: '6a8823880000000035026757',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a8823880000000035026757?source=webshare&xhsshare=pc_web&xsec_token=ABjwmmtNGBw4T3KfDz7nGZAdLZOToZMB5YDH5zguCBhvc=&xsec_source=pc_share',
+    intro: '把照片转成苏绣针迹的国风小工具：飞针动画逐针「绣」出来，针法密度与丝线配色可调，复现 DOTA2 TI 苏绣主题视觉。',
+    highlights: [
+      '苏绣/缎绣两种针法、密度针数可调，按针迹逐针绘制而非贴滤镜',
+      '飞针动画把「绣的过程」做成可观赏的核心体验',
+      '完成后显示「绣成 · 3807 针 · 7 色 · 留白 2%」参数化结果反馈'
+    ],
+    tech: 'h5 · GLM 5.3 生成 · 推测 Canvas'
+  },
+  {
+    id: 'speed-drift', title: '极速漂移 SPEED DRIFT', author: '词元AI编程', track: 'game',
+    cover: '04-ciyuan-ai-speed-drift.jpg',
+    noteId: '6a9e4a79000000001001cfbb',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a9e4a79000000001001cfbb?source=webshare&xhsshare=pc_web&xsec_token=ABjfgcEzSWOdluSkNocbyo4N5eb-Z6sM-xpWT2ujwxPXQ=&xsec_source=pc_share',
+    intro: '手机免下载直接玩的 3D 漂移赛车：拖动旋转车身选车、双指缩放进入赛道，主打「过弯拉手刹那一下」的漂移手感与解压体验。',
+    highlights: [
+      '拖动旋转车身选车、双指缩放入场，把 3D 观察做成交互的一部分',
+      '单点极致押注漂移手感：「过弯拉手刹那一下，太解压了」',
+      '竖屏金色大字标题 + 竖排按钮，低多边形赛道兼顾移动端性能'
+    ],
+    tech: 'h5 · AI 编写 · 推测 Three.js'
+  },
+  {
+    id: 'doraemon-house', title: '哆啦A梦的家 · 串门探险记', author: 'CarryTzz', track: 'game',
+    cover: '05-carrytzz-doraemon-house.jpg',
+    noteId: '6aa27919000000000b001536',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa27919000000000b001536?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMtUdaeLQD8xbmnKrVjV8n8M=&xsec_source=pc_share',
+    intro: '进大雄家自由探索的 3D 寻宝游戏：翻抽屉、开柜门、戴竹蜻蜓飞高处、用穿墙圈进藏宝室，一共 50 件秘密道具等你找齐。',
+    highlights: [
+      '50 件道具 = 34 件自由寻找 + 16 件能力解锁小冒险，收集分层清晰',
+      '「看见 ≠ 拿到」道具解谜链：缩小、放大、修复，道具互为钥匙',
+      '地面搜索 + 竹蜻蜓飞高 + 穿墙进暗室，三层空间纵深探索感立体'
+    ],
+    tech: 'h5 · 推测 Three.js 3D 场景'
+  },
+  {
+    id: 'fly', title: '中国人能飞 🪽', author: '倪的AI笔记📝', track: 'game',
+    cover: '06-nide-ai-fly.jpg',
+    noteId: '6a8ec88d0000000028004e1d',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a8ec88d0000000028004e1d?source=webshare&xhsshare=pc_web&xsec_token=ABH92no4SUJ9uKAhFMk4qJj1-QeYASJDmF8mY6A5x-wFg=&xsec_source=pc_share',
+    intro: '竖屏像素风自动飞升攀高游戏：角色自己往上飞，你只负责左右控制踩平台借力，看谁飞得更高。',
+    highlights: [
+      '底部左右双触区设计，竖屏单手即可玩，操作门槛极低',
+      '纵向自动飞升 + 横向微操，把玩法压缩到「一个维度」的决策',
+      '高度 / 最高 / 区域名三件套 HUD，攀比欲直接拉满'
+    ],
+    tech: 'h5 · 像素风 · 推测 Canvas 2D'
+  },
+  {
+    id: 'jump-ball', title: '跳吧小球', author: 'Way的AI创造社', track: 'game',
+    cover: '07-way-ai-jump-ball.jpg',
+    noteId: '6aa56fe8000000002502e51a',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa56fe8000000002502e51a?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv4O-Y9usH1NQ_saM593eE3k=&xsec_source=pc_share',
+    intro: '弹跳小球闯关 + 星标货币皮肤商店 + 成就系统，博主自述玩家破 38 万，是参赛作品里体量最大的长线运营案例。',
+    highlights: [
+      '星标货币皮肤商店：仓鼠、卡皮巴拉等 9+ 款软萌小球分档定价',
+      '以「新皮肤上线」为由头发更新笔记召回老玩家，长线运营节奏',
+      '「玩家破 38 万」真实数据做信任背书'
+    ],
+    tech: 'h5 · 3D 卡通 · 推测 Three.js'
+  },
+  {
+    id: 'mini-flight', title: '迷你飞行 · Q版模拟飞行', author: '哈哈要去哪里', track: 'game',
+    cover: '08-haha-mini-flight.jpg',
+    noteId: '6aabb29e000000002a004eaf',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aabb29e000000002a004eaf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvFJdc8GnR1x9g2I6U4XLODM=&xsec_source=pc_share',
+    intro: 'Q 版 3D 模拟飞行：点击起飞、在开放天空游览，螺旋桨机、特技机、喷气机、客机多机型阵容，宣传图是海报级构图。',
+    highlights: [
+      '4+ 架 Q 版机型（螺旋桨/特技/喷气/客机），机身带注册号与涂装',
+      '把专业模拟飞行简化为「点击起飞」的 Q 版体验，保留机场塔台场景',
+      '海报级宣传图：标题字效 + 四机编队 + slogan，制作规格拉满'
+    ],
+    tech: 'h5 · Q 版 3D · 推测 Three.js'
+  },
+  {
+    id: 'parking', title: '科目二挑战赛', author: '左手', track: 'game',
+    cover: '09-zuoshou-keer-parking.jpg',
+    noteId: '6a964de100000000270080fe',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a964de100000000270080fe?source=webshare&xhsshare=pc_web&xsec_token=ABZs6wR8HZcFeuHtJqDOYFblF1dS7pzmheZDs_FUikkR0=&xsec_source=pc_share',
+    intro: '把科目二驾驶考做成关卡制停车解谜：3D 俯视停车场里把车开出库，按用时 / 擦撞 / 挪车三维结算星级，「一把进」你来试试？',
+    highlights: [
+      '用时 / 擦撞 / 挪车三项指标并列结算 + 星级，维度透明可优化',
+      '科目二题库即关卡清单：直出、倒库、侧方、坡道……天然关卡库',
+      '灰暗色环境车 + 高饱和玩家车，视觉焦点管理清晰'
+    ],
+    tech: 'h5 · 3D 俯视 · 推测 Three.js'
+  },
+  {
+    id: 'excavator-pig', title: '挖掘机抓猪', author: '星空下的人', track: 'game',
+    cover: '10-xingkong-excavator-pig.jpg',
+    noteId: '6aad360500000000270160bf',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aad360500000000270160bf?source=webshare&xhsshare=pc_web&xsec_token=ABETpofYcFUKQ_zp2e1gqaLGkaDxFcGDsHWH7uRjo6Al4=&xsec_source=pc_share',
+    intro: '把「广西洪水挖掘机抓猪」全网热梗做成 3D 操作游戏：左手控制底盘追猪、右手控制机械臂抓，抓到送回围栏。',
+    highlights: [
+      '热梗题材自带流量与搜索词，选题眼光毒辣',
+      '女玩家吐槽 → 听劝连夜改第三人称视角，迭代复盘写成连续剧',
+      '左手追猪右手瞄准 + 按键教学，帮非传统玩家跨过上手坎'
+    ],
+    tech: 'h5 · 低多边形 3D · 推测 Three.js'
+  },
+  {
+    id: 'next-blue-dot', title: '下一个蓝点', author: '豆米AI', track: 'game',
+    cover: '11-doumi-next-blue-dot.jpg',
+    noteId: '6aaa7aa30000000026031dba',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba?source=webshare&xhsshare=pc_web&xsec_token=AB9XjDaMmirGGm8W5Dc5rH1GkqfszYQJ_EplEG_4WQfGg=&xsec_source=pc_share',
+    intro: '点、按住、滑三个手势飞向宇宙边缘：尺度尺从米一路跳到百万光年，结局是一颗真实存在的宜居系外行星。整包约 100KB。',
+    highlights: [
+      '三手势贯穿六阶段玩法，操作集合极小、玩法密度极高',
+      '时间膨胀「不参与玩法，纯粹因为它是真的」——真实即内容',
+      '零图片零音频，61 张天体卡全部参数化实时绘制，极端轻量化'
+    ],
+    tech: 'h5 · 纯参数化绘制 · 约 100KB'
+  },
+  {
+    id: 'bianzhong', title: '三十秒学会用编钟弹《晴天》', author: '机器旁白', track: 'guofeng',
+    cover: '12-jiqi-bianzhong-qingtian.jpg',
+    noteId: '6a969de6000000002800208c',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a969de6000000002800208c?source=webshare&xhsshare=pc_web&xsec_token=AB1omuMyMDrRAcOZGilD3vqXlNQfLL5gdHiOwFivPxaSw=&xsec_source=pc_share',
+    intro: '国乐编钟数字化：曾侯乙编钟式三层钟架还原「一钟双音」，轻触钟面听一声金石，三十秒学会用编钟弹奏《晴天》。',
+    highlights: [
+      '钮钟/甬钟/镈钟三层形制 + 每钟双音位标注，考据感直接成为卖点',
+      '「三十秒之内教会你」把学习成本写进标题，转化路径极短',
+      '敲击发光涟漪 + 「此刻钟音」状态栏，每次点击视听双重回应'
+    ],
+    tech: 'h5 · 音乐工具'
+  },
+  {
+    id: 'relic-viewer', title: '文物放大镜 · 掌上赏珍', author: '木渡川', track: 'guofeng',
+    cover: '13-muduchuan-relic-viewer.jpg',
+    noteId: '6aa226ad0000000011031465',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa226ad0000000011031465?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMt_W-xOGTmZvHKhvK6HOdds=&xsec_source=pc_share',
+    intro: '宣纸底色 + 展签版式的 3D 文物交互：揭顶观乐看内部乐师、细节导览分步聚焦、生成文物图鉴，覆盖完整观展动线的全流程教程。',
+    highlights: [
+      '界面即展陈设计：宣纸底、竖排书法标题、中英双馆名，版式语言统一',
+      '六个功能覆盖「看全貌 → 看内部 → 看细节 → 留纪念」完整动线',
+      '「春秋｜青铜器｜高 17 厘米」文物档案字段直接落版，科普严谨感拉满'
+    ],
+    tech: 'h5 · 教程 / webapp'
+  },
+  {
+    id: 'squeeze-toy', title: '捏捏乐', author: '阿毛的脑洞', track: 'game',
+    cover: '14-amao-squeeze-toy.jpg',
+    noteId: '6aa36e010000000026017522',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522?source=webshare&xhsshare=pc_web&xsec_token=ABcTHjdkq5QNPXfFz4D5TzMsSOIjq2rFkuUGpO2Oi98f8=&xsec_source=pc_share',
+    intro: '把线下流行的慢回弹「捏捏乐」搬进手机：饭团、牛角包、小猪、布丁，摸鱼时捏一捏很解压，目前八种捏捏持续上新。',
+    highlights: [
+      '实物拟物数字化，题材自带解压认知，零学习成本',
+      '「摸鱼时捏一捏」明确的碎片时间场景定位',
+      '八种捏捏 SKU 化更新 + 评论区征集下一款模型'
+    ],
+    tech: 'h5 · 小红书小工具'
+  },
+  {
+    id: 'moon-letter', title: '月下寄笺局 · 月亮信', author: '闲话AI | 造物日记', track: 'guofeng',
+    cover: '15-xianhua-moon-letter.jpg',
+    noteId: '6a9c2c180000000026018fe2',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2?source=webshare&xhsshare=pc_web&xsec_token=ABgyjiKnSj8-cKE2Iozok0qDqjOG9u-i57Z-4uXb7E3wo=&xsec_source=pc_share',
+    intro: '「当面太浓烈，微信怕唐突」——中秋把没来得及说的话寄给月亮：一封可截图转发的月亮信，情绪场景工具。',
+    highlights: [
+      '自有品牌「月下寄笺局」，机构拟人 + 克莱因蓝版画风格，美术克制',
+      '精准戳中中式情感表达的克制痛点，把工具定位成「安全出口」',
+      '寄信天然产出可截图转发的个人化结果，UGC 自传播'
+    ],
+    tech: 'h5 · 互动工具'
+  },
+  {
+    id: 'bala-bala', title: 'bala bala · 解压球球', author: 'Mingo 🥕', track: 'tool',
+    cover: '16-mingo-bala-bala.jpg',
+    noteId: '6aae76ec0000000029019a9b',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b?source=webshare&xhsshare=pc_web&xsec_token=ABdAl8pX503j3i3ttrJOJ4N7GEJLepe3-I3lEmRKEbSGQ=&xsec_source=pc_share',
+    intro: '戳一戳、按一按、扒拉扒拉的解压球球：可上传照片定制专属球（老板球警告），粉圈密码解锁专享彩蛋，还有桌面时钟陪伴形态。',
+    highlights: [
+      '戳 / 按 / 扒拉三种触觉动词对应三种反馈，纯触觉解压',
+      '「上传老板照片狠狠旋转它」——UGC 玩法自带梗传播力',
+      '粉圈密码解锁「专享同担五球」，圈内圈外两层身份设计'
+    ],
+    tech: 'h5 · 互动工具'
+  },
+  {
+    id: 'piece-of-moonlight', title: 'Piece of Moonlight · 月相互动音乐', author: '生姜醋饭', track: 'guofeng',
+    cover: '17-piece-of-moonlight.jpg',
+    noteId: '6a9e7f0e0000000028035dd9',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a9e7f0e0000000028035dd9?source=webshare&xhsshare=pc_web&xsec_token=ABRPKZVc37eJxffwd4-y1n57h5JKGNT8u0ZTmFUsA1tTs=&xsec_source=pc_share',
+    intro: '把月亮 15 种圆缺映射成 C3–C5 音高的互动音乐工具：选一个月相就成为五线谱上的一枚音符，短按半拍、长按更长的音，播放时月亮反色亮起、乐谱跟随旋律前移。',
+    highlights: [
+      '自然意象承载抽象音乐概念：月相圆缺 ↔ 音高高低，把乐理门槛降到「选月亮」',
+      '交互闭环清晰：选意象 → 实时落谱 → 播放高亮联动，视听强绑定',
+      '7 种合成音色 + 4 种主题色 + 月相谱卡可保存分享，成品能带走'
+    ],
+    tech: 'h5 · 互动音乐工具 · 推测 Web Audio'
+  },
+  /* ===== 以下为本人（人工智能Ding🥕）的作品：mine=true 会打「我的」角标 ===== */
+  {
+    id: 'defcon', title: '核战危机 DEFCON', author: '人工智能Ding🥕', track: 'game',
+    cover: '18-defcon.jpg',
+    noteId: '6aa53b220000000011036fb1',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aa53b220000000011036fb1?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv5hz5qYL-CrtVSjn7-d1dX8=&xsec_source=pc_share',
+    intro: '3D 球面核战策略：危机博弈推高 DEFCON 等级，核弹有限、死得少的赢——一场没有赢家的博弈，愿世界和平。',
+    highlights: [
+      '最用心的作品：把冷战核威慑做成可玩的球面策略，每一次升级都在赌对方的克制',
+      '核弹数量有限、胜负按伤亡结算——比的是「谁死得更少」，不是「谁打得更多」',
+      '立意反战：「没有赢家、愿世界和平」不是装饰文案，而是这套机制推出来的结论'
+    ],
+    tech: 'h5 · 3D 球面策略 · 复用 vibeknow/earth-3d 球面引擎',
+    mine: true
+  },
+  {
+    id: 'earth-3d', title: '口袋地球', author: '人工智能Ding🥕', track: 'tool',
+    cover: '19-earth-3d.jpg',
+    noteId: '6a9cd74300000000290186bf',
+    link: 'https://www.xiaohongshu.com/discovery/item/6a9cd74300000000290186bf?source=webshare&xhsshare=pc_web&xsec_token=AB5XVOySMnaRoqvFrY33XFy4oSfyUGfiu3UEZw2Js9CUk=&xsec_source=pc_share',
+    intro: '把地球装进口袋：3D 地球科普，昼夜交替、四季成因、月相变化、地球内部结构，近 5000 人玩过。',
+    highlights: [
+      '最受用户欢迎：近 5000 人玩过，是这轮参赛人气最高的作品',
+      '把抽象的天文地理做成能转、能看的直观演示：昼夜 / 四季 / 月相 / 内部圈层',
+      '框架复用度最高：寰宇小馆、恐龙地球、帆船图鉴等后续作品都由它派生'
+    ],
+    tech: 'h5 · Three.js 3D 地球',
+    mine: true
+  },
+  {
+    id: 'jurassic-park', title: '恐龙地球（侏罗纪公园）', author: '人工智能Ding🥕', track: 'tool',
+    cover: '20-jurassic-park.jpg',
+    noteId: '6aaa7730000000002802eff1',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aaa7730000000002802eff1?source=webshare&xhsshare=pc_web&xsec_token=ABOhlrW8243-oy4otWhFmVyDvZKrdMkFvwvnhZiFLrKp8=&xsec_source=pc_share',
+    intro: '手机沉浸式逛侏罗纪公园：坐巡逻车探访史前恐龙，30 只恐龙 / 4 条主题路线，行进途中在地球上标注化石发现地。',
+    highlights: [
+      '最受欢迎笔记：第一人称巡逻车视角逛公园，沉浸感就是传播点',
+      '30 只恐龙 + 4 条主题路线（可自选），内容量撑得起反复游玩',
+      '行进中把化石发现地标注到地球上，让「游览」和「科普坐标」绑在一起'
+    ],
+    tech: 'h5 · Three.js · 复用 world-food-3d 框架',
+    mine: true
+  }
+];
+var GALLERY_NOTES = {
+  'fireworks': '小工具【我的户外烟花秀】新功能上线了。\n点右上角「换背景」。把你站过的江边、窗边、天台，铺进夜空。贴地对齐地平线，或铺满整片天。六座城也在：北京、上海、广州、重庆、香港、澳门。嫌亮，就切暗夜。\n点左下角「选照片」。沿轮廓轻轻画一圈，裁出那只猫、那张笑。也可以整张用。\n然后按中间那只开关。\n欢迎搜索关注留言互动，解锁有趣好玩小工具。@户外薯\n#哲学咖啡师 #小红书外人节 #vibe外人节 #赛博户外 #小红书小工具',
+  'pocket-museum': '如果坦克可以放进口袋里，会是什么感觉？\n掌上博物馆 · 第01件展品。今天把一辆 T-72 坦克"搬"进了小红书小工具 #掌上博物馆。\n这次不是看一张坦克照片，而是可以直接在手机里：🔄 360°旋转 🔍 放大观察细节 👀 从不同角度查看车体结构 📱 像在博物馆里绕着展品慢慢看。\n我一直觉得，很多博物馆里的展品，如果展品数字化，会有更多人可以获得知识。\n所以想做一个小实验：如果把博物馆里的展品缩小到手机里，会怎么样？\n🏛️ 第一件：T-72 坦克。下一件展品继续更新。大家想看什么展品，在评论区留言。\n#哲学咖啡师 #掌上博物馆 #军事模型 #T72 #3D博物馆 #数字博物馆 #小红书小工具 #小红书vibecoding大赛 #vibetool',
+  'suxiu': 'TI同款苏绣国风小工具。TI没了西恩俱乐部后，那就剩下纯粹的享受了。今年TI的主题是苏绣，尝试用小工具复现了一下。全程使用 GLM 5.3 #GLM5 #智谱zcode（请给我发一份周额度重置吧）。初步复现成功，当然我测试了一下，优化空间还很大。anyway 希望大家玩的开心 😊 我也算完成个任务 @科技薯。\n#国风vibecoding #小红书小工具 #手作 #苏绣',
+  'speed-drift': '什么？小红书也能玩3D赛车游戏了！AI 写的漂移赛车，手机免下载直接飙🏎️过弯拉手刹那一下，太解压了！\n#小红书vibecoding大赛 #vibecoding #VibeCoding #小红书小工具 #REDSkill #KimiK3 #国风vibecoding #vibegame #赛车游戏 @科技薯 @数码薯 #赛车模拟器',
+  'doraemon-house': '大雄，你家墙后面怎么还有宝藏。\n我给这次串门定的目标很克制：进大雄家看看，找一件道具就走。然后——抽屉拉开了，柜门推开了。地上看完还不够，戴上竹蜻蜓往高处飞。最后掏出穿墙圈，连墙后面的藏宝室都进去逛了一圈😂。\n最让我上头的是，有些宝贝明明看见了，还得想办法拿到：挡路的积木要缩小，米粒大的铅笔要放大，坏盒子得先用包袱巾修好。找着找着，还铺起美食桌布，照着小纸条准备甜点，换回一片记忆面包。\n一共 50 件秘密道具。34 件在家里自由寻找，另外 16 件藏在 8 种能力对应的小冒险里。\n「最后再开一个抽屉。」——这是我今天最不可信的一句话。\n如果让你进大雄家，第一件最想找到什么？我先惦记上任意门了🚪\n#小红书vibecoding大赛 #哆啦A梦 #童年回忆 #小红书小工具 #寻宝游戏 #3D小游戏',
+  'fly': '中国人能飞🪽。点击屏幕下方开始飞！看谁飞的更高哈哈哈哈哈哈哈哈哈我又有新作了。\n#中国人能飞 #小红书vibecoding大赛 #vibegame #AI编程 #个人开发者 #我要飞得更高 快来一起玩啊 @adhd生活实验 @Shule 舒乐熊的喵 @一个人从零开始做游戏',
+  'jump-ball': '《跳吧小球》新皮肤来啦！玩家破 38 万！三只新小球上线，新增成就系统！赶紧回来看看吧。\n#小红书小工具 #vibecoding #我在小红书做游戏 #小红书vibecoding大赛 #vibegame #跳吧小球 #国风vibecoding #小红书小游戏',
+  'mini-flight': 'Q版模拟飞行小工具。点击下方小工具直接起飞。\n#小红书小工具 #小红书vibecoding大赛 #vibegame #小游戏 #模拟飞行 #飞机',
+  'parking': '出库 3星。出库「第 1 关 · 直出」通关。用时 00:33，擦撞 0 次，挪车 4 次。过道窄到怀疑人生，方向盘打死也就那样。你来试试？\n科目二挑战赛 #一把进 #停车技术 #小工具 #停车 #科目二 #vibecoding',
+  'excavator-pig': '女玩家说挖掘机老掉河里，抓不到猪怎么办？我把火遍全网的广西洪水挖掘机抓猪做成游戏啦。然后昨天一个女玩家吐槽：「你这挖掘机怎么操作怎么刹车啊，我的挖掘机直接掉河里了😭一头猪都抓不到」。我很震惊，一定要她抓到猪猪。后来我发现有很多女孩子们和女士们不太懂挖掘机，然后她看了我的按键说明，自己打开右上角的视角切换功能，开第三人称视角连抓两头大白猪。听劝！我连夜把游戏默认视角改成了第三人称（半俯视视野）。今天我自己用竖屏实测了一下，真的巨爽！视野瞬间拉大，挖掘机、机械臂、奔跑的猪、动物庄园，一目了然！左手追猪，右手瞄准，抓住后送回围栏，一气呵成！评论区告诉我，你们更喜欢第一人称还是第三人称？👇\n#小红书vibecoding大赛 #vibegame #小红书小工具 #AI游戏 #广西洪水挖掘机抓猪 #VibeCoding #抓猪游戏 #抓猪挑战',
+  'next-blue-dot': '通关条件不是飞得最远，是找到一颗有海的星球。《下一个蓝点》，从家门口的草地飞到宇宙的边缘。\n一局 60–90 秒，只有点、按住、滑三个手势：\n① 拼飞船，配平重心，刷个漆\n② 按住蓄能，松手落进绿区\n③ 滑着躲飞鸟、客机、雷暴、流星\n④ 按住靠近木星，松手，被引力甩出去（真·引力弹弓）\n⑤ 星图二选一：补给站、遗迹、黑洞、伽马暴\n⑥ 沿宇宙网的金色丝线往外飘\n六个阶段六种玩法，手势还是那三个，一次都没多。\n尺子从「米」起跳，一路跳到百万光年。过卡门线时屏幕上只有一句：「从这里开始，天空不再是天空。」\n整包一百来 KB，零图片零音频，61 张天体卡也是参数现画的。\n越接近光速，返航时地球流逝的年数越多。它不参与玩法，纯粹因为它是真的，就想放进去。\n结局那颗星叫 TOI-700 d，101.4 光年外，宜居指数 0.93。它真的在那儿。',
+  'bianzhong': '三十秒之内教会你弹周杰伦的《晴天》！花两天时间做出来的编钟演奏，用它直接弹奏一曲周杰伦的《晴天》！就在笔记最下方，你也来试试吧～\n#vibecoding #小红书小工具 #小红书vibecoding大赛 #周杰伦 #晴天 #vibemusic',
+  'relic-viewer': '「文物放大镜·掌上赏珍」这类 3D 数字交互项目的流程逻辑其实都大同小异，跟着视频拆解的步骤操作，带你跑通这类型项目的全流程。\n技术其实已经不难了，未来重要的是想法和创意，以及审美 sense。\n不用纠结工具，任意一款编程工具使用得当都可以做出效果不错的创意内容，但好的作品需要小步迭代、慢慢打磨，不要急于求成。\n赶紧做起来，一起探索尝试更多历史人文数字可视化交互的有趣创意！',
+  'squeeze-toy': '在小红书上随时可以捏的电子宠物！摸鱼时捏一捏很解压！\n目前做了八种捏捏，宝子们有想做的模型可以聊聊哦\n#捏捏乐 #小游戏 #解压小游戏 #摸鱼神器 #vibegame #小红书vibecoding大赛',
+  'moon-letter': '中秋，把没来得及说的话寄给月亮。\n有些话，当面说太浓烈，发微信又怕唐突。于是，借着今晚的月色，悄悄寄出去。\n点笔记下方的「用一用」，寄一封你的月亮信。\n#国风vibecoding #小红书vibecoding大赛 #中秋 #vibecoding #中秋赏月 #中秋节文案 #月亮是一种隐喻',
+  'bala-bala': '给中秋前上班的你做一个解压小工具。压力大的时候不妨来戳一戳，按一按，扒拉扒拉。\n可以上传照片，定制属于你自己的球球。比如上传你老板的照片，然后狠狠旋转它。\n如果你解锁了好玩的球球，评论区分享给大家看看。\n如果你是同担，输入解锁密码，还可以有专享同担五球哦。\n如果你喜欢这个小工具，欢迎点个关注哦。\n#小红书vibecoding大赛 #vibetool #wmls #5525',
+  /* 本人作品：手头只有笔记标题 + 自己的一句话简介，没有原文全文，故不往下补话题标签 */
+  'defcon': '战争策略游戏 | 核战危机 DEFCON 🌏\n一场没有赢家的博弈，愿世界和平🕊️',
+  'earth-3d': '把地球装进口袋！太绝了🌍\n3D 地球科普，近 5000 人玩过🌍',
+  'jurassic-park': '手机沉浸式逛侏罗纪公园！太上头了🦖\n坐巡逻车探访史前恐龙🦕'
+};
+var GALLERY_TRACKS = {
+  all:     { tag: '#vibecoding大赛', label: '全部' },
+  game:    { tag: '#vibegame',       label: '游戏' },
+  tool:    { tag: '#vibetool',       label: '工具' },
+  guofeng: { tag: '#国风vibecoding', label: '国风' },
+  liked:   { tag: '',                label: '已赞' }
+};
+var GALLERY_COVER_DIMS = {
+  "01-zhexue-kafeishi-fireworks.jpg": [540, 720],
+  "02-zhexue-kafeishi-pocket-museum.jpg": [540, 720],
+  "03-maoge-suxiu.jpg": [540, 1200],
+  "04-ciyuan-ai-speed-drift.jpg": [540, 1200],
+  "05-carrytzz-doraemon-house.jpg": [540, 720],
+  "06-nide-ai-fly.jpg": [540, 1178],
+  "07-way-ai-jump-ball.jpg": [540, 722],
+  "08-haha-mini-flight.jpg": [540, 719],
+  "09-zuoshou-keer-parking.jpg": [540, 720],
+  "10-xingkong-excavator-pig.jpg": [540, 720],
+  "11-doumi-next-blue-dot.jpg": [540, 720],
+  "12-jiqi-bianzhong-qingtian.jpg": [540, 720],
+  "13-muduchuan-relic-viewer.jpg": [540, 720],
+  "14-amao-squeeze-toy.jpg": [540, 720],
+  "15-xianhua-moon-letter.jpg": [540, 720],
+  "16-mingo-bala-bala.jpg": [540, 869],
+  "17-piece-of-moonlight.jpg": [540, 1170],
+  "18-defcon.jpg": [540, 720],
+  "19-earth-3d.jpg": [540, 502],
+  "20-jurassic-park.jpg": [540, 720],
+};
+
+  function galToast(view, msg) {
+    var t = view.querySelector('.gal-toast');
+    if (!t) { t = el('div', 'gal-toast'); view.appendChild(t); }
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  function buildGallery() {
+    var v = el('div', 'view view-gallery hidden');
+    v.appendChild(el('div', 'phead', '<h1>作品展</h1>'));
+
+    var body = el('div', 'pbody');
+    body.style.padding = '0';
+
+    /* 吸顶区：搜索 + 赛道筛选 */
+    var sticky = el('div', 'gal-sticky');
+    var searchRow = el('div', 'gal-search-row');
+    var search = el('div', 'gal-search');
+    search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/></svg><input type="text" placeholder="搜作品 / 博主" autocomplete="off">';
+    var gachaBtn = el('button', 'gal-gacha-btn');
+    gachaBtn.setAttribute('data-sfx', 'tap');
+    gachaBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><circle cx="8.5" cy="8.5" r="1.3" fill="#fff" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="#fff" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="none"/></svg>随机邂逅';
+    searchRow.appendChild(search);
+    searchRow.appendChild(gachaBtn);
+    sticky.appendChild(searchRow);
+    var chips = el('nav', 'gal-chips');
+    sticky.appendChild(chips);
+    body.appendChild(sticky);
+
+    /* 瀑布流 */
+    var feed = el('main', 'gal-feed');
+    var colL = el('div', 'gal-col');
+    var colR = el('div', 'gal-col');
+    feed.appendChild(colL); feed.appendChild(colR);
+    body.appendChild(feed);
+
+    var empty = el('div', 'gal-empty', '<div class="icon">&#128269;</div>没有找到相关作品，换个关键词试试');
+    body.appendChild(empty);
+    body.appendChild(el('footer', 'gal-footer', '小红书 vibecoding 大赛优秀作品归档<br>截图与简介版权归各位原作者所有'));
+    v.appendChild(body);
+
+    /* 回到顶部 */
+    var backTop = el('button', 'gal-backtop');
+    backTop.setAttribute('aria-label', '回到顶部');
+    backTop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="M6 12l6-6 6 6"/></svg>';
+    v.appendChild(backTop);
+
+    /* 详情页覆盖层 */
+    var detail = el('div', 'gal-overlay gal-detail');
+    var detailScroll = el('div', 'gal-detail-scroll');
+    var backBtn = el('button', 'gal-back-btn', '&#10094;');
+    backBtn.setAttribute('data-sfx', 'back');
+    var detailBar = el('div', 'gal-detail-bar');
+    detail.appendChild(detailScroll); detail.appendChild(backBtn); detail.appendChild(detailBar);
+    v.appendChild(detail);
+
+    /* 扭蛋机覆盖层 */
+    var gacha = el('div', 'gal-overlay gal-gacha');
+    gacha.innerHTML =
+      '<div class="gal-gacha-panel">' +
+        '<button class="gal-gacha-close" data-sfx="back">&#10005;</button>' +
+        '<div class="gal-gacha-title">随机邂逅</div>' +
+        '<div class="gal-gacha-sub">从 <b class="gal-gacha-count">0</b> 件归档里，摇一件好作品</div>' +
+        '<div class="gal-machine"><div class="gal-m-body"><div class="gal-dome"></div>' +
+        '<div class="gal-m-base"><span class="gal-m-knob" title="扭一个"></span><span class="gal-m-slot"></span><span class="gal-m-door"></span></div>' +
+        '<div class="gal-capsule"><span class="cap-top"></span><span class="cap-bot"></span></div></div></div>' +
+        '<button class="gal-shake-btn">摇一摇</button>' +
+        '<div class="gal-gacha-result"></div>' +
+      '</div>';
+    v.appendChild(gacha);
+
+    /* ---- 点赞状态（复用 ai-os 存储层） ---- */
+    var likes = (function () { try { return JSON.parse(read('gallery_likes', '[]')) || []; } catch (e) { return []; } })();
+    if (!Array.isArray(likes)) likes = [];
+    function isLiked(id) { return likes.indexOf(id) !== -1; }
+    function toggleLike(id, on) {
+      var i = likes.indexOf(id);
+      if (on && i === -1) likes.push(id);
+      if (!on && i !== -1) likes.splice(i, 1);
+      store('gallery_likes', JSON.stringify(likes));
+      refreshHearts(id); renderChips();
+      if (galState.track === 'liked') renderFeed(true);
+    }
+    function refreshHearts(id) {
+      var btns = v.querySelectorAll('[data-like="' + id + '"]');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('liked', isLiked(id));
+        btns[i].classList.remove('pop'); void btns[i].offsetWidth; btns[i].classList.add('pop');
+      }
+    }
+
+    /* ---- 工具 ---- */
+    function dimsOf(w) { var d = GALLERY_COVER_DIMS && GALLERY_COVER_DIMS[w.cover]; return d || [540, 720]; }
+    var PALETTE = ['#ff8a65', '#7986cb', '#4db6ac', '#ffb74d', '#f06292', '#9575cd', '#4fc3f7', '#aed581'];
+    function avatarColor(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffff; return PALETTE[h % PALETTE.length]; }
+    function firstChar(s) { var a = Array.from(s); return a[0] || '?'; }
+    function workById(id) { for (var i = 0; i < GALLERY_WORKS.length; i++) if (GALLERY_WORKS[i].id === id) return GALLERY_WORKS[i]; return null; }
+    function shuffle(arr) { var a = arr.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+    /* ---- 瀑布流 ---- */
+    var galState = { track: 'all', q: '' };
+    var feedOrder = shuffle(GALLERY_WORKS);
+    function filtered() {
+      var q = galState.q.trim().toLowerCase();
+      return feedOrder.filter(function (w) {
+        if (galState.track === 'liked') { if (!isLiked(w.id)) return false; }
+        else if (galState.track !== 'all' && w.track !== galState.track) return false;
+        if (!q) return true;
+        return (w.title + ' ' + w.author + ' ' + w.intro).toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    var PRELOAD_MARGIN = 420;
+    function loadImg(img) {
+      var src = img.getAttribute('data-src');
+      if (!src || img.getAttribute('data-loaded')) return;
+      img.setAttribute('data-loaded', '1');
+      img.onload = function () { img.classList.add('loaded'); };
+      img.onerror = function () { img.classList.add('loaded'); };
+      img.src = src;
+    }
+    function loadVisible() {
+      var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      var imgs = feed.querySelectorAll('img[data-src]');
+      for (var i = 0; i < imgs.length; i++) {
+        var img = imgs[i];
+        if (img.getAttribute('data-loaded')) continue;
+        var box = img.getBoundingClientRect();
+        if (box.top < vh + PRELOAD_MARGIN && box.bottom > -PRELOAD_MARGIN) loadImg(img);
+      }
+    }
+    function makeCard(w, idx) {
+      var d = dimsOf(w);
+      var card = el('div', 'gal-card');
+      card.style.animationDelay = (Math.min(idx, 9) * 40) + 'ms';
+      card.innerHTML =
+        '<div class="gal-cover" style="padding-top:' + (d[1] / d[0] * 100).toFixed(3) + '%">' +
+          '<img alt="' + esc(w.title) + '" data-src="./assets/gallery/' + w.cover + '">' +
+          '<div class="gal-badges">' +
+            (w.mine ? '<span class="gal-mine">我的</span>' : '') +
+            '<span class="gal-track-badge">' + esc(GALLERY_TRACKS[w.track].tag) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gal-card-title">' + esc(w.title) + '</div>' +
+        '<div class="gal-card-foot">' +
+          '<span class="gal-avatar" style="background:' + avatarColor(w.author) + '">' + esc(firstChar(w.author)) + '</span>' +
+          '<span class="gal-author">' + esc(w.author) + '</span>' +
+          '<span class="gal-like' + (isLiked(w.id) ? ' liked' : '') + '" data-like="' + w.id + '">&#9829;</span>' +
+        '</div>';
+      bindCard(card, w);
+      return card;
+    }
+    var tap = { id: null, time: 0, timer: 0 };
+    function cancelTap() { clearTimeout(tap.timer); tap = { id: null, time: 0, timer: 0 }; }
+    function handleTap(w, x, y) {
+      var now = Date.now();
+      if (tap.id === w.id && now - tap.time < 300 && tap.timer) { cancelTap(); if (!isLiked(w.id)) toggleLike(w.id, true); burstHeart(x, y); }
+      else { clearTimeout(tap.timer); tap.id = w.id; tap.time = now; var id = w.id; tap.timer = setTimeout(function () { cancelTap(); openDetail(id); }, 300); }
+    }
+    function bindCard(card, w) {
+      var likeBtn = card.querySelector('.gal-like');
+      var sx = 0, sy = 0;
+      card.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+      card.addEventListener('pointercancel', cancelTap);
+      card.addEventListener('pointerup', function (e) { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) { cancelTap(); return; } handleTap(w, e.clientX, e.clientY); });
+      likeBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      likeBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleLike(w.id, !isLiked(w.id)); });
+    }
+    function burstHeart(x, y) {
+      var h = el('div', 'gal-burst'); h.innerHTML = '&#9829;'; h.style.left = x + 'px'; h.style.top = y + 'px';
+      document.body.appendChild(h); setTimeout(function () { if (h.parentNode) h.parentNode.removeChild(h); }, 700);
+    }
+    function renderFeed(anim) {
+      var list = filtered();
+      if (anim === false) v.classList.add('gal-no-anim');
+      colL.innerHTML = ''; colR.innerHTML = '';
+      empty.style.display = list.length ? 'none' : 'block';
+      var colW = colL.clientWidth || 160, hs = [0, 0];
+      var frs = [document.createDocumentFragment(), document.createDocumentFragment()];
+      for (var i = 0; i < list.length; i++) {
+        var w = list[i], d = dimsOf(w), c = hs[0] <= hs[1] ? 0 : 1;
+        frs[c].appendChild(makeCard(w, i)); hs[c] += colW * d[1] / d[0] + 47 + 35 + 10;
+      }
+      colL.appendChild(frs[0]); colR.appendChild(frs[1]);
+      loadVisible();
+      if (anim === false) setTimeout(function () { v.classList.remove('gal-no-anim'); }, 60);
+    }
+    function renderChips() {
+      var counts = { all: GALLERY_WORKS.length, game: 0, tool: 0, guofeng: 0, liked: likes.length };
+      for (var i = 0; i < GALLERY_WORKS.length; i++) counts[GALLERY_WORKS[i].track]++;
+      var keys = ['all', 'game', 'tool', 'guofeng', 'liked'], html = '';
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
+        html += '<button class="gal-chip' + (galState.track === k ? ' active' : '') + '" data-track="' + k + '">' + GALLERY_TRACKS[k].label + '<span class="cnt">' + counts[k] + '</span></button>';
+      }
+      chips.innerHTML = html;
+    }
+    function setTrack(t) { galState.track = t; renderChips(); renderFeed(true); }
+
+    /* ---- 详情页 ---- */
+    var detailId = null;
+    function openDetail(id) {
+      var w = workById(id); if (!w) return; detailId = id;
+      detailScroll.innerHTML =
+        '<div class="gal-detail-cover"><img src="./assets/gallery/' + w.cover + '" alt="' + esc(w.title) + '"></div>' +
+        '<div class="gal-detail-body">' +
+          '<div class="gal-detail-title">' + esc(w.title) + '</div>' +
+          '<div class="gal-author-row">' +
+            '<span class="gal-avatar" style="background:' + avatarColor(w.author) + '">' + esc(firstChar(w.author)) + '</span>' +
+            '<div class="meta"><div class="name">' + esc(w.author) + (w.mine ? '<span class="gal-mine-tag">本人作品</span>' : '') + '</div><div class="sub">' + esc(w.tech) + '</div></div>' +
+            '<span class="gal-detail-track">' + esc(GALLERY_TRACKS[w.track].tag) + '</span>' +
+          '</div>' +
+          '<div class="gal-sec-title"><span class="dot"></span>作品简介</div>' +
+          '<div class="gal-detail-intro">' + esc(w.intro) + '</div>' +
+          '<div class="gal-sec-title"><span class="dot"></span>亮点拆解</div>' +
+          w.highlights.map(function (h, i) { return '<div class="gal-hl"><span class="num">' + (i + 1) + '</span><span class="txt">' + esc(h) + '</span></div>'; }).join('') +
+          (GALLERY_NOTES[w.id] ? '<div class="gal-sec-title"><span class="dot"></span>原笔记摘录</div><div class="gal-note-body">' + esc(GALLERY_NOTES[w.id]) + '</div>' : '') +
+          '<div class="gal-sec-title"><span class="dot"></span>原笔记链接</div>' +
+          '<div class="gal-link-box"><div class="tip">点底部按钮选中链接，长按复制，再到小红书打开</div><div class="url">' + esc(w.link) + '</div>' +
+            (w.link.indexOf('xsec_token=') === -1 ? '<div class="gal-url-warn">此条归档原文就未取到分享令牌（xsec_token），站外可能打不开</div>' : '') +
+          '</div>' +
+        '</div>';
+      detailBar.innerHTML = '<span class="gal-bar-like' + (isLiked(id) ? ' liked' : '') + '" data-like="' + id + '">&#9829;</span><button class="gal-bar-btn">复制链接去打开</button>';
+      detail.classList.add('open'); void detail.offsetWidth; detailScroll.scrollTop = 0; detail.classList.add('slide');
+    }
+    function closeDetail() { detail.classList.remove('slide'); setTimeout(function () { detail.classList.remove('open'); detailId = null; }, 280); }
+    function selectLink() {
+      var box = detailScroll.querySelector('.gal-link-box'), url = box ? box.querySelector('.url') : null;
+      if (box) { try { detailScroll.scrollTop = Math.max(0, box.offsetTop - 72); } catch (e) {} }
+      if (url) { try { var range = document.createRange(); range.selectNodeContents(url); var sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(range); } } catch (e) {} }
+      galToast(v, '已选中链接，长按复制，再到小红书打开');
+    }
+
+    /* ---- 扭蛋机（刚体物理模拟，适配自 vibecoding-gallery） ---- */
+    var GACHA_LINES = ['缘分到了！', '命运的齿轮开始转动', '这颗扭蛋里是——', '今日宜：玩这个', '红线牵到了这件', '摇中了本命作品'];
+    var gachaQueue = [], rolling = false;
+    var BALL_SPECS = [{r:20,c:'#ffd54d'},{r:18,c:'#ff9db5'},{r:17,c:'#8fd8c0'},{r:16,c:'#8cc9ff'},{r:15,c:'#f7a8b8'},{r:15,c:'#b9a8ff'},{r:14,c:'#ffc98a'},{r:13,c:'#a7e3c8'},{r:12,c:'#ffb3c1'},{r:12,c:'#8ecbff'},{r:11,c:'#ffe08a'},{r:11,c:'#c9b8ff'},{r:10,c:'#9fe0d2'},{r:10,c:'#ffd0a8'}];
+    var GRAV = 1500, REST_WALL = 0.5, REST_BALL = 0.4, FLOOR_FRIC = 0.55, SHAKE_ACC = 2600, SHAKE_W = 20;
+    var gBalls = [], gDomeW = 0, gDomeH = 0, gRAF = 0, gLast = 0, gT = 0, gTilt = 0, gShaking = false;
+    var dome = gacha.querySelector('.gal-dome'), mBody = gacha.querySelector('.gal-m-body'), mKnob = gacha.querySelector('.gal-m-knob'), capsule = gacha.querySelector('.gal-capsule');
+    function gMeasure() { gDomeW = dome.clientWidth; gDomeH = dome.clientHeight; }
+    function gCreateBalls() { dome.innerHTML = ''; gBalls = []; for (var i = 0; i < BALL_SPECS.length; i++) { var s = BALL_SPECS[i]; var b = el('div', 'gal-ball'); b.style.width = b.style.height = (s.r * 2) + 'px'; b.style.background = s.c; dome.appendChild(b); gBalls.push({r:s.r, m:s.r*s.r, el:b, x:0, y:0, vx:0, vy:0, rot:0}); } }
+    function gScatter() { var n = gBalls.length, perRow = Math.ceil(n / 2), cellW = gDomeW / perRow; for (var i = 0; i < n; i++) { var b = gBalls[i], idx = i % perRow, row = Math.floor(i / perRow); b.x = cellW * (idx + 0.5) + (Math.random() - 0.5) * cellW * 0.25; b.y = b.r + 4 + row * (b.r * 2 + 3) + Math.random() * 3; b.vx = (Math.random() - 0.5) * 40; b.vy = 0; if (b.x < b.r) b.x = b.r; if (b.x > gDomeW - b.r) b.x = gDomeW - b.r; } }
+    function gStep(dt) {
+      var i, j, b, b2; var target = gShaking ? 0.085 * Math.sin(gT * 14) : 0; gTilt += (target - gTilt) * Math.min(1, 12 * dt);
+      var acc = gShaking ? SHAKE_ACC * Math.sin(gT * SHAKE_W) : 0, gx = -GRAV * Math.sin(gTilt), gy = GRAV * Math.cos(gTilt) - acc;
+      var cr = Math.min(67, gDomeW / 2);
+      for (i = 0; i < gBalls.length; i++) {
+        b = gBalls[i]; b.vx += gx * dt; b.vy += gy * dt;
+        if (gShaking) { b.vx += (Math.random() - 0.5) * 1500 * dt; b.vy -= Math.random() * 900 * dt; }
+        b.vx *= 1 - 0.3 * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+        if (b.y > gDomeH - b.r) { b.y = gDomeH - b.r; if (b.vy > 0) b.vy = -b.vy * REST_WALL; b.vx *= Math.max(0, 1 - FLOOR_FRIC * dt); if (Math.abs(b.vy) < 20) b.vy = 0; }
+        if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx = -b.vx * REST_WALL; }
+        if (b.x > gDomeW - b.r) { b.x = gDomeW - b.r; if (b.vx > 0) b.vx = -b.vx * REST_WALL; }
+        if (b.y < cr) { var cx = b.x < cr ? cr : (b.x > gDomeW - cr ? gDomeW - cr : b.x), ddx = b.x - cx, ddy = b.y - cr, dd = Math.sqrt(ddx * ddx + ddy * ddy), maxD = cr - b.r; if (dd > maxD && dd > 0.001) { var nx = ddx / dd, ny = ddy / dd; b.x = cx + nx * maxD; b.y = cr + ny * maxD; var vn = b.vx * nx + b.vy * ny; if (vn > 0) { b.vx -= (1 + REST_WALL) * vn * nx; b.vy -= (1 + REST_WALL) * vn * ny; } } }
+        b.rot += (b.vx / b.r) * 57.3 * dt;
+      }
+      for (i = 0; i < gBalls.length; i++) { for (j = i + 1; j < gBalls.length; j++) { b = gBalls[i]; b2 = gBalls[j]; var cdx = b2.x - b.x, cdy = b2.y - b.y, d2 = cdx * cdx + cdy * cdy, minD = b.r + b2.r; if (d2 < minD * minD && d2 > 0.0001) { var d = Math.sqrt(d2), ux = cdx / d, uy = cdy / d, overlap = minD - d, total = b.m + b2.m; b.x -= ux * overlap * (b2.m / total); b.y -= uy * overlap * (b2.m / total); b2.x += ux * overlap * (b.m / total); b2.y += uy * overlap * (b.m / total); var rvx = b2.vx - b.vx, rvy = b2.vy - b.vy, rel = rvx * ux + rvy * uy; if (rel < 0) { var imp = -(1 + REST_BALL) * rel / (1 / b.m + 1 / b2.m); b.vx -= imp * ux / b.m; b.vy -= imp * uy / b.m; b2.vx += imp * ux / b2.m; b2.vy += imp * uy / b2.m; } } } }
+    }
+    function gRender() { for (var i = 0; i < gBalls.length; i++) { var b = gBalls[i]; b.el.style.transform = 'translate(' + (b.x - b.r).toFixed(1) + 'px,' + (b.y - b.r).toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)'; } var yOff = gShaking ? (SHAKE_ACC / (SHAKE_W * SHAKE_W)) * Math.sin(gT * SHAKE_W) : 0; mBody.style.transform = 'translateY(' + yOff.toFixed(2) + 'px) rotate(' + (gTilt * 57.3).toFixed(2) + 'deg)'; }
+    function gLoop(ts) { if (!gLast) gLast = ts; var dt = Math.min(0.033, (ts - gLast) / 1000); gLast = ts; gT += dt; gStep(dt); gRender(); gRAF = requestAnimationFrame(gLoop); }
+    function gStart() { if (gRAF) return; gLast = 0; gRAF = requestAnimationFrame(gLoop); }
+    function gStop() { if (gRAF) cancelAnimationFrame(gRAF); gRAF = 0; gShaking = false; mBody.style.transform = ''; }
+    function nextWork() { if (!gachaQueue.length) gachaQueue = shuffle(GALLERY_WORKS); return gachaQueue.pop(); }
+    var gachaResult = gacha.querySelector('.gal-gacha-result'), gachaPanel = gacha.querySelector('.gal-gacha-panel'), shakeBtn = gacha.querySelector('.gal-shake-btn');
+    function openGacha() {
+      gachaResult.classList.remove('show'); gachaResult.innerHTML = ''; shakeBtn.style.display = ''; gachaPanel.classList.remove('has-result'); capsule.className = 'gal-capsule';
+      gacha.classList.add('open'); gMeasure(); if (!gBalls.length) gCreateBalls(); gScatter(); gStart();
+    }
+    function closeGacha() { gacha.classList.remove('open'); gachaQueue = []; gStop(); }
+    function shakeGacha() {
+      if (rolling) return; rolling = true; shakeBtn.disabled = true; gShaking = true;
+      setTimeout(function () { gShaking = false; mKnob.classList.add('turn'); setTimeout(function () { mKnob.classList.remove('turn'); capsule.classList.add('drop'); setTimeout(function () { capsule.classList.add('open'); setTimeout(function () { capsule.className = 'gal-capsule'; revealGacha(); }, 460); }, 640); }, 720); }, 1150);
+    }
+    function revealGacha() {
+      gStop(); rolling = false; shakeBtn.disabled = false; var w = nextWork(), line = GACHA_LINES[Math.floor(Math.random() * GACHA_LINES.length)];
+      gachaResult.innerHTML =
+        '<div class="gal-gacha-line">' + esc(line) + '</div>' +
+        '<div class="gal-gacha-card"><div class="thumb" style="background-image:url(./assets/gallery/' + w.cover + ')"></div><div class="info">' +
+          '<div class="t">' + esc(w.title) + '</div><div class="a">' + esc(w.author) + ' · ' + esc(GALLERY_TRACKS[w.track].label) + '</div><div class="d">' + esc(w.intro) + '</div>' +
+        '</div></div><div class="gal-gacha-actions"><button class="again">再摇一个</button><button class="go">去看看</button></div>';
+      gachaResult.classList.add('show'); shakeBtn.style.display = 'none'; gachaPanel.classList.add('has-result');
+      gachaResult.querySelector('.again').addEventListener('click', function () { gachaResult.classList.remove('show'); shakeBtn.style.display = ''; gachaPanel.classList.remove('has-result'); gStart(); shakeGacha(); });
+      gachaResult.querySelector('.go').addEventListener('click', function () { closeGacha(); openDetail(w.id); });
+    }
+
+    /* ---- 事件绑定 ---- */
+    chips.addEventListener('click', function (e) { var btn = e.target; while (btn && btn !== this && !btn.getAttribute('data-track')) btn = btn.parentNode; if (btn && btn !== this && btn.getAttribute('data-track')) setTrack(btn.getAttribute('data-track')); });
+    search.querySelector('input').addEventListener('input', function (e) { galState.q = e.target.value; renderFeed(true); });
+    backBtn.addEventListener('click', closeDetail);
+    detailBar.addEventListener('click', function (e) { var like = e.target.closest('.gal-bar-like'); if (like) { toggleLike(like.getAttribute('data-like'), !isLiked(like.getAttribute('data-like'))); return; } if (e.target.closest('.gal-bar-btn')) selectLink(); });
+    gachaBtn.addEventListener('click', openGacha);
+    gacha.querySelector('.gal-gacha-close').addEventListener('click', closeGacha);
+    shakeBtn.addEventListener('click', shakeGacha);
+    mKnob.addEventListener('click', shakeGacha);
+    backTop.addEventListener('click', function () { body.scrollTop = 0; });
+    body.addEventListener('scroll', function () {
+      if (body.scrollTop > 400) backTop.classList.add('show'); else backTop.classList.remove('show');
+      if (!body._visTimer) body._visTimer = setTimeout(function () { body._visTimer = 0; loadVisible(); }, 120);
+    });
+    var resizeTimer = null;
+    window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { renderFeed(false); }, 200); });
+
+    /* 创作者数按唯一作者统计 */
+    var authorSeen = {}, authorCount = 0;
+    for (var ai = 0; ai < GALLERY_WORKS.length; ai++) { var key = GALLERY_WORKS[ai].author; if (!authorSeen[key]) { authorSeen[key] = 1; authorCount++; } }
+    gacha.querySelector('.gal-gacha-count').textContent = GALLERY_WORKS.length;
+
+    renderChips();
+    renderFeed(true);
+
+    /* onShow：每次进入应用时从存储重读点赞（他处可能改过） */
+    v.onShow = function () {
+      var fresh = (function () { try { return JSON.parse(read('gallery_likes', '[]')) || []; } catch (e) { return []; } })();
+      if (!Array.isArray(fresh)) fresh = [];
+      if (JSON.stringify(fresh) !== JSON.stringify(likes)) { likes = fresh; renderChips(); renderFeed(true); }
+    };
+    return v;
+  }
+
+  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore, gallery: buildGallery };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
   /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */

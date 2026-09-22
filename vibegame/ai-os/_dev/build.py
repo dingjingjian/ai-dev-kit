@@ -153,6 +153,75 @@ def store_apps():
         raise SystemExit("未能从 %s 解析出任何项目，请检查分类标题与表格格式。" % TRACKS)
     return groups
 
+
+# 「作品展」应用的数据真源：仓库根 vibecoding-gallery/（与 ai-os 同级上溯到仓库根）
+GALLERY_DIR = os.path.normpath(os.path.join(HERE, "..", "..", "..", "vibecoding-gallery"))
+
+
+def _extract_js_decl(text, start_marker, open_ch, close_ch):
+    """从 JS 源码里提取一个声明（如 var WORKS = [...]; 或 var NOTES = {...};）。
+    用括号深度匹配，跳过字符串字面量（' " `）与转义，稳健于数组/对象里的嵌套与中文。"""
+    i = text.find(start_marker)
+    if i < 0:
+        raise SystemExit("在 vibecoding-gallery 源码里找不到声明：%s" % start_marker)
+    j = text.find(open_ch, i + len(start_marker))
+    if j < 0:
+        raise SystemExit("找不到 %s 在 %s 之后" % (open_ch, start_marker))
+    depth, k, in_str = 0, j, None
+    while k < len(text):
+        c = text[k]
+        if in_str:
+            if c == '\\':
+                k += 2
+                continue
+            if c == in_str:
+                in_str = None
+        else:
+            if c in '"\'`':
+                in_str = c
+            elif c == open_ch:
+                depth += 1
+            elif c == close_ch:
+                depth -= 1
+                if depth == 0:
+                    end = k + 1
+                    while end < len(text) and text[end] in ' \t\r\n':
+                        end += 1
+                    if end < len(text) and text[end] == ';':
+                        return text[i:end + 1]
+                    return text[i:end]
+        k += 1
+    raise SystemExit("未找到匹配的 %s（声明 %s）" % (close_ch, start_marker))
+
+
+def gallery_data():
+    """「作品展」应用的数据：构建期从仓库根 vibecoding-gallery/main.js 与 covers-data.js
+    提取 WORKS / NOTES / TRACKS / COVER_DIMS 的源码片段，原样注入 ai-os 的 main.js。
+
+    数据真源是 vibecoding-gallery/main.js（与 covers-data.js），ai-os 不手抄——
+    手抄会在「新增作品 / 改链接 / 改简介」时与上游分叉。变量名加 GALLERY_ 前缀
+    避免与 ai-os 已有变量冲突。返回一段 JS 声明文本，注入 __GALLERY_DATA__。"""
+    main_js = os.path.join(GALLERY_DIR, "main.js")
+    covers_js = os.path.join(GALLERY_DIR, "covers-data.js")
+    if not os.path.isfile(main_js):
+        raise SystemExit("找不到 vibecoding-gallery/main.js\n它是「作品展」应用的数据真源。" % ())
+    with io.open(main_js, encoding="utf-8") as f:
+        main_text = f.read()
+    with io.open(covers_js, encoding="utf-8") as f:
+        covers_text = f.read()
+    works = _extract_js_decl(main_text, "var WORKS =", "[", "]")
+    notes = _extract_js_decl(main_text, "var NOTES =", "{", "}")
+    tracks = _extract_js_decl(main_text, "var TRACKS =", "{", "}")
+    dims = _extract_js_decl(covers_text, "window.COVER_DIMS =", "{", "}")
+    # 重命名变量，避免与 ai-os 已有的 var 冲突
+    return (
+        works.replace("var WORKS =", "var GALLERY_WORKS =", 1) + "\n"
+        + notes.replace("var NOTES =", "var GALLERY_NOTES =", 1) + "\n"
+        + tracks.replace("var TRACKS =", "var GALLERY_TRACKS =", 1) + "\n"
+        + dims.replace("window.COVER_DIMS =", "var GALLERY_COVER_DIMS =", 1)
+    )
+
+
 # ---------------------------------------------------------------------------
 # CSS（Chrome 61 基线层 + @supports 增强层；不维护两套样式表）
 # ---------------------------------------------------------------------------
@@ -196,10 +265,10 @@ body[data-mode="dark"]{
 body.in-app{ --safe-l:0px; --safe-r:0px;
   /* 宿主顶栏（返回 / 分享 / 更多）就压在这条预留带里：纯 50px 时几乎被它占满，
    * 带子下方只剩十几像素，看起来像「顶部没留白、内容顶到宿主顶栏上」。
-   * in-app 加大到 70px —— 宿主顶栏之下仍留出明显空白。
+   * in-app 加大到 56px —— 宿主顶栏（约 44-48px）之下仍留出 8-12px 空白。
    * 注意必须在 body 上**重新声明 --safe-top**：自定义属性在声明它的元素上求值，
    * 只覆盖 --top-gap 不会让 :root 上的 --safe-top 重算。 */
-  --top-gap:70px;
+  --top-gap:56px;
   --safe-top:calc(var(--top-gap) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
 }
 /* 宿主带真实状态栏 + 顶部导航条（返回 / 分享 / 更多）：in-app 时隐藏自绘状态栏。
@@ -207,8 +276,8 @@ body.in-app{ --safe-l:0px; --safe-r:0px;
  * 且自绘状态栏与宿主顶部按钮同处一行、互相挤占。
  * 用 visibility 而非 display —— 保住 --safe-top 预留带高度，宿主顶栏按钮与内容区之间仍有留白。
  * 纯浏览器 / PC 模拟器无宿主状态栏时照常显示（真机观感靠它）。 */
-/* 高度同样给普通值兜底：即使 --safe-top 链失效，in-app 也要保住 70px 预留带。 */
-body.in-app .statusbar{ visibility:hidden; height:70px; height:var(--safe-top); }
+/* 高度同样给普通值兜底：即使 --safe-top 链失效，in-app 也要保住 56px 预留带。 */
+body.in-app .statusbar{ visibility:hidden; height:56px; height:var(--safe-top); }
 
 /* ============ 主题 token（默认浅色，DESIGN.md §4.2） ============ */
 :root{
@@ -462,7 +531,7 @@ body[data-mode="dark"] .widget.w-weather{
   background:rgba(0,0,0,.28); border-radius:1px;
 }
 .w-bal-lbl{ font-size:10px; color:rgba(255,255,255,.6); margin-top:4px; }
-.w-bal{ font-size:25px; font-weight:800; line-height:1.1; color:#fff; letter-spacing:.2px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.w-bal{ font-size:22px; font-weight:800; line-height:1.1; color:#fff; letter-spacing:.2px; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .w-wrow{ display:flex; align-items:center; justify-content:space-between; margin-top:12px; }
 .w-spend{ font-size:10px; color:rgba(255,255,255,.6); }
 .w-cardno{ font-size:10px; color:rgba(255,255,255,.6); letter-spacing:1px; }
@@ -713,6 +782,260 @@ body[data-mode="dark"] .store-mini{
 .store-chip.warn{ color:var(--warn); background:rgba(232,161,60,.16); }
 .store-chip.self{ color:var(--accent); background:rgba(108,76,241,.12); margin-left:6px; }
 .store-empty{ padding:28px 0; text-align:center; font-size:13px; color:var(--ink-dim); }
+
+/* ============ 作品展（§4.14）：vibecoding 大赛优秀作品展 ============
+ * 复刻小红书信息流形态：双列瀑布流 + 笔记详情页 + 扭蛋机彩蛋。
+ * 数据构建期由仓库根 vibecoding-gallery/main.js 派生注入（__GALLERY_DATA__）。
+ * 封面图随包分发（./assets/gallery/*.jpg，由 build_zip.py 一并打包）。
+ * 结构复用 ai-os 三段式骨架（phead/pbody/pfoot），卡片/搜索/筛选用 ai-os token；
+ * 小红书品牌红（--gal-brand）只用于点赞心、赛道选中态、扭蛋机等「小红书信息流」语义色。 */
+.view-gallery{ --gal-brand:#ff2442; --gal-grad:#ff2442; }
+/* 吸顶区：搜索 + 赛道筛选（sticky 在 pbody 滚动区顶部） */
+.gal-sticky{
+  position:sticky; top:0; z-index:6;
+  background:var(--card);
+  box-shadow:0 1px 0 var(--line);
+  padding-bottom:6px;
+}
+@supports ((-webkit-backdrop-filter:blur(14px)) or (backdrop-filter:blur(14px))){
+  .gal-sticky{ background:rgba(255,255,255,0.86); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); }
+  body[data-mode="dark"] .gal-sticky{ background:rgba(28,28,34,0.86); }
+}
+.gal-search-row{ display:flex; align-items:center; padding:8px 4px 6px; }
+.gal-search{
+  flex:1; display:flex; align-items:center;
+  background:var(--card); border:1px solid var(--line);
+  border-radius:var(--r-sm); padding:0 12px; height:36px; margin-right:8px;
+}
+.gal-search:focus-within{ border-color:var(--gal-brand); box-shadow:0 0 0 2px rgba(255,36,66,.18); }
+.gal-search svg{ flex:none; width:15px; height:15px; }
+.gal-search input{
+  border:0; outline:0; background:none; font-size:13px; color:var(--ink);
+  margin-left:7px; width:100%; -webkit-user-select:text; user-select:text;
+}
+.gal-gacha-btn{
+  flex:none; display:flex; align-items:center;
+  background:var(--gal-grad); color:#fff; font-size:12px; font-weight:700;
+  border-radius:var(--r-sm); height:36px; padding:0 14px;
+  box-shadow:0 4px 12px rgba(255,36,66,.30); transition:transform .15s ease;
+}
+.gal-gacha-btn:active{ transform:scale(.94); opacity:.9; }
+.gal-gacha-btn svg{ width:15px; height:15px; margin-right:5px; }
+/* 赛道筛选 chips：等分满宽（与难度选择/商店筛选同一套控件语言，§4.4） */
+.gal-chips{ display:flex; padding:6px 4px 2px; }
+.gal-chip{
+  flex:1 1 0; min-width:0; display:flex; align-items:center; justify-content:center;
+  font-size:12.5px; font-weight:500; color:var(--ink-dim);
+  background:var(--card); border:1px solid var(--line);
+  border-radius:999px; padding:8px 2px; margin-right:6px; white-space:nowrap;
+  transition:transform .15s ease, background .15s ease, color .15s ease;
+}
+.gal-chip:last-child{ margin-right:0; }
+.gal-chip .cnt{
+  font-size:10px; font-weight:700; color:var(--ink-dim);
+  background:rgba(120,120,140,.14); border-radius:999px; padding:1px 5px; margin-left:4px; line-height:1.5;
+}
+.gal-chip:active{ transform:scale(.96); }
+.gal-chip.active{ background:var(--gal-brand); color:#fff; border-color:transparent; }
+.gal-chip.active .cnt{ color:#fff; background:rgba(255,255,255,.24); }
+/* 瀑布流 */
+.gal-feed{ display:flex; align-items:flex-start; padding:6px 2px 0; }
+.gal-col{ flex:1; min-width:0; }
+.gal-col + .gal-col{ margin-left:8px; }
+.gal-card{
+  background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+  overflow:hidden; margin-bottom:10px; position:relative;
+  box-shadow:var(--sh-1);
+  animation:gal-card-in .42s cubic-bezier(.22,.9,.36,1) backwards;
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+.gal-no-anim .gal-card{ animation:none; }
+.gal-card:active{ transform:scale(.975); box-shadow:var(--sh-2); }
+@keyframes gal-card-in{ from{ opacity:0; transform:translateY(16px); } to{ opacity:1; transform:translateY(0); } }
+.gal-cover{ position:relative; width:100%; background:var(--line); overflow:hidden; }
+.gal-cover img{
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  opacity:0; transform:scale(1.05);
+  transition:opacity .4s ease, transform .5s ease;
+}
+.gal-cover img.loaded{ opacity:1; transform:scale(1); }
+.gal-badges{ position:absolute; left:8px; bottom:8px; z-index:2; display:flex; align-items:center; }
+.gal-badges span{ margin-right:6px; }
+.gal-badges span:last-child{ margin-right:0; }
+.gal-mine{
+  background:var(--gal-brand); color:#fff; font-size:10px; font-weight:700;
+  border-radius:999px; padding:3px 7px;
+}
+.gal-track-badge{
+  background:rgba(20,22,26,.55); color:#fff; font-size:10px; font-weight:600;
+  border-radius:999px; padding:3px 8px;
+}
+@supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+  .gal-track-badge{ background:rgba(20,22,26,.38); -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+}
+.gal-card-title{
+  font-size:13.5px; font-weight:600; line-height:19px; color:var(--ink);
+  padding:9px 11px 3px; height:47px;
+  display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2;
+  overflow:hidden; word-break:break-all;
+}
+.gal-card-foot{ display:flex; align-items:center; padding:0 11px 10px; }
+.gal-avatar{
+  flex:none; width:19px; height:19px; border-radius:50%; color:#fff;
+  font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 0 1.5px var(--card), 0 0 0 2.5px rgba(31,35,41,.08);
+}
+.gal-author{ flex:1; min-width:0; font-size:11px; color:var(--ink-dim); margin-left:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.gal-like{ flex:none; font-size:17px; line-height:1; color:#c6cad1; padding:3px 2px; }
+.gal-like.liked{ color:var(--gal-brand); }
+.gal-like.pop{ animation:gal-pop .42s ease-out; }
+@keyframes gal-pop{ 0%{ transform:scale(1); } 40%{ transform:scale(1.45); } 100%{ transform:scale(1); } }
+/* 双击大爱心 */
+.gal-burst{
+  position:fixed; z-index:300; pointer-events:none; font-size:78px; line-height:1;
+  color:var(--gal-brand); text-shadow:0 4px 18px rgba(255,36,66,.45);
+  animation:gal-burst .65s ease-out forwards;
+}
+@keyframes gal-burst{
+  0%{ transform:translate(-50%,-50%) scale(.3) rotate(-6deg); opacity:0; }
+  25%{ transform:translate(-50%,-50%) scale(1.15) rotate(4deg); opacity:1; }
+  55%{ transform:translate(-50%,-50%) scale(1) rotate(-2deg); opacity:1; }
+  100%{ transform:translate(-50%,-50%) scale(1.25) rotate(0deg); opacity:0; }
+}
+.gal-empty{ display:none; text-align:center; color:var(--ink-dim); font-size:13px; padding:64px 20px; }
+.gal-empty .icon{ font-size:36px; margin-bottom:12px; }
+.gal-footer{ text-align:center; color:var(--ink-dim); font-size:11px; padding:18px 20px 28px; line-height:1.9; opacity:.7; }
+/* 回到顶部 */
+.gal-backtop{
+  position:absolute; right:16px; bottom:16px; z-index:8;
+  width:42px; height:42px; border-radius:50%;
+  background:var(--card); color:var(--ink-dim); border:1px solid var(--line);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--sh-2); opacity:0; pointer-events:none; transform:translateY(8px);
+  transition:opacity .2s ease, transform .2s ease;
+}
+.gal-backtop svg{ width:20px; height:20px; }
+.gal-backtop.show{ opacity:1; pointer-events:auto; transform:translateY(0); }
+.gal-backtop:active{ transform:scale(.92); }
+/* 详情页覆盖层（应用内覆盖，不盖底部金刚键） */
+.gal-overlay{
+  position:absolute; top:0; left:0; right:0; bottom:0; z-index:20;
+  display:none; background:var(--app-bg);
+}
+.gal-overlay.open{ display:block; }
+.gal-detail{ transform:translateX(100%); transition:transform .28s cubic-bezier(.32,.9,.35,1); }
+.gal-detail.slide{ transform:translateX(0); }
+.gal-detail-scroll{
+  position:absolute; top:0; left:0; right:0; bottom:60px;
+  overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-y:contain;
+}
+.gal-detail-cover{ position:relative; background:var(--line); }
+.gal-detail-cover img{ width:100%; }
+.gal-back-btn{
+  position:absolute; top:14px; left:14px; z-index:5;
+  width:36px; height:36px; border-radius:50%;
+  background:rgba(20,22,26,.4); color:#fff; font-size:18px; line-height:36px; text-align:center;
+}
+@supports ((-webkit-backdrop-filter:blur(8px)) or (backdrop-filter:blur(8px))){
+  .gal-back-btn{ background:rgba(20,22,26,.26); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+}
+.gal-detail-body{ padding:16px 18px 24px; }
+.gal-detail-title{ font-size:18px; font-weight:800; color:var(--ink); line-height:1.45; word-break:break-all; }
+.gal-author-row{ display:flex; align-items:center; margin-top:14px; padding:10px 12px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); }
+.gal-author-row .gal-avatar{ width:34px; height:34px; font-size:14px; }
+.gal-author-row .meta{ flex:1; min-width:0; margin-left:10px; }
+.gal-author-row .name{ font-size:14px; font-weight:700; color:var(--ink); }
+.gal-author-row .sub{ font-size:11px; color:var(--ink-dim); margin-top:3px; }
+.gal-mine-tag{ display:inline-block; margin-left:6px; padding:1px 6px; border-radius:999px; background:var(--gal-brand); color:#fff; font-size:10px; font-weight:700; vertical-align:1px; }
+.gal-detail-track{ flex:none; font-size:11px; font-weight:700; color:#fff; background:var(--gal-grad); border-radius:999px; padding:5px 11px; box-shadow:0 3px 8px rgba(255,36,66,.3); }
+.gal-detail-intro{ font-size:14px; color:var(--ink-dim); line-height:1.75; word-break:break-all; padding:12px 14px; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); }
+.gal-note-body{ font-size:14px; color:var(--ink-dim); line-height:1.9; white-space:pre-line; word-break:break-word; -webkit-user-select:text; user-select:text; }
+.gal-sec-title{ display:flex; align-items:center; font-size:14.5px; font-weight:800; color:var(--ink); margin:22px 0 11px; }
+.gal-sec-title .dot{ width:5px; height:16px; border-radius:3px; background:var(--gal-grad); margin-right:8px; }
+.gal-hl{ display:flex; background:var(--card); border:1px solid var(--line); border-radius:var(--r-md); padding:12px 13px; margin-bottom:9px; }
+.gal-hl .num{ flex:none; width:20px; height:20px; border-radius:7px; background:var(--gal-grad); color:#fff; font-size:11px; font-weight:800; text-align:center; line-height:20px; margin-top:1px; box-shadow:0 2px 6px rgba(255,36,66,.28); }
+.gal-hl .txt{ flex:1; min-width:0; font-size:13px; color:var(--ink-dim); line-height:1.65; margin-left:10px; word-break:break-all; }
+.gal-link-box{ background:var(--card); border:1px dashed var(--line); border-radius:var(--r-md); padding:12px 13px; }
+.gal-link-box .tip{ font-size:11px; color:var(--ink-dim); line-height:1.6; }
+.gal-link-box .url{ font-family:Menlo,Consolas,monospace; font-size:10.5px; color:var(--ink); line-height:1.65; word-break:break-all; -webkit-user-select:text; user-select:text; margin-top:7px; }
+.gal-url-warn{ font-size:10.5px; color:var(--danger); line-height:1.6; margin-top:6px; }
+.gal-detail-bar{
+  position:absolute; left:0; right:0; bottom:0; height:60px;
+  display:flex; align-items:center; background:var(--card); border-top:1px solid var(--line); padding:0 14px;
+}
+.gal-bar-like{ flex:none; font-size:23px; color:#c6cad1; padding:6px 12px 6px 2px; }
+.gal-bar-like.liked{ color:var(--gal-brand); }
+.gal-bar-like.pop{ animation:gal-pop .42s ease-out; }
+.gal-bar-btn{
+  flex:1; background:var(--gal-grad); color:#fff; font-size:14.5px; font-weight:700;
+  border-radius:999px; height:42px; box-shadow:0 5px 14px rgba(255,36,66,.36); transition:transform .15s ease;
+}
+.gal-bar-btn:active{ transform:scale(.97); }
+/* 扭蛋机 */
+.gal-gacha{ background:rgba(15,17,21,.66); }
+.gal-gacha-panel{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:84%; max-width:340px; max-height:90%; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  background:var(--card); border-radius:20px; padding:22px 20px 20px; box-shadow:0 24px 60px rgba(0,0,0,.3);
+}
+.gal-gacha-close{ position:absolute; top:12px; right:14px; font-size:20px; color:var(--ink-dim); padding:4px 6px; }
+.gal-gacha-title{ text-align:center; font-size:16px; font-weight:800; color:var(--ink); }
+.gal-gacha-sub{ text-align:center; font-size:11px; color:var(--ink-dim); margin-top:4px; }
+.gal-machine{ position:relative; height:232px; max-height:232px; margin:18px 8px 0; overflow:hidden; transition:opacity .22s ease, transform .3s ease, max-height .42s ease, margin-top .42s ease; }
+.gal-m-body{ position:absolute; top:0; left:0; right:0; bottom:0; transform-origin:50% 90%; }
+.gal-dome{ position:absolute; top:0; left:7%; right:7%; height:134px; border-radius:67px 67px 14px 14px; background:linear-gradient(160deg,#ffffff 0%,#eef2f8 55%,#e0e7f1 100%); border:2px solid #d7dfea; overflow:hidden; box-shadow:inset 0 -12px 20px rgba(120,140,170,.18), 0 6px 14px rgba(40,60,90,.08); }
+.gal-dome::before{ content:""; position:absolute; top:9%; left:9%; width:32%; height:15%; border-radius:50%; background:rgba(255,255,255,.92); transform:rotate(-18deg); filter:blur(1px); }
+.gal-dome::after{ content:""; position:absolute; left:0; right:0; bottom:0; height:20px; background:linear-gradient(180deg,rgba(150,168,196,0),rgba(150,168,196,.22)); }
+.gal-ball{ position:absolute; left:0; top:0; border-radius:50%; transform-origin:50% 50%; box-shadow:inset -4px -6px 10px rgba(0,0,0,.16), inset 3px 4px 6px rgba(255,255,255,.6); }
+.gal-ball::after{ content:""; position:absolute; top:14%; left:20%; width:26%; height:20%; border-radius:50%; background:rgba(255,255,255,.85); transform:rotate(-24deg); }
+.gal-m-base{ position:absolute; left:0; right:0; bottom:0; height:106px; border-radius:16px 16px 18px 18px; background:linear-gradient(180deg,#ff5c6f 0%,#ff2442 52%,#e01e3a 100%); box-shadow:0 12px 24px rgba(255,36,66,.26), inset 0 2px 0 rgba(255,255,255,.4); }
+.gal-m-base::before{ content:""; position:absolute; left:15%; right:15%; top:12px; height:62px; border-radius:10px; background:rgba(255,255,255,.16); }
+.gal-m-knob{ position:absolute; top:22px; left:50%; width:38px; height:38px; margin-left:-19px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#ffffff,#d5dce6 72%); box-shadow:inset 0 -3px 5px rgba(0,0,0,.14), 0 2px 5px rgba(0,0,0,.22); cursor:pointer; }
+.gal-m-knob::after{ content:""; position:absolute; top:11px; left:11px; right:11px; bottom:11px; border-radius:50%; border:3px solid #aab4c4; }
+.gal-m-slot{ position:absolute; top:30px; right:20px; width:24px; height:8px; border-radius:4px; background:#7d1626; box-shadow:inset 0 1px 3px rgba(0,0,0,.55); }
+.gal-m-door{ position:absolute; left:50%; bottom:14px; width:54px; height:34px; margin-left:-27px; border-radius:6px 6px 13px 13px; background:#f2f5f9; border:2px solid rgba(255,255,255,.7); box-shadow:inset 0 3px 6px rgba(0,0,0,.18); }
+.gal-m-door::after{ content:""; position:absolute; left:8px; right:8px; top:7px; height:4px; border-radius:2px; background:#cdd6e2; }
+.gal-gacha-panel.has-result .gal-machine{ max-height:0; opacity:0; margin-top:0; transform:translateY(-42px); }
+.gal-m-knob.turn{ animation:gal-knob .72s cubic-bezier(.45,.05,.35,1); }
+@keyframes gal-knob{ 0%{ transform:rotate(0deg); } 20%{ transform:rotate(72deg); } 100%{ transform:rotate(360deg); } }
+.gal-capsule{ position:absolute; left:50%; bottom:42px; width:42px; height:42px; margin-left:-21px; opacity:0; pointer-events:none; z-index:3; }
+.gal-capsule .cap-top, .gal-capsule .cap-bot{ position:absolute; left:0; right:0; height:21px; box-shadow:inset -3px -4px 8px rgba(0,0,0,.16), inset 2px 3px 5px rgba(255,255,255,.5); }
+.gal-capsule .cap-top{ top:0; border-radius:21px 21px 3px 3px; background:var(--gal-brand); border-bottom:2px solid #d81b35; }
+.gal-capsule .cap-bot{ bottom:0; border-radius:3px 3px 21px 21px; background:#f6f8fb; border-top:2px solid #dfe4ec; }
+.gal-capsule.drop{ animation:gal-capdrop .62s cubic-bezier(.3,.6,.4,1) forwards; }
+@keyframes gal-capdrop{ 0%{ opacity:0; transform:translateY(0) scale(.72); } 16%{ opacity:1; } 50%{ transform:translateY(26px) scale(1); } 64%{ transform:translateY(19px) scale(1.05,.94); } 80%{ transform:translateY(26px) scale(.99,1.01); } 100%{ opacity:1; transform:translateY(24px) scale(1); } }
+.gal-capsule.open .cap-top{ animation:gal-capTop .45s ease-out forwards; }
+.gal-capsule.open .cap-bot{ animation:gal-capBot .45s ease-out forwards; }
+@keyframes gal-capTop{ to{ transform:translateY(-30px) rotate(-40deg); opacity:0; } }
+@keyframes gal-capBot{ to{ transform:translateY(26px) rotate(32deg); opacity:0; } }
+.gal-gacha-result{ display:none; text-align:center; }
+.gal-gacha-result.show{ display:block; animation:gal-resultin .42s cubic-bezier(.22,1.1,.5,1) both; }
+@keyframes gal-resultin{ 0%{ opacity:0; transform:translateY(12px) scale(.96); } 100%{ opacity:1; transform:translateY(0) scale(1); } }
+.gal-gacha-line{ display:flex; align-items:center; justify-content:center; margin-top:20px; margin-bottom:13px; font-size:12.5px; font-weight:600; letter-spacing:.4px; line-height:1.4; color:var(--gal-brand); }
+.gal-gacha-line::before, .gal-gacha-line::after{ content:""; flex:1 1 auto; height:1px; margin:0 12px; }
+.gal-gacha-line::before{ background:linear-gradient(90deg,rgba(255,36,66,0),rgba(255,36,66,.3)); }
+.gal-gacha-line::after{ background:linear-gradient(90deg,rgba(255,36,66,.3),rgba(255,36,66,0)); }
+.gal-gacha-card{ border-radius:14px; overflow:hidden; background:var(--card); border:1px solid var(--line); text-align:left; }
+.gal-gacha-card .thumb{ width:100%; height:210px; background:var(--line) center / cover no-repeat; }
+.gal-gacha-card .info{ padding:12px 13px 14px; }
+.gal-gacha-card .t{ font-size:15px; font-weight:700; color:var(--ink); line-height:1.4; }
+.gal-gacha-card .a{ font-size:11.5px; color:var(--ink-dim); margin-top:5px; }
+.gal-gacha-card .d{ font-size:12.5px; color:var(--ink-dim); line-height:1.6; margin-top:9px; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
+.gal-gacha-actions{ display:flex; margin-top:16px; }
+.gal-gacha-actions .again{ flex:none; font-size:13px; font-weight:600; color:var(--ink-dim); border:1px solid var(--line); border-radius:999px; height:40px; padding:0 17px; margin-right:10px; }
+.gal-gacha-actions .go{ flex:1; background:var(--gal-brand); color:#fff; font-size:14px; font-weight:700; border-radius:999px; height:40px; box-shadow:0 5px 14px rgba(255,36,66,.3); }
+.gal-gacha-actions .again:active, .gal-gacha-actions .go:active{ opacity:.75; }
+.gal-shake-btn{ display:block; width:100%; margin-top:18px; background:var(--gal-brand); color:#fff; font-size:15px; font-weight:800; border-radius:999px; height:46px; box-shadow:0 6px 16px rgba(255,36,66,.3); transition:transform .15s ease; }
+.gal-shake-btn:active{ transform:scale(.97); }
+.gal-shake-btn[disabled]{ opacity:.5; }
+/* gallery toast：实色底高对比文字（toast-solid-bg-high-contrast 记忆） */
+.gal-toast{
+  position:absolute; left:50%; bottom:22%; transform:translateX(-50%); z-index:40;
+  background:rgba(20,22,26,.88); color:#fff; font-size:13px; border-radius:999px;
+  padding:11px 19px; max-width:78%; text-align:center; opacity:0; pointer-events:none;
+  transition:opacity .25s ease;
+}
+.gal-toast.show{ opacity:1; }
 
 /* ============ 游戏页组件（§4.7 二期a） ============ */
 .gstats{
@@ -1564,6 +1887,8 @@ JS = r"""
     moon: '<svg viewBox="0 0 24 24"><path d="M20.6 14.6A9 9 0 1 1 9.4 3.4a7.2 7.2 0 0 0 11.2 11.2z"/></svg>',
     /* 购物袋：袋身（圆角矩形）+ 提手（弧线）—— 手绘简单几何，不写复杂单 path */
     bag: '<svg viewBox="0 0 24 24"><path d="M5.4 7.6h13.2a1.6 1.6 0 0 1 1.6 1.7l-.9 10a2 2 0 0 1-2 1.8H6.7a2 2 0 0 1-2-1.8l-.9-10a1.6 1.6 0 0 1 1.6-1.7z"/><path d="M8.8 7.6V6.1a3.2 3.2 0 0 1 6.4 0v1.5" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>',
+    /* 作品展：双列瀑布流卡片（两张错落卡片 + 顶部小图）—— 手绘简单几何 */
+    gallery: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="10" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="15.5" width="7" height="5" rx="1.6"/><rect x="13.5" y="12.5" width="7" height="8" rx="1.6"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><g fill="#fff"><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(45 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(90 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(135 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(180 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(225 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(270 12 12)"/><rect x="10.5" y="1.5" width="3" height="4.6" rx="1.3" transform="rotate(315 12 12)"/></g><circle cx="12" cy="12" r="5.4" fill="none" stroke="#fff" stroke-width="2.9"/></svg>'
   };
 
@@ -1577,7 +1902,11 @@ JS = r"""
     { id: 'stats',     name: '统计',     slogan: '它不会分析，但你会',   g: 'chart', c: ['#4FD0E5', '#2E9EC4'], deg: 150 },
     /* 应用商店的色相取青柠绿（黄绿，hue≈92）—— 主屏其余图标里没有这个色区，
      * 与日程/电话的春绿、统计/助手的青蓝都拉得开（DESIGN §4.3 色相不重复）。 */
-    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 }
+    { id: 'store',     name: '应用商店', slogan: '整条工具街都在这儿',   g: 'bag',   c: ['#8ED04A', '#5C9E1C'], deg: 135 },
+    /* 作品展：vibecoding 大赛优秀作品展（瀑布流 + 详情页 + 扭蛋机彩蛋）。
+     * 色相取品红（hue≈345），与应用商店青柠、统计青蓝、闹钟紫都拉得开。
+     * 数据构建期由仓库根 vibecoding-gallery/main.js 派生注入（见 GALLERY_DATA 占位符）。 */
+    { id: 'gallery',   name: '作品展',   slogan: 'vibecoding 优秀作品展', g: 'gallery', c: ['#FF6B9D', '#D62972'], deg: 135 }
   ];
   var DOCK = [
     { id: 'phone',    name: '电话', slogan: '拨一个不存在的号码', g: 'phone',  c: ['#34C46F', '#1E9E50'], deg: 135 },
@@ -1640,7 +1969,7 @@ JS = r"""
   var XHS_CALL_TIMEOUT = 800;              /* 端能力超时即当失败，由镜像通道兜住 */
   var INJECT_WAIT = 1500;                  /* 等 SDK 注入的上限，官方未承诺注入时机 */
   var INJECT_POLL = 100;                   /* 等注入时的轮询间隔 */
-  var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages'];
+  var STORE_KEYS = ['mode', 'wall', 'wmask', 'sound', 'stats', 'phone_records', 'sms_messages', 'gallery_likes'];
 
   var storeCache = {};        /* 短 key -> 字符串值 */
   var storeBackend = 'local'; /* 'xhs' = 容器 Storage，'local' = localStorage 降级 */
@@ -2287,8 +2616,8 @@ JS = r"""
 
   /* ---------- 主屏 ---------- */
   var WEEK = ['日', '一', '二', '三', '四', '五', '六'];
-  var WALLET_BAL = '￥ -99,999';
-  var WALLET_MASKED = '￥ -****';
+  var WALLET_BAL = '￥ 9,999,999';
+  var WALLET_MASKED = '￥ ****';
 
   function buildWidgets() {
     var wrap = el('div', 'widgets');
@@ -2334,11 +2663,11 @@ JS = r"""
     wtop.appendChild(el('span', 'w-bank', '灵光银行 · 数字卡'));
     wtop.appendChild(el('span', 'w-chip'));
     wallet.appendChild(wtop);
-    wallet.appendChild(el('div', 'w-bal-lbl', '余额（透支中）'));
+    wallet.appendChild(el('div', 'w-bal-lbl', '余额（收入中）'));
     var bal = el('div', 'w-bal', masked ? WALLET_MASKED : WALLET_BAL);
     wallet.appendChild(bal);
     var wrow = el('div', 'w-wrow');
-    wrow.appendChild(el('span', 'w-spend', '今日支出 ￥9,999'));
+    wrow.appendChild(el('span', 'w-spend', '今日收入 ￥9,999'));
     wrow.appendChild(el('span', 'w-cardno', '**** 2333'));
     wallet.appendChild(wrow);
     wallet.addEventListener('click', function () {
@@ -4712,7 +5041,334 @@ JS = r"""
     return v;
   }
 
-  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore };
+  /* ---------- 作品展（§4.14）：vibecoding 大赛优秀作品展 ----------
+   * 数据由 _dev/build.py 在构建期从仓库根 vibecoding-gallery/main.js 派生注入
+   * （GALLERY_DATA 占位符 → GALLERY_WORKS / GALLERY_NOTES / GALLERY_TRACKS / GALLERY_COVER_DIMS）。
+   * 封面图在 ./assets/gallery/（随 zip 分发）。点赞复用 ai-os 存储层（aios_gallery_likes）。
+   * 结构复用三段式骨架（phead + pbody），详情页 / 扭蛋机用应用内覆盖层（不盖金刚键）。 */
+  __GALLERY_DATA__
+
+  function galToast(view, msg) {
+    var t = view.querySelector('.gal-toast');
+    if (!t) { t = el('div', 'gal-toast'); view.appendChild(t); }
+    t.textContent = msg; t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+
+  function buildGallery() {
+    var v = el('div', 'view view-gallery hidden');
+    v.appendChild(el('div', 'phead', '<h1>作品展</h1>'));
+
+    var body = el('div', 'pbody');
+    body.style.padding = '0';
+
+    /* 吸顶区：搜索 + 赛道筛选 */
+    var sticky = el('div', 'gal-sticky');
+    var searchRow = el('div', 'gal-search-row');
+    var search = el('div', 'gal-search');
+    search.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="21" y2="21"/></svg><input type="text" placeholder="搜作品 / 博主" autocomplete="off">';
+    var gachaBtn = el('button', 'gal-gacha-btn');
+    gachaBtn.setAttribute('data-sfx', 'tap');
+    gachaBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="3.5" width="17" height="17" rx="4.5"/><circle cx="8.5" cy="8.5" r="1.3" fill="#fff" stroke="none"/><circle cx="15.5" cy="15.5" r="1.3" fill="#fff" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="#fff" stroke="none"/></svg>随机邂逅';
+    searchRow.appendChild(search);
+    searchRow.appendChild(gachaBtn);
+    sticky.appendChild(searchRow);
+    var chips = el('nav', 'gal-chips');
+    sticky.appendChild(chips);
+    body.appendChild(sticky);
+
+    /* 瀑布流 */
+    var feed = el('main', 'gal-feed');
+    var colL = el('div', 'gal-col');
+    var colR = el('div', 'gal-col');
+    feed.appendChild(colL); feed.appendChild(colR);
+    body.appendChild(feed);
+
+    var empty = el('div', 'gal-empty', '<div class="icon">&#128269;</div>没有找到相关作品，换个关键词试试');
+    body.appendChild(empty);
+    body.appendChild(el('footer', 'gal-footer', '小红书 vibecoding 大赛优秀作品归档<br>截图与简介版权归各位原作者所有'));
+    v.appendChild(body);
+
+    /* 回到顶部 */
+    var backTop = el('button', 'gal-backtop');
+    backTop.setAttribute('aria-label', '回到顶部');
+    backTop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6"/><path d="M6 12l6-6 6 6"/></svg>';
+    v.appendChild(backTop);
+
+    /* 详情页覆盖层 */
+    var detail = el('div', 'gal-overlay gal-detail');
+    var detailScroll = el('div', 'gal-detail-scroll');
+    var backBtn = el('button', 'gal-back-btn', '&#10094;');
+    backBtn.setAttribute('data-sfx', 'back');
+    var detailBar = el('div', 'gal-detail-bar');
+    detail.appendChild(detailScroll); detail.appendChild(backBtn); detail.appendChild(detailBar);
+    v.appendChild(detail);
+
+    /* 扭蛋机覆盖层 */
+    var gacha = el('div', 'gal-overlay gal-gacha');
+    gacha.innerHTML =
+      '<div class="gal-gacha-panel">' +
+        '<button class="gal-gacha-close" data-sfx="back">&#10005;</button>' +
+        '<div class="gal-gacha-title">随机邂逅</div>' +
+        '<div class="gal-gacha-sub">从 <b class="gal-gacha-count">0</b> 件归档里，摇一件好作品</div>' +
+        '<div class="gal-machine"><div class="gal-m-body"><div class="gal-dome"></div>' +
+        '<div class="gal-m-base"><span class="gal-m-knob" title="扭一个"></span><span class="gal-m-slot"></span><span class="gal-m-door"></span></div>' +
+        '<div class="gal-capsule"><span class="cap-top"></span><span class="cap-bot"></span></div></div></div>' +
+        '<button class="gal-shake-btn">摇一摇</button>' +
+        '<div class="gal-gacha-result"></div>' +
+      '</div>';
+    v.appendChild(gacha);
+
+    /* ---- 点赞状态（复用 ai-os 存储层） ---- */
+    var likes = (function () { try { return JSON.parse(read('gallery_likes', '[]')) || []; } catch (e) { return []; } })();
+    if (!Array.isArray(likes)) likes = [];
+    function isLiked(id) { return likes.indexOf(id) !== -1; }
+    function toggleLike(id, on) {
+      var i = likes.indexOf(id);
+      if (on && i === -1) likes.push(id);
+      if (!on && i !== -1) likes.splice(i, 1);
+      store('gallery_likes', JSON.stringify(likes));
+      refreshHearts(id); renderChips();
+      if (galState.track === 'liked') renderFeed(true);
+    }
+    function refreshHearts(id) {
+      var btns = v.querySelectorAll('[data-like="' + id + '"]');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].classList.toggle('liked', isLiked(id));
+        btns[i].classList.remove('pop'); void btns[i].offsetWidth; btns[i].classList.add('pop');
+      }
+    }
+
+    /* ---- 工具 ---- */
+    function dimsOf(w) { var d = GALLERY_COVER_DIMS && GALLERY_COVER_DIMS[w.cover]; return d || [540, 720]; }
+    var PALETTE = ['#ff8a65', '#7986cb', '#4db6ac', '#ffb74d', '#f06292', '#9575cd', '#4fc3f7', '#aed581'];
+    function avatarColor(s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0xffff; return PALETTE[h % PALETTE.length]; }
+    function firstChar(s) { var a = Array.from(s); return a[0] || '?'; }
+    function workById(id) { for (var i = 0; i < GALLERY_WORKS.length; i++) if (GALLERY_WORKS[i].id === id) return GALLERY_WORKS[i]; return null; }
+    function shuffle(arr) { var a = arr.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
+
+    /* ---- 瀑布流 ---- */
+    var galState = { track: 'all', q: '' };
+    var feedOrder = shuffle(GALLERY_WORKS);
+    function filtered() {
+      var q = galState.q.trim().toLowerCase();
+      return feedOrder.filter(function (w) {
+        if (galState.track === 'liked') { if (!isLiked(w.id)) return false; }
+        else if (galState.track !== 'all' && w.track !== galState.track) return false;
+        if (!q) return true;
+        return (w.title + ' ' + w.author + ' ' + w.intro).toLowerCase().indexOf(q) !== -1;
+      });
+    }
+    var PRELOAD_MARGIN = 420;
+    function loadImg(img) {
+      var src = img.getAttribute('data-src');
+      if (!src || img.getAttribute('data-loaded')) return;
+      img.setAttribute('data-loaded', '1');
+      img.onload = function () { img.classList.add('loaded'); };
+      img.onerror = function () { img.classList.add('loaded'); };
+      img.src = src;
+    }
+    function loadVisible() {
+      var vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      var imgs = feed.querySelectorAll('img[data-src]');
+      for (var i = 0; i < imgs.length; i++) {
+        var img = imgs[i];
+        if (img.getAttribute('data-loaded')) continue;
+        var box = img.getBoundingClientRect();
+        if (box.top < vh + PRELOAD_MARGIN && box.bottom > -PRELOAD_MARGIN) loadImg(img);
+      }
+    }
+    function makeCard(w, idx) {
+      var d = dimsOf(w);
+      var card = el('div', 'gal-card');
+      card.style.animationDelay = (Math.min(idx, 9) * 40) + 'ms';
+      card.innerHTML =
+        '<div class="gal-cover" style="padding-top:' + (d[1] / d[0] * 100).toFixed(3) + '%">' +
+          '<img alt="' + esc(w.title) + '" data-src="./assets/gallery/' + w.cover + '">' +
+          '<div class="gal-badges">' +
+            (w.mine ? '<span class="gal-mine">我的</span>' : '') +
+            '<span class="gal-track-badge">' + esc(GALLERY_TRACKS[w.track].tag) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="gal-card-title">' + esc(w.title) + '</div>' +
+        '<div class="gal-card-foot">' +
+          '<span class="gal-avatar" style="background:' + avatarColor(w.author) + '">' + esc(firstChar(w.author)) + '</span>' +
+          '<span class="gal-author">' + esc(w.author) + '</span>' +
+          '<span class="gal-like' + (isLiked(w.id) ? ' liked' : '') + '" data-like="' + w.id + '">&#9829;</span>' +
+        '</div>';
+      bindCard(card, w);
+      return card;
+    }
+    var tap = { id: null, time: 0, timer: 0 };
+    function cancelTap() { clearTimeout(tap.timer); tap = { id: null, time: 0, timer: 0 }; }
+    function handleTap(w, x, y) {
+      var now = Date.now();
+      if (tap.id === w.id && now - tap.time < 300 && tap.timer) { cancelTap(); if (!isLiked(w.id)) toggleLike(w.id, true); burstHeart(x, y); }
+      else { clearTimeout(tap.timer); tap.id = w.id; tap.time = now; var id = w.id; tap.timer = setTimeout(function () { cancelTap(); openDetail(id); }, 300); }
+    }
+    function bindCard(card, w) {
+      var likeBtn = card.querySelector('.gal-like');
+      var sx = 0, sy = 0;
+      card.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; });
+      card.addEventListener('pointercancel', cancelTap);
+      card.addEventListener('pointerup', function (e) { if (Math.abs(e.clientX - sx) > 10 || Math.abs(e.clientY - sy) > 10) { cancelTap(); return; } handleTap(w, e.clientX, e.clientY); });
+      likeBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      likeBtn.addEventListener('click', function (e) { e.stopPropagation(); toggleLike(w.id, !isLiked(w.id)); });
+    }
+    function burstHeart(x, y) {
+      var h = el('div', 'gal-burst'); h.innerHTML = '&#9829;'; h.style.left = x + 'px'; h.style.top = y + 'px';
+      document.body.appendChild(h); setTimeout(function () { if (h.parentNode) h.parentNode.removeChild(h); }, 700);
+    }
+    function renderFeed(anim) {
+      var list = filtered();
+      if (anim === false) v.classList.add('gal-no-anim');
+      colL.innerHTML = ''; colR.innerHTML = '';
+      empty.style.display = list.length ? 'none' : 'block';
+      var colW = colL.clientWidth || 160, hs = [0, 0];
+      var frs = [document.createDocumentFragment(), document.createDocumentFragment()];
+      for (var i = 0; i < list.length; i++) {
+        var w = list[i], d = dimsOf(w), c = hs[0] <= hs[1] ? 0 : 1;
+        frs[c].appendChild(makeCard(w, i)); hs[c] += colW * d[1] / d[0] + 47 + 35 + 10;
+      }
+      colL.appendChild(frs[0]); colR.appendChild(frs[1]);
+      loadVisible();
+      if (anim === false) setTimeout(function () { v.classList.remove('gal-no-anim'); }, 60);
+    }
+    function renderChips() {
+      var counts = { all: GALLERY_WORKS.length, game: 0, tool: 0, guofeng: 0, liked: likes.length };
+      for (var i = 0; i < GALLERY_WORKS.length; i++) counts[GALLERY_WORKS[i].track]++;
+      var keys = ['all', 'game', 'tool', 'guofeng', 'liked'], html = '';
+      for (var j = 0; j < keys.length; j++) {
+        var k = keys[j];
+        html += '<button class="gal-chip' + (galState.track === k ? ' active' : '') + '" data-track="' + k + '">' + GALLERY_TRACKS[k].label + '<span class="cnt">' + counts[k] + '</span></button>';
+      }
+      chips.innerHTML = html;
+    }
+    function setTrack(t) { galState.track = t; renderChips(); renderFeed(true); }
+
+    /* ---- 详情页 ---- */
+    var detailId = null;
+    function openDetail(id) {
+      var w = workById(id); if (!w) return; detailId = id;
+      detailScroll.innerHTML =
+        '<div class="gal-detail-cover"><img src="./assets/gallery/' + w.cover + '" alt="' + esc(w.title) + '"></div>' +
+        '<div class="gal-detail-body">' +
+          '<div class="gal-detail-title">' + esc(w.title) + '</div>' +
+          '<div class="gal-author-row">' +
+            '<span class="gal-avatar" style="background:' + avatarColor(w.author) + '">' + esc(firstChar(w.author)) + '</span>' +
+            '<div class="meta"><div class="name">' + esc(w.author) + (w.mine ? '<span class="gal-mine-tag">本人作品</span>' : '') + '</div><div class="sub">' + esc(w.tech) + '</div></div>' +
+            '<span class="gal-detail-track">' + esc(GALLERY_TRACKS[w.track].tag) + '</span>' +
+          '</div>' +
+          '<div class="gal-sec-title"><span class="dot"></span>作品简介</div>' +
+          '<div class="gal-detail-intro">' + esc(w.intro) + '</div>' +
+          '<div class="gal-sec-title"><span class="dot"></span>亮点拆解</div>' +
+          w.highlights.map(function (h, i) { return '<div class="gal-hl"><span class="num">' + (i + 1) + '</span><span class="txt">' + esc(h) + '</span></div>'; }).join('') +
+          (GALLERY_NOTES[w.id] ? '<div class="gal-sec-title"><span class="dot"></span>原笔记摘录</div><div class="gal-note-body">' + esc(GALLERY_NOTES[w.id]) + '</div>' : '') +
+          '<div class="gal-sec-title"><span class="dot"></span>原笔记链接</div>' +
+          '<div class="gal-link-box"><div class="tip">点底部按钮选中链接，长按复制，再到小红书打开</div><div class="url">' + esc(w.link) + '</div>' +
+            (w.link.indexOf('xsec_token=') === -1 ? '<div class="gal-url-warn">此条归档原文就未取到分享令牌（xsec_token），站外可能打不开</div>' : '') +
+          '</div>' +
+        '</div>';
+      detailBar.innerHTML = '<span class="gal-bar-like' + (isLiked(id) ? ' liked' : '') + '" data-like="' + id + '">&#9829;</span><button class="gal-bar-btn">复制链接去打开</button>';
+      detail.classList.add('open'); void detail.offsetWidth; detailScroll.scrollTop = 0; detail.classList.add('slide');
+    }
+    function closeDetail() { detail.classList.remove('slide'); setTimeout(function () { detail.classList.remove('open'); detailId = null; }, 280); }
+    function selectLink() {
+      var box = detailScroll.querySelector('.gal-link-box'), url = box ? box.querySelector('.url') : null;
+      if (box) { try { detailScroll.scrollTop = Math.max(0, box.offsetTop - 72); } catch (e) {} }
+      if (url) { try { var range = document.createRange(); range.selectNodeContents(url); var sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(range); } } catch (e) {} }
+      galToast(v, '已选中链接，长按复制，再到小红书打开');
+    }
+
+    /* ---- 扭蛋机（刚体物理模拟，适配自 vibecoding-gallery） ---- */
+    var GACHA_LINES = ['缘分到了！', '命运的齿轮开始转动', '这颗扭蛋里是——', '今日宜：玩这个', '红线牵到了这件', '摇中了本命作品'];
+    var gachaQueue = [], rolling = false;
+    var BALL_SPECS = [{r:20,c:'#ffd54d'},{r:18,c:'#ff9db5'},{r:17,c:'#8fd8c0'},{r:16,c:'#8cc9ff'},{r:15,c:'#f7a8b8'},{r:15,c:'#b9a8ff'},{r:14,c:'#ffc98a'},{r:13,c:'#a7e3c8'},{r:12,c:'#ffb3c1'},{r:12,c:'#8ecbff'},{r:11,c:'#ffe08a'},{r:11,c:'#c9b8ff'},{r:10,c:'#9fe0d2'},{r:10,c:'#ffd0a8'}];
+    var GRAV = 1500, REST_WALL = 0.5, REST_BALL = 0.4, FLOOR_FRIC = 0.55, SHAKE_ACC = 2600, SHAKE_W = 20;
+    var gBalls = [], gDomeW = 0, gDomeH = 0, gRAF = 0, gLast = 0, gT = 0, gTilt = 0, gShaking = false;
+    var dome = gacha.querySelector('.gal-dome'), mBody = gacha.querySelector('.gal-m-body'), mKnob = gacha.querySelector('.gal-m-knob'), capsule = gacha.querySelector('.gal-capsule');
+    function gMeasure() { gDomeW = dome.clientWidth; gDomeH = dome.clientHeight; }
+    function gCreateBalls() { dome.innerHTML = ''; gBalls = []; for (var i = 0; i < BALL_SPECS.length; i++) { var s = BALL_SPECS[i]; var b = el('div', 'gal-ball'); b.style.width = b.style.height = (s.r * 2) + 'px'; b.style.background = s.c; dome.appendChild(b); gBalls.push({r:s.r, m:s.r*s.r, el:b, x:0, y:0, vx:0, vy:0, rot:0}); } }
+    function gScatter() { var n = gBalls.length, perRow = Math.ceil(n / 2), cellW = gDomeW / perRow; for (var i = 0; i < n; i++) { var b = gBalls[i], idx = i % perRow, row = Math.floor(i / perRow); b.x = cellW * (idx + 0.5) + (Math.random() - 0.5) * cellW * 0.25; b.y = b.r + 4 + row * (b.r * 2 + 3) + Math.random() * 3; b.vx = (Math.random() - 0.5) * 40; b.vy = 0; if (b.x < b.r) b.x = b.r; if (b.x > gDomeW - b.r) b.x = gDomeW - b.r; } }
+    function gStep(dt) {
+      var i, j, b, b2; var target = gShaking ? 0.085 * Math.sin(gT * 14) : 0; gTilt += (target - gTilt) * Math.min(1, 12 * dt);
+      var acc = gShaking ? SHAKE_ACC * Math.sin(gT * SHAKE_W) : 0, gx = -GRAV * Math.sin(gTilt), gy = GRAV * Math.cos(gTilt) - acc;
+      var cr = Math.min(67, gDomeW / 2);
+      for (i = 0; i < gBalls.length; i++) {
+        b = gBalls[i]; b.vx += gx * dt; b.vy += gy * dt;
+        if (gShaking) { b.vx += (Math.random() - 0.5) * 1500 * dt; b.vy -= Math.random() * 900 * dt; }
+        b.vx *= 1 - 0.3 * dt; b.x += b.vx * dt; b.y += b.vy * dt;
+        if (b.y > gDomeH - b.r) { b.y = gDomeH - b.r; if (b.vy > 0) b.vy = -b.vy * REST_WALL; b.vx *= Math.max(0, 1 - FLOOR_FRIC * dt); if (Math.abs(b.vy) < 20) b.vy = 0; }
+        if (b.x < b.r) { b.x = b.r; if (b.vx < 0) b.vx = -b.vx * REST_WALL; }
+        if (b.x > gDomeW - b.r) { b.x = gDomeW - b.r; if (b.vx > 0) b.vx = -b.vx * REST_WALL; }
+        if (b.y < cr) { var cx = b.x < cr ? cr : (b.x > gDomeW - cr ? gDomeW - cr : b.x), ddx = b.x - cx, ddy = b.y - cr, dd = Math.sqrt(ddx * ddx + ddy * ddy), maxD = cr - b.r; if (dd > maxD && dd > 0.001) { var nx = ddx / dd, ny = ddy / dd; b.x = cx + nx * maxD; b.y = cr + ny * maxD; var vn = b.vx * nx + b.vy * ny; if (vn > 0) { b.vx -= (1 + REST_WALL) * vn * nx; b.vy -= (1 + REST_WALL) * vn * ny; } } }
+        b.rot += (b.vx / b.r) * 57.3 * dt;
+      }
+      for (i = 0; i < gBalls.length; i++) { for (j = i + 1; j < gBalls.length; j++) { b = gBalls[i]; b2 = gBalls[j]; var cdx = b2.x - b.x, cdy = b2.y - b.y, d2 = cdx * cdx + cdy * cdy, minD = b.r + b2.r; if (d2 < minD * minD && d2 > 0.0001) { var d = Math.sqrt(d2), ux = cdx / d, uy = cdy / d, overlap = minD - d, total = b.m + b2.m; b.x -= ux * overlap * (b2.m / total); b.y -= uy * overlap * (b2.m / total); b2.x += ux * overlap * (b.m / total); b2.y += uy * overlap * (b.m / total); var rvx = b2.vx - b.vx, rvy = b2.vy - b.vy, rel = rvx * ux + rvy * uy; if (rel < 0) { var imp = -(1 + REST_BALL) * rel / (1 / b.m + 1 / b2.m); b.vx -= imp * ux / b.m; b.vy -= imp * uy / b.m; b2.vx += imp * ux / b2.m; b2.vy += imp * uy / b2.m; } } } }
+    }
+    function gRender() { for (var i = 0; i < gBalls.length; i++) { var b = gBalls[i]; b.el.style.transform = 'translate(' + (b.x - b.r).toFixed(1) + 'px,' + (b.y - b.r).toFixed(1) + 'px) rotate(' + b.rot.toFixed(1) + 'deg)'; } var yOff = gShaking ? (SHAKE_ACC / (SHAKE_W * SHAKE_W)) * Math.sin(gT * SHAKE_W) : 0; mBody.style.transform = 'translateY(' + yOff.toFixed(2) + 'px) rotate(' + (gTilt * 57.3).toFixed(2) + 'deg)'; }
+    function gLoop(ts) { if (!gLast) gLast = ts; var dt = Math.min(0.033, (ts - gLast) / 1000); gLast = ts; gT += dt; gStep(dt); gRender(); gRAF = requestAnimationFrame(gLoop); }
+    function gStart() { if (gRAF) return; gLast = 0; gRAF = requestAnimationFrame(gLoop); }
+    function gStop() { if (gRAF) cancelAnimationFrame(gRAF); gRAF = 0; gShaking = false; mBody.style.transform = ''; }
+    function nextWork() { if (!gachaQueue.length) gachaQueue = shuffle(GALLERY_WORKS); return gachaQueue.pop(); }
+    var gachaResult = gacha.querySelector('.gal-gacha-result'), gachaPanel = gacha.querySelector('.gal-gacha-panel'), shakeBtn = gacha.querySelector('.gal-shake-btn');
+    function openGacha() {
+      gachaResult.classList.remove('show'); gachaResult.innerHTML = ''; shakeBtn.style.display = ''; gachaPanel.classList.remove('has-result'); capsule.className = 'gal-capsule';
+      gacha.classList.add('open'); gMeasure(); if (!gBalls.length) gCreateBalls(); gScatter(); gStart();
+    }
+    function closeGacha() { gacha.classList.remove('open'); gachaQueue = []; gStop(); }
+    function shakeGacha() {
+      if (rolling) return; rolling = true; shakeBtn.disabled = true; gShaking = true;
+      setTimeout(function () { gShaking = false; mKnob.classList.add('turn'); setTimeout(function () { mKnob.classList.remove('turn'); capsule.classList.add('drop'); setTimeout(function () { capsule.classList.add('open'); setTimeout(function () { capsule.className = 'gal-capsule'; revealGacha(); }, 460); }, 640); }, 720); }, 1150);
+    }
+    function revealGacha() {
+      gStop(); rolling = false; shakeBtn.disabled = false; var w = nextWork(), line = GACHA_LINES[Math.floor(Math.random() * GACHA_LINES.length)];
+      gachaResult.innerHTML =
+        '<div class="gal-gacha-line">' + esc(line) + '</div>' +
+        '<div class="gal-gacha-card"><div class="thumb" style="background-image:url(./assets/gallery/' + w.cover + ')"></div><div class="info">' +
+          '<div class="t">' + esc(w.title) + '</div><div class="a">' + esc(w.author) + ' · ' + esc(GALLERY_TRACKS[w.track].label) + '</div><div class="d">' + esc(w.intro) + '</div>' +
+        '</div></div><div class="gal-gacha-actions"><button class="again">再摇一个</button><button class="go">去看看</button></div>';
+      gachaResult.classList.add('show'); shakeBtn.style.display = 'none'; gachaPanel.classList.add('has-result');
+      gachaResult.querySelector('.again').addEventListener('click', function () { gachaResult.classList.remove('show'); shakeBtn.style.display = ''; gachaPanel.classList.remove('has-result'); gStart(); shakeGacha(); });
+      gachaResult.querySelector('.go').addEventListener('click', function () { closeGacha(); openDetail(w.id); });
+    }
+
+    /* ---- 事件绑定 ---- */
+    chips.addEventListener('click', function (e) { var btn = e.target; while (btn && btn !== this && !btn.getAttribute('data-track')) btn = btn.parentNode; if (btn && btn !== this && btn.getAttribute('data-track')) setTrack(btn.getAttribute('data-track')); });
+    search.querySelector('input').addEventListener('input', function (e) { galState.q = e.target.value; renderFeed(true); });
+    backBtn.addEventListener('click', closeDetail);
+    detailBar.addEventListener('click', function (e) { var like = e.target.closest('.gal-bar-like'); if (like) { toggleLike(like.getAttribute('data-like'), !isLiked(like.getAttribute('data-like'))); return; } if (e.target.closest('.gal-bar-btn')) selectLink(); });
+    gachaBtn.addEventListener('click', openGacha);
+    gacha.querySelector('.gal-gacha-close').addEventListener('click', closeGacha);
+    shakeBtn.addEventListener('click', shakeGacha);
+    mKnob.addEventListener('click', shakeGacha);
+    backTop.addEventListener('click', function () { body.scrollTop = 0; });
+    body.addEventListener('scroll', function () {
+      if (body.scrollTop > 400) backTop.classList.add('show'); else backTop.classList.remove('show');
+      if (!body._visTimer) body._visTimer = setTimeout(function () { body._visTimer = 0; loadVisible(); }, 120);
+    });
+    var resizeTimer = null;
+    window.addEventListener('resize', function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(function () { renderFeed(false); }, 200); });
+
+    /* 创作者数按唯一作者统计 */
+    var authorSeen = {}, authorCount = 0;
+    for (var ai = 0; ai < GALLERY_WORKS.length; ai++) { var key = GALLERY_WORKS[ai].author; if (!authorSeen[key]) { authorSeen[key] = 1; authorCount++; } }
+    gacha.querySelector('.gal-gacha-count').textContent = GALLERY_WORKS.length;
+
+    renderChips();
+    renderFeed(true);
+
+    /* onShow：每次进入应用时从存储重读点赞（他处可能改过） */
+    v.onShow = function () {
+      var fresh = (function () { try { return JSON.parse(read('gallery_likes', '[]')) || []; } catch (e) { return []; } })();
+      if (!Array.isArray(fresh)) fresh = [];
+      if (JSON.stringify(fresh) !== JSON.stringify(likes)) { likes = fresh; renderChips(); renderFeed(true); }
+    };
+    return v;
+  }
+
+  var BUILDERS = { calc: buildCalc, alarm: buildAlarm, calendar: buildCal, assistant: buildAssistant, schedule: buildSchedule, phone: buildPhone, sms: buildSms, camera: buildCamera, stats: buildStats, weather: buildWeather, store: buildStore, gallery: buildGallery };
 
   /* ---------- 打开 / 关闭 / 导航 ---------- */
   /* isApp=true 进入应用态：body 带 on-app，状态栏区/内容区/底部导航一起铺应用底色（DESIGN §4.2） */
@@ -4996,6 +5652,7 @@ JS = r"""
 def main():
     shots = cam_shots()
     store = store_apps()
+    gallery = gallery_data()
     index_path = os.path.join(OUT, "index.html")
     js_path = os.path.join(OUT, "main.js")
     with io.open(index_path, "w", encoding="utf-8", newline="\n") as f:
@@ -5007,6 +5664,7 @@ def main():
     # ensure_ascii=False：中文原样写进 main.js，别让项目定位变成 \uXXXX 转义
     js = JS.replace("__CAM_SHOTS__", json.dumps(shots))
     js = js.replace("__STORE_DATA__", json.dumps(store, ensure_ascii=False))
+    js = js.replace("__GALLERY_DATA__", gallery)
     with io.open(js_path, "w", encoding="utf-8", newline="\n") as f:
         f.write(js.strip("\n"))
         f.write("\n")
@@ -5015,6 +5673,7 @@ def main():
     print("built: 相机取景素材 %d 张（./assets/cam/，由 _dev/make_cam_photos.py 派生）" % len(shots))
     print("built: 应用商店 %d 个分类 / %d 个项目（构建期由仓库根 TRACKS.md 派生）"
           % (len(store), sum(len(g["items"]) for g in store)))
+    print("built: 作品展 %d 件作品（构建期由仓库根 vibecoding-gallery/main.js 派生）" % gallery.count("id:"))
 
 
 if __name__ == "__main__":

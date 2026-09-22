@@ -88,9 +88,11 @@ GUARDS = [
     ("无 <base href> / <iframe> / <object>", not re.search(r"<base\b|<iframe\b|<object\b", html, re.I)),
     ("无内联事件 on*=", not re.search(r"\son[a-z]+\s*=\s*[\"']", html, re.I)),
     ("无 eval / new Function", not re.search(r"\beval\s*\(|new\s+Function\b", js)),
-    # 外部资源（邮件/规范里的 xmlns 除外）
-    ("无 http(s) 外部资源引用",
-     not [u for u in re.findall(r"https?://[^\s\"')]+", html + js) if "www.w3.org" not in u]),
+    # 外部资源（邮件/规范里的 xmlns 除外；作品展「原笔记链接」为展示文本 + 长按复制，
+    # 由用户自行到小红书打开，工具本身不 fetch/不 window.open，宿主即小红书，故放行 xiaohongshu.com）
+    ("无 http(s) 外部资源引用（xiaohongshu.com 为作品展展示文本，放行）",
+     not [u for u in re.findall(r"https?://[^\s\"')]+", html + js)
+          if "www.w3.org" not in u and "xiaohongshu.com" not in u]),
     # 容器适配（DESIGN.md §2）
     ("安全区用 var(--safe-area-inset-*, env(...)) 组合",
      "var(--safe-area-inset-top, env(safe-area-inset-top, 0px))" in html),
@@ -120,6 +122,9 @@ GUARDS = [
     # 相机取景素材：三个 vibeknow 项目派生的小图（_dev/make_cam_photos.py），随包分发
     ("相机取景素材随包分发（./assets/cam/*.webp）", len(list((ROOT / "assets" / "cam").glob("*.webp"))) >= 3),
     ("相机素材清单指向包内相对路径", "./assets/cam/" in js),
+    # 作品展（§4.14）：vibecoding 大赛优秀作品展，封面图随包分发
+    ("作品展封面图随包分发（./assets/gallery/*.jpg）", len(list((ROOT / "assets" / "gallery").glob("*.jpg"))) >= 20),
+    ("作品展数据已注入（GALLERY_WORKS）", "var GALLERY_WORKS = [" in js),
     ("版本判断忽略 buildVersion 末 3 位", "Math.floor(buildVersion / 1000)" in js
      and "STORAGE_MIN_CLIENT_VERSION = 9460" in js),
     # 系统音效（DESIGN.md §4.11）：Web Audio 实时合成，零音频文件、无音频标签
