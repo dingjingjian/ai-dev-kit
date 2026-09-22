@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<title>罗马军团图鉴 · 兵种志</title>
+<title>罗马军团图鉴</title>
 <style>
-  /* ===== 罗马军团图鉴 · 兵种志 =====
+  /* ===== 罗马军团图鉴 =====
      选阵营 → 点兵编排 → 凯旋门 → 逐兵种检阅 → 军团志。
      配色：暗青铜 / 金 / 大理石白 / 帝国红；8 个阵营各一套主题色，切换整页换装。
      视觉口径：主视觉一律用 AI 出图（logo / 过渡画面 / 阵营横幅），页面只做排版与
@@ -58,6 +58,12 @@
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --shadow:0 10px 34px rgba(0,0,0,.45);
     --bar:52px;
+    /* 检阅页 3D 地球：画布**从顶栏下沿一路铺到页面底部**（不再是一条 218px 的窄带子）——
+       这样放大时上下都有地方铺开：下沿不会切到球，上沿最多被顶栏压住（允许）。
+       --globem / --globe-top 只作**默认取景基准**：地球默认直径按 --globem 这条虚拟带子算，
+       球心落在带子中心（带子顶边距顶栏 --globe-top）—— 默认的大小和位置仍与窄带时代一致。 */
+    --globem:218px;
+    --globe-top:26px;
     /* 右上角音乐开关：贴在地球槽右上角那一带、**顶栏之下** —— 不占顶栏空间，
        顶栏就不必为它留右侧空白，标题才能真居中。
        --bgmgap = 开关顶边在地球槽顶边之下多少（要挪位置就改这一个数） */
@@ -260,15 +266,54 @@
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 6px 18px rgba(0,0,0,.6);animation:gateFade .9s ease 2.1s both}
   @keyframes gateFade{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
 
+  /* ===== 地球定位组件（检阅页的背景层）=====
+     口径：只有一个地球，没有星空、没有云层。槽**自身完全透明** —— 不画渐变底、
+     不画顶部高光与四周暗角，WebGL 画布也是透明底（alpha:true），
+     一起透出检阅页自己的阵营底色；地球之外不该有任何"板子"的痕迹。
+     定位：**不占文档流** —— 它是 .page-review 内部的 absolute 层（z-index:0），
+     内容区 .tour-body 压在它上面（z-index:1）且不再为它留 margin-top，
+     所以档案卡能整块上移、贴着底栏完整显示；地球只在卡片之上那片空白里露出来。
+     数据层只有一个：当前兵种的地名标签（.tag）。 */
+  .globe-slot{position:absolute;left:0;right:0;z-index:0;overflow:hidden;background:transparent;
+    top:calc(var(--bar) + var(--sattop));bottom:0;height:auto}
+  .globe-slot canvas{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+  .globe-tags{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
+  /* 降级：拿不到 WebGL / three 没加载上 / 场景构建抛异常 → 整块换这层说明，页面其余照常 */
+  .globe-down{position:absolute;top:0;right:0;bottom:0;left:0;display:none;
+    flex-direction:column;align-items:center;justify-content:center;padding:0 26px 26px;text-align:center;
+    background:radial-gradient(ellipse 74% 58% at 50% 38%,var(--iron-5),var(--iron-8) 62%,var(--iron-9))}
+  .globe-down.show{display:flex}
+  .globe-down .gd-ttl{font-size:14px;color:var(--stone);letter-spacing:3px}
+  .globe-down .gd-sub{margin-top:9px;font-size:11.5px;line-height:1.9;color:var(--ink-3);letter-spacing:1px}
+  /* 地球在卡片背后：内容区自身不吃指针事件，事件落到它下面的画布上，
+     于是空白处的拖动 / 缩放照样能转动地球；卡片与画框自己再收回指针事件。 */
+  .tour-body{pointer-events:none}
+  .tour-row,.tour-card{pointer-events:auto}
+
   /* ===== 装备拆解（检阅页右列）=====
      版式：兵种图在左，槽位列表在右，两者同高对齐。
      空槽**不渲染**（一件没有就不占位）；说明固定两行 —— 行高一致，
      48 个兵种横比时槽位才对得齐。
      图位 ./assets/gear/<id>.webp（128×128 透明底，规格见 docs/装备图集需求.md）；
      缺图时把槽位名摊在图标位上，绝不出现空框（由 app.js 预检后加 .has-img）。 */
-  .tour-row{display:flex;align-items:center;justify-content:center;width:100%;max-width:430px}
+  /* margin-top:auto：把整块内容推到检阅页底部（地球之下那片空间的底），空间不够时才回到顶部并允许滚动。
+     两个子项（兵种图画框 / 装备面板）都是 flex:1 1 0 —— **各占一半**，宽度一致。 */
+  .tour-row{display:flex;align-items:center;justify-content:center;width:100%;max-width:430px;margin-top:auto}
   .tour-row > * + *{margin-left:14px}
-  .gear{flex:1;min-width:0}
+  /* 装备面板：地球现在是透明的背景层，槽位文字会直接压在地球上 —— 铺一层渐变黑灰
+     把字衬出来。**不画方框**（无描边 / 圆角 / 投影），而且只铺在**标题横线之下**
+     那一段（.gear-list），下沿一路渐隐到全透明，和页面自然接上。
+     多打几个停靠点是为了让衰减更接近缓动曲线，避免出现"一段一段"的台阶感。 */
+  .gear{flex:1 1 0;min-width:0}
+  .gear-list{padding:6px 10px 10px;
+    background:linear-gradient(180deg,
+      rgba(14,12,10,.90) 0%,
+      rgba(13,11,9,.85) 18%,
+      rgba(12,10,8,.74) 36%,
+      rgba(11,10,8,.58) 54%,
+      rgba(10,9,7,.38) 72%,
+      rgba(9,8,6,.18) 87%,
+      rgba(8,7,6,0) 100%)}
   .gear-ttl{font-family:var(--sans);font-size:9.5px;color:var(--gold-2);letter-spacing:2px;
     padding-bottom:5px;margin-bottom:5px;box-shadow:inset 0 -1px 0 var(--line)}
   .gear-i{display:flex;align-items:center;padding:3px 0}
@@ -293,22 +338,31 @@
   .tour-crumb{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--gold-2);letter-spacing:2px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* 版式：顶栏 → 内容区（兵种图 + 装备拆解 / 档案卡）→ 底部操作栏 */
-  .tour-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;
-    padding:10px 16px calc(72px + var(--sab))}
+  /* 版式：顶栏 → 内容区（兵种图 + 装备拆解 / 档案卡）→ 底部操作栏。
+     地球是 .page-review 里的 absolute 背景层（见 .globe-slot），**不吃布局** ——
+     内容区从顶栏下就开始排，整块**底部对齐**：档案卡以底栏上方那条线为底边往上长，
+     空间够就整张完整露出，不够也能滚（滚动位置压到底，见 app.js 的 showReviewUnit）。 */
+  /* padding-bottom：底栏之上再留一段呼吸位（底栏实高约 62px，这里给到 104px，
+     卡片不会贴着按钮边缘）。 */
+  .tour-body{position:relative;z-index:1;flex:1;min-height:0;overflow:hidden;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;display:flex;flex-direction:column;
+    padding:10px 16px calc(104px + var(--sab))}
   .tour-wrap{width:100%;max-width:820px;margin:0 auto;flex:1;min-height:0;display:flex}
-  .tour-stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  /* 兵种图画框：兵种图是 1:1 方图（两种风格都按方图出，规格见 docs/兵种图片素材需求.md），
-     所以画框也做成正方形 —— 方图正好填满方框，不会从上下裁掉头与脚。
-     边长（宽高同值）随视口高收缩，屏幕多矮都整块等比变小，不裁图、不压扁。
-     画框只做容器：金线描边 + 投影。原先那套「青铜铭牌」叠层（扫描线 / 缓扫光泽 /
-     暗角 / HUD 角标）已删除 —— 画面表达交给图片本身，页面不再往图上叠任何东西。 */
-  .tour-frame{position:relative;flex:0 1 auto;overflow:hidden;
-    width:24vh;height:24vh;min-width:88px;min-height:88px;max-width:190px;max-height:190px;
+  /* 内容底部对齐用 .tour-row 的 margin-top:auto，不用 justify-content:flex-end：
+     后者在「Flex 容器 + overflow」的经典组合下会把溢出的一头裁掉且滚不到，
+     auto 外边距既能贴底、又保留可滚动。 */
+  .tour-stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-start}
+  /* 兵种图画框：与右侧装备拆解**各占一行的一半**（.tour-row 里两个都是 flex:1 1 0）。
+     仍是正方形 —— 兵种图是 1:1 方图，方图正好填满方框，不会裁头脚。
+     正方形的做法：宽度由 flex 平分得到，高度用 padding-bottom 撑出来 ——
+     padding 百分比按**父级宽度**算，所以 padding-bottom:calc(50% - 7px) 恰好等于
+     「父级一半减去 14px 间距的一半」，与 flex 分到的宽度一致（兼容性好过 aspect-ratio）。
+     画框只做容器：金线描边 + 投影。原先那套「青铜铭牌」叠层已删除。 */
+  .tour-frame{position:relative;flex:1 1 0;min-width:0;height:0;
+    padding-bottom:calc(50% - 7px);overflow:hidden;
     border-radius:2px;box-shadow:0 0 0 1px rgba(201,161,59,.6),0 12px 30px rgba(0,0,0,.6)}
-  /* contain + 深色底：万一画框被 flex 挤成非方形（极矮视口），
-     也只会在两侧留深色边，绝不裁图。同样不加滤镜——写实那套要保真。 */
-  .tour-img{width:100%;height:100%;border-radius:2px;
+  /* 画框的高来自 padding，所以图片层改成绝对定位铺满；contain + 深色底保证绝不裁图 */
+  .tour-img{position:absolute;top:0;right:0;bottom:0;left:0;border-radius:2px;
     background-color:var(--iron-8);background-size:contain;background-repeat:no-repeat;background-position:center}
 
   /* 兵种图**只有一套写实**：48 支一律用它（2026-09-22）。
@@ -346,21 +400,31 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .tour-tagline i{font-style:normal;opacity:.4;margin:0 5px}
 
-  /* ===== 通用底栏与按钮（检阅 / 军团志 / 自选三页共用）===== */
+  /* ===== 通用底栏与按钮（检阅 / 军团志 / 自选三页共用）=====
+     配色口径：金是**全站界面固定色**，只有数据层才取阵营色（见 §配色口径），
+     所以主次只靠"同一档金的不同亮度"分，不引第二种色。
+     顶边压 1px `--line-2` 而不是 2px 实金：底栏本来就站着一枚金色主按钮，
+     再来一条 2px 金线就是双金叠加，等于把整页的亮度都压在栏上。 */
   .tour-controls,.summary-controls,.builder-controls{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;justify-content:center;
     padding:12px 16px calc(12px + var(--sab));
     background:linear-gradient(180deg,var(--iron-6),var(--iron-8) 42%,var(--iron-9));
-    border-top:2px solid var(--gold);box-shadow:0 -8px 26px rgba(0,0,0,.62)}
+    border-top:1px solid var(--line-2);box-shadow:0 -8px 26px rgba(0,0,0,.62)}
   .tour-controls > * + *,.summary-controls > * + *,.builder-controls > * + *{margin-left:12px}
   .bar-btn{border:none;cursor:pointer;font-family:var(--serif);font-weight:700;transition:.15s;white-space:nowrap;border-radius:2px;
     font-size:14px;letter-spacing:2px;padding:10px 18px}
   .bar-btn-primary{background:linear-gradient(180deg,var(--gold-3),var(--gold));color:var(--ink);
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.4),0 4px 14px rgba(0,0,0,.45)}
-  .bar-btn-primary:hover{background:linear-gradient(180deg,#fff6d8,var(--gold-2))}
+  /* hover：**整块往上提一档金**（下沿从 --gold 提到 --gold-2），再叠一层柔光 ——
+     仍是金色、仍比静止态亮（不能反过来压暗，否则读起来像"按下"），但不泛白：
+     原先用到 #fff6d8 那种近白高光，会把哑光的压铸金变成塑料。 */
+  .bar-btn-primary:hover{background:linear-gradient(180deg,var(--gold-3),var(--gold-2));
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.55),0 4px 16px var(--gold-glow)}
   .bar-btn-primary:disabled{opacity:.35;cursor:not-allowed}
-  .bar-btn-ghost{background:transparent;border:1px solid var(--line-2);color:var(--ink-4)}
-  .bar-btn-ghost:hover{background:rgba(201,161,59,.18);color:var(--stone)}
-  .bar-btn-ghost:disabled{opacity:.3;cursor:not-allowed}
+  /* 次级按钮：给一层极淡金底让它有"面" —— 原先透明底 + 淡金边，两枚 ghost 并排看着像纯文字。
+     禁用态取 .45 而不是 .3：.3 压在暗青铜底上只剩约 2:1，按钮会直接"消失"。 */
+  .bar-btn-ghost{background:rgba(201,161,59,.10);border:1px solid var(--line-2);color:var(--ink-4)}
+  .bar-btn-ghost:hover{background:rgba(201,161,59,.22);color:var(--stone);border-color:var(--gold-2)}
+  .bar-btn-ghost:disabled{opacity:.45;cursor:not-allowed}
 
   /* ===== 军团志（总结页）===== */
   .page-summary{background:radial-gradient(ellipse 80% 60% at 50% 10%,var(--iron-6),var(--iron-8) 60%,var(--iron-9))}
@@ -391,9 +455,17 @@
   .radar .axis{stroke:var(--line);stroke-width:1}
   .radar .face{fill:var(--f-accent);fill-opacity:.22;stroke:var(--f-accent);stroke-width:1.8;stroke-linejoin:round}
   .radar .dot{fill:var(--f-accent-2)}
+  /* 峰值层：各维最强一队连成的虚线（副信息，不抢实线均值） */
+  .radar .peakline{fill:none;stroke:var(--f-accent-2);stroke-width:1.3;stroke-dasharray:4 3;
+    stroke-linejoin:round;opacity:.9}
+  .radar .pkdot{fill:none;stroke:var(--f-accent-2);stroke-width:1.1;opacity:.9}
   .radar .lab{fill:var(--ink-3);font-family:var(--serif);font-size:12px;font-weight:700;letter-spacing:1px}
   .radar .lab.peak{fill:var(--f-accent-2)}
   .radar .val{fill:var(--ink-4);font-size:10.5px;font-weight:400;letter-spacing:0;font-variant-numeric:tabular-nums}
+  .radar-legend{display:flex;align-items:center;justify-content:center;margin:1px auto 0;
+    font-size:10.5px;color:var(--ink-3);letter-spacing:1px}
+  .radar-legend i{flex:none;width:16px;height:0;margin-right:6px;border-top:1.8px solid var(--f-accent)}
+  .radar-legend i.dash{margin-left:14px;border-top:1.3px dashed var(--f-accent-2)}
   .sum-dish{display:flex;align-items:baseline;padding:8px 2px;border-bottom:1px dotted var(--line)}
   .sum-dish > * + *{margin-left:9px}
   .sum-dish .sum-dot{flex:none;width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 1px rgba(8,7,6,.35);transform:translateY(1px)}
@@ -465,26 +537,30 @@
     background:linear-gradient(180deg,var(--stone),var(--stone-3));border:1px solid var(--gold);border-radius:2px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 
   /* ===== 提示（toast）=====
-     口径：与全站同一块「暗青铜 + 金线 + 大理石白」铭牌语言。
-     原先是一颗帝国红药丸（--crimson 渐变 + 纯白字）：红是罗马本体的强调色，
-     挂在别的阵营上串味，和满页青铜 / 金的页面也两张皮；纯白字也不是这套配色里的白。
-     现在改成——底＝暗青铜（铁灰渐变）／边＝金线／字＝大理石白衬线，
-     顶边再压一道镏金细线，取当前阵营的 --f-accent-2（默认罗马红），随阵营换装。 */
-  .hint{position:fixed;left:50%;top:calc(var(--sat) + 60px);transform:translate(-50%,-8px);z-index:26;
+     口径：帝国红旗面 + 镏金字，取罗马军团旗（vexillum）的配色 —— SPQR 旗就是红底金绣。
+     底＝深色罗马红渐变（上 #8e2a20 → 下 #4d120e，做出布面的一点垂坠）／字＝最亮的 --gold-3，保证红底上的
+     对比度／边＝一道金线内描 + 一道暗描压边，顶边再压一道镏金细线。
+     注意：这里是**全站唯一的红底**，不跟着阵营换色（--f-accent*）——它代表的是罗马本体，
+     不是当前检阅的那支军团，别改成取 --f-accent。 */
+  /* top 取「顶栏底边 + 12px」：顶栏高 --bar 52 + --sattop(8+安全区) = 60 + 安全区，
+     所以 72px 在带顶栏的三页（检阅 / 军团志 / 自选）都正好落在栏下方 12px，
+     阵营页没有顶栏，落在这个位置也不挡 hero 标题。 */
+  .hint{position:fixed;left:50%;top:calc(var(--sat) + 72px);transform:translate(-50%,-8px);z-index:26;
     opacity:0;transition:opacity .35s,transform .35s;pointer-events:none;
     width:max-content;max-width:calc(100% - 36px);padding:9px 18px 10px;border-radius:3px;
     font-family:var(--serif);font-size:12.5px;font-weight:700;letter-spacing:2px;line-height:1.7;
-    color:var(--stone);text-align:center;white-space:normal;text-shadow:0 1px 4px rgba(0,0,0,.8);
-    background:linear-gradient(180deg,rgba(34,30,26,.98),rgba(9,8,7,.97));
-    box-shadow:inset 0 0 0 1px var(--line-2),0 0 0 1px rgba(4,4,3,.9),0 14px 30px rgba(0,0,0,.66)}
-  /* 顶边一道镏金：中心亮、两端收，像铭牌上的一道压边 */
+    color:var(--gold-3);text-align:center;white-space:normal;text-shadow:0 1px 3px rgba(60,10,6,.72);
+    /* 深色罗马红（ Pompeian red 那一档）：饱和度压下来、明度也压下来，
+       不用 --crimson（#d0433a，偏亮偏艳，挂在这套暗青铜页面上太跳）。 */
+    background:linear-gradient(180deg,#8e2a20 0%,#76201a 42%,#4d120e 100%);
+    box-shadow:inset 0 0 0 1px rgba(246,230,180,.42),inset 0 1px 0 rgba(255,236,190,.26),
+      0 0 0 1px rgba(4,4,3,.9),0 14px 30px rgba(0,0,0,.66),0 0 20px rgba(120,26,18,.34)}
+  /* 顶边一道镏金：中心亮、两端收，像旗面上绣的一道金边 */
   .hint::before{content:"";position:absolute;left:12%;right:12%;top:0;height:2px;border-radius:0 0 2px 2px;
-    background:linear-gradient(90deg,rgba(201,161,59,0),var(--f-accent-2) 50%,rgba(201,161,59,0))}
+    background:linear-gradient(90deg,rgba(201,161,59,0),var(--gold-3) 50%,rgba(201,161,59,0))}
   .hint.show{opacity:1;transform:translate(-50%,0)}
-  /* 阵营选择页的提示改贴底栏上方，避免压住 hero 的标题 */
-  body.mode-factions .hint{top:auto;bottom:calc(58px + var(--sab))}
-  body.mode-review .hint,
-  body.mode-builder .hint{top:calc(var(--bar) + var(--sattop) + 12px)}
+  /* 位置全站统一在顶部：原先阵营页贴底、检阅 / 自选页躲顶栏，导致提示会「跳位置」。
+     现在五页一律同一个 top（.hint 那条），不再写 body.mode-* 的覆盖。 */
 
   /* ===== 背景音乐开关（音频数据：assets/audio/bgm.js）=====
      容器上传白名单不收音频扩展名、CSP 又禁 data:/blob: 媒体源，所以音频以 base64
@@ -516,6 +592,33 @@
   .bgm-btn:not(.on) .bgm-ico-on{display:none}
   .bgm-btn:not(.on) .bgm-ico-off{display:inline-block}
 
+  /* ===== 分享按钮（端能力 postNote）=====
+     容器里没有"分享"，只有 §3.3 的 POSTNOTE —— 唤起 App 的笔记发布页并带上内容与媒体。
+     只有容器注入了 window.xhs.miniTool.postNote 才显形：桌面浏览器直接打开 index.html、
+     以及 ?demo 录屏时都不会出现（**能力检测，不做 UA 判断**）。 */
+  .share-btn{display:none}
+  html.has-share .share-btn{display:inline-block}
+  html.is-demo .share-btn{display:none}
+  .share-btn:disabled{opacity:.5;cursor:progress}
+
+  /* ===== 检阅页分享（分享这个兵种的原图）=====
+     只出现在检阅页，且只有这支兵种的原图**确实加载成功**时才亮 —— 没图就不给按钮，
+     与「缺图回退色卡」同一口径，不做占位分享。
+     位置：右上角音乐开关左边一枚，同为小铜牌样式（right 错开开关宽度 + 6px 间隙）。 */
+  .unit-share-btn{position:fixed;right:48px;z-index:24;display:none;align-items:center;
+    top:calc(var(--bar) + var(--sattop) + var(--bgmgap));
+    border-radius:2px;cursor:pointer;white-space:nowrap;transition:.15s;line-height:1;
+    padding:4px 8px;color:var(--gold-2);background:rgba(8,7,6,.62);border:1px solid var(--line-2);
+    box-shadow:0 2px 8px rgba(0,0,0,.45)}
+  html.has-share body.mode-review .unit-share-btn{display:inline-flex}
+  html.has-share body.mode-review .unit-share-btn.off{display:none}
+  html.is-demo .unit-share-btn{display:none}
+  .unit-share-btn:hover{color:var(--stone);background:rgba(201,161,59,.24);border-color:var(--gold-2)}
+  .unit-share-btn:focus{outline:2px solid var(--gold);outline-offset:1px}
+  .unit-share-btn:disabled{opacity:.5;cursor:progress}
+  .unit-share-ico{flex:none;width:14px;height:14px;overflow:visible}
+  .unit-share-ico path{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
   /* ===== 加载 ===== */
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s;
     background:radial-gradient(ellipse 70% 50% at 50% 40%,var(--iron-6),var(--iron-8) 60%,var(--iron-9))}
@@ -529,10 +632,11 @@
   /* 焦点基线 */
   .route-card:focus,.bar-btn:focus,.bd-item:focus,.bd-mini:focus{outline:2px solid var(--gold);outline-offset:1px}
 
-  /* 矮视口：兵种图与右列一起收，避免被挤爆。
-     画面宽高必须同改，否则画框又变长方、方图会被裁。 */
+  /* 矮视口：整行收窄，兵种图与装备面板**一起等比变小**（两者都是 flex 平分，
+     收 .tour-row 的 max-width 就够了，画框靠 padding-bottom 自动跟着变方）。
+     地球画布铺满整页，矮屏不用改什么。 */
   @media (max-height:560px){
-    .tour-frame{width:20vh;height:20vh}
+    .tour-row{max-width:360px}
   }
   @media (max-height:520px){.park-hero{height:calc(104px + 92px + var(--sattop))}.park-ttl{font-size:20px}}
   @media (max-height:420px){.park-hero{height:calc(96px + 78px + var(--sattop))}.park-logo{display:none}}
@@ -586,7 +690,7 @@
     <div class="park-brand">
       <div class="park-logo"></div>
       <div class="park-ttl">罗马军团图鉴</div>
-      <!-- 副标题走英文：中文那行「ROMA · 兵种志」中英混排，夹在拉丁字母里很突兀 -->
+      <!-- 副标题走英文：中文夹在拉丁字母里很突兀 -->
       <div class="park-sub">ROMA · LEGION CODEX</div>
     </div>
   </header>
@@ -638,6 +742,15 @@
 
 <!-- 检阅页 -->
 <section class="page page-review" id="pageReview">
+  <!-- 地球定位组件：检阅页的背景层（absolute，不吃布局），标当前兵种的征召地 -->
+  <div class="globe-slot" id="globeSlot">
+    <canvas id="stage"></canvas>
+    <div class="globe-tags" id="globeTags"></div>
+    <div class="globe-down" id="globeDown">
+      <div class="gd-ttl">地球组件不可用</div>
+      <div class="gd-sub">当前浏览器不支持 WebGL，征召地改由下方文字标出。<br>检阅照常进行。</div>
+    </div>
+  </div>
   <div class="tour-bar">
     <div class="tour-crumb" id="tourCrumb"></div>
   </div>
@@ -686,14 +799,16 @@
       <div class="summary-ttl">检阅完毕</div>
       <div class="summary-sub">本次检阅 <b id="sumCount">0</b> 个兵种 · 覆盖 <b id="sumKind">0</b> 种兵种类型 <b id="sumRegion">0</b> 个征召行省</div>
       <div class="summary-brief" id="sumBrief"></div>
-      <div class="sec">战力图谱<span class="secnote">六维 · 本次均值 · 满分 5</span></div>
+      <div class="sec">战力图谱<span class="secnote">六维 · 实线均值 / 虚线峰值 · 满分 5</span></div>
       <div id="sumBars"></div>
+      <div class="radar-legend"><i></i>编制均值<i class="dash"></i>尖兵峰值</div>
       <div class="sec">兵种档案<span class="secnote">各队最突出的两维</span></div>
       <div id="sumDishes"></div>
     </div>
   </div>
   <div class="summary-controls">
-    <button class="bar-btn bar-btn-ghost" id="scAgain">再阅一次</button>
+    <button class="bar-btn bar-btn-ghost" id="scAgain">再次检阅</button>
+    <button class="bar-btn bar-btn-ghost share-btn" id="scShare">分享</button>
     <button class="bar-btn bar-btn-primary" id="scBack">返回选择阵营</button>
   </div>
 </section>
@@ -714,10 +829,23 @@
     <path class="slash" d="M1.6 1.6 14.4 14.4"/>
   </svg>
 </button>
+<!-- 检阅页分享：把当前这支兵种的**原图**直接交给 POSTNOTE（不走 canvas 重绘，保住原图字节）。
+     只在检阅页、且这支兵种的原图确实加载成功、且容器注入了端能力时才显形。
+     位置在音乐开关左边，同为小铜牌样式（见 CSS 的 .unit-share-btn）。 -->
+<button class="unit-share-btn off" id="unitShareBtn" type="button" aria-label="分享这个兵种" title="分享这个兵种">
+  <svg class="unit-share-ico" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.4 6.5h2.1v7H2.5v-7h2.1"/>
+    <path d="M8 9.6V1.9"/>
+    <path d="M5.2 4.7 8 1.9l2.8 2.8"/>
+  </svg>
+</button>
 <div id="loader"><div class="spin"></div><p>正在集结</p></div>
 
 <script src="./assets/units.js"></script>
 <script src="./assets/gear.js"></script>
+<!-- three.js：地球组件用。必须在 app.js 之前，且**可缺席** ——
+     拿不到就 typeof THREE==='undefined'，地球降级、其余四页照常。 -->
+<script src="./assets/three.min.js"></script>
 <!-- 音频数据（base64）必须在 app.js 之前就位：容器上传白名单不收音频扩展名，
      所以音频藏在 .js 里，由 app.js 交给 Web Audio 解码播放。 -->
 <script src="./assets/audio/bgm.js"></script>

@@ -1,11 +1,35 @@
-# 无头冒烟：走通 阵营选择 → 过渡页（即将检阅）→ 检阅 → 军团志，外加自选军团分支。
+# 无头冒烟：走通 阵营选择 → 过渡页（即将检阅）→ 检阅 → 军团志，外加自选军团分支与分享链路。
 # 用法：python tools/smoke_test.py
 # 判据：全程无 JS 异常 / console.error；五页 DOM 关键点逐一落到预期。
+# 分享：先验桌面（容器没注入端能力）两处入口都隐藏；再开一页注入 window.xhs.miniTool 桩，
+#       走通「检阅页分享兵种原图 → 军团志分享卡片」的 writeTempFile → postNote 全链路。
 import os, sys, pathlib, time
 from playwright.sync_api import sync_playwright
 
+try:                                  # Windows 控制台默认 GBK，收尾那行 ✅/❌ 会直接抛 UnicodeEncodeError
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+except Exception:
+    pass
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 URL = (ROOT / 'index.html').as_uri()
+
+# 模拟小红书容器注入的 JSBridge（jsbridge-api.md §postNote / §writeTempFile）。
+# 只做记录与放行，不改页面其他行为 —— 用来验「分享」两处入口的整条链路。
+BRIDGE = """
+window.xhs = { miniTool: {
+  postNote: function (o) {
+    (window.__calls = window.__calls || { postNote: [], writeTempFile: [] }).postNote.push(
+      JSON.parse(JSON.stringify(o)));
+    return Promise.resolve({ errMsg: 'postNote:ok' });
+  },
+  writeTempFile: function (o) {
+    (window.__calls = window.__calls || { postNote: [], writeTempFile: [] }).writeTempFile.push(
+      { data: (o && o.data) || '' });
+    return Promise.resolve({ filePath: 'file:///tmp/xhs-temp', errMsg: 'writeTempFile:ok' });
+  }
+} };
+"""
 
 errors, warns = [], []
 fails = []
@@ -26,6 +50,9 @@ with sync_playwright() as p:
     browser = p.chromium.launch(channel='msedge', args=[
         '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader',
         '--autoplay-policy=no-user-gesture-required', '--mute-audio',
+        # 分享链路要在 file:// 下取兵种原图的字节（XHR + FileReader），
+        # 默认同源策略会把它拦掉 —— 这一条只为让冒烟跑得通，容器里资源同源、本来就能取。
+        '--allow-file-access-from-files',
     ])
     page = browser.new_page(viewport={'width': 420, 'height': 860})
     page.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
@@ -66,16 +93,19 @@ with sync_playwright() as p:
     n_cards = page.locator('#routeList .route-card').count()
     check(n_cards == 9, '阵营卡 9 张（8 阵营 + 自选），实际 ' + str(n_cards))
     check('罗马军团图鉴' in page.inner_text('.park-ttl'), 'hero 标题已渲染')
-    # hero 副标题走英文：中文那行「ROMA · 兵种志」中英混排，夹在拉丁字母里很突兀
+    # hero 副标题走英文：中文夹在拉丁字母里很突兀。判据直接取「整行不含中日韩字符」
     sub = page.inner_text('.park-sub')
-    check('LEGION CODEX' in sub and '兵种志' not in sub, 'hero 副标题为英文：' + sub)
+    check('LEGION CODEX' in sub and not any(u'\u4e00' <= c <= u'\u9fff' for c in sub),
+          'hero 副标题为纯英文：' + sub)
     # 首页 hero 轮播：八大军团横幅各一层（纯 CSS 交叉淡化，无 JS 定时器）
     n_shots = page.locator('.park-shots .park-shot').count()
     check(n_shots == 8, '首页 hero 轮播 8 层（八大军团横幅），实际 ' + str(n_shots))
     shot_bg = page.evaluate(
         "getComputedStyle(document.querySelectorAll('.park-shot')[0]).backgroundImage")
     check('faction-rome' in shot_bg, '首层轮播吃罗马阵营横幅：' + shot_bg[:64])
-    check(page.evaluate("!document.getElementById('globeSlot')"), '3D 地球组件已移除（无 #globeSlot）')
+    # 3D 地球 2026-09-23 已加回（占检阅页背景层），这里只验它在位、且画布挂在槽里
+    check(page.locator('#globeSlot canvas#stage').count() == 1,
+          '检阅页 3D 地球层在位（#globeSlot > canvas#stage）')
 
     # 2. 点阵营 → 过渡页（即将检阅）
     t_pick = time.time()
@@ -221,7 +251,97 @@ with sync_playwright() as p:
     p1 = page.get_attribute('#bgmBtn', 'aria-pressed')
     check(p0 != p1, 'BGM 开关可切换（aria-pressed %s → %s）' % (p0, p1))
 
-    # 7. 无 JS 异常
+    # 7. 分享：桌面（容器没注入端能力）时两处入口都不该出现
+    #    这一页此刻正停在自选军团的军团志上。
+    html_cls = page.get_attribute('html', 'class') or ''
+    check('has-share' not in html_cls, '桌面（无 postNote）不挂 has-share')
+    check(not page.locator('#scShare').is_visible(), '桌面军团志不给「分享」按钮')
+    check(not page.locator('#unitShareBtn').is_visible(), '桌面检阅页不给「分享这个兵种」按钮')
+
+    # 8. 分享：模拟容器注入 postNote 后走通两处入口
+    page2 = browser.new_page(viewport={'width': 420, 'height': 860})
+    page2.add_init_script(BRIDGE)
+    errs2 = []
+    page2.on('pageerror', lambda e: errs2.append('pageerror: ' + str(e)))
+    page2.on('console', lambda m: (errs2.append('console.error: ' + m.text)
+                                   if m.type == 'error' else None))
+
+    def mode2():
+        return ((page2.get_attribute('body', 'class') or '').split() or [''])[0]
+
+    def wait_mode2(cls, timeout=14000):
+        waited = 0
+        while waited < timeout:
+            if mode2() == cls:
+                return True
+            page2.wait_for_timeout(200)
+            waited += 200
+        return False
+
+    def calls():
+        return page2.evaluate("(window.__calls && window.__calls.postNote) || []")
+
+    def temps():
+        return page2.evaluate("(window.__calls && window.__calls.writeTempFile) || []")
+
+    page2.goto(URL)
+    page2.wait_for_timeout(1600)
+    check('has-share' in (page2.get_attribute('html', 'class') or ''),
+          '容器注入了 postNote 才挂 has-share（能力检测，不认 UA）')
+
+    page2.locator('#routeList .route-card').nth(0).click()
+    check(wait_mode2('mode-review'), '（分享链路）罗马阵营进入检阅页')
+
+    # 检阅页分享：只有**这一支兵种的原图确实加载成功**才显形（没图不给按钮）
+    ready = 0
+    while ready < 6000:
+        if page2.locator('#unitShareBtn:not(.off)').count() == 1:
+            break
+        page2.wait_for_timeout(200)
+        ready += 200
+    check(page2.locator('#unitShareBtn:not(.off)').count() == 1,
+          '兵种原图就绪后「分享这个兵种」显形')
+    page2.locator('#unitShareBtn').click()
+    page2.wait_for_timeout(900)
+    c1 = calls()
+    check(len(c1) == 1, '点「分享这个兵种」唤起发布页一次，实际 %d 次' % len(c1))
+    if c1:
+        p = c1[0]
+        check(p.get('pageType') == 'photo_publish', 'pageType 为 photo_publish')
+        check(p.get('title') == '轻装投枪兵 · 罗马',
+              '笔记标题＝兵种名 · 阵营：' + str(p.get('title')))
+        check(p.get('title') and len(p.get('title')) <= 20, '标题未超 20 字上限')
+        content = p.get('content') or ''
+        check(len(content) <= 1000, '正文未超 1000 字上限（%d 字）' % len(content))
+        check('轻标枪' in content and '六维' in content, '正文＝介绍 + 一段紧凑资料')
+        url0 = ((p.get('mediaInfo') or {}).get('image_resources') or [{}])[0].get('url') or ''
+        check(url0.startswith('file://'), 'mediaInfo 必填，且先 writeTempFile 换成本地 filePath：' + url0)
+    t1 = temps()
+    check(len(t1) == 1 and t1[0].get('data', '').startswith('data:image/webp;base64,'),
+          '兵种原图走逐字节 data:uri（webp，不经 canvas 重绘）')
+
+    # 军团志分享：把这一轮检阅画成卡片（Canvas 2D，1080×1440，JPEG）
+    steps3 = 0
+    while mode2() == 'mode-review' and steps3 < 10:
+        page2.locator('#tcNext').click()
+        page2.wait_for_timeout(180)
+        steps3 += 1
+    check(mode2() == 'mode-summary', '（分享链路）走到军团志')
+    check(page2.locator('#scShare').is_visible(), '军团志底栏出现「分享」按钮')
+    page2.locator('#scShare').click()
+    page2.wait_for_timeout(2000)
+    c2 = calls()
+    t2 = temps()
+    check(len(c2) == 2, '点军团志「分享」再唤起发布页一次，实际 %d 次' % len(c2))
+    if len(c2) == 2:
+        check(c2[1].get('title') == '罗马 · 军团志', '卡片标题＝阵营 · 军团志：' + str(c2[1].get('title')))
+        check('image_resources' in (c2[1].get('mediaInfo') or {}), '卡片笔记带 image_resources')
+    check(len(t2) == 2 and t2[1].get('data', '').startswith('data:image/jpeg;base64,'),
+          '军团志卡片为 JPEG（1080×1440，PNG 压不动）')
+    check(not errs2, '（分享链路）无 JS 异常' + ('' if not errs2 else '：' + ' | '.join(errs2[:3])))
+    page2.close()
+
+    # 9. 无 JS 异常
     # 素材可能有个别缺位（缺图一律回退，页面必须照常跑），所以把「资源 404」与
     # 「真实 JS 异常」分开统计：前者只登记并点名，后者才判失败。
     missing = [e for e in errors if 'Failed to load resource' in e and 'favicon' not in e.lower()]

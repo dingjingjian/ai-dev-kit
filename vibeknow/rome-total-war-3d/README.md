@@ -1,4 +1,4 @@
-# 罗马军团图鉴 · 兵种志
+# 罗马军团图鉴
 
 > **分类**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
 
@@ -23,8 +23,15 @@
 | **阵营选择** | 顶部 hero 是**八大军团横幅轮播**（8s 一格、纯 CSS 交叉淡化），副标题走英文（`ROMA · LEGION CODEX`）；下方 8 个阵营 + 自选军团共 9 张军牌，点一张即整页换成该阵营的主题色 |
 | **自选军团** | 48 支队伍按 7 类兵种分组列出，勾选后按勾选顺序检阅，可上下调序，也可一键随机编 8 队 |
 | **过渡页（即将检阅）** | 标题＝**你选中的阵营名**（副标题＝它的拉丁名，`SPQR · LEGIONVM CODEX` 只留给罗马），底下写队数；一帧画面 + 7.1 秒缓慢推近，走完即进检阅。**画面按阵营换**（⑨ `gate-<key>.webp`，每阵营一张）；缺图时退该阵营横幅，上下信箱边由同图的模糊铺底填满。九张 ⑨ **启动期预热**，且**图就绪才进页**（最多等 2s）—— 不会先闪一张阵营横幅再换成过渡图 |
-| **检阅** | 兵种图 + **装备拆解**（右列 6 个槽位，空槽不占位）+ 档案卡（名称 / 等级 / 编制 / 三条特征 / 六维战力）；兵种图**只有写实一套**（48 支全用），没有风格开关 |
-| **军团志** | 本轮检阅的总览：队数、编制合计、兵种构成的六维雷达图（数据层取**当前阵营色** `<body data-faction>`）、逐队档案、检阅简报 |
+| **检阅** | 兵种图 + **装备拆解**（右列 6 个槽位，空槽不占位）+ 档案卡（名称 / 等级 / 编制 / 三条特征 / 六维战力）；兵种图**只有写实一套**（48 支全用），没有风格开关；右上角一枚「**分享这个兵种**」（把原图直发笔记，见 §笔记分享，容器注入端能力且原图就绪才出现） |
+| **军团志** | 本轮检阅的总览：队数、编制合计、兵种构成的六维雷达图（**实线＝编制均值、虚线＝各维最强一队的峰值**；只用峰值会让 8 个阵营几乎都顶成满六边形、失去区分度）、逐队档案、检阅简报。数据层取**当前阵营色** `<body data-faction>`；底栏中间「**分享**」把这一页画成卡片发笔记（见 §笔记分享） |
+
+> **配色口径**：金（`--gold` / `--line` / `--line-2`）是**全站界面固定色**，界面上不分主次色相、
+> 只靠同一档金的不同亮度分（底栏主按钮 = 亮金压铸、次级按钮 = 极淡金底 + 金边）；
+> 只有**数据层**取阵营色，靠 `<body data-faction>` 切换：雷达的面与顶点、雷达图例、简报里的数字、过渡页标题。
+> **已知取舍**：日耳曼 `#b0703a` 与塞琉古 `#d9a13b` 的阵营色跟界面金**撞色** ——
+> 这两档的军团志里，雷达数据面与金色网格分不太开、看着像没换色。它们本来就是青铜 / 塞琉古金这类
+> 史实色，故不调；想确认"确实换过色"，看图例与简报数字即可（那两处同样是阵营色）。
 
 ## 八个阵营
 
@@ -47,7 +54,7 @@
 |------|------|
 | `id` | 标识，同时是图片文件名与阵营 `units` 数组的引用键 |
 | `name` / `faction` / `region` / `city` | 名称、所属阵营、征召行省、征召地 |
-| `lat` / `lon` | 经纬度；**留档字段**——原来给 3D 地球定位用，2026-09-22 移除地球后暂无组件引用 |
+| `lat` / `lon` | 经纬度；3D 地球按它给每个兵种的征召地打点（`app.js` 的 `ll2v()`），48 个坐标都要落在球面可标范围内 |
 | `kind` | 兵种类型：`inf` 重步兵 / `spear` 长矛 / `light` 轻步兵 / `missile` 远程 / `cavalry` 骑兵 / `cavalry_missile` 弓骑兵 / `beast` 战兽 |
 | `tier` | 等级：`levy` 征召 / `regular` 正规 / `elite` 精锐 / `special` 特殊 |
 | `men` | 编制人数（一个单位的典型规模） |
@@ -90,6 +97,8 @@ assets/
 ├── app.js              交互逻辑（状态机 / 装备拆解 / 雷达图 / BGM / 过渡页取图）
 ├── units.js            兵种数据真源（48 兵种 + 8 阵营 + 自选）
 ├── gear.js             装备数据真源（52 件词表 + 48 兵种的槽位引用表）
+├── three.min.js        three.js（地球组件用；可缺席——拿不到就降级，其余四页照常）
+├── earth.jpg           地球贴图（file:// 下会被判跨源，自动退程序化经纬网贴图）
 ├── units/              兵种图 ×48（外部素材，写实，48 支全用它）
 ├── gear/               装备图 ×52（外部素材，128×128 透明底）
 ├── tex/                场景图 ×20（外部素材；阵营横幅兼首页 hero 轮播，gate-<key> 是过渡画面）
@@ -104,7 +113,8 @@ tools/
 ├── extract-audio.py    从视频抽音轨 → mp3
 ├── make-bgm.mjs        BGM 截段 + 重编码
 ├── analyze-bgm.mjs     循环点分析
-└── pack.mjs            打 zip
+├── pack.mjs            打 zip
+└── serve.mjs           本地预览服务器（node tools/serve.mjs → http://localhost:8123）
 docs/ xiaohongshu/
 ```
 
@@ -118,13 +128,26 @@ python tools/prep_units.py --kind card --src <兵牌目录>   # 出图后：兵�
 python tools/prep_units.py --kind tex --src <过渡画面目录>  # 出图后：⑨ 过渡画面 → assets/tex/gate-<key>.webp
 node tools/check_data.js      # 代码契约（含 hero 轮播 / 过渡画面按阵营取图契约）
 node tools/check_assets.js    # 素材本身（含 ⑨ 过渡画面 9 张的在位与体积）
-python tools/smoke_test.py    # 无头冒烟（含 hero 轮播 / 过渡画面取图与预热 / 装备拆解 / 过渡页阵营标题 / 雷达图随阵营换色）
-node tools/pack.mjs           # 打 zip
+python tools/smoke_test.py    # 无头冒烟（含 hero 轮播 / 过渡画面取图与预热 / 装备拆解 / 过渡页阵营标题 / 雷达图随阵营换色 / 分享两处入口）
+node tools/pack.mjs           # 打 zip（产物 rome-total-war-3d.zip，index.html 在 zip 根）
+# 按小红书小工具规范审计（.skill/minitool-zip-builder）：
+node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs .
+node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs ./rome-total-war-3d.zip
 ```
 
+打包前另有一份规范静态扫描要点（已按 `.skill/minitool-zip-builder/references/zip-artifact-spec.md` 逐条核对并通过）：
+脚本全部外置、无内联 `<script>` / 行内事件 / `eval`、无 `type="module"`、无外部 `http(s)` 引用、
+无 `<base>` / `<iframe>` / 自建 CSP、资源全为相对路径且都在包内。
+
+> ⚠️ **当前 zip 4.70 MiB**：未超 10 MiB 上传上限，但超出规范"建议 ≤2 MiB"。
+> 大头是兵种图 1.77MB + 场景图 1.28MB + BGM 1.19MB + 地球（three.min.js 0.58MB + earth.jpg 0.49MB）。
+> 要压到 2MB 只能砍 BGM 或砍 3D 地球，二者都要先确认取舍。
+
 冒烟用 Playwright 驱动 msedge（`--use-angle=swiftshader`），视口 420×860，
-覆盖五页全流程、兵种图定档（罗马取兵牌 / 其余取写实，判据是**实际发出的请求**）、
-已退役图位不再被请求、自选军团分支、雷达图与 BGM 链路。
+覆盖五页全流程、兵种图定档（48 支一律写实，判据是**实际发出的请求**）、
+已退役图位不再被请求、自选军团分支、雷达图与 BGM 链路，以及**分享的两条路**：
+桌面（容器没注入端能力）两处入口必须都隐藏；再开一页注入 `window.xhs.miniTool` 桩，
+走通「检阅页分享兵种原图 → 军团志分享卡片」的 `writeTempFile → postNote` 全链路。
 
 > 本机（Windows）PATH 里的 `python` 是坏的 uv shim（会报 `No Python at ...`），别用它。
 > 可用解释器：`C:\Users\dingj\.workbuddy\binaries\python\versions\3.14.3\python.exe`，
@@ -135,7 +158,7 @@ node tools/pack.mjs           # 打 zip
 > & "C:\Users\dingj\.workbuddy\binaries\python\versions\3.14.3\python.exe" tools/gen_prompts.py
 > ```
 >
-> 2026-09-22 已用这条路径跑通 `gen_prompts.py`（场景图 20 条）与 `smoke_test.py`（65 项全过）。
+> 2026-09-23 已用这条路径跑通 `smoke_test.py`（86 项全过，含分享链路）。
 
 ## 兼容性
 
@@ -146,6 +169,44 @@ node tools/pack.mjs           # 打 zip
 - 首页 hero 轮播是**纯 CSS `@keyframes`**（Chrome 61 原生可用，无 JS 定时器）；
   `prefers-reduced-motion:reduce` 下停在第一张。
 - 图片 / BGM 缺失一律回退，页面照常可用。
+- 笔记分享走**能力检测**（拿不到 `window.xhs.miniTool.postNote` 即整块隐藏），
+  分享卡片**只用 Canvas 图元与文字**绘制、不绘制任何位图；守则与实测口径见 §笔记分享。
+
+## 笔记分享（分享到小红书）
+
+容器里没有名为「分享」的 API，只有 §3.3 的 **POSTNOTE**（唤起 App 的笔记发布页并带上内容与媒体；
+`mediaInfo` 必填，且图片 / 视频 / 实况三种资源至少传一种）。两处入口：
+
+| 入口 | 位置 | 媒体 | 笔记正文 |
+|------|------|------|----------|
+| **分享这个兵种** | 检阅页右上角（地球槽右上角那一带、音乐开关**左侧**的小铜牌按钮） | **该兵种的原图原文件**（`assets/units/<id>.webp`，逐字节，不重绘） | 该兵种的介绍 + 一段紧凑资料 |
+| **分享军团志** | 军团志底栏中间 | Canvas 现画的军团志卡片（**版式与配色照军团志页复刻**） | 检阅简报 + 一行统计 |
+
+两处都先把媒体换成本地 `filePath` 再发（§3.5：大 base64 先落文件）：
+
+```
+分享兵种: XHR ./assets/units/<id>.webp → FileReader.readAsDataURL → data:image/webp;base64,…
+分享军团志: Canvas 2D 1080×1440 → toDataURL('image/jpeg',0.92)
+        ↓
+      writeTempFile({ data }) 换本地 filePath（客户端没有这个 API 时，把完整 data:uri 直接交给 postNote）
+        ↓
+      postNote({ pageType:'photo_publish', mediaInfo:{ image_resources:[{ url: filePath }] } })
+```
+
+| 项 | 说明 |
+|------|------|
+| 显形条件 | **能力检测**：拿不到 `window.xhs.miniTool.postNote` 就整块隐藏（桌面直接打开 `index.html`、以及 `?demo` 录屏都不会出现），**不做 UA 判断** |
+| 检阅页显隐 | 只在检阅页、**且这支兵种的原图确实加载成功**（复用大图那份 `IMG_OK` 预检，不另开探测）时才亮 —— 没图就不给按钮，与「缺图回退色卡」同一口径，不做占位分享；换一队会重新判断 |
+| 为什么不用 canvas 转原图 | `drawImage` 在 `file://` 来源下会把画布标记成被污染、`toDataURL` 抛 `SecurityError`；而且重绘等于重编码，分享出去的就不是原图了。XHR + FileReader 拿到的是**逐字节原图**，格式仍是 webp |
+| 卡片不画图片 | 卡片**只用 Canvas 图元与文字**，不 `drawImage` 任何兵种 / 装备 webp —— 同上，本地图会污染画布 |
+| 卡片配色 | 雷达图数据层读 `body` 实测的 `--f-accent*`，**跟着当前检阅的那个阵营换色**（与军团志页同一口径，不是写死的帝国红） |
+| 标题 / 正文 | 标题 ≤20 字（`<兵种名> · <阵营>` / `<阵营> · 军团志`）；正文 ≤1000 字，超出主动 `slice` 裁剪 |
+| 结果语义 | `postNote` 成功**只代表发布页被唤起并由用户点了发布，不代表过审** —— 只当「已唤起」提示，不据此改任何业务状态 |
+
+> ⚠️ 取原图走 `XHR + FileReader`，与框架来源 [`jurassic-park-3d`](../jurassic-park-3d/) 及同源
+> [`age-of-sail-3d`](../age-of-sail-3d/) 同一条路。容器能力清单 §7 把 `XMLHttpRequest` 列入
+> 「须删除或改写的联网请求」，这里读的是**包内相对路径**、并不联网 —— 但严格按清单口径仍属待商榷项，
+> **上架前需在真机容器里实测确认**（实测前按规范记「兼容性未实测」）。
 
 ## 演示模式
 
@@ -181,10 +242,16 @@ index.html?demo&warm=6       先静置 6 秒预热
 `⑨ gate-<key> → ⑧ faction-<key>`，信箱边由**同一张图的模糊铺底**填满。
 设计变更的来龙去脉见 [`docs/场景配图需求.md`](docs/场景配图需求.md) 八、。
 
-**3D 地球已于 2026-09-22 移除**：48 个征召地全在地中海—近东一带，球面是杀鸡用牛刀，
-而且 `three.min.js` + `earth.jpg` + `clouds.png` 占 1.34 MiB（当时整包的一半），
-双击打开还因 WebGL 跨源限制用不上真实贴图。那一格改成**装备拆解**（信息密度更高、零额外开销），
-整包原始体积从 2.64MB 降到 **1.32MB**；兵种图与场景图的预算因此宽松了一档。
+**3D 地球 2026-09-22 移除、2026-09-23 加回**：移除的原因是 `three.min.js` + `earth.jpg` +
+`clouds.png` 占 1.34 MiB（当时整包的一半），那一格换成了**装备拆解**。加回时两者不再互斥——
+地球占检阅页**顶部条带**（`--globem`，218px），装备拆解在**兵种图右列**，内容区整体**底部对齐**。
+同时按新口径瘦身：**没有星空球、没有星星点云、没有云层**，画布是透明底（`alpha:true`），
+背景由槽自己的暗青铜渐变提供，只留一个地球 + 征召地金点 + 底部一行「兵种名 / 经纬度」。
+代价是 `three.min.js` 0.58MB + `earth.jpg` 0.49MB（可打包原始体积 4.55MB → 5.64MB）。
+
+> ⚠️ **file:// 下用不上真实贴图**：双击打开时浏览器把同目录的 `earth.jpg` 判成跨源，
+> 贴图会被「污染探测」拦下、自动退到程序化的**经纬网贴图**（不会白球，也不会崩）。
+> 要看真实贴图走 http：`node tools/serve.mjs` → `http://localhost:8123`。
 
 BGM 用的是《Total War: Rome II — Main Menu》的 8.50–125.53s 乐句（117s，
 波形互相关 1.000，接缝基本听不出），64kbps 单声道 22.05kHz，解码后 0.893 MiB。

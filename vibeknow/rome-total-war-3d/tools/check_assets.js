@@ -218,7 +218,7 @@ const packFiles = ['index.html'];
 let raw = 0;
 packFiles.forEach(f => { try { raw += fs.statSync(path.join(ROOT, f)).size; } catch (e) { } });
 console.log('将进包 ' + packFiles.length + ' 个文件 · 原始合计 ' + (raw / MB).toFixed(2) + ' MB');
-console.log('（3D 地球已移除：three.min.js / earth.jpg / clouds.png 约 1.34 MB 不再进包）');
+console.log('（3D 地球已加回：three.min.js 约 0.58 MB + earth.jpg 约 0.49 MB 进包；云层与星空已不复用）');
 console.log('（过渡页已取消视频：⑨ 过渡画面 ×9 全出也只占 ≤0.90 MB，比原视频预算 1.20 MB 更省）');
 if (raw > 8 * MB) note('原始合计偏大，zip 体积会接近容器上传上限，注意核对');
 
