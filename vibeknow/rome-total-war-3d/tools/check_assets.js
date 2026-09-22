@@ -44,11 +44,11 @@ const UNITS = new Function(fs.readFileSync(path.join(ROOT, 'assets/units.js'), '
 
 const TEX_SLOTS = [
   { f: 'logo.webp', max: 40 * KB, square: false, ratio: '约 3:2', must: false },
-  /* gate-front 仍是首页 hero 底图；gate-open 只在视频缺失时当第二帧兜底 —— 视频到位后两者都是可选 */
+  /* gate-front / gate-front-portrait 只在视频缺失时当**单帧**兜底（横 / 竖），两者都可选；
+     原 gate-open 第二帧已随「两帧交叉淡化 → 单帧缓推」取消。
+     首页 hero 现在是阵营横幅轮播，不再吃 gate-front —— 见下方 faction-*.webp。 */
   { f: 'gate-front.webp', max: 180 * KB, square: false, ratio: '16:9', must: false },
-  { f: 'gate-open.webp', max: 180 * KB, square: false, ratio: '16:9', must: false },
   { f: 'gate-front-portrait.webp', max: 180 * KB, square: false, ratio: '9:14', must: false },
-  { f: 'gate-open-portrait.webp', max: 180 * KB, square: false, ratio: '9:14', must: false },
   { f: 'gate.webp', max: 150 * KB, square: false, ratio: '16:9', must: false },
   { f: 'marble.webp', max: 60 * KB, square: true, ratio: '1:1 可平铺', must: false },
 ].concat(FACTIONS.map(f => ({ f: 'faction-' + f.key + '.webp', max: 120 * KB, square: false, ratio: '8:3', must: true })))
@@ -106,12 +106,12 @@ else ok('场景图 ' + TEX_SLOTS.length + ' 个齐备');
 if (tTotal > 1.8 * MB) bad('场景图合计 ' + (tTotal / MB).toFixed(2) + 'MB 超过上限 1.8MB');
 else ok('场景图合计 ' + (tTotal / MB).toFixed(2) + 'MB / 上限 1.80MB（' + tHave + '/' + TEX_SLOTS.length + ' 个）');
 
-/* ---------- 2.5 过渡视频（凯旋门页；缺失自动退回两帧图，不计失败） ---------- */
+/* ---------- 2.5 过渡视频（凯旋门页；缺失自动退回单帧缓推，不计失败） ---------- */
 console.log('\n— 过渡视频 —');
 const VIDEO = { f: 'gate.mp4', max: 1200 * KB };
 const vp = path.join(ROOT, 'assets/video', VIDEO.f);
 if (!fs.existsSync(vp)) {
-  note('assets/video/gate.mp4 未生成 → 过渡页退回 gate-front/gate-open 两帧交叉淡化（页面照常跑）。规格见 docs/过渡视频需求.md');
+  note('assets/video/gate.mp4 未生成 → 过渡页退回 gate-front（竖屏 gate-front-portrait）单帧缓推（页面照常跑）。规格见 docs/过渡视频需求.md');
 } else {
   const vs = fs.statSync(vp);
   if (vs.size > VIDEO.max) bad('gate.mp4 ' + (vs.size / KB).toFixed(0) + 'KB 超过上限 ' + (VIDEO.max / KB) + 'KB');

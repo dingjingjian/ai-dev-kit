@@ -58,6 +58,12 @@ with sync_playwright() as p:
     n_cards = page.locator('#routeList .route-card').count()
     check(n_cards == 9, '阵营卡 9 张（8 阵营 + 自选），实际 ' + str(n_cards))
     check('罗马军团图鉴' in page.inner_text('.park-ttl'), 'hero 标题已渲染')
+    # 首页 hero 轮播：八大军团横幅各一层（纯 CSS 交叉淡化，无 JS 定时器）
+    n_shots = page.locator('.park-shots .park-shot').count()
+    check(n_shots == 8, '首页 hero 轮播 8 层（八大军团横幅），实际 ' + str(n_shots))
+    shot_bg = page.evaluate(
+        "getComputedStyle(document.querySelectorAll('.park-shot')[0]).backgroundImage")
+    check('faction-rome' in shot_bg, '首层轮播吃罗马阵营横幅：' + shot_bg[:64])
     globe_shown = page.evaluate("getComputedStyle(document.getElementById('globeSlot')).display")
     check(globe_shown == 'none', '阵营页不显示地球（只在检阅页显示）')
 
@@ -66,11 +72,16 @@ with sync_playwright() as p:
     page.wait_for_timeout(400)
     check(mode() == 'mode-gate', '进入凯旋门页')
     check('即将检阅' in page.inner_text('#gateRouteName'), '凯旋门页已写入阵营名')
-    # 过渡视频层：元素要在（视频素材落位即用，缺失时退回两帧图），且必须静音（BGM 走音频链路）
+    # 过渡视频层：元素要在（视频素材落位即用，缺失时退回单帧图），且必须静音（BGM 走音频链路）
     gate_vid = page.evaluate("() => { var v = document.getElementById('gateVideo'); return !!v && v.muted; }")
     check(gate_vid, '过渡视频元素存在且静音')
     gate_cls = page.get_attribute('body', 'class') or ''
     check('gate-video-on' not in gate_cls, '无视频素材时保持在图片兜底模式')
+    # 图片兜底只一帧（原先的「两帧交叉淡化」已改成单帧缓推）
+    check(page.locator('.page-gate .gate-shot').count() == 1, '凯旋门页图片兜底为单帧')
+    push = page.evaluate(
+        "getComputedStyle(document.querySelector('.page-gate .gate-shot')).animationName")
+    check(push == 'shotPush', '单帧缓推动画已挂上：' + str(push))
 
     # 3. 等凯旋门走完 → 检阅页
     check(wait_page('mode-review'), '凯旋门结束自动进检阅页')

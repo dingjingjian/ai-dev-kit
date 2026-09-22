@@ -64,17 +64,28 @@ ok('字段取值全部在白名单内');
 /* 3. 图位与 index.html 契约 */
 const imgPrefix = './assets/units/';
 if (!html.includes(imgPrefix.replace('./assets/units/', 'assets/units/'))) bad('index.html 未标注 assets/units/ 图位');
-const slots = ['logo.webp', 'gate-front.webp', 'gate-open.webp', 'gate.webp',
-               'gate-front-portrait.webp', 'gate-open-portrait.webp', 'marble.webp'];
+const slots = ['logo.webp', 'gate-front.webp', 'gate-front-portrait.webp', 'gate.webp', 'marble.webp'];
 slots.forEach(s => { if (!html.includes(s)) bad('index.html 缺图位：' + s); });
 FACTIONS.forEach(f => {
   if (!html.includes('faction-' + f.key + '.webp')) bad('index.html 缺阵营横幅图位：faction-' + f.key + '.webp');
 });
 if (!html.includes('faction-custom.webp')) bad('index.html 缺自选军团横幅图位');
-ok('index.html 图位齐全（logo / 凯旋门横竖各两帧 + 兜底 / 大理石 / 阵营横幅 ×9）');
+ok('index.html 图位齐全（logo / 凯旋门横竖各一帧 + 兜底 / 大理石 / 阵营横幅 ×9）');
 
-/* 3b. 过渡视频契约：页面元素、JS 里的路径、唯一文件名三者要对得上。
-   视频是可选素材（缺了退两帧图），所以这里只查"写了就得写对"，不查文件在不在。 */
+/* 3a. 首页 hero：8 个预设阵营各一层横幅轮播（自选军团不参与），纯 CSS 交叉淡化 */
+const shotN = (html.match(/class="park-shot"/g) || []).length;
+if (shotN !== FACTIONS.length) bad('首页 hero 轮播层应为 ' + FACTIONS.length + ' 层，实际 ' + shotN);
+else ok('首页 hero 轮播 ' + shotN + ' 层（8 个预设阵营横幅）');
+if (!html.includes('@keyframes heroCycle')) bad('index.html 缺 heroCycle 轮播关键帧');
+if (!html.includes('@keyframes shotPush')) bad('index.html 缺 shotPush 单帧缓推关键帧');
+
+/* 3b. 过渡页图片兜底：视频播不动时只退回**一帧**（不再是两帧交叉淡化） */
+const gateShotN = (html.match(/class="gate-shot"/g) || []).length;
+if (gateShotN !== 1) bad('凯旋门页图片兜底应为单帧，实际 ' + gateShotN + ' 个 .gate-shot');
+else ok('凯旋门页图片兜底为单帧（竖屏优先 gate-front-portrait）');
+
+/* 3c. 过渡视频契约：页面元素、JS 里的路径、唯一文件名三者要对得上。
+   视频是可选素材（缺了退单帧图），所以这里只查"写了就得写对"，不查文件在不在。 */
 const VIDEO_SRC = './assets/video/gate.mp4';
 if (!html.includes('id="gateVideo"')) bad('index.html 缺过渡视频元素 #gateVideo');
 if (!app.includes(VIDEO_SRC)) bad('app.js 里的过渡视频路径应为 ' + VIDEO_SRC);

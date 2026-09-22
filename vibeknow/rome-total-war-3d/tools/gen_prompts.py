@@ -2,14 +2,15 @@
 """从规格文档拼装「可直接粘贴」的出图提示词。
 
 真源（本脚本只读，不写）：
-  docs/兵种图片素材需求.md   48 张兵种图的主体描述 / 构图模板 / 风格前缀 / 阵营色调
-  docs/场景配图需求.md       16 个场景图位的提示词要点与建议尺寸
+  docs/兵种图片素材需求.md   48 个兵种的主体描述 / 构图模板 / 阵营色调，
+                             外加两套风格前缀：写实 3.1+3.2、兵牌 3.5+3.6+3.7（共 96 张图）
+  docs/场景配图需求.md       14 个场景图位的提示词要点与建议尺寸
 产出：
   docs/提示词包.md           （本脚本生成，**不要手改**；改规格改上面两份文档后重跑）
-  --txt DIR 时，另为每张图写一份 <id>.txt，方便批量投喂
+  --txt DIR 时，另为每张图写一份 .txt（写实 <id>.txt / 兵牌 card-<id>.txt），方便批量投喂
 
 设计取舍：
-  规格散在两份文档的表格与引用块里，如果再把 64 条提示词手抄一遍，
+  规格散在两份文档的表格与引用块里，如果再把 110 条提示词手抄一遍，
   就会出现「文档改了、提示词没改」的静默分叉。所以这里全部走解析 ——
   解析不到就硬失败并把缺的图位列出来，绝不给半份清单。
 
@@ -31,7 +32,7 @@ DOC_TEX = os.path.join(ROOT, 'docs', '场景配图需求.md')
 OUT_MD = os.path.join(ROOT, 'docs', '提示词包.md')
 
 UNITS_N = 48
-TEX_N = 16
+TEX_N = 14
 
 
 def read_lines(path):
@@ -78,7 +79,7 @@ def quotes(lines):
 
 
 def strip_label(s):
-    """去掉「提示词要点：」「提示词要点（两帧共用前半段）：」这类前缀标签。"""
+    """去掉「提示词要点：」「提示词要点（竖版）：」这类前缀标签。"""
     if s.startswith('提示词要点'):
         # 只认紧跟标签的那个冒号。取最后一个会把正文里的「9:14」当成标签分隔符，
         # 切出「14，凯旋门完整入画」这种残句。
@@ -167,6 +168,69 @@ def unit_prompt(it, tpl, tone, key):
     return en, cn
 
 
+# ---------------------------------------------------------------- 兵牌（第二套）
+
+def parse_card_spec():
+    """兵牌那一套的三块规格：3.5 中文前缀 / 3.6 英文前缀 / 3.7 固定背景（CN / EN）。"""
+    lines = read_lines(DOC_UNITS)
+
+    def bq(mark):
+        return [x for x in quotes(section(lines, mark)) if x]
+
+    cn_prefix = '\n'.join(bq('### 3.5')).strip()
+    en_prefix = '\n'.join(bq('### 3.6')).strip()
+    cn_bg = en_bg = ''
+    tail = ''            # 正在累积哪一段：'' / 'cn' / 'en'
+    for x in bq('### 3.7'):
+        # 用显式标签切分，靠「有没有中文」猜会随文案变化而失效；
+        # 标签之后没换行的续行（长句折行）要接回同一段，否则只有第一行被读走。
+        if x.startswith('CN'):
+            tail = 'cn'
+            cn_bg = _after_label(x)
+        elif x.startswith('EN'):
+            tail = 'en'
+            en_bg = _after_label(x)
+        elif tail == 'cn':
+            cn_bg = (cn_bg + ' ' + x).strip()
+        elif tail == 'en':
+            en_bg = (en_bg + ' ' + x).strip()
+    for label, val in (('3.5 兵牌中文前缀', cn_prefix), ('3.6 兵牌英文前缀', en_prefix),
+                       ('3.7 兵牌背景 CN', cn_bg), ('3.7 兵牌背景 EN', en_bg)):
+        if not val:
+            raise SystemExit('FAIL 解析不到「%s」（文档的引用块改格式了？）' % label)
+    return cn_prefix, en_prefix, cn_bg, en_bg
+
+
+def _after_label(s):
+    """取「CN：xxx」/「EN: xxx」冒号之后的正文。中文冒号优先，取不到再认英文冒号。"""
+    for mark in ('：', ':'):
+        i = s.find(mark)
+        if i >= 0:
+            return s[i + 1:].strip()
+    return s.strip()
+
+
+def card_unit_prompt(it, tpl, bg_cn, bg_en, tone, key):
+    """兵牌与写实共用主体描述与构图模板，只把「背景」换成 3.7 的固定底。"""
+    cn_tone, en_tone = tone.get(key, ('', ''))
+    comp = tpl.get(it['tpl'], '')
+    en = '\n'.join(x for x in [
+        'Composition: ' + comp if comp else '',
+        'Subject: ' + it['subject'],
+        'Setting: ' + bg_en,
+        'Palette: ' + en_tone if en_tone else '',
+        'Format: square 1:1',
+    ] if x)
+    cn = '\n'.join(x for x in [
+        '构图：' + comp if comp else '',
+        '主体：' + it['subject'],
+        '背景：' + bg_cn,
+        '色调：' + cn_tone if cn_tone else '',
+        '画幅：方形 1:1',
+    ] if x)
+    return en, cn
+
+
 # ---------------------------------------------------------------- 场景图
 
 def parse_tex_spec():
@@ -190,19 +254,10 @@ def parse_tex_spec():
     def bq(marker):
         return [strip_label(x) for x in quotes(sec(marker))]
 
-    # 凯旋门横版两帧：同一引用块里前半段是共用前缀，后半段是两帧各自的追加
-    gate = bq('三、')
-    shared, s3, s4 = [], '', ''
-    for l in gate:
-        if '③ 追加' in l:
-            s3 = l.split('追加', 1)[1].lstrip('：: ').strip()
-        elif '④ 追加' in l:
-            s4 = l.split('追加', 1)[1].lstrip('：: ').strip()
-        elif l:
-            shared.append(l)
-    gate_prefix = '\n'.join(shared).strip()
+    # 凯旋门兜底只剩一帧，整段引用块就是它的提示词（不再拆「共用前缀 + 各帧追加」）
+    gate_shot = '\n'.join(x for x in bq('三、') if x).strip()
 
-    # 竖版两帧：明示「与 ③④ 完全相同的前缀，追加…」
+    # 竖版单帧：明示「与 ③ 相同的前缀，追加…」
     port_txt = '\n'.join(x for x in bq('四、') if x).strip()
     if '追加' in port_txt:
         port_txt = port_txt.split('追加', 1)[1].strip()
@@ -218,19 +273,18 @@ def parse_tex_spec():
             continue
         banners.append({'file': clean(r[0]).strip('`'), 'faction': clean(r[1]), 'scene': clean(r[2])})
 
-    for label, val in (('logo', logo), ('凯旋门共用前缀', gate_prefix),
-                       ('凯旋门 ③ 追加', s3), ('凯旋门 ④ 追加', s4),
+    for label, val in (('logo', logo), ('凯旋门单帧', gate_shot),
                        ('竖版追加', port_txt), ('大理石', marble), ('横幅模板', banner_tpl)):
         if not val:
             raise SystemExit('FAIL 场景图「%s」解析为空（文档的引用块改格式了？）' % label)
     if len(banners) != 9:
         raise SystemExit('FAIL 阵营横幅解析到 %d 条，应为 9 条' % len(banners))
-    return size, logo, gate_prefix, s3, s4, port_txt, marble, banner_tpl, banners
+    return size, logo, gate_shot, port_txt, marble, banner_tpl, banners
 
 
 def tex_slots(spec):
-    """把上面解析到的碎片组装成 16 个图位的完整提示词。"""
-    size, logo, gate_prefix, s3, s4, port_txt, marble, banner_tpl, banners = spec
+    """把上面解析到的碎片组装成 14 个图位的完整提示词。"""
+    size, logo, gate_shot, port_txt, marble, banner_tpl, banners = spec
 
     def dim(name):
         return size.get(name, (None, None, False))
@@ -240,19 +294,13 @@ def tex_slots(spec):
         {'file': 'logo.webp', 'name': '图鉴 logo', 'dim': '图鉴 logo', 'prompt': logo,
          'note': '透明底；只出图形不出文字（SPQR 由页面文字层负责）'},
         {'file': 'gate-front.webp', 'name': '凯旋门正面（横）', 'dim': '凯旋门正面（横）',
-         'prompt': gate_prefix + '\n' + s3,
-         'note': '与 gate-open 必须同机位同光位；构图左右对称，门居中'},
-        {'file': 'gate-open.webp', 'name': '凯旋门穿行（横）', 'dim': '凯旋门穿行（横）',
-         'prompt': gate_prefix + '\n' + s4,
-         'note': '同一道门、同一机位，只把相机推进到门洞内'},
-        {'file': 'gate-front-portrait.webp', 'name': '凯旋门正面（竖）', 'dim': '凯旋门竖版两帧',
-         'prompt': gate_prefix + '\n' + port_txt,
-         'note': '竖幅，门完整入画不裁立柱'},
-        {'file': 'gate-open-portrait.webp', 'name': '凯旋门穿行（竖）', 'dim': '凯旋门竖版两帧',
-         'prompt': gate_prefix + '\n' + port_txt + '\n相机已推进至门洞内，门框成为画框，透过去是远去的军道',
-         'note': '与竖版第一帧同机位；差别只在门洞内的明暗与透视'},
+         'prompt': gate_shot,
+         'note': '图片兜底只此一帧；与过渡视频首帧必须同门同光位；构图左右对称、门居中'},
+        {'file': 'gate-front-portrait.webp', 'name': '凯旋门竖版单帧', 'dim': '凯旋门竖版单帧',
+         'prompt': gate_shot + '\n' + port_txt,
+         'note': '竖幅，门完整入画不裁立柱；可选，只在竖屏且没有视频时用'},
         {'file': 'gate.webp', 'name': '兜底内景', 'dim': '兜底内景',
-         'prompt': gate_prefix + '\n凯旋门内景与远去的军道，暗调，无人物，可作底层压暗',
+         'prompt': gate_shot + '\n凯旋门内景与远去的军道，暗调，无人物，可作底层压暗',
          'note': '脚本补的后半句（原文档未给要点）；缺了也不影响可用性'},
         {'file': 'marble.webp', 'name': '大理石纹理', 'dim': '大理石纹理', 'prompt': marble,
          'note': '必须能无缝平铺；出图后先拼 2×2 看接缝'},
@@ -285,6 +333,7 @@ def main():
     global TONE_CN
     cn_prefix, en_prefix, tone, tpl, factions, units = parse_units_spec()
     TONE_CN = {k: v[0] for k, v in tone.items()}
+    cn_card, en_card, cn_card_bg, en_card_bg = parse_card_spec()
 
     spec = parse_tex_spec()
     slots = tex_slots(spec)
@@ -309,12 +358,20 @@ def main():
     w('   前缀决定画风，主体决定画什么，两处都不该让模型自由发挥。')
     w('3. 出图尺寸建议 **1024×1024**（兵种图）／场景图按每条标注的尺寸；')
     w('   落位前的裁方与压缩交给 `tools/prep_units.py`，不要手工另存。')
-    w('4. 出完图放一个目录，跑 `python tools/prep_units.py --src <目录>` 落位并核对体积。')
+    w('4. 兵种图**两套分目录放**：写实跑 `python tools/prep_units.py --src <写实目录>`，')
+    w('   兵牌跑 `python tools/prep_units.py --kind card --src <兵牌目录>`；场景图同理（`--kind tex`）。')
     w('')
 
-    w('## 一、兵种图 ×%d' % len(units))
+    w('## 一、兵种图 ×%d（每条 4 段：写实 EN/CN + 兵牌 EN/CN）' % len(units))
     w('')
-    w('统一规格：源图 1024×1024 → 落位 512×512 WebP，单张 ≤70KB，全套 ≤2.6MB。')
+    w('两套**各自独立出图**，共用同一条主体描述与构图模板，只有「风格前缀 + 背景」不同：')
+    w('')
+    w('| 套 | 落位 | 风格前缀 | 背景 | 预算 |')
+    w('|----|------|----------|------|------|')
+    w('| 写实（默认） | `assets/units/<id>.webp` | §3.1 / §3.2 | 每条各写的地景 | 单张 ≤70KB · 全套 ≤2.6MB |')
+    w('| 兵牌 | `assets/units/card/<id>.webp` | §3.5 / §3.6 | §3.7 的固定底 | 单张 ≤55KB · 全套 ≤2.0MB |')
+    w('')
+    w('统一规格：源图 1024×1024 → 落位 512×512 WebP。')
     w('')
     n = 0
     for name, key, items in factions:
@@ -323,22 +380,20 @@ def main():
         for it in items:
             n += 1
             en, cn = unit_prompt(it, tpl, tone, key)
+            c_en, c_cn = card_unit_prompt(it, tpl, cn_card_bg, en_card_bg, tone, key)
             w('**%02d · `%s`**　%s　模板 %s　背景：%s' % (n, it['file'], it['unit'], it['tpl'], it['bg']))
             w('')
-            w('EN（推荐）')
-            w('')
-            w('```text')
-            w(en_prefix)
-            w(en)
-            w('```')
-            w('')
-            w('CN')
-            w('')
-            w('```text')
-            w(cn_prefix)
-            w(cn)
-            w('```')
-            w('')
+            for label, pre, body in (('写实 EN（推荐）', en_prefix, en),
+                                     ('写实 CN', cn_prefix, cn),
+                                     ('兵牌 EN（推荐）', en_card, c_en),
+                                     ('兵牌 CN', cn_card, c_cn)):
+                w(label)
+                w('')
+                w('```text')
+                w(pre)
+                w(body)
+                w('```')
+                w('')
 
     w('## 二、场景图 ×%d' % len(slots))
     w('')
@@ -360,7 +415,7 @@ def main():
 
     with io.open(OUT_MD, 'w', encoding='utf-8') as f:
         f.write('\n'.join(out))
-    print('ok   写入 %s（兵种图 %d 条 · 场景图 %d 条）' % (OUT_MD, len(units), len(slots)))
+    print('ok   写入 %s（兵种图 %d 条 × 写实/兵牌两套 · 场景图 %d 条）' % (OUT_MD, len(units), len(slots)))
 
     if args.txt:
         d = os.path.join(ROOT, args.txt)
@@ -370,9 +425,13 @@ def main():
         for name, key, items in factions:
             for it in items:
                 en, _ = unit_prompt(it, tpl, tone, key)
-                with io.open(os.path.join(d, it['file'].replace('.webp', '') + '.txt'), 'w', encoding='utf-8') as f:
+                c_en, _ = card_unit_prompt(it, tpl, cn_card_bg, en_card_bg, tone, key)
+                stem = it['file'].replace('.webp', '')
+                with io.open(os.path.join(d, stem + '.txt'), 'w', encoding='utf-8') as f:
                     f.write(en_prefix + '\n' + en)
-                k += 1
+                with io.open(os.path.join(d, 'card-' + stem + '.txt'), 'w', encoding='utf-8') as f:
+                    f.write(en_card + '\n' + c_en)
+                k += 2
         for s in slots:
             with io.open(os.path.join(d, s['file'].replace('.webp', '') + '.txt'), 'w', encoding='utf-8') as f:
                 f.write(s['prompt'])
