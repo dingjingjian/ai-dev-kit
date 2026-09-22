@@ -45,30 +45,26 @@ const UNITS = new Function(fs.readFileSync(path.join(ROOT, 'assets/units.js'), '
 
 const TEX_SLOTS = [
   { f: 'logo.webp', max: 40 * KB, square: false, ratio: '约 3:2', must: false },
-  /* gate-front / gate-front-portrait 只在视频缺失时当**单帧**兜底（横 / 竖），两者都可选；
-     原 gate-open 第二帧已随「两帧交叉淡化 → 单帧缓推」取消。
-     首页 hero 现在是阵营横幅轮播，不再吃 gate-front —— 见下方 faction-*.webp。 */
-  { f: 'gate-front.webp', max: 180 * KB, square: false, ratio: '16:9', must: false },
-  { f: 'gate-front-portrait.webp', max: 180 * KB, square: false, ratio: '9:14', must: false },
-  { f: 'gate.webp', max: 150 * KB, square: false, ratio: '16:9', must: false },
+  /* 旧的「通用凯旋门」③⑤⑥（横版 / 竖版 / 最后兜底）已于 2026-09-22 整组退役并删除：
+     画面里画进了现代相机，而且 ⑨ 过渡画面九张落位后这一页每阵营都有专属画面，
+     通用那张只会在 contain 留出的信箱边里露出来（正是「上下露出原来大门」的 bug）。
+     过渡页现在的画面链是 ⑨ gate-<key> → 该阵营横幅 ⑧，见下方两个分组。 */
   { f: 'marble.webp', max: 60 * KB, square: true, ratio: '1:1 可平铺', must: false },
 ].concat(FACTIONS.map(f => ({ f: 'faction-' + f.key + '.webp', max: 120 * KB, square: false, ratio: '8:3', must: true })))
   .concat([{ f: 'faction-custom.webp', max: 120 * KB, square: false, ratio: '8:3', must: false }]);
 
-/* ---------- 1. 兵种图（两套：写实 real / 兵牌 card） ----------
- * 写实 = units.js 的 img 字段；兵牌 = assets/units/card/<id>.webp（由 app.js 派生）。 */
+/* ---------- 1. 兵种图（只有一套：写实） ----------
+ * 写实 = units.js 的 img 字段。兵牌那套（assets/units/card/）2026-09-22 整组退役：
+ * 画风不合要求、效果也不行，罗马也不再特殊 —— 页面只请求这一套，缺图退色卡。 */
 const SETS = [
   { key: 'real', name: '写实 ', dir: 'assets/units', nameOf: (u) => u.img, maxEach: 70 * KB, maxAll: 2.6 * MB, must: true },
-  { key: 'card', name: '兵牌 ', dir: 'assets/units/card', nameOf: (u) => './assets/units/card/' + u.id + '.webp', maxEach: 55 * KB, maxAll: 2.0 * MB, must: false },
 ];
 console.log('— 兵种图 —');
 SETS.forEach((S) => {
   let have = 0, total = 0, missingCnt = 0, missingList = [], over = 0, notSquare = 0, small = 0;
   UNITS.forEach((u) => {
     const src = S.nameOf(u);
-    const file = S.key === 'real'
-      ? (src ? path.join(ROOT, S.dir, path.basename(src)) : '')
-      : path.join(ROOT, S.dir, u.id + '.webp');
+    const file = src ? path.join(ROOT, S.dir, path.basename(src)) : '';
     if (!file || !fs.existsSync(file)) { missingCnt++; missingList.push(u.id); return; }
     have++;
     const st = fs.statSync(file);
@@ -80,13 +76,20 @@ SETS.forEach((S) => {
     else if (d.w < 512) { note(S.key + '/' + u.id + '.webp 只有 ' + d.w + 'px，建议 512'); small++; }
   });
   if (missingCnt) {
-    const tag = S.must ? '会回退色卡，页面照常跑' : '切到兵牌时回退色卡';
+    const tag = S.must ? '会回退色卡，页面照常跑' : '不用（这套已退役）';
     note(S.name + '缺 ' + missingCnt + ' 张（' + tag + '）' + (missingCnt <= 12 ? '：' + missingList.join(', ') : ''));
   } else ok(S.name + '48 张齐备');
   if (total > S.maxAll) bad(S.name + '合计 ' + (total / MB).toFixed(2) + 'MB 超过全套上限 ' + (S.maxAll / MB).toFixed(2) + 'MB');
   else ok(S.name + '合计 ' + (total / MB).toFixed(2) + 'MB / 上限 ' + (S.maxAll / MB).toFixed(2) + 'MB（' + have + '/' + UNITS.length + ' 张）'
     + (over || notSquare || small ? ' · 超重 ' + over + ' / 非方 ' + notSquare + ' / 偏小 ' + small : ''));
 });
+
+/* 兵牌那套已退役：目录里若又冒出图，只提示（页面不会加载它们） */
+const cardDir = path.join(ROOT, 'assets/units/card');
+if (fs.existsSync(cardDir)) {
+  const left = fs.readdirSync(cardDir).filter(f => /\.webp$/i.test(f));
+  if (left.length) note('assets/units/card/ 里还有 ' + left.length + ' 张兵牌图，但页面已不再请求它们（兵牌 2026-09-22 退役）');
+}
 
 /* ---------- 2. 场景图 ---------- */
 console.log('\n— 场景图 —');
@@ -133,7 +136,7 @@ if (gTotal > 0.6 * MB) bad('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB �
 else ok('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB / 上限 0.60MB（' + gHave + '/' + gearIds.length + ' 张）'
   + (gOver || gNotSquare ? ' · 超重 ' + gOver + ' / 非方 ' + gNotSquare : ''));
 
-/* ---------- 2.5 过渡画面（「即将检阅」页；每阵营一张，缺则退该阵营横幅 → 通用凯旋门） ---------- */
+/* ---------- 2.5 过渡画面（「即将检阅」页；每阵营一张，缺则退该阵营横幅 ⑧） ---------- */
 console.log('\n— 过渡画面 —');
 const GATE_EACH = 110 * KB, GATE_ALL = 0.9 * MB;
 const gateSlots = FACTIONS.map(f => 'gate-' + f.key + '.webp').concat(['gate-custom.webp']);
@@ -153,8 +156,8 @@ gateSlots.forEach(f => {
 });
 if (gsMissing.length) {
   note('⑨ 过渡画面缺 ' + gsMissing.length + '/9 张（每阵营一张）：' + gsMissing.join(', ')
-    + ' → 该阵营已退到自己的横幅 faction-<key>.webp，再退 ③ gate-front；页面照常跑。'
-    + '规格见 docs/场景配图需求.md §六');
+    + ' → 该阵营已退到自己的横幅 faction-<key>.webp；页面照常跑。'
+    + '规格见 docs/场景配图需求.md 六、');
 } else ok('⑨ 过渡画面 9 张齐备（每阵营一张）');
 if (gsTotal > GATE_ALL) bad('过渡画面合计 ' + (gsTotal / MB).toFixed(2) + 'MB 超过上限 0.90MB');
 else ok('过渡画面合计 ' + (gsTotal / MB).toFixed(2) + 'MB / 上限 0.90MB（' + gsHave + '/9 张）'
@@ -163,12 +166,7 @@ else ok('过渡画面合计 ' + (gsTotal / MB).toFixed(2) + 'MB / 上限 0.90MB�
 /* ---------- 3. 目录里有没有多余的文件 ---------- */
 const expectU = new Set(UNITS.map(u => u.id + '.webp'));
 const expectT = new Set(TEX_SLOTS.map(s => s.f).concat(gateSlots));
-/* assets/units 下多了 card/ 子目录属正常，先看里面的文件是不是都对应得上 */
-const cardDir = path.join(ROOT, 'assets/units/card');
-if (fs.existsSync(cardDir)) {
-  const extraCard = fs.readdirSync(cardDir).filter(f => /\.(webp|jpg|png)$/i.test(f) && !expectU.has(f));
-  if (extraCard.length) note('assets/units/card/ 里有 ' + extraCard.length + ' 个图位表之外的文件：' + extraCard.slice(0, 8).join(', '));
-}
+/* assets/units/card/ 是兵牌那套的位置（已退役）—— 上面已单独看过一遍，这里不重复点名 */
 ['units', 'tex'].forEach(dir => {
   const p = path.join(ROOT, 'assets', dir);
   if (!fs.existsSync(p)) return;

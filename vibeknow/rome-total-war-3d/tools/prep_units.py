@@ -6,13 +6,13 @@
 
 真源（本脚本只读）：
   assets/units.js           48 个兵种 id（文件名）
-  docs/场景配图需求.md       §一 各图位建议尺寸、§十 落位文件名（含 ⑨ 过渡画面 gate-<key>.webp）
+  docs/场景配图需求.md       一、各图位建议尺寸、七、落位文件名（含 ⑨ 过渡画面 gate-<key>.webp）
   tools/check_assets.js      每个图位的体积上限（预算的唯一真源，不在这里另写一份）
 
 用法：
   python tools/prep_units.py --src <原图目录>            # 写实兵种图 + 场景图一起处理
   python tools/prep_units.py --src <原图目录> --kind units
-  python tools/prep_units.py --kind card --src <兵牌原图目录>   # 兵牌那一套 → assets/units/card/
+  python tools/prep_units.py --kind card --src <兵牌原图目录>   # 兵牌那一套（2026-09-22 已退役，留档用）
   python tools/prep_units.py --kind gear --src <装备原图目录>   # 装备图 128×128 透明底 → assets/gear/
   python tools/prep_units.py --src <原图目录> --dry      # 只报不写，先看匹配对不对
   python tools/prep_units.py --src <原图目录> --force    # 覆盖已落位的文件
@@ -51,12 +51,10 @@ GEAR_JS = os.path.join(ROOT, 'assets', 'gear.js')
 SRC_EXT = ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff')
 KB = 1024
 
-# 场景图文件 -> 场景配图需求.md §一 图位总览里的「图位」列（尺寸从那张表查）
+# 场景图文件 -> 场景配图需求.md 一、图位总览里的「图位」列（尺寸从那张表查）。
+# ③④⑤⑥（通用凯旋门横版 / 竖版 / 兜底内景）2026-09-22 已退役、文件已删，不再落位。
 DIM_OF = {
     'logo.webp': '图鉴 logo',
-    'gate-front.webp': '凯旋门正面（横）',
-    'gate-front-portrait.webp': '凯旋门竖版单帧',
-    'gate.webp': '兜底内景',
     'marble.webp': '大理石纹理',
 }
 FACTION_DIM = '阵营横幅'
@@ -69,8 +67,7 @@ def tex_slot_dim(f):
         return DIM_OF[f]
     if f.startswith('faction-'):
         return FACTION_DIM
-    # ⑨ 过渡画面「每阵营一张」：gate-<key>.webp。注意 gate-front / gate.webp 已在 DIM_OF 里，
-    # 所以要先查 DIM_OF，否则 gate-front 会被这条正则先认走。
+    # ⑨ 过渡画面「每阵营一张」：gate-<key>.webp（<key> 与 ⑧ 阵营横幅同源）。
     if re.match(r'^gate-[a-z]+\.webp$', f):
         return TRANSITION_DIM
     return None
@@ -301,7 +298,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', required=True, help='原图目录（不会被改动）')
     ap.add_argument('--kind', default='auto', choices=['auto', 'units', 'tex', 'card', 'gear'],
-                    help='auto=写实兵种图+场景图；card=兵牌（assets/units/card/）；'
+                    help='auto=写实兵种图+场景图；card=兵牌（assets/units/card/，已退役、留档用）；'
                          'gear=装备图（assets/gear/，128×128 保留透明底）')
     ap.add_argument('--fit', default='crop', choices=['crop', 'pad'], help='比例不合时裁切还是留白，默认裁切')
     ap.add_argument('--start-q', type=int, default=82)

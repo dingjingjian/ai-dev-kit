@@ -13,25 +13,26 @@
 
   /* ===== 素材图位（逐项规格见 docs/ 下三份素材需求）=====
      原则：页面里不再画任何 CSS/SVG 装饰，缺什么素材就退到什么底，不留手绘替代图形。
-     ① 兵种图 ×96  assets/units/<id>.webp        写实风格 ×48（默认，缺图回退色卡）
-                    assets/units/card/<id>.webp  兵牌风格 ×48（检阅页可切换，缺图回退色卡）
-                    均为 512×512 方图，两套各自独立出图，规格见 docs/兵种图片素材需求.md
-     ② 图鉴 logo    assets/tex/logo.webp          透明底 SPQR 鹰旗徽章，缺图则整块隐藏
-     ③ 凯旋门正面   assets/tex/gate-front.webp    过渡页**通用**兜底（横版）；⑨ 全缺时用它
-     ④ —            已取消：过渡页不再需要「穿行」第二帧
-     ⑤ 竖版单帧     assets/tex/gate-front-portrait.webp
-                                                  过渡页竖屏通用兜底，可以先不出
-     ⑥ 旧兜底内景   assets/tex/gate.webp          ③⑤ 的最后兜底
+     ① 兵种图 ×48  assets/units/<id>.webp        写实风格，512×512 方图（缺图退色卡）
+                    规格见 docs/兵种图片素材需求.md；**48 支一律走写实**
+     ①′ 兵牌       assets/units/card/            **已退役（2026-09-22）**：画风不合要求、效果也不行，
+                    罗马也不再特殊；整组图与「写实 / 兵牌」开关都没了，规格留档在
+                    docs/兵种图片素材需求.md §3.5–3.8（将来要重启按那份出图）
+     ② 图鉴 logo    assets/tex/logo.webp          军牌式鹰旗徽章（深石底 + 暗金描边），缺图则整块隐藏
+     ③④⑤⑥ 已退役（2026-09-22）：过渡页不再有「通用凯旋门」兜底——③ 横版大门 / ⑤ 竖版大门
+                    的图里画进了一台现代相机，④ 是更早取消的「穿行」第二帧，⑥ 是它们的最后兜底。
+                    ⑨ 九张落位后这一页每阵营都有专属画面，整组图已从仓库删除，
+                    退役说明见 docs/场景配图需求.md 十一、
      ⑦ 大理石纹理   assets/tex/marble.webp        卡片 / 控制栏底纹 + 首页 hero 轮播的兜底层
      ⑧ 阵营横幅 ×9  assets/tex/faction-<key>.webp 阵营卡片背景 + 首页 hero 轮播（8 个预设阵营）
      ⑨ 过渡画面 ×9  assets/tex/gate-<key>.webp    「即将检阅」页的主素材，**每个阵营一张**
                                                   （key = units.js 的 FACTIONS[].key，自选军团是 custom）；
-                                                  缺则退该阵营横幅 → ③ → ⑥，页面照常跑
+                                                  缺则退该阵营横幅，页面照常跑
      ⑩ 背景音乐     assets/audio/bgm.js           base64 音频（源曲目是构建输入，不打进包）
      ⑪ 装备图集 ×52 assets/gear/<id>.webp          128×128 透明底，检阅页右列「装备拆解」用；
                                                    名单是 assets/gear.js 的 GEAR，缺图退成槽位名
      ①      规格见 docs/兵种图片素材需求.md
-     ②~⑨   规格见 docs/场景配图需求.md
+     ②⑦~⑨  规格见 docs/场景配图需求.md
      ⑩      规格（乐句 / 码率 / 循环点 / 版权）见 docs/背景音乐需求.md
      ⑪      规格（逐件描述 / 统一风格 / 提示词）见 docs/装备图集需求.md */
 
@@ -216,33 +217,29 @@
   /* ===== 过渡页（即将检阅） =====
      主素材是**按阵营取的一张过渡画面**：⑨ assets/tex/gate-<key>.webp（1600×900，key = 选中阵营）。
      整段就是 7.1s 的缓慢推近（.gate-shot 的 shotPush 动画），播完即进检阅页。
-     兜底链全部由 CSS 的多层 background-image 完成 —— 前一层 404 就露出下一层，
+     画面链只有两层，仍由 CSS 的多层 background-image 完成 —— 前一层 404 就露出下一层，
      JS 不参与判定，所以不存在「素材加载 / 起播失败」这类会卡住的状态分支：
-       横屏  ⑨ gate-<key> → 该阵营横幅 → ③ gate-front → ⑥ gate
-       竖屏  ⑨ gate-<key> → 该阵营横幅 → ⑤ gate-front-portrait → ③ → ⑥
-     --gate-art 由 app.js 在 enterGate() 里按阵营写入（两层：专属图 + 该阵营横幅）；
-     默认 none，JS 没跑起来时页面退到 ③/⑥ 的通用画面。 */
+       ⑨ gate-<key> → 该阵营横幅 ⑧
+     画面用 cover 铺满整屏（连信箱边都没有），所以这一页不会再出现「横条 / 留白」。
+     旧的「通用凯旋门」③⑤⑥ 已整组退役（2026-09-22）：图里画进了现代相机，而且 ⑨ 九张
+     落位之后这一页每阵营都有专属画面，通用的那张只会在画面边缘露出来，反倒把人看糊涂了。
+     两层都没有时退页面底色——字幕与 7.1s 计时都在 JS 里，开天窗也只是少一张画，流程照常。
+     --gate-art 由 app.js 在 enterGate() 里按阵营写入（专属图 + 该阵营横幅）；默认 none。 */
   .page-gate{background:#050403;align-items:center;justify-content:center;overflow:hidden}
   .gate-stage{--gate-art:none;
     position:relative;width:100%;height:100%;max-width:760px;margin:0 auto;overflow:hidden}
-  /* 模糊铺底：contain 留出的信箱边用它填满，画面不空 */
+  /* 铺底：一层模糊放大顶在最底下（万一上面那帧全部 404，这一层还在） */
   .gate-bg{position:absolute;top:-5%;right:-5%;bottom:-5%;left:-5%;
-    background-image:var(--gate-art),url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
+    background-image:var(--gate-art);
     background-size:cover;background-position:center;background-repeat:no-repeat;
-    filter:blur(26px) saturate(.75);opacity:.42}
-  /* contain 而非 cover：保证门 / 入口永远完整可见（竖屏也不会裁掉立柱）。
-     只有一帧，所以不做交叉淡化 —— 整段就是一路推近，opacity 恒为 1。 */
+    filter:blur(26px) saturate(.75);opacity:.46}
+  /* cover 而非 contain：一帧画面**铺满整屏**，横屏竖屏都不留上下横条
+     （2026-09-22 改：原来用 contain，手机竖屏下 16:9 的图缩成中间一条、上下空出信箱边，
+     看着就是「这张图还是横的」。cover 会裁掉左右余景，而主体（入口）在画面正中，裁不到它）。 */
   .gate-shot{position:absolute;top:0;right:0;bottom:0;left:0;
-    background-size:contain;background-position:center;background-repeat:no-repeat;
-    background-image:var(--gate-art),url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
+    background-size:cover;background-position:center;background-repeat:no-repeat;
+    background-image:var(--gate-art);
     animation:shotPush 7s cubic-bezier(.35,.02,.62,1) forwards}
-  /* 竖屏：⑨ 与阵营横幅照样优先（每阵营不同 ＞ 竖版更满幅），它们都没有时才轮到 ⑤ */
-  @media (orientation:portrait){
-    .gate-bg{background-image:var(--gate-art),url('./assets/tex/gate-front-portrait.webp'),
-      url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp')}
-    .gate-shot{background-image:var(--gate-art),url('./assets/tex/gate-front-portrait.webp'),
-      url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp')}
-  }
   @keyframes shotPush{
     0%{transform:scale(1)}
     30%{transform:scale(1.15)}
@@ -314,20 +311,10 @@
   .tour-img{width:100%;height:100%;border-radius:2px;
     background-color:var(--iron-8);background-size:contain;background-repeat:no-repeat;background-position:center}
 
-  /* 风格切换：写实 / 兵牌两套独立出图，这里只负责选哪一套。
-     做成一小段分段开关放在画框之下，不压画面。 */
-  .tour-style{display:flex;align-items:center;justify-content:center;margin-top:12px}
-  .ts-btn{font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;
-    padding:5px 14px;border:1px solid var(--line-2);background:rgba(8,7,6,.72);
-    color:var(--ink-3);cursor:pointer;transition:.15s}
-  .ts-btn + .ts-btn{margin-left:-1px}
-  .ts-btn:first-child{border-radius:2px 0 0 2px}
-  .ts-btn:last-child{border-radius:0 2px 2px 0}
-  .ts-btn.on{color:#1a1408;background:linear-gradient(180deg,var(--gold-2),var(--gold));
-    border-color:var(--gold-2);box-shadow:0 0 12px var(--gold-glow)}
-  .ts-btn:hover:not(.on){color:var(--stone-2);background:rgba(246,230,180,.10)}
-  .ts-off{font-family:var(--sans);font-size:9.5px;letter-spacing:1px;color:var(--ink-4);margin-left:10px}
-  body.img-missing .ts-off{display:none}
+  /* 兵种图**只有一套写实**：48 支一律用它（2026-09-22）。
+     原先是两套（写实 / 兵牌）加一段切换开关，后来定档（罗马用兵牌、其余用写实），
+     最后整组退役 —— 兵牌画风不合要求、效果也不行，罗马也不再特殊。
+     开关与那句「图片没生成」的提示一并删除，详情页现在干干净净。 */
   /* 档案卡：图片之下的一张信息卡，卡内一律左对齐 */
   .tour-card{width:100%;max-width:540px;margin-top:20px;padding:11px 13px 12px;border-radius:3px;text-align:left;
     background:linear-gradient(180deg,rgba(14,12,10,.80),rgba(8,7,6,.74));
@@ -647,11 +634,6 @@
           </div>
           <!-- 装备拆解：槽位列表由 app.js 按 assets/gear.js 的 KIT 渲染，空槽不渲染 -->
           <div class="gear" id="gearCol"></div>
-        </div>
-        <div class="tour-style" id="tourStyle" role="group" aria-label="兵种图风格">
-          <button type="button" class="ts-btn" data-style="real">写实</button>
-          <button type="button" class="ts-btn" data-style="card">兵牌</button>
-          <span class="ts-off" id="tsNote">素材未生成</span>
         </div>
         <div class="tour-card">
           <div class="tour-head">

@@ -167,70 +167,30 @@
   function darken(h,a){var r=hex2rgb(h);return rgb2hex([r[0]*(1-a),r[1]*(1-a),r[2]*(1-a)]);}
   function plateGrad(c){return 'radial-gradient(circle at 32% 26%,'+lighten(c,.3)+','+c+' 56%,'+darken(c,.36)+' 100%)';}
 
-  /* 兵种图有**两套**：写实（默认）与兵牌（Rome II 式单位卡），各自独立出图。
-     写实路径写在 units.js 的 img 字段；兵牌路径按同一套 id 派生，避免 48 条重复。
-     STYLE 决定当前用哪一套；缺哪套就退哪套的色卡，页面照常跑。 */
-  var STYLE='real',STYLE_KEY='rtw3d.style';
-  function cardImgOf(u){return './assets/units/card/'+u.id+'.webp';}
-  function imgOf(u,s){return s==='card'?cardImgOf(u):u.img;}
-
-  /* IMG_OK['real#'+id] / IMG_OK['card#'+id]：三态 undefined=未加载 / true=已载入 / false=缺失。
-     两套都做成**懒加载**：只预载当前这套，切过去时才补另一套，省一半请求。 */
-  var IMG_OK={};
-  function preloadStyle(s){
-    UNITS.forEach(function(u,i){
-      var src=imgOf(u,s),k=s+'#'+u.id;
-      if(!src||IMG_OK[k]!==undefined)return;
-      IMG_OK[k]=null;
+  /* 兵种图只有**一套**：写实，路径写在 units.js 的 img 字段里。
+     兵牌那套（`assets/units/card/<id>.webp`）2026-09-22 **整组退役**：
+     画风不合要求、效果也不行，罗马也不再特殊 —— 48 支一律走写实，缺图退色卡。 */
+  var IMG_OK={};   /* id -> undefined 未探测 / null 加载中 / true 已载入 / false 缺失 */
+  function preloadImages(){
+    UNITS.forEach(function(u){
+      if(!u.img||IMG_OK[u.id]!==undefined)return;
+      IMG_OK[u.id]=null;
       var im=new Image();
-      im.onload=function(){IMG_OK[k]=true;repaintReviewImg(i);markMissing();};
-      im.onerror=function(){IMG_OK[k]=false;markMissing();};
-      im.src=src;
+      im.onload=function(){IMG_OK[u.id]=true;repaintImg(u);};
+      im.onerror=function(){IMG_OK[u.id]=false;};
+      im.src=u.img;
     });
   }
-  try{
-    var sv=window.localStorage.getItem(STYLE_KEY);
-    if(sv==='card'||sv==='real')STYLE=sv;
-  }catch(e){}
-  preloadStyle(STYLE);
-
-  /* 两套素材都没到位时，在切换按钮旁标一句「素材未生成」，避免看着像按钮坏了 */
-  function markMissing(){
-    var any=false,i;
-    for(i=0;i<UNITS.length;i++){
-      if(IMG_OK['real#'+UNITS[i].id]===true||IMG_OK['card#'+UNITS[i].id]===true){any=true;break;}
-    }
-    try{document.body.classList[any?'remove':'add']('img-missing');}catch(e){}
-  }
+  preloadImages();
 
   function thumbStyle(u){
-    /* contain 而非 cover：两套都是 1:1 方图，遇到非方形图位也只留深色边，绝不裁头脚 */
-    var src=imgOf(u,STYLE);
-    if(src&&IMG_OK[STYLE+'#'+u.id]===true)
-      return "background-image:url('"+src+"');background-size:contain;background-repeat:no-repeat;background-position:center";
+    /* contain 而非 cover：写实是 1:1 方图，遇到非方形图位也只留深色边，绝不裁头脚 */
+    if(u.img&&IMG_OK[u.id]===true)
+      return "background-image:url('"+u.img+"');background-size:contain;background-repeat:no-repeat;background-position:center";
     return 'background:'+plateGrad(u.color||'#8a3a2a');
   }
-  function repaintReviewImg(i){
-    if(st.page==='review'&&i===st.sel){
-      tourImgEl.setAttribute('style',thumbStyle(UNITS[i]));
-    }
-  }
-  /* 切换风格：换的是整张图，不是往图上叠效果——两套图本来就是分开出的。
-     目标风格若还没出图，就退回色卡，不会白屏也不会卡住。 */
-  function setStyle(s){
-    if(s!=='real'&&s!=='card')return;
-    STYLE=s;
-    preloadStyle(s);
-    try{window.localStorage.setItem(STYLE_KEY,s);}catch(e){}
-    var bs=document.querySelectorAll('#tourStyle .ts-btn');
-    for(var i=0;i<bs.length;i++){
-      var on=bs[i].getAttribute('data-style')===s;
-      bs[i].className='ts-btn'+(on?' on':'');
-      bs[i].setAttribute('aria-pressed',on?'true':'false');
-    }
-    if(st.page==='review')tourImgEl.setAttribute('style',thumbStyle(UNITS[st.sel]));
-    else if(st.page==='builder')renderBuilder();
-    markMissing();
+  function repaintImg(u){
+    if(st.page==='review'&&UNITS[st.sel]===u)tourImgEl.setAttribute('style',thumbStyle(u));
   }
 
   /* ================= 装备拆解（检阅页右列）=================
@@ -459,10 +419,11 @@
   /* ================= 过渡页（即将检阅） =================
    * 主素材是**按阵营取的一张过渡画面**：⑨ assets/tex/gate-<key>.webp，整段就是 7.1s
    * 的缓慢推近（.gate-shot 的 shotPush 动画），播完即进检阅页。
-   * 取哪张图由 setGateArt() 写进 CSS 自定义属性 --gate-art，兜底链一并定在 CSS 里：
-   *   ⑨ gate-<key> → 该阵营横幅 → ③ gate-front（竖屏优先 ⑤）→ ⑥ gate
+   * 取哪张图由 setGateArt() 写进 CSS 自定义属性 --gate-art，两层链一并定在 CSS 里：
+   *   ⑨ gate-<key> → 该阵营横幅 ⑧
    * 前一层 404 就露出下一层，JS 不参与判定 —— 没有「素材加载 / 起播失败」这类会卡住的
-   * 状态分支，页面永远停在这 7.1s 上，不存在提前或在原地卡死的可能。 */
+   * 状态分支，页面永远停在这 7.1s 上，不存在提前或在原地卡死的可能。
+   * （旧的「通用凯旋门」③⑤⑥ 已整组退役：图里画进了现代相机，且只会在信箱边里露出来。） */
   var GATE_MS=7100;
   var gateTimer=null;
   var GATE_ELS='.gate-shot,.gate-caption,.gate-title,.gate-subtitle,.gate-route-name';
@@ -488,7 +449,7 @@
   /* 按阵营写过渡画面：专属图在前、该阵营横幅在后。
      横幅是**零成本的顶替**（9 个阵营天然各不相同），所以专属图还没出画时，
      这一页也已经「每阵营一张不同的图」；⑨ 落位后自动接管，不用改代码。
-     两层都没有（理论上不会）才会走到 CSS 里的 ③/⑤/⑥ 通用凯旋门。 */
+     两层都没有（理论上不会）就退页面底色 —— 字幕与 7.1s 计时都在这支 JS 里，流程照常。 */
   function gateArtChain(key){
     return ['./assets/tex/gate-'+key+'.webp','./assets/tex/faction-'+key+'.webp'];
   }
@@ -581,15 +542,7 @@
   tcPrevBtn.addEventListener('click',reviewPrev);
   tcNextBtn.addEventListener('click',reviewNext);
   tcQuitBtn.addEventListener('click',quitReview);
-  /* 风格切换：写实 ↔ 兵牌。两套图是分开出的素材，这里只选一套显示 */
-  var tourStyleEl=document.getElementById('tourStyle');
-  tourStyleEl.addEventListener('click',function(e){
-    var b=null,n=e.target;
-    while(n&&n!==tourStyleEl){if(n.className&&String(n.className).indexOf('ts-btn')>=0){b=n;break;}n=n.parentNode;}
-    if(!b)return;
-    setStyle(b.getAttribute('data-style'));
-  });
-  setStyle(STYLE);   /* 同步按钮高亮（含从 localStorage 读回来的值） */
+  /* 兵种图只有一套（写实），没有风格开关，也没有第二套可切 */
 
   /* ================= 军团志（总结页）================= */
   /* 六维战力雷达图（内联 SVG，零依赖） */
@@ -929,9 +882,9 @@
     }catch(e){}
   })();
 
-  /* 首屏若图未就绪，等预检结束后统一重绘 */
+  /* 首屏若图未就绪，等预检结束后统一重绘：2.6s 还没回来的按缺图处理，退色卡 */
   setTimeout(function(){
-    for(var i=0;i<UNITS.length;i++)if(UNITS[i].img&&IMG_OK[UNITS[i].id]===null){IMG_OK[UNITS[i].id]=false;}
-    if(st.page==='review')repaintReviewImg(st.sel);
+    for(var i=0;i<UNITS.length;i++)if(UNITS[i].img&&IMG_OK[UNITS[i].id]===null)IMG_OK[UNITS[i].id]=false;
+    if(st.page==='review')repaintImg(UNITS[st.sel]);
   },2600);
 })();

@@ -31,9 +31,11 @@ with sync_playwright() as p:
     page.on('pageerror', lambda e: errors.append('pageerror: ' + str(e)))
     page.on('console', lambda m: (errors.append('console.error: ' + m.text)
                                   if m.type == 'error' else None))
+    reqs = []   # 页面请求过的 URL：用来判「兵种图取哪一套」「有没有碰已退役的图」
+    page.on('request', lambda r: reqs.append(r.url))
 
     def mode():
-        """body 上还会挂 img-missing 之类的状态类，
+        """body 上还有可能挂别的状态类，
         只取第一个 token（由 className 整体赋值写入的 mode-*）来判定当前页。"""
         return ((page.get_attribute('body', 'class') or '').split() or [''])[0]
 
@@ -76,17 +78,28 @@ with sync_playwright() as p:
     check('队' in page.inner_text('#gateRouteName'), '过渡页写明队数：' + page.inner_text('#gateRouteName'))
     # 视频设定已下线：页面里不该再有 video 元素
     check(page.evaluate("!document.querySelector('.page-gate video')"), '过渡页已无 video 元素（视频设定下线）')
-    # ⑨ 按阵营取图：--gate-art 要指向该阵营的专属图 + 该阵营横幅（两层兜底），
-    # 且不能是全局的 gate-front（否则就不是「每阵营一张不同的图」）
+    # ⑨ 按阵营取图：--gate-art 要指向该阵营的专属图 + 该阵营横幅（两层，就这两层）
     gate_art = page.evaluate(
         "getComputedStyle(document.querySelector('.gate-stage')).getPropertyValue('--gate-art')")
     check('gate-rome.webp' in gate_art, '⑨ 过渡画面按阵营取图（罗马）：' + gate_art[:80])
     check('faction-rome.webp' in gate_art, '⑨ 第一层兜底是该阵营横幅：' + gate_art[:80])
+    # 通用凯旋门 ③⑤⑥ 已整组退役：既不能出现在页面里，也不能被请求
+    # （它们是「上下信箱边露出原来大门」的来源 —— 图里还画着一台现代相机）
+    check('gate-front' not in gate_art and '/tex/gate.webp' not in gate_art,
+          '画面链里没有退役的通用凯旋门：' + gate_art[:80])
+    check(not any('/tex/gate-front' in u or u.endswith('/tex/gate.webp') for u in reqs),
+          '过渡页不再请求退役的通用凯旋门图')
     # 画面只一帧（原先的「两帧交叉淡化」与视频层都已取消）
     check(page.locator('.page-gate .gate-shot').count() == 1, '过渡页主画面为单帧')
     push = page.evaluate(
         "getComputedStyle(document.querySelector('.page-gate .gate-shot')).animationName")
     check(push == 'shotPush', '单帧缓推动画已挂上：' + str(push))
+    # 画面铺满：cover 而非 contain —— 否则竖屏下 16:9 的图会缩成中间一条、上下留横边
+    shot_size = page.evaluate(
+        "getComputedStyle(document.querySelector('.page-gate .gate-shot')).backgroundSize")
+    # 画面链是多层（⑨ + 阵营横幅），backgroundSize 会按层返回「cover, cover」
+    check(shot_size.split(',')[0].strip() == 'cover',
+          '过渡页画面 cover 铺满整屏（不留上下横边）：' + shot_size)
 
     # 3. 等过渡页走完 → 检阅页
     check(wait_page('mode-review'), '过渡页结束自动进检阅页')
@@ -98,7 +111,8 @@ with sync_playwright() as p:
     # 装备拆解：轻装投枪兵 4 件（无甲 / 兽皮头兜 / 小圆盾 / 轻标枪），空槽不渲染
     n_gear = page.locator('#gearCol .gear-i').count()
     check(n_gear == 4, '装备拆解渲染 4 件（空槽不占位），实际 ' + str(n_gear))
-    g1 = page.inner_text('#gearCol .gear-i:first-child .gear-nm')
+    # 注意：#gearCol 的第一个子元素是 .gear-ttl（标题），所以这里不能用 :first-child
+    g1 = page.locator('#gearCol .gear-i').first.locator('.gear-nm').inner_text()
     check(g1 == '兽皮头兜', '装备按槽位顺序（头部在前）：' + g1)
     check('装备拆解' in page.inner_text('#gearCol .gear-ttl'), '拆解有标题与件数')
     # 空槽不渲染：轻装投枪兵没有坐骑，列表里不该出现「坐骑」
@@ -110,9 +124,16 @@ with sync_playwright() as p:
     check(page.locator('#tourTraits .tour-trait').count() == 3, '三条特征已渲染')
     check(page.locator('.tour-row .tour-frame').count() == 1, '兵种图与拆解同排（.tour-row）')
     check(page.locator('#tcPrev').is_disabled(), '第一队时「上一队」禁用')
-    # 缺图回退色卡：背景应是渐变而非 url()
-    bg = page.evaluate("document.getElementById('tourImg').style.background || document.getElementById('tourImg').style.backgroundImage")
-    check('url(' not in bg, '兵种图缺失时回退色卡（无图不炸）')
+    # 兵种图（2026-09-22 定稿）：只有写实一套，罗马也一样。判据不走 DOM 的时序
+    # （图可能还没回来），直接看页面请求了哪些 URL。
+    check(any(u.endswith('/assets/units/velites.webp') for u in reqs),
+          '罗马首队（轻装投枪兵）取写实那套')
+    check(not any('/units/card/' in u for u in reqs), '不再请求已退役的兵牌图')
+    check(page.locator('#tourStyle').count() == 0, '「写实 / 兵牌」切换开关已删除')
+    check('素材未生成' not in page.inner_text('body'), '详情页不再出现「素材未生成」提示')
+    # 画像总得有个底：有图给图、缺图给色卡，绝不留空框
+    img_style = page.evaluate("document.getElementById('tourImg').getAttribute('style') || ''")
+    check(bool(img_style), '兵种图画框已上背景（有图给图 / 缺图给色卡）')
 
     # 4. 逐队前进到军团志
     steps = 0
@@ -139,6 +160,9 @@ with sync_playwright() as p:
     check(n_pool == 48, '兵种名录 48 条，实际 ' + str(n_pool))
     n_group = page.locator('#bdPool .bd-era-group').count()
     check(n_group == 7, '名录按 7 类分组，实际 ' + str(n_group))
+    # 名录一次渲染 48 条，48 张写实图此刻都已进入探测队列
+    check(any(u.endswith('/assets/units/phalanx.webp') for u in reqs),
+          '非罗马兵种（马其顿方阵兵）也走写实那套')
     check(page.locator('#bdStart').is_disabled(), '未选兵种时「开始检阅」禁用')
     page.locator('#bdPool .bd-item').nth(0).click()
     page.locator('#bdPool .bd-item').nth(5).click()
@@ -167,12 +191,12 @@ with sync_playwright() as p:
     check(p0 != p1, 'BGM 开关可切换（aria-pressed %s → %s）' % (p0, p1))
 
     # 7. 无 JS 异常
-    # 素材（兵种图 / 场景图 / bgm.js）此时尚未生成，404 属预期 —— 页面必须照常跑，
-    # 所以把「资源 404」与「真实 JS 异常」分开统计：前者只登记，后者才判失败。
-    missing = [e for e in errors if 'Failed to load resource' in e]
+    # 素材可能有个别缺位（缺图一律回退，页面必须照常跑），所以把「资源 404」与
+    # 「真实 JS 异常」分开统计：前者只登记并点名，后者才判失败。
+    missing = [e for e in errors if 'Failed to load resource' in e and 'favicon' not in e.lower()]
     real = [e for e in errors if 'Failed to load resource' not in e and 'favicon' not in e.lower()]
     check(not real, '全程无 JS 异常' + ('' if not real else '：' + ' | '.join(real[:3])))
-    print('note 素材未生成，资源 404 共 %d 条（页面已按缺图契约照常跑完）' % len(missing))
+    check(not missing, '全程无资源 404（素材齐备）' + ('' if not missing else '：共 %d 条' % len(missing)))
 
     browser.close()
 
