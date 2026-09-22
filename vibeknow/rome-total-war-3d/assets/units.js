@@ -3,9 +3,10 @@
  *   id          兵种标识（文件名 slug，同时是阵营 units 数组的引用键）
  *   name        兵种名
  *   faction     所属阵营 key（对应 FACTIONS[].key）
- *   region      征召行省（地球组件标注用）
+ *   region      征召行省（档案卡与军团志的「覆盖 N 个行省」用）
  *   city        征召地
- *   lat, lon    经纬度（用于在地球上定位征召地）
+ *   lat, lon    经纬度——**留档字段**：原来给 3D 地球定位用，
+ *               2026-09-22 移除地球（改「装备拆解」）后暂无组件引用，保留以备将来做地图
  *   kind        兵种类别：inf/spear/light/missile/cavalry/cavalry_missile/beast
  *   tier        等级：levy（征召）/ regular（正规）/ elite（精锐）/ special（特殊）
  *   men         编制人数（该兵种一个单位的典型规模）

@@ -27,10 +27,13 @@
      ⑨ 过渡视频     assets/video/gate.mp4         凯旋门页主过渡，播完即进检阅（首选）
                                                   缺失 / 不支持 / 播放失败 → 自动退回 ③ / ⑤ 单帧缓推
      ⑩ 背景音乐     assets/audio/bgm.js           base64 音频（源曲目是构建输入，不打进包）
+     ⑪ 装备图集 ×52 assets/gear/<id>.webp          128×128 透明底，检阅页右列「装备拆解」用；
+                                                   名单是 assets/gear.js 的 GEAR，缺图退成槽位名
      ①      规格见 docs/兵种图片素材需求.md
      ②~⑧   规格见 docs/场景配图需求.md
      ⑨      规格（镜头 / 编码 / 落位）见 docs/过渡视频需求.md
-     ⑩      规格（乐句 / 码率 / 循环点 / 版权）见 docs/背景音乐需求.md */
+     ⑩      规格（乐句 / 码率 / 循环点 / 版权）见 docs/背景音乐需求.md
+     ⑪      规格（逐件描述 / 统一风格 / 提示词）见 docs/装备图集需求.md */
 
   :root{
     /* 大理石白系（文字 / 铭牌） */
@@ -53,7 +56,7 @@
     --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --shadow:0 10px 34px rgba(0,0,0,.45);
-    --bar:52px;--globem:218px;
+    --bar:52px;
     /* 右上角音乐开关：贴在地球槽右上角那一带、**顶栏之下** —— 不占顶栏空间，
        顶栏就不必为它留右侧空白，标题才能真居中。
        --bgmgap = 开关顶边在地球槽顶边之下多少（要挪位置就改这一个数） */
@@ -270,27 +273,29 @@
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.45),0 6px 18px rgba(0,0,0,.6);animation:gateFade .9s ease 2.1s both}
   @keyframes gateFade{0%{opacity:0;transform:translateY(10px)}100%{opacity:1;transform:translateY(0)}}
 
-  /* ===== 地球定位组件 ===== */
-  .globe-slot{position:fixed;z-index:15;overflow:hidden;
-    background:radial-gradient(ellipse 80% 62% at 50% 12%,var(--iron-5),var(--iron-8) 62%,var(--iron-9));
-    box-shadow:0 0 0 1px var(--gold),0 0 0 4px rgba(10,9,8,.92),0 0 0 5px rgba(201,161,59,.3),0 14px 40px rgba(0,0,0,.5)}
-  .globe-slot canvas{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
-  .globe-light{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
-    background:radial-gradient(ellipse 66% 42% at 50% -8%,rgba(255,228,180,.20),transparent 72%),
-      radial-gradient(ellipse 120% 92% at 50% 48%,transparent 44%,rgba(8,7,6,.62) 100%)}
-  .globe-tags{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none}
-  .globe-cap{position:absolute;left:0;right:0;bottom:0;padding:7px 12px;pointer-events:none;
-    font-size:11.5px;color:var(--gold-2);letter-spacing:1.5px;font-variant-numeric:tabular-nums;
-    display:flex;align-items:baseline;justify-content:space-between;
-    background:linear-gradient(0deg,rgba(10,9,8,.85),rgba(10,9,8,0))}
-  .globe-cap .gname{color:var(--stone);font-family:var(--serif);letter-spacing:2px;font-size:12.5px}
-  .globe-cap .gcoord{font-family:var(--sans);opacity:.85;margin-left:8px}
-  .globe-down{position:absolute;top:0;right:0;bottom:0;left:0;display:none;
-    flex-direction:column;align-items:center;justify-content:center;padding:0 26px 26px;text-align:center;
-    background:radial-gradient(ellipse 74% 58% at 50% 38%,var(--iron-5),var(--iron-8) 62%,var(--iron-9))}
-  .globe-down.show{display:flex}
-  .globe-down .gd-ttl{font-size:14px;color:var(--stone);letter-spacing:3px}
-  .globe-down .gd-sub{margin-top:9px;font-size:11.5px;line-height:1.9;color:var(--ink-3);letter-spacing:1px}
+  /* ===== 装备拆解（检阅页右列）=====
+     版式：兵种图在左，槽位列表在右，两者同高对齐。
+     空槽**不渲染**（一件没有就不占位）；说明固定两行 —— 行高一致，
+     48 个兵种横比时槽位才对得齐。
+     图位 ./assets/gear/<id>.webp（128×128 透明底，规格见 docs/装备图集需求.md）；
+     缺图时把槽位名摊在图标位上，绝不出现空框（由 app.js 预检后加 .has-img）。 */
+  .tour-row{display:flex;align-items:center;justify-content:center;width:100%;max-width:430px}
+  .tour-row > * + *{margin-left:14px}
+  .gear{flex:1;min-width:0}
+  .gear-ttl{font-family:var(--sans);font-size:9.5px;color:var(--gold-2);letter-spacing:2px;
+    padding-bottom:5px;margin-bottom:5px;box-shadow:inset 0 -1px 0 var(--line)}
+  .gear-i{display:flex;align-items:center;padding:3px 0}
+  .gear-i + .gear-i{box-shadow:inset 0 1px 0 rgba(201,161,59,.13)}
+  .gear-ic{flex:none;width:28px;height:28px;margin-right:8px;background-color:rgba(201,161,59,.08);
+    background-size:contain;background-position:center;background-repeat:no-repeat;
+    box-shadow:inset 0 0 0 1px rgba(201,161,59,.26)}
+  .gear-ic i{display:flex;width:100%;height:100%;align-items:center;justify-content:center;
+    font-style:normal;font-family:var(--sans);font-size:9px;color:var(--gold-2);letter-spacing:.5px}
+  .gear-ic.has-img i{display:none}
+  .gear-tx{min-width:0;flex:1}
+  .gear-nm{font-size:11.5px;letter-spacing:.6px;color:var(--stone);line-height:1.25}
+  .gear-no{font-family:var(--sans);font-size:9.5px;line-height:1.4;color:var(--ink-3);
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 
   /* ===== 检阅页 ===== */
   .page-review{background:radial-gradient(ellipse 92% 64% at 50% 26%,var(--f-mid),var(--f-dark) 60%,var(--iron-9))}
@@ -301,9 +306,9 @@
   .tour-crumb{flex:1;min-width:0;text-align:center;font-size:12px;color:var(--gold-2);letter-spacing:2px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-  /* 版式：顶栏 → 地球条带(--globem) → 内容区 → 底部操作栏 */
+  /* 版式：顶栏 → 内容区（兵种图 + 装备拆解 / 档案卡）→ 底部操作栏 */
   .tour-body{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;
-    margin-top:var(--globem);padding:10px 16px calc(72px + var(--sab))}
+    padding:10px 16px calc(72px + var(--sab))}
   .tour-wrap{width:100%;max-width:820px;margin:0 auto;flex:1;min-height:0;display:flex}
   .tour-stage{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
   /* 兵种图画框：兵种图是 1:1 方图（两种风格都按方图出，规格见 docs/兵种图片素材需求.md），
@@ -346,7 +351,7 @@
     padding:2px 8px;border-radius:2px;background:linear-gradient(180deg,var(--gold-2),var(--gold));
     box-shadow:inset 0 0 0 1px rgba(255,255,255,.3)}
   /* 征召地 + 编制数据并作一行 */
-  .tour-meta{margin-top:5px;display:flex;align-items:baseline;justify-content:space-between}
+  .tour-meta{margin-top:5px;display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap}
   .tour-meta > * + *{margin-left:10px}
   .tour-loc{flex:1;min-width:0;font-size:11.5px;color:var(--gold-2);letter-spacing:1.4px;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -528,18 +533,13 @@
   #loader p{margin-top:18px;font-size:14px;color:var(--gold-2);letter-spacing:4px}
 
   /* ===== 移动端 ===== */
-  .globe-slot{top:calc(var(--bar) + var(--sattop));left:0;right:0;height:var(--globem);border-radius:0;display:none}
-  body.mode-review .globe-slot{display:block}
 
   /* 焦点基线 */
   .route-card:focus,.bar-btn:focus,.bd-item:focus,.bd-mini:focus{outline:2px solid var(--gold);outline-offset:1px}
 
-  /* 矮视口 */
-  /* 地球高度固定为 --globem（218），矮屏不改它；空间不足由铭牌画框的边长让位。
-     只有极矮视口（<560）才兜底收一点，避免整页被挤爆。
+  /* 矮视口：兵种图与右列一起收，避免被挤爆。
      画面宽高必须同改，否则画框又变长方、方图会被裁。 */
   @media (max-height:560px){
-    :root{--globem:176px}
     .tour-frame{width:20vh;height:20vh}
   }
   @media (max-height:520px){.park-hero{height:calc(104px + 92px + var(--sattop))}.park-ttl{font-size:20px}}
@@ -576,16 +576,6 @@
 <script src="./assets/flexgap.js"></script>
 </head>
 <body class="mode-factions">
-<div class="globe-slot" id="globeSlot">
-  <canvas id="stage"></canvas>
-  <div class="globe-light" aria-hidden="true"></div>
-  <div class="globe-tags" id="globeTags"></div>
-  <div class="globe-down" id="globeDown">
-    <div class="gd-ttl">地球组件不可用</div>
-    <div class="gd-sub">当前浏览器不支持 WebGL，征召地改由下方文字标出。<br>检阅照常进行。</div>
-  </div>
-  <div class="globe-cap"><span class="gname" id="capName"></span><span class="gcoord" id="capCoord"></span></div>
-</div>
 
 <!-- 阵营选择页 -->
 <main class="page page-factions" id="pageFactions">
@@ -648,7 +638,9 @@
            muted playsinline preload="auto" disablepictureinpicture></video>
     <div class="gate-scrim" aria-hidden="true"></div>
     <div class="gate-caption">
-      <div class="gate-title" id="gateTitle">罗马军团图鉴</div>
+      <!-- 标题与副标题由 app.js 的 enterGate() 按**选中的阵营**写入（默认值是罗马那一档，
+           只为 JS 没跑起来时兜底，不是通用文案） -->
+      <div class="gate-title" id="gateTitle">罗马</div>
       <div class="gate-subtitle" id="gateSubtitle">SPQR · LEGIONVM CODEX</div>
       <div class="gate-route-name" id="gateRouteName"></div>
     </div>
@@ -663,8 +655,12 @@
   <div class="tour-body" id="tourBody">
     <div class="tour-wrap">
       <div class="tour-stage">
-        <div class="tour-frame">
-          <div class="tour-img" id="tourImg"></div>
+        <div class="tour-row">
+          <div class="tour-frame">
+            <div class="tour-img" id="tourImg"></div>
+          </div>
+          <!-- 装备拆解：槽位列表由 app.js 按 assets/gear.js 的 KIT 渲染，空槽不渲染 -->
+          <div class="gear" id="gearCol"></div>
         </div>
         <div class="tour-style" id="tourStyle" role="group" aria-label="兵种图风格">
           <button type="button" class="ts-btn" data-style="real">写实</button>
@@ -737,7 +733,7 @@
 <div id="loader"><div class="spin"></div><p>正在集结</p></div>
 
 <script src="./assets/units.js"></script>
-<script src="./assets/three.min.js"></script>
+<script src="./assets/gear.js"></script>
 <!-- 音频数据（base64）必须在 app.js 之前就位：容器上传白名单不收音频扩展名，
      所以音频藏在 .js 里，由 app.js 交给 Web Audio 解码播放。 -->
 <script src="./assets/audio/bgm.js"></script>

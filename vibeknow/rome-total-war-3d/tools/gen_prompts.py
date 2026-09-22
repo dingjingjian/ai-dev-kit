@@ -3,14 +3,16 @@
 
 真源（本脚本只读，不写）：
   docs/兵种图片素材需求.md   48 个兵种的主体描述 / 构图模板 / 阵营色调，
-                             外加两套风格前缀：写实 3.1+3.2、兵牌 3.5+3.6+3.7（共 96 张图）
+                             外加两套风格前缀：写实 3.1+3.2（取景 3.4）、
+                             兵牌 3.5+3.6+3.7（取景 3.8，半身像）（共 96 张图）
+  docs/装备图集需求.md       52 件装备的逐件主体描述 + 统一风格（3.1~3.4）
   docs/场景配图需求.md       14 个场景图位的提示词要点与建议尺寸
 产出：
-  docs/提示词包.md           （本脚本生成，**不要手改**；改规格改上面两份文档后重跑）
-  --txt DIR 时，另为每张图写一份 .txt（写实 <id>.txt / 兵牌 card-<id>.txt），方便批量投喂
+  docs/提示词包.md           （本脚本生成，**不要手改**；改规格改上面三份文档后重跑）
+  --txt DIR 时，另为每张图写一份 .txt（写实 <id>.txt / 兵牌 card-<id>.txt / 装备 gear-<id>.txt）
 
 设计取舍：
-  规格散在两份文档的表格与引用块里，如果再把 110 条提示词手抄一遍，
+  规格散在三份文档的表格与引用块里，如果再把 162 条提示词手抄一遍，
   就会出现「文档改了、提示词没改」的静默分叉。所以这里全部走解析 ——
   解析不到就硬失败并把缺的图位列出来，绝不给半份清单。
 
@@ -28,10 +30,12 @@ import argparse
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOC_UNITS = os.path.join(ROOT, 'docs', '兵种图片素材需求.md')
+DOC_GEAR = os.path.join(ROOT, 'docs', '装备图集需求.md')
 DOC_TEX = os.path.join(ROOT, 'docs', '场景配图需求.md')
 OUT_MD = os.path.join(ROOT, 'docs', '提示词包.md')
 
 UNITS_N = 48
+GEAR_N = 52
 TEX_N = 14
 
 
@@ -171,7 +175,7 @@ def unit_prompt(it, tpl, tone, key):
 # ---------------------------------------------------------------- 兵牌（第二套）
 
 def parse_card_spec():
-    """兵牌那一套的三块规格：3.5 中文前缀 / 3.6 英文前缀 / 3.7 固定背景（CN / EN）。"""
+    """兵牌那一套的四块规格：3.5 中文前缀 / 3.6 英文前缀 / 3.7 固定背景（CN / EN）/ 3.8 半身取景。"""
     lines = read_lines(DOC_UNITS)
 
     def bq(mark):
@@ -194,11 +198,19 @@ def parse_card_spec():
             cn_bg = (cn_bg + ' ' + x).strip()
         elif tail == 'en':
             en_bg = (en_bg + ' ' + x).strip()
+
+    # 兵牌是半身像，取景与写实那套（3.4 的膝以上 / 整体入画）不同，单独一张表
+    tpl_card = {}
+    for r in table_rows(section(lines, '### 3.8'), '兵牌构图'):
+        tpl_card[clean(r[0])] = clean(r[2])
+
     for label, val in (('3.5 兵牌中文前缀', cn_prefix), ('3.6 兵牌英文前缀', en_prefix),
                        ('3.7 兵牌背景 CN', cn_bg), ('3.7 兵牌背景 EN', en_bg)):
         if not val:
             raise SystemExit('FAIL 解析不到「%s」（文档的引用块改格式了？）' % label)
-    return cn_prefix, en_prefix, cn_bg, en_bg
+    if not tpl_card:
+        raise SystemExit('FAIL 解析不到兵牌构图模板（§3.8 的表格改结构了？）')
+    return cn_prefix, en_prefix, cn_bg, en_bg, tpl_card
 
 
 def _after_label(s):
@@ -210,10 +222,10 @@ def _after_label(s):
     return s.strip()
 
 
-def card_unit_prompt(it, tpl, bg_cn, bg_en, tone, key):
-    """兵牌与写实共用主体描述与构图模板，只把「背景」换成 3.7 的固定底。"""
+def card_unit_prompt(it, tpl, tpl_card, bg_cn, bg_en, tone, key):
+    """兵牌与写实共用主体描述，取景换成 3.8 的半身模板、背景换成 3.7 的固定暗底。"""
     cn_tone, en_tone = tone.get(key, ('', ''))
-    comp = tpl.get(it['tpl'], '')
+    comp = tpl_card.get(it['tpl']) or tpl.get(it['tpl'], '')   # 3.8 优先，缺哪档回落 3.4
     en = '\n'.join(x for x in [
         'Composition: ' + comp if comp else '',
         'Subject: ' + it['subject'],
@@ -228,6 +240,40 @@ def card_unit_prompt(it, tpl, bg_cn, bg_en, tone, key):
         '色调：' + cn_tone if cn_tone else '',
         '画幅：方形 1:1',
     ] if x)
+    return en, cn
+
+
+# ---------------------------------------------------------------- 装备图集
+
+def parse_gear_spec():
+    """装备图集需求.md：3.1~3.4 四段风格块 + §四 的逐件表格（文件名即 assets/gear.js 的键）。"""
+    lines = read_lines(DOC_GEAR)
+
+    def bq(mark):
+        return '\n'.join(x for x in quotes(section(lines, mark)) if x).strip()
+
+    cn_prefix, en_prefix = bq('### 3.1'), bq('### 3.2')
+    cn_suffix, en_suffix = bq('### 3.3'), bq('### 3.4')
+    for label, val in (('3.1 中文前缀', cn_prefix), ('3.2 英文前缀', en_prefix),
+                       ('3.3 中文后缀', cn_suffix), ('3.4 英文后缀', en_suffix)):
+        if not val:
+            raise SystemExit('FAIL 装备图集「%s」解析为空（引用块改格式了？）' % label)
+
+    items = []
+    for r in table_rows(section(lines, '## 四、'), '主体描述'):
+        if len(r) < 5:
+            continue
+        items.append({'file': clean(r[1]).strip('`'), 'name': clean(r[2]),
+                      'slot': clean(r[3]), 'desc': clean(r[4])})
+    if len(items) != GEAR_N:
+        raise SystemExit('FAIL 装备解析到 %d 件，应为 %d 件（表格改结构了？）' % (len(items), GEAR_N))
+    return cn_prefix, en_prefix, cn_suffix, en_suffix, items
+
+
+def gear_prompt(it, cn_prefix, cn_suffix, en_prefix, en_suffix):
+    """与兵种图同一条口径：前缀决定画风、主体决定画什么，两处都不该让模型自由发挥。"""
+    en = '\n'.join([en_prefix, 'Subject: ' + it['desc'], en_suffix])
+    cn = '\n'.join([cn_prefix, '主体：' + it['desc'], cn_suffix])
     return en, cn
 
 
@@ -333,10 +379,11 @@ def main():
     global TONE_CN
     cn_prefix, en_prefix, tone, tpl, factions, units = parse_units_spec()
     TONE_CN = {k: v[0] for k, v in tone.items()}
-    cn_card, en_card, cn_card_bg, en_card_bg = parse_card_spec()
+    cn_card, en_card, cn_card_bg, en_card_bg, tpl_card = parse_card_spec()
 
     spec = parse_tex_spec()
     slots = tex_slots(spec)
+    cn_prefix_g, en_prefix_g, cn_suffix_g, en_suffix_g, gear_items = parse_gear_spec()
     if len(slots) != TEX_N:
         raise SystemExit('FAIL 场景图解析到 %d 个位，应为 %d 个' % (len(slots), TEX_N))
 
@@ -359,7 +406,8 @@ def main():
     w('3. 出图尺寸建议 **1024×1024**（兵种图）／场景图按每条标注的尺寸；')
     w('   落位前的裁方与压缩交给 `tools/prep_units.py`，不要手工另存。')
     w('4. 兵种图**两套分目录放**：写实跑 `python tools/prep_units.py --src <写实目录>`，')
-    w('   兵牌跑 `python tools/prep_units.py --kind card --src <兵牌目录>`；场景图同理（`--kind tex`）。')
+    w('   兵牌跑 `python tools/prep_units.py --kind card --src <兵牌目录>`；')
+    w('   装备图跑 `--kind gear`，场景图跑 `--kind tex`。')
     w('')
 
     w('## 一、兵种图 ×%d（每条 4 段：写实 EN/CN + 兵牌 EN/CN）' % len(units))
@@ -380,7 +428,7 @@ def main():
         for it in items:
             n += 1
             en, cn = unit_prompt(it, tpl, tone, key)
-            c_en, c_cn = card_unit_prompt(it, tpl, cn_card_bg, en_card_bg, tone, key)
+            c_en, c_cn = card_unit_prompt(it, tpl, tpl_card, cn_card_bg, en_card_bg, tone, key)
             w('**%02d · `%s`**　%s　模板 %s　背景：%s' % (n, it['file'], it['unit'], it['tpl'], it['bg']))
             w('')
             for label, pre, body in (('写实 EN（推荐）', en_prefix, en),
@@ -395,7 +443,29 @@ def main():
                 w('```')
                 w('')
 
-    w('## 二、场景图 ×%d' % len(slots))
+    w('## 二、装备图集 ×%d' % len(gear_items))
+    w('')
+    w('落位目录 `assets/gear/`，**文件名必须等于 `assets/gear.js` 里 GEAR 的键**（写错就是静默缺图）。')
+    w('统一规格：源图 1024×1024 → 落位 **128×128 透明底** WebP，单张 ≤8KB，全套 ≤0.60MB。')
+    w('')
+    for it in gear_items:
+        en, cn = gear_prompt(it, cn_prefix_g, cn_suffix_g, en_prefix_g, en_suffix_g)
+        w('**`%s`**　%s　%s' % (it['file'], it['name'], it['slot']))
+        w('')
+        w('EN（推荐）')
+        w('')
+        w('```text')
+        w(en)
+        w('```')
+        w('')
+        w('CN')
+        w('')
+        w('```text')
+        w(cn)
+        w('```')
+        w('')
+
+    w('## 三、场景图 ×%d' % len(slots))
     w('')
     w('落位目录 `assets/tex/`，文件名逐字对应 `index.html` 里的 `url()`，写错会静默回退。')
     w('')
@@ -415,7 +485,8 @@ def main():
 
     with io.open(OUT_MD, 'w', encoding='utf-8') as f:
         f.write('\n'.join(out))
-    print('ok   写入 %s（兵种图 %d 条 × 写实/兵牌两套 · 场景图 %d 条）' % (OUT_MD, len(units), len(slots)))
+    print('ok   写入 %s（兵种图 %d 条 × 写实/兵牌两套 · 装备图 %d 条 · 场景图 %d 条）'
+          % (OUT_MD, len(units), len(gear_items), len(slots)))
 
     if args.txt:
         d = os.path.join(ROOT, args.txt)
@@ -425,13 +496,19 @@ def main():
         for name, key, items in factions:
             for it in items:
                 en, _ = unit_prompt(it, tpl, tone, key)
-                c_en, _ = card_unit_prompt(it, tpl, cn_card_bg, en_card_bg, tone, key)
+                c_en, _ = card_unit_prompt(it, tpl, tpl_card, cn_card_bg, en_card_bg, tone, key)
                 stem = it['file'].replace('.webp', '')
                 with io.open(os.path.join(d, stem + '.txt'), 'w', encoding='utf-8') as f:
                     f.write(en_prefix + '\n' + en)
                 with io.open(os.path.join(d, 'card-' + stem + '.txt'), 'w', encoding='utf-8') as f:
                     f.write(en_card + '\n' + c_en)
                 k += 2
+        for it in gear_items:
+            en, _ = gear_prompt(it, cn_prefix_g, cn_suffix_g, en_prefix_g, en_suffix_g)
+            with io.open(os.path.join(d, 'gear-' + it['file'].replace('.webp', '') + '.txt'),
+                         'w', encoding='utf-8') as f:
+                f.write(en)
+            k += 1
         for s in slots:
             with io.open(os.path.join(d, s['file'].replace('.webp', '') + '.txt'), 'w', encoding='utf-8') as f:
                 f.write(s['prompt'])

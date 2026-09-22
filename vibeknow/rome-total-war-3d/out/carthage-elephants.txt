@@ -1,0 +1,10 @@
+historically accurate ancient military illustration, museum exhibition plate quality,
+single figure, three-quarter view, calm natural stance, no heroic lighting,
+archaeologically reconstructed armour and clothing, worn metal, woven fabric texture,
+shallow depth of field with period landscape background, natural side-back light,
+no text, no watermark, no logo, no modern objects, no legible letters
+Composition: 以兽或车为主体占画面宽度 85%；战象取象头与前半身 + 象轿的近景，不画全躯（画全躯在 88px 下会成一团）
+Subject: 北非林象（体型较小、耳极大），身披甲片，背负象轿，驭手持刺棒，象牙完整
+Setting: 扬尘的战场
+Palette: Tyrian purple and violet, brass and ivory accents
+Format: square 1:1

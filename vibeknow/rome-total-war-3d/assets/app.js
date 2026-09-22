@@ -21,13 +21,11 @@
   CUSTOM_FACTION.unitIdx=[];
 
   /* ===== DOM 引用 ===== */
-  var slot=document.getElementById('globeSlot');
-  var canvas=document.getElementById('stage');
-  var tagsLayer=document.getElementById('globeTags');
-  var capName=document.getElementById('capName');
-  var capCoord=document.getElementById('capCoord');
+  var gearColEl=document.getElementById('gearCol');
 
   var routeListEl=document.getElementById('routeList');
+  var gateTitleEl=document.getElementById('gateTitle');
+  var gateSubtitleEl=document.getElementById('gateSubtitle');
   var gateRouteNameEl=document.getElementById('gateRouteName');
   var tourCrumbEl=document.getElementById('tourCrumb');
   var tourBodyEl=document.getElementById('tourBody');
@@ -159,9 +157,6 @@
 
   /* ================= 工具函数 ================= */
   function fmtN(v){return String(v).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
-  function fmtCoord(lat,lon){
-    return Math.abs(lat).toFixed(1)+'°'+(lat>=0?'N':'S')+' '+Math.abs(lon).toFixed(1)+'°'+(lon>=0?'E':'W');
-  }
   function roman(n){return ROMAN[n]||String(n);}
   function menOf(u){return (u&&typeof u.men==='number')?u.men:0;}
 
@@ -238,350 +233,70 @@
     markMissing();
   }
 
-  /* ================= 3D 地球组件（可降级）=================
-   * 三层能力检测，任一不过就降级——地球在这里只是「标征召地」的组件，
-   * 它跑不起来不该连累整页（阵营选择 / 凯旋门 / 检阅 / 军团志全部照常）：
-   *   ① 拿得到 WebGL 上下文吗（webgl2 或 webgl）；
-   *   ② three.min.js 加载上了吗（typeof THREE）；
-   *   ③ 建场景这一段会不会抛异常（外面用 try/catch 兜住）。
-   * 任一不过 → G 为 null → 地球槽内显示 .globe-down，页面其余部分不受影响。 */
-  var gl=null;try{gl=canvas.getContext('webgl2')||canvas.getContext('webgl');}catch(e){}
-  var HAS3D=!!(gl&&typeof THREE!=='undefined');
-  var G=null;
-  if(HAS3D){try{G=(function(){
-
-  var renderer=new THREE.WebGLRenderer({canvas:canvas,antialias:true,powerPreference:'high-performance'});
-  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
-  renderer.outputEncoding=THREE.sRGBEncoding;
-  renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.06;
-
-  var scene=new THREE.Scene();
-  var camera=new THREE.PerspectiveCamera(52,1,0.1,5000);
-  var W=2,H=2,sizeDirty=true;
-  var R=1.6;
-
-  function starfieldTex(){
-    var w=2048,h=1024,c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');
-    var bg=x.createLinearGradient(0,0,0,h);bg.addColorStop(0,'#0a0a0e');bg.addColorStop(.5,'#141418');bg.addColorStop(1,'#0a0a0e');
-    x.fillStyle=bg;x.fillRect(0,0,w,h);
-    x.save();x.translate(w/2,h/2);x.rotate(-0.4);x.translate(-w/2,-h/2);
-    for(var i=0;i<20;i++){var px=Math.random()*w,py=h/2+(Math.random()-0.5)*h*0.3,r=90+Math.random()*220;
-      var gg=x.createRadialGradient(px,py,0,px,py,r),hue=Math.random(),c1=hue<.5?'rgba(150,150,190,':'rgba(190,170,120,';
-      gg.addColorStop(0,c1+(0.05+Math.random()*.05)+')');gg.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=gg;x.fillRect(0,0,w,h);}
-    x.restore();
-    for(var i2=0;i2<4200;i2++){var qx=Math.random()*w,qy=Math.random()*h,b=.15+Math.random()*.5;
-      x.fillStyle='rgba(255,250,236,'+b+')';x.fillRect(qx,qy,1,1);}
-    for(var i3=0;i3<220;i3++){var rx=Math.random()*w,ry=Math.random()*h,b2=.82+Math.random()*.18;
-      x.fillStyle='rgba(255,252,240,'+b2+')';x.fillRect(rx,ry,1,1);}
-    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
-  }
-  var sky=new THREE.Mesh(new THREE.SphereGeometry(2600,48,32),
-    new THREE.MeshBasicMaterial({map:starfieldTex(),side:THREE.BackSide,depthWrite:false}));
-  scene.add(sky);
-
-  var ambient=new THREE.AmbientLight(0x4a4638,1.0);scene.add(ambient);
-  var lampLight=new THREE.PointLight(0xffe0b0,2.2,0,1.3);lampLight.position.set(18,7,14);scene.add(lampLight);
-  var fillLight=new THREE.PointLight(0x5a5a6a,0.8,0,1.3);fillLight.position.set(-16,-6,-12);scene.add(fillLight);
-  var candleLight=new THREE.PointLight(0xffa860,0.6,300,1.6);candleLight.position.set(-26,-30,18);scene.add(candleLight);
-
-  function radialTex(c0,c1,c2){
-    var c=document.createElement('canvas');c.width=c.height=128;var x=c.getContext('2d'),g=x.createRadialGradient(64,64,0,64,64,64);
-    g.addColorStop(0,c0);g.addColorStop(.4,c1);g.addColorStop(1,c2);x.fillStyle=g;x.fillRect(0,0,128,128);
-    return new THREE.CanvasTexture(c);
-  }
-  function plainTex(col){var c=document.createElement('canvas');c.width=c.height=4;var x=c.getContext('2d');x.fillStyle=col;x.fillRect(0,0,4,4);return new THREE.CanvasTexture(c);}
-
-  function ll2v(lat,lon,r){
-    var th=(90-lat)*Math.PI/180,p=(lon+180)/360*Math.PI*2;
-    return new THREE.Vector3(-r*Math.cos(p)*Math.sin(th),r*Math.cos(th),r*Math.sin(p)*Math.sin(th));
-  }
-
-  var earthTilt=new THREE.Group();earthTilt.rotation.z=23.5*Math.PI/180;scene.add(earthTilt);
-  var earthGroup=new THREE.Group();earthTilt.add(earthGroup);
-  var earthMat=new THREE.MeshStandardMaterial({map:plainTex('#2a4a3a'),color:0xd8ccae,roughness:.85,metalness:.05});
-  var earthMesh=new THREE.Mesh(new THREE.SphereGeometry(R,64,44),earthMat);earthGroup.add(earthMesh);
-  var cloudMat=new THREE.MeshStandardMaterial({map:plainTex('#ffffff'),transparent:true,alphaMap:plainTex('#ffffff'),opacity:.32,roughness:1,depthWrite:false});
-  var clouds=new THREE.Mesh(new THREE.SphereGeometry(R*1.012,48,32),cloudMat);earthTilt.add(clouds);
-  var atmo=new THREE.Mesh(new THREE.SphereGeometry(R*1.06,48,32),
-    new THREE.MeshBasicMaterial({color:0xc8a060,side:THREE.BackSide,transparent:true,opacity:.16,blending:THREE.AdditiveBlending,depthWrite:false}));
-  earthTilt.add(atmo);
-
-  /* ===== 标记点：全部建好，按阵营成员与选中状态决定显隐 ===== */
-  var markerGroup=new THREE.Group();earthGroup.add(markerGroup);
-  var glowTex=radialTex('rgba(255,236,200,.95)','rgba(255,180,90,.45)','rgba(230,120,40,0)');
-  var ringTex=radialTex('rgba(255,220,160,.7)','rgba(255,180,90,.25)','rgba(230,120,40,0)');
-  var markers=[];
-  (function buildMarkers(){
-    for(var i=0;i<UNITS.length;i++){
-      var u=UNITS[i];
-      var grp=new THREE.Group();
-      grp.position.copy(ll2v(u.lat,u.lon,R*1.012));
-      grp.lookAt(0,0,0);grp.rotateX(Math.PI);
-      var col=new THREE.Color(u.color);
-      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.052,14,14),new THREE.MeshBasicMaterial({color:col}));
-      var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:col}));
-      glow.scale.set(0.46,0.46,1);
-      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:col,opacity:.8}));
-      ring.scale.set(0.72,0.72,1);
-      grp.add(dot);grp.add(glow);grp.add(ring);
-      markerGroup.add(grp);
-      markers.push({unit:u,grp:grp,dot:dot,glow:glow,ring:ring,dim:false,visible:false});
+  /* ================= 装备拆解（检阅页右列）=================
+   * 数据源：assets/gear.js 的 GEAR（受控词表）与 KIT（兵种 -> 槽位引用）。
+   * 三条口径：
+   *   ① 空槽不渲染 —— 一件没有就不占位。
+   *   ② 说明固定两行（CSS 的 -webkit-line-clamp:2），行高一致，48 个兵种横比时槽位对得齐。
+   *   ③ 图缺了退成槽位名文字，不留空框（GEAR_OK 三态缓存，与兵种图同一套口径）。
+   * 只探测当前这一屏用到的那几件（按 URL 缓存），不预载全部 52 张。 */
+  var GEAR_OK={};            /* gearId -> true 已载入 / false 缺失 / undefined 未探测 */
+  var SLOT_LABEL={};(function(){for(var i=0;i<GEAR_SLOTS.length;i++)SLOT_LABEL[GEAR_SLOTS[i][0]]=GEAR_SLOTS[i][1];})();
+  function gearImgOf(id){return './assets/gear/'+id+'.webp';}
+  /* 按槽位顺序取出这个兵种的装备；空槽与词表里查不到的 id 都不进列表 */
+  function gearItems(u){
+    var kit=(u&&KIT[u.id])||{},out=[],i,sk,id,g;
+    for(i=0;i<GEAR_SLOTS.length;i++){
+      sk=GEAR_SLOTS[i][0];id=kit[sk];
+      if(!id)continue;
+      g=GEAR[id];
+      if(!g)continue;
+      out.push({slot:sk,label:SLOT_LABEL[sk],id:id,name:g.name,note:g.note});
     }
-  })();
-
-  var stars=(function(){
-    var n=2600,geo=new THREE.BufferGeometry(),pos=new Float32Array(n*3),col=new Float32Array(n*3);
-    for(var i=0;i<n;i++){var q=Math.random()*2-1,v=Math.random()*6.2832,s=Math.sqrt(1-q*q),rr=900+Math.random()*560;
-      pos[i*3]=rr*s*Math.cos(v);pos[i*3+1]=rr*q;pos[i*3+2]=rr*s*Math.sin(v);
-      var b=.25+Math.random()*.75,t=Math.random();
-      if(t<.2){col[i*3]=b;col[i*3+1]=b*.85;col[i*3+2]=b*.7;}
-      else{col[i*3]=b;col[i*3+1]=b*.96;col[i*3+2]=b*.9;}}
-    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-    var p=new THREE.Points(geo,new THREE.PointsMaterial({size:0.5,sizeAttenuation:true,vertexColors:true,transparent:true,opacity:.9,depthWrite:false}));
-    scene.add(p);return p;
-  })();
-
-  /* 地球贴图的三重降级（顺序递减，缺哪级就用下一级）：
-       ① earth.jpg / clouds.png 真实贴图
-       ② 程序化「经纬网」贴图（canvas 现画，永远不会失败）
-       ③ plainTex 纯色
-     为什么需要 ②：直接双击 index.html 时页面来源是 file://，浏览器把同目录的
-     earth.jpg 也当成跨源 —— 不是请求被拦（图能下下来），而是这个 <img> 元素本身
-     被标记为污染，WebGL 的 texSubImage2D 会直接抛 SecurityError，整个渲染循环断掉。
-     所以载入后先做一次「污染探测」：把图往 1×1 画布上画一像素再 getImageData，
-     抛错即判定不可用，改用 ②。http(s) 下探测通过，照常用真实贴图。 */
-  function gridTex(){
-    var c=document.createElement('canvas'),W=1024,H=512;c.width=W;c.height=H;
-    var x=c.getContext('2d'),g=x.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,'#26333c');g.addColorStop(.5,'#3a4c42');g.addColorStop(1,'#26333c');
-    x.fillStyle=g;x.fillRect(0,0,W,H);
-    x.lineWidth=1;x.strokeStyle='rgba(198,168,110,.20)';
-    for(var i=1;i<12;i++){var yy=i*H/12;x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke();}
-    for(var j=0;j<24;j++){var xx=j*W/24;x.beginPath();x.moveTo(xx,0);x.lineTo(xx,H);x.stroke();}
-    x.strokeStyle='rgba(232,204,146,.45)';x.beginPath();x.moveTo(0,H/2);x.lineTo(W,H/2);x.stroke();
-    var t=new THREE.CanvasTexture(c);return t;
+    return out;
   }
-  function tainted(im){
-    /* 污染探测：drawImage + getImageData，抛 SecurityError 即跨源不可用。 */
-    try{
-      var c=document.createElement('canvas');c.width=c.height=1;
-      var g=c.getContext('2d');g.drawImage(im,0,0,1,1);g.getImageData(0,0,1,1);
-      return false;
-    }catch(e){return true;}
+  function probeGear(items){
+    for(var i=0;i<items.length;i++){
+      (function(it){
+        if(GEAR_OK[it.id]!==undefined)return;
+        GEAR_OK[it.id]=null;
+        var im=new Image();
+        im.onload=function(){GEAR_OK[it.id]=true;repaintGear();};
+        im.onerror=function(){GEAR_OK[it.id]=false;};
+        im.src=gearImgOf(it.id);
+      })(items[i]);
+    }
   }
-  var maxA=renderer.capabilities.getMaxAnisotropy();
-  function loadTex(u,ok,fail){
-    var im=new Image();
-    im.onload=function(){
-      if(tainted(im)){if(fail)fail();return;}
-      try{
-        var t=new THREE.Texture(im);t.needsUpdate=true;ok(t);
-      }catch(e){if(fail)fail();}
-    };
-    im.onerror=function(){if(fail)fail();};
-    im.src=u;
-  }
-  loadTex('./assets/earth.jpg',
-    function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;earthMat.map=t;earthMat.needsUpdate=true;},
-    function(){earthMat.map=gridTex();earthMat.needsUpdate=true;clouds.visible=false;});
-  loadTex('./assets/clouds.png',
-    function(t){t.anisotropy=maxA;cloudMat.map=t;cloudMat.alphaMap=t;cloudMat.needsUpdate=true;},
-    function(){clouds.visible=false;});
-
-  /* ================= 相机：始终对准当前这个兵种的征召地 ================= */
-  var baseT=0,baseP=1.2;
-  var camT=0,camP=1.2,camR=5;
-  var camTG=0,camPG=1.2,camRG=5;
-  var fitR=5,R_MIN=3,R_MAX=12,userZoomed=false,playing=false;
-
-  function fitDist(){
-    var vF=camera.fov*Math.PI/180;
-    var hF=2*Math.atan(Math.tan(vF/2)*camera.aspect);
-    var lim=Math.min(vF,hF);
-    return R/Math.sin(0.38*lim);
-  }
-  function resize(){
-    var r=slot.getBoundingClientRect();
-    var w=Math.round(r.width),h=Math.round(r.height);
-    if(w<10||h<10){sizeDirty=true;return;}
-    sizeDirty=false;W=w;H=h;
-    camera.aspect=W/H;camera.updateProjectionMatrix();
-    renderer.setSize(W,H,false);
-    fitR=fitDist();
-    R_MIN=fitR*0.6;R_MAX=fitR*2.6;
-    if(!userZoomed)camRG=fitR;
-    camR=Math.min(R_MAX,Math.max(R_MIN,camR));
-  }
-  function aimUnit(instant){
+  /* 图到位后把那一格从「槽位名文字」换成图；只改 class 与背景，不重排 */
+  function repaintGear(){
+    if(st.page!=='review'||!gearColEl)return;
     var u=UNITS[st.sel];if(!u)return;
-    var local=ll2v(u.lat,u.lon,1);
-    var e=earthGroup.rotation.y,cs=Math.cos(e),sn=Math.sin(e);
-    var wx=local.x*cs+local.z*sn,wy=local.y,wz=-local.x*sn+local.z*cs;
-    baseP=Math.acos(Math.max(-1,Math.min(1,wy)));
-    baseT=Math.atan2(wx,wz);
-    if(instant){camT=baseT;camP=baseP;camTG=baseT;camPG=baseP;}
-  }
-  function camPos(){
-    var sp=Math.sin(camP);
-    camera.position.set(camR*sp*Math.sin(camT),camR*Math.cos(camP),camR*sp*Math.cos(camT));
-    camera.lookAt(0,0,0);
-  }
-
-  /* ================= 手势：拖动转动、滚轮 / 双指缩放 ================= */
-  var pointers={},dragId=null,pinch=0,lx=0,ly=0;
-  function pCount(){var n=0,k;for(k in pointers)if(pointers[k])n++;return n;}
-  function stopDrag(){dragId=null;}
-  function tdist(t){return(Math.hypot||function(a,b){return Math.sqrt(a*a+b*b);})(t[0].clientX-t[1].clientX,t[0].clientY-t[1].clientY);}
-  canvas.addEventListener('pointerdown',function(e){
-    pointers[e.pointerId]={x:e.clientX,y:e.clientY};
-    if(pCount()>1){stopDrag();return;}
-    dragId=e.pointerId;lx=e.clientX;ly=e.clientY;
-    try{canvas.setPointerCapture(e.pointerId);}catch(_){}
-  });
-  function onPointerEnd(e){
-    delete pointers[e.pointerId];
-    if(dragId===e.pointerId)stopDrag();
-    try{canvas.releasePointerCapture(e.pointerId);}catch(_){}
-    if(pCount()===1){for(var id in pointers)if(pointers[id]){dragId=Number(id);lx=pointers[id].x;ly=pointers[id].y;break;}}
-  }
-  canvas.addEventListener('pointerup',onPointerEnd);
-  canvas.addEventListener('pointercancel',onPointerEnd);
-  canvas.addEventListener('pointermove',function(e){
-    var p=pointers[e.pointerId];if(!p)return;
-    var nx=e.clientX,ny=e.clientY;
-    p.x=nx;p.y=ny;
-    if(e.pointerId!==dragId||pCount()>1)return;
-    baseT-=(nx-lx)*0.006;baseP-=(ny-ly)*0.006;
-    baseP=Math.max(0.08,Math.min(Math.PI-0.08,baseP));
-    lx=nx;ly=ny;
-  });
-  canvas.addEventListener('wheel',function(e){
-    e.preventDefault();
-    camRG*=1+(e.deltaY>0?1:-1)*0.08;
-    camRG=Math.max(R_MIN,Math.min(R_MAX,camRG));
-    userZoomed=true;
-  },{passive:false});
-  canvas.addEventListener('touchstart',function(e){if(e.touches.length===2){stopDrag();pinch=tdist(e.touches);}},{passive:true});
-  canvas.addEventListener('touchend',function(e){if(e.touches.length<2)pinch=0;},{passive:true});
-  canvas.addEventListener('touchcancel',function(){pinch=0;},{passive:true});
-  canvas.addEventListener('touchmove',function(e){
-    if(e.touches.length!==2)return;e.preventDefault();
-    var d=tdist(e.touches);
-    if(pinch>12&&d>12){camRG*=pinch/d;camRG=Math.max(R_MIN,Math.min(R_MAX,camRG));userZoomed=true;}
-    pinch=d;
-  },{passive:false});
-
-  /* ================= 征召地标签：只标当前这个兵种 ================= */
-  var tagEl=document.createElement('div');tagEl.className='tag';tagsLayer.appendChild(tagEl);
-  var _v=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
-  function updateTag(){
-    var m=markers[st.sel];
-    if(!m||!m.visible){tagEl.style.opacity='0';return;}
-    _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
-    m.grp.getWorldPosition(_n);
-    _d.copy(camera.position).sub(_n).normalize();_n.normalize();
-    var front=(_v.z<1)&&(_n.dot(_d)>=0.2);
-    m.glow.visible=front;m.ring.visible=front;
-    if(!front){tagEl.style.opacity='0';return;}
-    tagEl.style.left=((_v.x*0.5+0.5)*W).toFixed(1)+'px';
-    tagEl.style.top=((-_v.y*0.5+0.5)*H).toFixed(1)+'px';
-    tagEl.style.opacity='1';
-  }
-
-  /* ================= 标记点显隐与脉动 =================
-   * 检阅页：该阵营全部兵种的征召地标出，当前这队高亮脉动，同阵营其余压暗作上下文。 */
-  function refreshMarkers(){
-    var list=st.faction?st.faction.unitIdx:[];
-    for(var i=0;i<markers.length;i++){
-      var m=markers[i];
-      var inF=list.indexOf(i)>=0;
-      var sel=(i===st.sel);
-      m.visible=inF;
-      m.dim=inF&&!sel;
-      m.grp.visible=m.visible;
-      m.glow.visible=sel;m.ring.visible=sel;
-      m.dot.scale.setScalar(sel?1:0.66);
-      m.dot.material.color.set(sel?'#ffffff':'#f0e6cc');
-      m.dot.visible=m.visible;
+    var items=gearItems(u),cells=gearColEl.querySelectorAll('.gear-ic');
+    for(var i=0;i<cells.length&&i<items.length;i++){
+      if(GEAR_OK[items[i].id]===true){
+        cells[i].className='gear-ic has-img';
+        cells[i].style.backgroundImage='url("'+gearImgOf(items[i].id)+'")';
+      }
     }
   }
-  function pulseMarkers(t){
-    var m=markers[st.sel];
-    if(!m||!m.visible)return;
-    var p=0.5+0.5*Math.sin(t*2.6);
-    var f=1+focusFlash*1.6;
-    var g=0.46*(1+0.3*p)*f,r=0.72*(1+0.36*p)*f;
-    m.glow.scale.set(g,g,1);m.ring.scale.set(r,r,1);
-  }
-
-  /* ================= 视图初始化 ================= */
-  var focusFlash=0;
-  function fitView(keepZoom){
-    aimUnit(false);
-    if(!keepZoom)userZoomed=false;
-    camRG=userZoomed?camRG:fitR;
-  }
-
-  /* ================= 动画 ================= */
-  var clock=new THREE.Clock();
-  var running=true,perfAcc=0,perfN=0,dprStep=Math.min(devicePixelRatio||1,2);
-  function globeVisible(){return st.page==='review';}
-  function animate(){
-    if(!running)return;
-    requestAnimationFrame(animate);
-    var dt=clock.getDelta(),t=performance.now()*0.001;
-    if(sizeDirty)resize();
-    if(!globeVisible())return;
-    if(playing){
-      camTG=baseT+0.42*Math.sin(t*0.16);
-      camPG=baseP+0.09*Math.sin(t*0.16+1.2);
-      camPG=Math.max(0.08,Math.min(Math.PI-0.08,camPG));
-      clouds.rotation.y+=dt*0.02;
-      stars.rotation.y+=dt*0.003;
-    }else{
-      camTG=baseT;camPG=baseP;
+  function renderGear(u){
+    if(!gearColEl)return;
+    var items=gearItems(u),h='',i,it,ok;
+    h+='<div class="gear-ttl">装备拆解 · '+items.length+' 件</div>';
+    for(i=0;i<items.length;i++){
+      it=items[i];ok=(GEAR_OK[it.id]===true);
+      h+='<div class="gear-i">'+
+           '<span class="gear-ic'+(ok?' has-img':'')+'"'+
+             (ok?' style="background-image:url(\''+gearImgOf(it.id)+'\')"':'')+'>'+
+             '<i>'+it.label+'</i></span>'+
+           '<span class="gear-tx">'+
+             '<span class="gear-nm">'+it.name+'</span>'+
+             '<span class="gear-no">'+it.note+'</span>'+
+           '</span>'+
+         '</div>';
     }
-    if(focusFlash>0)focusFlash=Math.max(0,focusFlash-dt*0.55);
-    camT+=(camTG-camT)*0.09;camP+=(camPG-camP)*0.09;camR+=(camRG-camR)*0.1;
-    camPos();
-    lampLight.position.copy(camera.position);lampLight.position.y+=3;
-    renderer.render(scene,camera);
-    pulseMarkers(t);
-    updateTag();
-    perfAcc+=dt;perfN++;
-    if(perfN>=30){
-      var avg=perfAcc/perfN;perfAcc=0;perfN=0;
-      if(avg>0.045&&dprStep>1){dprStep=Math.max(1,dprStep-0.25);renderer.setPixelRatio(dprStep);resize();}
-    }
-  }
-  window.addEventListener('resize',function(){sizeDirty=true;resize();});
-  window.addEventListener('orientationchange',function(){setTimeout(function(){sizeDirty=true;resize();},220);});
-  document.addEventListener('visibilitychange',function(){
-    if(document.hidden){running=false;}
-    else if(!running){running=true;clock.getDelta();animate();}
-  });
-  canvas.addEventListener('webglcontextlost',function(e){
-    e.preventDefault();running=false;
-    var gd=document.getElementById('globeDown');
-    if(gd)gd.className='globe-down show';
-  },false);
-
-  return {
-    resize:resize,
-    markDirty:function(){sizeDirty=true;},
-    aimUnit:aimUnit,
-    fitView:fitView,
-    refreshMarkers:refreshMarkers,
-    setTag:function(t){tagEl.textContent=t;},
-    setPlaying:function(v){playing=v;},
-    start:animate
-  };
-  })();}catch(e){G=null;}}
-  if(!G){
-    var gd=document.getElementById('globeDown');
-    if(gd)gd.className='globe-down show';
+    gearColEl.innerHTML=h;
+    probeGear(items);
   }
 
   /* ================= 阵营选择页渲染 ================= */
@@ -836,7 +551,15 @@
     st.page='gate';
     document.body.className='mode-gate';
     document.body.setAttribute('data-faction',faction.key);
-    gateRouteNameEl.textContent='即将检阅 · '+faction.name;
+    /* 这一页写的是**你选中的这个阵营**，不是 app 的名字：
+       标题＝阵营名，副标题＝它的拉丁名。「SPQR · LEGIONVM CODEX」是罗马专属的国号与书名，
+       只留给罗马那一档，别的阵营挂上它就是张冠李戴。
+       底下那行改成队数——阵营名已经在标题上了，再写一遍是重复。 */
+    gateTitleEl.textContent=faction.name;
+    gateSubtitleEl.textContent=(faction.key==='rome')
+      ? 'SPQR · LEGIONVM CODEX'
+      : (faction.latin||'');
+    gateRouteNameEl.textContent='即将检阅 · '+faction.unitIdx.length+' 队';
     if(gateTimer)clearTimeout(gateTimer);
     resetGateAnim();
     setGateTiming(GATE_MS);
@@ -853,10 +576,9 @@
     st.page='review';
     document.body.className='mode-review';
     document.body.setAttribute('data-faction',f.key);
-    if(G)G.setPlaying(true);
     showReviewUnit();
     if(DEMO)demoReviewStep();
-    toast(G?'检阅开始 · 拖动地球可转动':'检阅开始 · 征召地见地球标注');
+    toast('检阅开始 · 逐队看过它的装备与战力');
   }
   function showReviewUnit(){
     var f=curFaction();
@@ -876,9 +598,7 @@
     tourCrumbEl.textContent=f.name+' · '+(KIND_LABEL[u.kind]||'')+' · 第 '+seq+' / '+f.unitIdx.length+' 队';
     tcPrevBtn.disabled=(st.reviewIdx===0);
     tcNextBtn.textContent=(seq>=f.unitIdx.length)?'军团志 ›':'下一队 ›';
-    capName.textContent=u.name;
-    capCoord.textContent=fmtCoord(u.lat,u.lon);
-    if(G){G.setTag(u.city);G.refreshMarkers();G.aimUnit(false);G.fitView(false);G.markDirty();}
+    renderGear(u);
     tourBodyEl.scrollTop=0;
   }
   function reviewNext(){
@@ -899,7 +619,6 @@
     st.faction=null;
     document.body.className='mode-factions';
     document.body.removeAttribute('data-faction');
-    if(G)G.setPlaying(false);
     renderFactions();
   }
   tcPrevBtn.addEventListener('click',reviewPrev);
@@ -980,7 +699,6 @@
     st.page='summary';
     document.body.className='mode-summary';
     document.body.removeAttribute('data-faction');
-    if(G)G.setPlaying(false);
     var n=order.length,i,k;
     var avg=[0,0,0,0,0,0];
     for(i=0;i<n;i++){
@@ -1012,7 +730,6 @@
     sumKindEl.textContent=Object.keys(kinds).length;
     sumRegionEl.textContent=Object.keys(regs).length;
     summaryBodyEl.scrollTop=0;
-    if(G)G.markDirty();
     if(DEMO){
       demoAfter(600,function(){
         var max=Math.max(0,summaryBodyEl.scrollHeight-summaryBodyEl.clientHeight);
@@ -1032,7 +749,6 @@
     st.faction=null;
     document.body.className='mode-factions';
     document.body.removeAttribute('data-faction');
-    if(G)G.setPlaying(false);
     renderFactions();
   }
   scBackBtn.addEventListener('click',backToFactions);
@@ -1242,11 +958,9 @@
   /* ================= 启动 ================= */
   st.custom=loadCustom();
   renderFactions();
-  if(G){G.refreshMarkers();}
   document.body.className='mode-factions';
-  toast('选一个阵营 · 逐队检阅它的兵种与征召地');
-  setTimeout(function(){if(G)G.markDirty();document.getElementById('loader').classList.add('hide');},520);
-  if(G)G.start();
+  toast('选一个阵营 · 逐队检阅它的兵种与装备');
+  setTimeout(function(){document.getElementById('loader').classList.add('hide');},520);
   if(DEMO)demoAfter(DEMO_WARM_MS,startDemo);
 
   /* logo 图到位才显示 logo 块（挂在 <html> 上，不会被页面切换的 body.className 覆盖） */

@@ -106,6 +106,32 @@ else ok('场景图 ' + TEX_SLOTS.length + ' 个齐备');
 if (tTotal > 1.8 * MB) bad('场景图合计 ' + (tTotal / MB).toFixed(2) + 'MB 超过上限 1.8MB');
 else ok('场景图合计 ' + (tTotal / MB).toFixed(2) + 'MB / 上限 1.80MB（' + tHave + '/' + TEX_SLOTS.length + ' 个）');
 
+/* ---------- 2.2 装备图集（assets/gear/<id>.webp，128×128 透明底）
+ * 名单是 assets/gear.js 的 GEAR；缺哪张那件装备就退成槽位名文字，不计失败。 */
+console.log('\n— 装备图集 —');
+const GEAR = new Function(fs.readFileSync(path.join(ROOT, 'assets/gear.js'), 'utf8') + ';return GEAR;')();
+const gearIds = Object.keys(GEAR);
+const GEAR_MAX = 8 * KB;
+let gHave = 0, gTotal = 0, gOver = 0, gNotSquare = 0;
+const gMissing = [];
+gearIds.forEach((id) => {
+  const p = path.join(ROOT, 'assets/gear', id + '.webp');
+  if (!fs.existsSync(p)) { gMissing.push(id); return; }
+  gHave++;
+  const st = fs.statSync(p);
+  gTotal += st.size;
+  if (st.size > GEAR_MAX) { bad('gear/' + id + '.webp ' + (st.size / KB).toFixed(0) + 'KB 超过单图上限 ' + (GEAR_MAX / KB) + 'KB'); gOver++; }
+  const d = webpSize(fs.readFileSync(p));
+  if (!d) note('gear/' + id + '.webp 读不出尺寸（不是标准 WebP？）');
+  else if (d.w !== d.h) { bad('gear/' + id + '.webp 不是方图：' + d.w + '×' + d.h); gNotSquare++; }
+  else if (d.w < 128) note('gear/' + id + '.webp 只有 ' + d.w + 'px，建议 128');
+});
+if (gMissing.length) note('装备图缺 ' + gMissing.length + ' 张（缺图退成槽位名文字，页面照常跑）' + (gMissing.length <= 10 ? '：' + gMissing.join(', ') : ''));
+else ok('装备图 ' + gearIds.length + ' 张齐备');
+if (gTotal > 0.6 * MB) bad('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB 超过预算 0.60MB');
+else ok('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB / 上限 0.60MB（' + gHave + '/' + gearIds.length + ' 张）'
+  + (gOver || gNotSquare ? ' · 超重 ' + gOver + ' / 非方 ' + gNotSquare : ''));
+
 /* ---------- 2.5 过渡视频（凯旋门页；缺失自动退回单帧缓推，不计失败） ---------- */
 console.log('\n— 过渡视频 —');
 const VIDEO = { f: 'gate.mp4', max: 1200 * KB };
@@ -138,6 +164,13 @@ if (fs.existsSync(cardDir)) {
   const extra = fs.readdirSync(p).filter(f => /\.(webp|jpg|png)$/i.test(f) && !(dir === 'units' ? expectU : expectT).has(f));
   if (extra.length) note('assets/' + dir + '/ 里有 ' + extra.length + ' 个图位表之外的文件（不会加载）：' + extra.slice(0, 8).join(', '));
 });
+/* 装备图集目录：文件必须都对得上 GEAR 的 id */
+const gearDir = path.join(ROOT, 'assets/gear');
+if (fs.existsSync(gearDir)) {
+  const expectG = new Set(gearIds.map((id) => id + '.webp'));
+  const extraG = fs.readdirSync(gearDir).filter(f => /\.(webp|jpg|png)$/i.test(f) && !expectG.has(f));
+  if (extraG.length) note('assets/gear/ 里有 ' + extraG.length + ' 个词表之外的文件（不会加载）：' + extraG.slice(0, 8).join(', '));
+}
 
 /* ---------- 4. BGM ---------- */
 console.log('\n— 背景音乐 —');
@@ -176,7 +209,7 @@ const packFiles = ['index.html'];
 let raw = 0;
 packFiles.forEach(f => { try { raw += fs.statSync(path.join(ROOT, f)).size; } catch (e) { } });
 console.log('将进包 ' + packFiles.length + ' 个文件 · 原始合计 ' + (raw / MB).toFixed(2) + ' MB');
-console.log('（含 three.min.js / earth.jpg / clouds.png 共约 1.34 MB 的固定开销）');
+console.log('（3D 地球已移除：three.min.js / earth.jpg / clouds.png 约 1.34 MB 不再进包）');
 if (raw > 8 * MB) note('原始合计偏大，zip 体积会接近容器上传上限，注意核对');
 
 console.log(fail ? '\n❌ ' + fail + ' 项未通过（另有 ' + warn + ' 条提示）' : '\n✅ 全部通过' + (warn ? '（' + warn + ' 条提示）' : ''));

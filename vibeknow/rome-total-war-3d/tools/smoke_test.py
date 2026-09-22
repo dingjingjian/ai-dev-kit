@@ -64,14 +64,16 @@ with sync_playwright() as p:
     shot_bg = page.evaluate(
         "getComputedStyle(document.querySelectorAll('.park-shot')[0]).backgroundImage")
     check('faction-rome' in shot_bg, '首层轮播吃罗马阵营横幅：' + shot_bg[:64])
-    globe_shown = page.evaluate("getComputedStyle(document.getElementById('globeSlot')).display")
-    check(globe_shown == 'none', '阵营页不显示地球（只在检阅页显示）')
+    check(page.evaluate("!document.getElementById('globeSlot')"), '3D 地球组件已移除（无 #globeSlot）')
 
     # 2. 点阵营 → 凯旋门
     page.locator('#routeList .route-card').nth(0).click()
     page.wait_for_timeout(400)
     check(mode() == 'mode-gate', '进入凯旋门页')
-    check('即将检阅' in page.inner_text('#gateRouteName'), '凯旋门页已写入阵营名')
+    # 凯旋门页写的是「选中的这个阵营」，不是 app 的名字（罗马那一档才配 SPQR）
+    check(page.inner_text('#gateTitle') == '罗马', '凯旋门页标题＝阵营名：' + page.inner_text('#gateTitle'))
+    check('SPQR' in page.inner_text('#gateSubtitle'), '罗马档保留 SPQR 副标题')
+    check('队' in page.inner_text('#gateRouteName'), '凯旋门页写明队数：' + page.inner_text('#gateRouteName'))
     # 过渡视频层：元素要在（视频素材落位即用，缺失时退回单帧图），且必须静音（BGM 走音频链路）
     gate_vid = page.evaluate("() => { var v = document.getElementById('gateVideo'); return !!v && v.muted; }")
     check(gate_vid, '过渡视频元素存在且静音')
@@ -90,18 +92,20 @@ with sync_playwright() as p:
     check(name1 == '轻装投枪兵', '第一队是「轻装投枪兵」，实际 ' + name1)
     crumb = page.inner_text('#tourCrumb')
     check('罗马' in crumb and '第 1 / 6 队' in crumb, '面包屑：' + crumb)
-    # 地球槽的题注：兵种名 + 经纬度（app.js 的 capName / capCoord）
-    cap = page.inner_text('#capName')
-    check(cap == '轻装投枪兵', '地球题注写明当前兵种：' + cap)
-    coord = page.inner_text('#capCoord').strip()
-    check(coord != '', '地球题注写出经纬度：' + coord)
+    # 装备拆解：轻装投枪兵 4 件（无甲 / 兽皮头兜 / 小圆盾 / 轻标枪），空槽不渲染
+    n_gear = page.locator('#gearCol .gear-i').count()
+    check(n_gear == 4, '装备拆解渲染 4 件（空槽不占位），实际 ' + str(n_gear))
+    g1 = page.inner_text('#gearCol .gear-i:first-child .gear-nm')
+    check(g1 == '兽皮头兜', '装备按槽位顺序（头部在前）：' + g1)
+    check('装备拆解' in page.inner_text('#gearCol .gear-ttl'), '拆解有标题与件数')
+    # 空槽不渲染：轻装投枪兵没有坐骑，列表里不该出现「坐骑」
+    check('坐骑' not in page.inner_text('#gearCol'), '空槽未渲染（无坐骑行）')
     loc = page.inner_text('#tourLoc')
     check(loc == '意大利 · 坎帕尼亚', '征召地：' + loc)
     data = page.inner_text('#tourData')
     check('编制' in data and '120' in data, '编制人数已写入：' + data[:24] + '…')
     check(page.locator('#tourTraits .tour-trait').count() == 3, '三条特征已渲染')
-    globe_shown = page.evaluate("getComputedStyle(document.getElementById('globeSlot')).display")
-    check(globe_shown == 'block', '检阅页显示地球')
+    check(page.locator('.tour-row .tour-frame').count() == 1, '兵种图与拆解同排（.tour-row）')
     check(page.locator('#tcPrev').is_disabled(), '第一队时「上一队」禁用')
     # 缺图回退色卡：背景应是渐变而非 url()
     bg = page.evaluate("document.getElementById('tourImg').style.background || document.getElementById('tourImg').style.backgroundImage")
@@ -141,6 +145,9 @@ with sync_playwright() as p:
     page.locator('#bdStart').click()
     page.wait_for_timeout(400)
     check(mode() == 'mode-gate', '自选军团走凯旋门流程')
+    # 换阵营后标题必须跟着换：自选军团不是罗马，不能顶着「罗马军团图鉴 / SPQR」
+    check(page.inner_text('#gateTitle') == '自选军团', '自选军团档标题＝自选军团：' + page.inner_text('#gateTitle'))
+    check('SPQR' not in page.inner_text('#gateSubtitle'), '非罗马档不出现 SPQR：' + page.inner_text('#gateSubtitle'))
     check(wait_page('mode-review'), '自选军团进入检阅')
     check(page.get_attribute('body', 'data-faction') == 'custom', '自选军团挂 custom 主题')
     check(page.inner_text('#tourCrumb').endswith('第 1 / 2 队'), '自选军团只检阅 2 队')

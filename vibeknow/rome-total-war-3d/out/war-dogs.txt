@@ -1,0 +1,10 @@
+historically accurate ancient military illustration, museum exhibition plate quality,
+single figure, three-quarter view, calm natural stance, no heroic lighting,
+archaeologically reconstructed armour and clothing, worn metal, woven fabric texture,
+shallow depth of field with period landscape background, natural side-back light,
+no text, no watermark, no logo, no modern objects, no legible letters
+Composition: 以兽或车为主体占画面宽度 85%；战象取象头与前半身 + 象轿的近景，不画全躯（画全躯在 88px 下会成一团）
+Subject: 獒犬型猛犬，带钉皮项圈，驯犬人的手牵引（只到小臂），犬占画面主体
+Setting: 比利时高卢林地
+Palette: cold slate blue-grey, raw wood and raw iron
+Format: square 1:1

@@ -13,6 +13,7 @@
   python tools/prep_units.py --src <原图目录>            # 写实兵种图 + 场景图一起处理
   python tools/prep_units.py --src <原图目录> --kind units
   python tools/prep_units.py --kind card --src <兵牌原图目录>   # 兵牌那一套 → assets/units/card/
+  python tools/prep_units.py --kind gear --src <装备原图目录>   # 装备图 128×128 透明底 → assets/gear/
   python tools/prep_units.py --src <原图目录> --dry      # 只报不写，先看匹配对不对
   python tools/prep_units.py --src <原图目录> --force    # 覆盖已落位的文件
   python tools/prep_units.py --src <原图目录> --only hastati,equites
@@ -43,7 +44,9 @@ DOC_TEX = os.path.join(ROOT, 'docs', '场景配图需求.md')
 CHECK_JS = os.path.join(ROOT, 'tools', 'check_assets.js')
 UNIT_DIR = os.path.join(ROOT, 'assets', 'units')
 CARD_DIR = os.path.join(UNIT_DIR, 'card')
+GEAR_DIR = os.path.join(ROOT, 'assets', 'gear')
 TEX_DIR = os.path.join(ROOT, 'assets', 'tex')
+GEAR_JS = os.path.join(ROOT, 'assets', 'gear.js')
 
 SRC_EXT = ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff')
 KB = 1024
@@ -122,22 +125,33 @@ def parse_tex_files(keys):
 def parse_budgets():
     """体积上限从 check_assets.js 读，避免这里和它各写一份。"""
     src = read_text(CHECK_JS)
-    unit_max, card_max = 70 * KB, 55 * KB
+    unit_max, card_max, gear_max = 70 * KB, 55 * KB, 8 * KB
     for k, n in re.findall(r"key:\s*'(\w+)'[\s\S]*?maxEach:\s*(\d+)\s*\*\s*KB", src):
         if k == 'real':
             unit_max = int(n) * KB
         elif k == 'card':
             card_max = int(n) * KB
+    m = re.search(r"GEAR_MAX\s*=\s*(\d+)\s*\*\s*KB", src)
+    if m:
+        gear_max = int(m.group(1)) * KB
     tex_max = {}
     for f, n in re.findall(r"f:\s*'([^']+)'\s*,\s*max:\s*(\d+)\s*\*\s*KB", src):
         tex_max[f] = int(n) * KB
-    return unit_max, card_max, tex_max
+    return unit_max, card_max, gear_max, tex_max
+
+
+def parse_gear_ids():
+    """assets/gear.js 里 GEAR 的键（= 装备图文件名）。"""
+    ids = re.findall(r"^\s*'([a-z0-9\-]+)'\s*:\s*\{slot:", read_text(GEAR_JS), re.M)
+    if not ids:
+        raise SystemExit('FAIL assets/gear.js 解析不到 GEAR 的键（文件结构改了？）')
+    return ids
 
 
 def build_targets(kind):
     ids, keys = parse_unit_ids()
     sizes = parse_tex_sizes()
-    unit_max, card_max, tex_max = parse_budgets()
+    unit_max, card_max, gear_max, tex_max = parse_budgets()
     out = []
     if kind in ('units', 'auto'):
         for i in ids:
@@ -149,6 +163,12 @@ def build_targets(kind):
             out.append({'kind': 'card', 'key': i, 'file': i + '.webp',
                         'dir': CARD_DIR, 'w': 512, 'h': 512, 'alpha': False,
                         'max': card_max})
+    if kind == 'gear':
+        for i in parse_gear_ids():
+            out.append({'kind': 'gear', 'key': i, 'file': i + '.webp',
+                        'dir': GEAR_DIR, 'w': 128, 'h': 128, 'alpha': True,
+                        'max': gear_max})
+        return out
     if kind in ('tex', 'auto'):
         for f in parse_tex_files(keys):
             dim = DIM_OF.get(f, FACTION_DIM if f.startswith('faction-') else None)
@@ -266,8 +286,9 @@ def save_webp(im, max_bytes, q0, qmin, keep_alpha):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--src', required=True, help='原图目录（不会被改动）')
-    ap.add_argument('--kind', default='auto', choices=['auto', 'units', 'tex', 'card'],
-                    help='auto=写实兵种图+场景图；card=兵牌那一套（落位到 assets/units/card/）')
+    ap.add_argument('--kind', default='auto', choices=['auto', 'units', 'tex', 'card', 'gear'],
+                    help='auto=写实兵种图+场景图；card=兵牌（assets/units/card/）；'
+                         'gear=装备图（assets/gear/，128×128 保留透明底）')
     ap.add_argument('--fit', default='crop', choices=['crop', 'pad'], help='比例不合时裁切还是留白，默认裁切')
     ap.add_argument('--start-q', type=int, default=82)
     ap.add_argument('--min-q', type=int, default=60)

@@ -6,6 +6,7 @@
  *   3. 经纬度在有效区间内；men 为正整数
  *   4. index.html 里引用的图位路径与数据里的 img 前缀一致
  *   5. app.js 的 STATS_DIMS / KIND_LABEL / TIER_LABEL 覆盖数据里出现的全部取值
+ *   6. assets/gear.js 的装备表与槽位引用：48 兵种都有表、id 双向可解析、slot 一致、没有白写的装备
  */
 const fs = require('fs');
 const path = require('path');
@@ -92,6 +93,38 @@ if (!app.includes(VIDEO_SRC)) bad('app.js 里的过渡视频路径应为 ' + VID
 if (app.indexOf(VIDEO_SRC) !== app.lastIndexOf(VIDEO_SRC)) bad('app.js 里过渡视频路径写了多处，应只有一处常量');
 if (!app.includes('enterReview')) bad('app.js 缺 enterReview（过渡结束后的落点）');
 ok('过渡视频契约：#gateVideo 元素 + 唯一路径常量 + 结束落点');
+
+/* 3d. 装备拆解契约：assets/gear.js（词表 + 槽位引用）与 units.js / index.html 对得上。
+   判据：① 每个兵种都有 KIT；② KIT 的键是 units.js 里的 id；③ 值是 GEAR 里的 id；
+        ④ slot 与 GEAR 声明一致；⑤ 页面有装它、脚本有引它；⑥ 没有白写的装备。 */
+const gearSrc = fs.readFileSync(path.join(ROOT, 'assets/gear.js'), 'utf8');
+const GEAR = new Function(gearSrc + ';return GEAR;')();
+const KIT = new Function(gearSrc + ';return KIT;')();
+const GEAR_SLOTS = new Function(gearSrc + ';return GEAR_SLOTS;')();
+const slotKeys = GEAR_SLOTS.map(s => s[0]);
+if (!html.includes('id="gearCol"')) bad('index.html 缺装备拆解容器 #gearCol');
+if (!html.includes('assets/gear.js')) bad('index.html 未引入 assets/gear.js');
+if (!app.includes('gearCol')) bad('app.js 未接管 #gearCol');
+UNITS.forEach(u => {
+  if (!KIT[u.id]) { bad('兵种缺装备表：' + u.id); return; }
+  Object.keys(KIT[u.id]).forEach(s => {
+    if (!slotKeys.includes(s)) bad(u.id + ' 用了槽位表之外的键：' + s);
+  });
+  slotKeys.forEach(s => {
+    const g = KIT[u.id][s];
+    if (!g) return;
+    if (!GEAR[g]) bad(u.id + ' 引用了 GEAR 里没有的装备：' + g);
+    else if (GEAR[g].slot !== s) bad(u.id + ' 的「' + s + '」槽放了 ' + g + '（它属于 ' + GEAR[g].slot + '）');
+  });
+});
+const kitIDs = Object.keys(KIT);
+kitIDs.forEach(id => { if (id2i[id] == null) bad('KIT 里有 units.js 不存在的兵种：' + id); });
+const used = {};
+Object.keys(KIT).forEach(id => Object.keys(KIT[id]).forEach(s => { if (KIT[id][s]) used[KIT[id][s]] = (used[KIT[id][s]] || 0) + 1; }));
+Object.keys(GEAR).forEach(g => { if (!used[g]) bad('装备从未被任何兵种引用（白写）：' + g); });
+const kitN = Object.keys(GEAR).length;
+const fillN = Object.keys(used).reduce((s, g) => s + used[g], 0);
+ok('装备表 ' + kitN + ' 件 · 覆盖 ' + fillN + ' 个槽位 · 48 兵种全部有装备表');
 const SCENE_SLOTS = slots.length + 9;
 
 /* 4. 阵营 key 与 CSS 主题一一对应 */
