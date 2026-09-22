@@ -1,0 +1,384 @@
+# -*- coding: utf-8 -*-
+"""从规格文档拼装「可直接粘贴」的出图提示词。
+
+真源（本脚本只读，不写）：
+  docs/兵种图片素材需求.md   48 张兵种图的主体描述 / 构图模板 / 风格前缀 / 阵营色调
+  docs/场景配图需求.md       16 个场景图位的提示词要点与建议尺寸
+产出：
+  docs/提示词包.md           （本脚本生成，**不要手改**；改规格改上面两份文档后重跑）
+  --txt DIR 时，另为每张图写一份 <id>.txt，方便批量投喂
+
+设计取舍：
+  规格散在两份文档的表格与引用块里，如果再把 64 条提示词手抄一遍，
+  就会出现「文档改了、提示词没改」的静默分叉。所以这里全部走解析 ——
+  解析不到就硬失败并把缺的图位列出来，绝不给半份清单。
+
+用法：
+  python tools/gen_prompts.py
+  python tools/gen_prompts.py --txt docs/prompts
+"""
+
+import io
+import os
+import re
+import sys
+import time
+import argparse
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DOC_UNITS = os.path.join(ROOT, 'docs', '兵种图片素材需求.md')
+DOC_TEX = os.path.join(ROOT, 'docs', '场景配图需求.md')
+OUT_MD = os.path.join(ROOT, 'docs', '提示词包.md')
+
+UNITS_N = 48
+TEX_N = 16
+
+
+def read_lines(path):
+    with io.open(path, encoding='utf-8') as f:
+        return f.read().split('\n')
+
+
+def section(lines, marker, stop=('### ', '## ')):
+    """取某个标题下的正文（不含标题行本身），遇到下一个同级标题为止。"""
+    out, started = [], False
+    for l in lines:
+        s = l.rstrip()
+        if not started:
+            if s.startswith(marker):
+                started = True
+            continue
+        if s.startswith(stop):
+            break
+        out.append(s)
+    return out
+
+
+def table_rows(lines, header_marker):
+    """取某一张表的数据行。header_marker 命中表头即开始，遇非表格行为止。"""
+    rows, in_tbl = [], False
+    for l in lines:
+        s = l.strip()
+        if not in_tbl:
+            if s.startswith('|') and header_marker in s and '---' not in s:
+                in_tbl = True
+            continue
+        if not s.startswith('|'):
+            break
+        body = s.strip().strip('|')
+        if set(body.replace('|', '')) <= set('- '):   # |---|---| 分隔行
+            continue
+        rows.append([c.strip() for c in body.split('|')])
+    return rows
+
+
+def quotes(lines):
+    """取一段里所有引用块的行（去掉 '>'，保留空行以维持段落结构）。"""
+    return [l[1:].strip() for l in lines if l.strip().startswith('>')]
+
+
+def strip_label(s):
+    """去掉「提示词要点：」「提示词要点（两帧共用前半段）：」这类前缀标签。"""
+    if s.startswith('提示词要点'):
+        # 只认紧跟标签的那个冒号。取最后一个会把正文里的「9:14」当成标签分隔符，
+        # 切出「14，凯旋门完整入画」这种残句。
+        i = s.find('：')
+        if i < 0:
+            i = s.find(':')
+        if i >= 0:
+            s = s[i + 1:].strip()
+    return s
+
+
+def clean(s):
+    """去掉表格里的 markdown 强调标记，避免 **无马镫** 被原样粘进模型。"""
+    return s.replace('**', '').strip()
+
+
+def parse_size(s):
+    m = re.search(r'(\d+)\s*[×xX*]\s*(\d+)', s)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), ('透明底' in s)
+
+
+# ---------------------------------------------------------------- 兵种图
+
+def parse_units_spec():
+    lines = read_lines(DOC_UNITS)
+
+    cn_prefix = '\n'.join(quotes(section(lines, '### 3.1'))).strip()
+    en_prefix = '\n'.join(quotes(section(lines, '### 3.2'))).strip()
+    if not cn_prefix or not en_prefix:
+        raise SystemExit('FAIL 解析不到风格前缀（3.1 / 3.2 的引用块改格式了？）')
+
+    tone = {}
+    for r in table_rows(section(lines, '### 3.3'), '中文色调后缀'):
+        tone[r[1]] = (clean(r[2]), clean(r[3]))       # key -> (中文, 英文)
+
+    tpl = {}
+    for r in table_rows(section(lines, '### 3.4'), '构图'):
+        tpl[clean(r[0])] = clean(r[2])
+
+    factions, units = [], []
+    for i, l in enumerate(lines):
+        if not l.startswith('### ') or '·' not in l:
+            continue
+        name, key = [x.strip() for x in l[4:].split('·')[:2]]
+        if key not in tone:
+            continue
+        rows = table_rows(lines[i + 1:], '主体描述')
+        items = []
+        for r in rows:
+            if len(r) < 6:
+                continue
+            items.append({
+                'file': clean(r[1]).strip('`'),
+                'unit': clean(r[2]),
+                'tpl': clean(r[3]),
+                'subject': clean(r[4]),
+                'bg': clean(r[5]),
+            })
+        factions.append((name, key, items))
+        units.extend(items)
+
+    if len(units) != UNITS_N:
+        raise SystemExit('FAIL 兵种图解析到 %d 条，应为 %d 条（文档表格改结构了？）' % (len(units), UNITS_N))
+    return cn_prefix, en_prefix, tone, tpl, factions, units
+
+
+def unit_prompt(it, tpl, tone, key):
+    cn_tone, en_tone = tone.get(key, ('', ''))
+    comp = tpl.get(it['tpl'], '')
+    en = '\n'.join(x for x in [
+        'Composition: ' + comp if comp else '',
+        'Subject: ' + it['subject'],
+        'Setting: ' + it['bg'],
+        'Palette: ' + en_tone if en_tone else '',
+        'Format: square 1:1',
+    ] if x)
+    cn = '\n'.join(x for x in [
+        '构图：' + comp if comp else '',
+        '主体：' + it['subject'],
+        '背景：' + it['bg'],
+        '色调：' + cn_tone if cn_tone else '',
+        '画幅：方形 1:1',
+    ] if x)
+    return en, cn
+
+
+# ---------------------------------------------------------------- 场景图
+
+def parse_tex_spec():
+    lines = read_lines(DOC_TEX)
+
+    size = {}
+    for r in table_rows(section(lines, '## 一、'), '建议尺寸'):
+        dim = parse_size(r[3])
+        if dim:
+            size[r[1]] = dim                          # 图位名 -> (w, h, alpha)
+
+    def sec(num):
+        """场景文档用的是 ## 级标题，其下还有 ### 级子条目（如「### ③ gate-front.webp」），
+        所以这里只停在 ## 级，不能把子条目里的引用块一起截掉。"""
+        for pre in ('## ', '### '):
+            s = section(lines, pre + num, stop=('## ', '# '))
+            if s:
+                return s
+        return []
+
+    def bq(marker):
+        return [strip_label(x) for x in quotes(sec(marker))]
+
+    # 凯旋门横版两帧：同一引用块里前半段是共用前缀，后半段是两帧各自的追加
+    gate = bq('三、')
+    shared, s3, s4 = [], '', ''
+    for l in gate:
+        if '③ 追加' in l:
+            s3 = l.split('追加', 1)[1].lstrip('：: ').strip()
+        elif '④ 追加' in l:
+            s4 = l.split('追加', 1)[1].lstrip('：: ').strip()
+        elif l:
+            shared.append(l)
+    gate_prefix = '\n'.join(shared).strip()
+
+    # 竖版两帧：明示「与 ③④ 完全相同的前缀，追加…」
+    port_txt = '\n'.join(x for x in bq('四、') if x).strip()
+    if '追加' in port_txt:
+        port_txt = port_txt.split('追加', 1)[1].strip()
+    port_txt = port_txt.strip('「」')
+
+    logo = '\n'.join(x for x in bq('二、') if x).strip()
+    marble = '\n'.join(x for x in bq('六、') if x).strip()
+    banner_tpl = '\n'.join(x for x in bq('七、') if x).strip()
+
+    banners = []
+    for r in table_rows(sec('七、'), '画面内容'):
+        if len(r) < 3:
+            continue
+        banners.append({'file': clean(r[0]).strip('`'), 'faction': clean(r[1]), 'scene': clean(r[2])})
+
+    for label, val in (('logo', logo), ('凯旋门共用前缀', gate_prefix),
+                       ('凯旋门 ③ 追加', s3), ('凯旋门 ④ 追加', s4),
+                       ('竖版追加', port_txt), ('大理石', marble), ('横幅模板', banner_tpl)):
+        if not val:
+            raise SystemExit('FAIL 场景图「%s」解析为空（文档的引用块改格式了？）' % label)
+    if len(banners) != 9:
+        raise SystemExit('FAIL 阵营横幅解析到 %d 条，应为 9 条' % len(banners))
+    return size, logo, gate_prefix, s3, s4, port_txt, marble, banner_tpl, banners
+
+
+def tex_slots(spec):
+    """把上面解析到的碎片组装成 16 个图位的完整提示词。"""
+    size, logo, gate_prefix, s3, s4, port_txt, marble, banner_tpl, banners = spec
+
+    def dim(name):
+        return size.get(name, (None, None, False))
+
+    # dim = 场景配图需求.md §一 图位总览表里的「图位」列，尺寸从那张表查，不在这里另写一份
+    slots = [
+        {'file': 'logo.webp', 'name': '图鉴 logo', 'dim': '图鉴 logo', 'prompt': logo,
+         'note': '透明底；只出图形不出文字（SPQR 由页面文字层负责）'},
+        {'file': 'gate-front.webp', 'name': '凯旋门正面（横）', 'dim': '凯旋门正面（横）',
+         'prompt': gate_prefix + '\n' + s3,
+         'note': '与 gate-open 必须同机位同光位；构图左右对称，门居中'},
+        {'file': 'gate-open.webp', 'name': '凯旋门穿行（横）', 'dim': '凯旋门穿行（横）',
+         'prompt': gate_prefix + '\n' + s4,
+         'note': '同一道门、同一机位，只把相机推进到门洞内'},
+        {'file': 'gate-front-portrait.webp', 'name': '凯旋门正面（竖）', 'dim': '凯旋门竖版两帧',
+         'prompt': gate_prefix + '\n' + port_txt,
+         'note': '竖幅，门完整入画不裁立柱'},
+        {'file': 'gate-open-portrait.webp', 'name': '凯旋门穿行（竖）', 'dim': '凯旋门竖版两帧',
+         'prompt': gate_prefix + '\n' + port_txt + '\n相机已推进至门洞内，门框成为画框，透过去是远去的军道',
+         'note': '与竖版第一帧同机位；差别只在门洞内的明暗与透视'},
+        {'file': 'gate.webp', 'name': '兜底内景', 'dim': '兜底内景',
+         'prompt': gate_prefix + '\n凯旋门内景与远去的军道，暗调，无人物，可作底层压暗',
+         'note': '脚本补的后半句（原文档未给要点）；缺了也不影响可用性'},
+        {'file': 'marble.webp', 'name': '大理石纹理', 'dim': '大理石纹理', 'prompt': marble,
+         'note': '必须能无缝平铺；出图后先拼 2×2 看接缝'},
+    ]
+    for b in banners:
+        key = b['file'].replace('faction-', '').replace('.webp', '')
+        cn_tone = TONE_CN.get(key, '')
+        p = banner_tpl.replace('[画面内容]', b['scene']).replace('[阵营色调]', cn_tone)
+        # 自选军团没有阵营色调，替换后会留下一个孤零零的「，视觉焦点…」，这里清掉
+        p = '\n'.join(re.sub(r'^，+', '', x.strip()) for x in p.split('\n') if x.strip())
+        slots.append({'file': b['file'], 'name': '阵营横幅 · ' + b['faction'], 'dim': '阵营横幅', 'prompt': p,
+                      'note': '视觉焦点放在画面右侧 40%，左侧留干净暗部给文字'})
+
+    for s in slots:
+        w, h, alpha = dim(s['dim'])
+        s['size'] = (w, h)
+        s['alpha'] = alpha
+        if not w:
+            raise SystemExit('FAIL 场景图「%s」在 §一 图位总览里查不到建议尺寸' % s['dim'])
+    return slots
+
+
+# ---------------------------------------------------------------- 输出
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument('--txt', default='', help='额外为每张图写一份 .txt 到该目录')
+    args = ap.parse_args()
+
+    global TONE_CN
+    cn_prefix, en_prefix, tone, tpl, factions, units = parse_units_spec()
+    TONE_CN = {k: v[0] for k, v in tone.items()}
+
+    spec = parse_tex_spec()
+    slots = tex_slots(spec)
+    if len(slots) != TEX_N:
+        raise SystemExit('FAIL 场景图解析到 %d 个位，应为 %d 个' % (len(slots), TEX_N))
+
+    out = []
+    w = out.append
+    w('# 出图提示词包')
+    w('')
+    w('> **本文件由 `tools/gen_prompts.py` 生成，不要手改。**')
+    w('> 改规格请改 [`兵种图片素材需求.md`](兵种图片素材需求.md) / [`场景配图需求.md`](场景配图需求.md)，')
+    w('> 再跑一次 `python tools/gen_prompts.py` 重新生成。')
+    w('>')
+    w('> 生成时间：%s' % time.strftime('%Y-%m-%d %H:%M'))
+    w('')
+    w('## 怎么用')
+    w('')
+    w('1. 每条提示词已把「风格前缀 + 构图模板 + 主体描述 + 背景 + 阵营色调」拼好，整段复制即可。')
+    w('2. **EN 版**给吃英文的模型；**CN 版**给吃中文的模型。主体描述只有中文一版，')
+    w('   所以 EN 版是「英文前缀 + 中文主体 + 英文色调」的混合体 —— 这是有意的：')
+    w('   前缀决定画风，主体决定画什么，两处都不该让模型自由发挥。')
+    w('3. 出图尺寸建议 **1024×1024**（兵种图）／场景图按每条标注的尺寸；')
+    w('   落位前的裁方与压缩交给 `tools/prep_units.py`，不要手工另存。')
+    w('4. 出完图放一个目录，跑 `python tools/prep_units.py --src <目录>` 落位并核对体积。')
+    w('')
+
+    w('## 一、兵种图 ×%d' % len(units))
+    w('')
+    w('统一规格：源图 1024×1024 → 落位 512×512 WebP，单张 ≤70KB，全套 ≤2.6MB。')
+    w('')
+    n = 0
+    for name, key, items in factions:
+        w('### %s · %s' % (name, key))
+        w('')
+        for it in items:
+            n += 1
+            en, cn = unit_prompt(it, tpl, tone, key)
+            w('**%02d · `%s`**　%s　模板 %s　背景：%s' % (n, it['file'], it['unit'], it['tpl'], it['bg']))
+            w('')
+            w('EN（推荐）')
+            w('')
+            w('```text')
+            w(en_prefix)
+            w(en)
+            w('```')
+            w('')
+            w('CN')
+            w('')
+            w('```text')
+            w(cn_prefix)
+            w(cn)
+            w('```')
+            w('')
+
+    w('## 二、场景图 ×%d' % len(slots))
+    w('')
+    w('落位目录 `assets/tex/`，文件名逐字对应 `index.html` 里的 `url()`，写错会静默回退。')
+    w('')
+    for s in slots:
+        sw, sh = s['size']
+        w('**`%s`**　%s　%s%s' % (s['file'], s['name'],
+                                  ('%d×%d' % (sw, sh)) if sw else '尺寸见文档',
+                                  '　透明底' if s['alpha'] else ''))
+        w('')
+        if s['note']:
+            w('> %s' % s['note'])
+            w('')
+        w('```text')
+        w(s['prompt'])
+        w('```')
+        w('')
+
+    with io.open(OUT_MD, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(out))
+    print('ok   写入 %s（兵种图 %d 条 · 场景图 %d 条）' % (OUT_MD, len(units), len(slots)))
+
+    if args.txt:
+        d = os.path.join(ROOT, args.txt)
+        if not os.path.isdir(d):
+            os.makedirs(d)
+        k = 0
+        for name, key, items in factions:
+            for it in items:
+                en, _ = unit_prompt(it, tpl, tone, key)
+                with io.open(os.path.join(d, it['file'].replace('.webp', '') + '.txt'), 'w', encoding='utf-8') as f:
+                    f.write(en_prefix + '\n' + en)
+                k += 1
+        for s in slots:
+            with io.open(os.path.join(d, s['file'].replace('.webp', '') + '.txt'), 'w', encoding='utf-8') as f:
+                f.write(s['prompt'])
+            k += 1
+        print('ok   另写 %d 份 .txt 到 %s' % (k, d))
+
+
+if __name__ == '__main__':
+    main()
