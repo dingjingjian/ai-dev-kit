@@ -8,7 +8,7 @@
   /* ===== 罗马军团图鉴 · 兵种志 =====
      选阵营 → 点兵编排 → 凯旋门 → 逐兵种检阅 → 军团志。
      配色：暗青铜 / 金 / 大理石白 / 帝国红；8 个阵营各一套主题色，切换整页换装。
-     视觉口径：主视觉一律用 AI 出图 / 出片（logo / 过渡视频 / 阵营横幅），页面只做排版与
+     视觉口径：主视觉一律用 AI 出图（logo / 过渡画面 / 阵营横幅），页面只做排版与
      一层可读性暗化，不画 CSS 或 SVG 形状。地球为「征召地定位组件」，仅检阅页内嵌。 */
 
   /* ===== 素材图位（逐项规格见 docs/ 下三份素材需求）=====
@@ -17,21 +17,21 @@
                     assets/units/card/<id>.webp  兵牌风格 ×48（检阅页可切换，缺图回退色卡）
                     均为 512×512 方图，两套各自独立出图，规格见 docs/兵种图片素材需求.md
      ② 图鉴 logo    assets/tex/logo.webp          透明底 SPQR 鹰旗徽章，缺图则整块隐藏
-     ③ 凯旋门正面   assets/tex/gate-front.webp    凯旋门页**单帧**（横版）；⑨ 要与之同门同光位
-     ④ —            已取消：过渡页改成单帧缓推后，不再需要「穿行」第二帧
+     ③ 凯旋门正面   assets/tex/gate-front.webp    过渡页**通用**兜底（横版）；⑨ 全缺时用它
+     ④ —            已取消：过渡页不再需要「穿行」第二帧
      ⑤ 竖版单帧     assets/tex/gate-front-portrait.webp
-                                                  仅竖屏且没有 ⑨ 时用，可以先不出
-     ⑥ 旧兜底内景   assets/tex/gate.webp          ③⑤ 的兜底图
+                                                  过渡页竖屏通用兜底，可以先不出
+     ⑥ 旧兜底内景   assets/tex/gate.webp          ③⑤ 的最后兜底
      ⑦ 大理石纹理   assets/tex/marble.webp        卡片 / 控制栏底纹 + 首页 hero 轮播的兜底层
      ⑧ 阵营横幅 ×9  assets/tex/faction-<key>.webp 阵营卡片背景 + 首页 hero 轮播（8 个预设阵营）
-     ⑨ 过渡视频     assets/video/gate.mp4         凯旋门页主过渡，播完即进检阅（首选）
-                                                  缺失 / 不支持 / 播放失败 → 自动退回 ③ / ⑤ 单帧缓推
+     ⑨ 过渡画面 ×9  assets/tex/gate-<key>.webp    「即将检阅」页的主素材，**每个阵营一张**
+                                                  （key = units.js 的 FACTIONS[].key，自选军团是 custom）；
+                                                  缺则退该阵营横幅 → ③ → ⑥，页面照常跑
      ⑩ 背景音乐     assets/audio/bgm.js           base64 音频（源曲目是构建输入，不打进包）
      ⑪ 装备图集 ×52 assets/gear/<id>.webp          128×128 透明底，检阅页右列「装备拆解」用；
                                                    名单是 assets/gear.js 的 GEAR，缺图退成槽位名
      ①      规格见 docs/兵种图片素材需求.md
-     ②~⑧   规格见 docs/场景配图需求.md
-     ⑨      规格（镜头 / 编码 / 落位）见 docs/过渡视频需求.md
+     ②~⑨   规格见 docs/场景配图需求.md
      ⑩      规格（乐句 / 码率 / 循环点 / 版权）见 docs/背景音乐需求.md
      ⑪      规格（逐件描述 / 统一风格 / 提示词）见 docs/装备图集需求.md */
 
@@ -213,50 +213,40 @@
     background:linear-gradient(180deg,var(--iron-7),var(--iron-9));border-top:1px solid var(--line)}
   .routes-bar-text{font-size:11px;color:var(--ink-3);letter-spacing:2px}
 
-  /* ===== 凯旋门过渡页 =====
-     首选素材是一段 6–8 秒的穿门视频（assets/video/gate.mp4）。
-     视频缺失、编解码不支持、播放失败 → 自动退回「单帧出图 + 缓慢推近」，
-     那一帧此时才登场：凯旋门正面（竖屏优先用竖版单帧）。
-     两种模式共用同一套字幕层与兜底底图，切换只靠 body 上的 .gate-video-on。 */
+  /* ===== 过渡页（即将检阅） =====
+     主素材是**按阵营取的一张过渡画面**：⑨ assets/tex/gate-<key>.webp（1600×900，key = 选中阵营）。
+     整段就是 7.1s 的缓慢推近（.gate-shot 的 shotPush 动画），播完即进检阅页。
+     兜底链全部由 CSS 的多层 background-image 完成 —— 前一层 404 就露出下一层，
+     JS 不参与判定，所以不存在「素材加载 / 起播失败」这类会卡住的状态分支：
+       横屏  ⑨ gate-<key> → 该阵营横幅 → ③ gate-front → ⑥ gate
+       竖屏  ⑨ gate-<key> → 该阵营横幅 → ⑤ gate-front-portrait → ③ → ⑥
+     --gate-art 由 app.js 在 enterGate() 里按阵营写入（两层：专属图 + 该阵营横幅）；
+     默认 none，JS 没跑起来时页面退到 ③/⑥ 的通用画面。 */
   .page-gate{background:#050403;align-items:center;justify-content:center;overflow:hidden}
-  .gate-stage{position:relative;width:100%;height:100%;max-width:760px;margin:0 auto;overflow:hidden}
+  .gate-stage{--gate-art:none;
+    position:relative;width:100%;height:100%;max-width:760px;margin:0 auto;overflow:hidden}
   /* 模糊铺底：contain 留出的信箱边用它填满，画面不空 */
   .gate-bg{position:absolute;top:-5%;right:-5%;bottom:-5%;left:-5%;
-    background-image:url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
+    background-image:var(--gate-art),url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
     background-size:cover;background-position:center;background-repeat:no-repeat;
     filter:blur(26px) saturate(.75);opacity:.42}
-  /* contain 而非 cover：保证凯旋门永远完整可见（竖屏也不会裁掉立柱）。
+  /* contain 而非 cover：保证门 / 入口永远完整可见（竖屏也不会裁掉立柱）。
      只有一帧，所以不做交叉淡化 —— 整段就是一路推近，opacity 恒为 1。 */
   .gate-shot{position:absolute;top:0;right:0;bottom:0;left:0;
     background-size:contain;background-position:center;background-repeat:no-repeat;
-    background-image:url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
+    background-image:var(--gate-art),url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp');
     animation:shotPush 7s cubic-bezier(.35,.02,.62,1) forwards}
-  /* 竖屏优先用竖版单帧：门在竖构图里能铺满整屏，不再上下留大片信箱边。
-     竖版图缺失时该层 404，自动落到后面的横版层 —— 纯 CSS 兜底，不用改 JS。 */
+  /* 竖屏：⑨ 与阵营横幅照样优先（每阵营不同 ＞ 竖版更满幅），它们都没有时才轮到 ⑤ */
   @media (orientation:portrait){
-    .gate-bg{background-image:url('./assets/tex/gate-front-portrait.webp'),
+    .gate-bg{background-image:var(--gate-art),url('./assets/tex/gate-front-portrait.webp'),
       url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp')}
-    .gate-shot{background-image:url('./assets/tex/gate-front-portrait.webp'),
+    .gate-shot{background-image:var(--gate-art),url('./assets/tex/gate-front-portrait.webp'),
       url('./assets/tex/gate-front.webp'),url('./assets/tex/gate.webp')}
   }
   @keyframes shotPush{
     0%{transform:scale(1)}
     30%{transform:scale(1.15)}
     100%{transform:scale(1.5)}}
-  /* 过渡视频：整屏铺满（cover），底下有模糊铺底兜住极端比例。
-     默认 opacity:0 —— 只有确认能播才由 JS 加 .on，避免加载失败时闪一帧黑块。 */
-  .gate-video{position:absolute;top:0;left:0;width:100%;height:100%;
-    object-fit:cover;object-position:center;background:#050403;
-    opacity:0;pointer-events:none;transition:opacity .45s ease;
-    -webkit-transform:translateZ(0)}
-  .gate-video.on{opacity:1}
-  /* 视频模式：单帧图让位（它只是兜底，不该和视频叠在一起） */
-  .gate-video-on .gate-shot{display:none}
-  .gate-video-on .gate-bg{opacity:.22}
-  /* 竖屏：视频按 16:9 铺满会左右裁掉不少，把焦点压在画面中心（门洞所在） */
-  @media (orientation:portrait){
-    .gate-video{object-position:center 45%}
-  }
   /* 字幕压字遮罩（只为可读性，不是装饰） */
   .gate-scrim{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;
     background:linear-gradient(180deg,rgba(5,4,3,.34) 0%,rgba(5,4,3,0) 30%,rgba(5,4,3,.10) 58%,rgba(5,4,3,.78) 100%)}
@@ -627,15 +617,11 @@
   </div>
 </section>
 
-<!-- 凯旋门过渡页 -->
+<!-- 过渡页（即将检阅） -->
 <section class="page page-gate" id="pageGate">
   <div class="gate-stage">
     <div class="gate-bg" aria-hidden="true"></div>
     <div class="gate-shot" aria-hidden="true"></div>
-    <!-- 过渡视频（可选素材）：有它就用它，没有或播不动就退回上面那一帧图。
-         src 由 app.js 在进入本页时才挂上，避免首页就下载。 -->
-    <video class="gate-video" id="gateVideo" aria-hidden="true"
-           muted playsinline preload="auto" disablepictureinpicture></video>
     <div class="gate-scrim" aria-hidden="true"></div>
     <div class="gate-caption">
       <!-- 标题与副标题由 app.js 的 enterGate() 按**选中的阵营**写入（默认值是罗马那一档，

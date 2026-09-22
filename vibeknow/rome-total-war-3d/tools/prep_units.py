@@ -6,7 +6,7 @@
 
 真源（本脚本只读）：
   assets/units.js           48 个兵种 id（文件名）
-  docs/场景配图需求.md       §一 各图位建议尺寸、§九 落位文件名
+  docs/场景配图需求.md       §一 各图位建议尺寸、§十 落位文件名（含 ⑨ 过渡画面 gate-<key>.webp）
   tools/check_assets.js      每个图位的体积上限（预算的唯一真源，不在这里另写一份）
 
 用法：
@@ -60,6 +60,20 @@ DIM_OF = {
     'marble.webp': '大理石纹理',
 }
 FACTION_DIM = '阵营横幅'
+TRANSITION_DIM = '过渡画面'
+
+
+def tex_slot_dim(f):
+    """文件名 → 场景配图需求.md §一 图位总览的「图位」列（尺寸与透明底都从那张表查，不在这里另写一份）。"""
+    if f in DIM_OF:
+        return DIM_OF[f]
+    if f.startswith('faction-'):
+        return FACTION_DIM
+    # ⑨ 过渡画面「每阵营一张」：gate-<key>.webp。注意 gate-front / gate.webp 已在 DIM_OF 里，
+    # 所以要先查 DIM_OF，否则 gate-front 会被这条正则先认走。
+    if re.match(r'^gate-[a-z]+\.webp$', f):
+        return TRANSITION_DIM
+    return None
 
 
 def read_text(p):
@@ -171,7 +185,7 @@ def build_targets(kind):
         return out
     if kind in ('tex', 'auto'):
         for f in parse_tex_files(keys):
-            dim = DIM_OF.get(f, FACTION_DIM if f.startswith('faction-') else None)
+            dim = tex_slot_dim(f)
             if dim is None or dim not in sizes:
                 raise SystemExit('FAIL 场景图「%s」在 §一 图位总览里查不到尺寸（文档改了？）' % f)
             w, h, alpha = sizes[dim]

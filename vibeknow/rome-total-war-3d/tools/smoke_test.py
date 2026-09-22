@@ -1,4 +1,4 @@
-# 无头冒烟：走通 阵营选择 → 凯旋门 → 检阅 → 军团志，外加自选军团分支。
+# 无头冒烟：走通 阵营选择 → 过渡页（即将检阅）→ 检阅 → 军团志，外加自选军团分支。
 # 用法：python tools/smoke_test.py
 # 判据：全程无 JS 异常 / console.error；五页 DOM 关键点逐一落到预期。
 import os, sys, pathlib
@@ -33,13 +33,13 @@ with sync_playwright() as p:
                                   if m.type == 'error' else None))
 
     def mode():
-        """body 上还会挂 img-missing / gate-video-on 之类的状态类，
+        """body 上还会挂 img-missing 之类的状态类，
         只取第一个 token（由 className 整体赋值写入的 mode-*）来判定当前页。"""
         return ((page.get_attribute('body', 'class') or '').split() or [''])[0]
 
     def wait_page(cls, timeout=14000):
-        """轮询等 body 切到指定页面。凯旋门时长由视频实际时长决定（钳在 3.2–9.0s），
-        写死 wait_for_timeout 会在视频更长/更短时误判，所以一律轮询。"""
+        """轮询等 body 切到指定页面。过渡页固定 7.1s，但加载与动画都可能拖后，
+        写死 wait_for_timeout 会误判，所以一律轮询。"""
         waited = 0
         while waited < timeout:
             if mode() == cls:
@@ -66,27 +66,30 @@ with sync_playwright() as p:
     check('faction-rome' in shot_bg, '首层轮播吃罗马阵营横幅：' + shot_bg[:64])
     check(page.evaluate("!document.getElementById('globeSlot')"), '3D 地球组件已移除（无 #globeSlot）')
 
-    # 2. 点阵营 → 凯旋门
+    # 2. 点阵营 → 过渡页（即将检阅）
     page.locator('#routeList .route-card').nth(0).click()
     page.wait_for_timeout(400)
-    check(mode() == 'mode-gate', '进入凯旋门页')
-    # 凯旋门页写的是「选中的这个阵营」，不是 app 的名字（罗马那一档才配 SPQR）
-    check(page.inner_text('#gateTitle') == '罗马', '凯旋门页标题＝阵营名：' + page.inner_text('#gateTitle'))
+    check(mode() == 'mode-gate', '进入过渡页')
+    # 过渡页写的是「选中的这个阵营」，不是 app 的名字（罗马那一档才配 SPQR）
+    check(page.inner_text('#gateTitle') == '罗马', '过渡页标题＝阵营名：' + page.inner_text('#gateTitle'))
     check('SPQR' in page.inner_text('#gateSubtitle'), '罗马档保留 SPQR 副标题')
-    check('队' in page.inner_text('#gateRouteName'), '凯旋门页写明队数：' + page.inner_text('#gateRouteName'))
-    # 过渡视频层：元素要在（视频素材落位即用，缺失时退回单帧图），且必须静音（BGM 走音频链路）
-    gate_vid = page.evaluate("() => { var v = document.getElementById('gateVideo'); return !!v && v.muted; }")
-    check(gate_vid, '过渡视频元素存在且静音')
-    gate_cls = page.get_attribute('body', 'class') or ''
-    check('gate-video-on' not in gate_cls, '无视频素材时保持在图片兜底模式')
-    # 图片兜底只一帧（原先的「两帧交叉淡化」已改成单帧缓推）
-    check(page.locator('.page-gate .gate-shot').count() == 1, '凯旋门页图片兜底为单帧')
+    check('队' in page.inner_text('#gateRouteName'), '过渡页写明队数：' + page.inner_text('#gateRouteName'))
+    # 视频设定已下线：页面里不该再有 video 元素
+    check(page.evaluate("!document.querySelector('.page-gate video')"), '过渡页已无 video 元素（视频设定下线）')
+    # ⑨ 按阵营取图：--gate-art 要指向该阵营的专属图 + 该阵营横幅（两层兜底），
+    # 且不能是全局的 gate-front（否则就不是「每阵营一张不同的图」）
+    gate_art = page.evaluate(
+        "getComputedStyle(document.querySelector('.gate-stage')).getPropertyValue('--gate-art')")
+    check('gate-rome.webp' in gate_art, '⑨ 过渡画面按阵营取图（罗马）：' + gate_art[:80])
+    check('faction-rome.webp' in gate_art, '⑨ 第一层兜底是该阵营横幅：' + gate_art[:80])
+    # 画面只一帧（原先的「两帧交叉淡化」与视频层都已取消）
+    check(page.locator('.page-gate .gate-shot').count() == 1, '过渡页主画面为单帧')
     push = page.evaluate(
         "getComputedStyle(document.querySelector('.page-gate .gate-shot')).animationName")
     check(push == 'shotPush', '单帧缓推动画已挂上：' + str(push))
 
-    # 3. 等凯旋门走完 → 检阅页
-    check(wait_page('mode-review'), '凯旋门结束自动进检阅页')
+    # 3. 等过渡页走完 → 检阅页
+    check(wait_page('mode-review'), '过渡页结束自动进检阅页')
     check(page.get_attribute('body', 'data-faction') == 'rome', '检阅页挂上阵营主题 rome')
     name1 = page.inner_text('#tourName')
     check(name1 == '轻装投枪兵', '第一队是「轻装投枪兵」，实际 ' + name1)
@@ -144,7 +147,7 @@ with sync_playwright() as p:
     check(not page.locator('#bdStart').is_disabled(), '有编制后可开始检阅')
     page.locator('#bdStart').click()
     page.wait_for_timeout(400)
-    check(mode() == 'mode-gate', '自选军团走凯旋门流程')
+    check(mode() == 'mode-gate', '自选军团走过渡页流程')
     # 换阵营后标题必须跟着换：自选军团不是罗马，不能顶着「罗马军团图鉴 / SPQR」
     check(page.inner_text('#gateTitle') == '自选军团', '自选军团档标题＝自选军团：' + page.inner_text('#gateTitle'))
     check('SPQR' not in page.inner_text('#gateSubtitle'), '非罗马档不出现 SPQR：' + page.inner_text('#gateSubtitle'))

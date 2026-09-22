@@ -6,13 +6,14 @@
                              外加两套风格前缀：写实 3.1+3.2（取景 3.4）、
                              兵牌 3.5+3.6+3.7（取景 3.8，半身像）（共 96 张图）
   docs/装备图集需求.md       52 件装备的逐件主体描述 + 统一风格（3.1~3.4）
-  docs/场景配图需求.md       14 个场景图位的提示词要点与建议尺寸
+  docs/场景配图需求.md       23 个场景图位的提示词要点与建议尺寸
+                             （logo / 凯旋门横竖 / 兜底内景 / 大理石 / 阵营横幅 ×9 / 过渡画面 ×9）
 产出：
   docs/提示词包.md           （本脚本生成，**不要手改**；改规格改上面三份文档后重跑）
   --txt DIR 时，另为每张图写一份 .txt（写实 <id>.txt / 兵牌 card-<id>.txt / 装备 gear-<id>.txt）
 
 设计取舍：
-  规格散在三份文档的表格与引用块里，如果再把 162 条提示词手抄一遍，
+  规格散在三份文档的表格与引用块里，如果再把 171 条提示词手抄一遍，
   就会出现「文档改了、提示词没改」的静默分叉。所以这里全部走解析 ——
   解析不到就硬失败并把缺的图位列出来，绝不给半份清单。
 
@@ -36,7 +37,8 @@ OUT_MD = os.path.join(ROOT, 'docs', '提示词包.md')
 
 UNITS_N = 48
 GEAR_N = 52
-TEX_N = 14
+TEX_N = 23            # ① logo / 凯旋门横竖 / 兜底内景 / 大理石（5）+ 阵营横幅 ×9 + 过渡画面 ×9
+TRANSITION_DIM = '过渡画面'
 
 
 def read_lines(path):
@@ -310,27 +312,38 @@ def parse_tex_spec():
     port_txt = port_txt.strip('「」')
 
     logo = '\n'.join(x for x in bq('二、') if x).strip()
-    marble = '\n'.join(x for x in bq('六、') if x).strip()
-    banner_tpl = '\n'.join(x for x in bq('七、') if x).strip()
+    marble = '\n'.join(x for x in bq('七、') if x).strip()
+    banner_tpl = '\n'.join(x for x in bq('八、') if x).strip()
 
     banners = []
-    for r in table_rows(sec('七、'), '画面内容'):
+    for r in table_rows(sec('八、'), '画面内容'):
         if len(r) < 3:
             continue
         banners.append({'file': clean(r[0]).strip('`'), 'faction': clean(r[1]), 'scene': clean(r[2])})
 
+    # ⑨ 过渡画面：模板里的 [画面内容] / [阵营色调] 逐行替换（与阵营横幅同一套做法）
+    trans_tpl = '\n'.join(x for x in bq('六、') if x).strip()
+    trans = []
+    for r in table_rows(sec('六、'), '画面内容'):
+        if len(r) < 3:
+            continue
+        trans.append({'file': clean(r[0]).strip('`'), 'faction': clean(r[1]), 'scene': clean(r[2])})
+
     for label, val in (('logo', logo), ('凯旋门单帧', gate_shot),
-                       ('竖版追加', port_txt), ('大理石', marble), ('横幅模板', banner_tpl)):
+                       ('竖版追加', port_txt), ('大理石', marble), ('横幅模板', banner_tpl),
+                       ('过渡画面模板', trans_tpl)):
         if not val:
             raise SystemExit('FAIL 场景图「%s」解析为空（文档的引用块改格式了？）' % label)
     if len(banners) != 9:
         raise SystemExit('FAIL 阵营横幅解析到 %d 条，应为 9 条' % len(banners))
-    return size, logo, gate_shot, port_txt, marble, banner_tpl, banners
+    if len(trans) != 9:
+        raise SystemExit('FAIL 过渡画面解析到 %d 条，应为 9 条（每阵营一张）' % len(trans))
+    return size, logo, gate_shot, port_txt, marble, banner_tpl, banners, trans_tpl, trans
 
 
 def tex_slots(spec):
-    """把上面解析到的碎片组装成 14 个图位的完整提示词。"""
-    size, logo, gate_shot, port_txt, marble, banner_tpl, banners = spec
+    """把上面解析到的碎片组装成 23 个图位的完整提示词。"""
+    size, logo, gate_shot, port_txt, marble, banner_tpl, banners, trans_tpl, trans = spec
 
     def dim(name):
         return size.get(name, (None, None, False))
@@ -338,19 +351,28 @@ def tex_slots(spec):
     # dim = 场景配图需求.md §一 图位总览表里的「图位」列，尺寸从那张表查，不在这里另写一份
     slots = [
         {'file': 'logo.webp', 'name': '图鉴 logo', 'dim': '图鉴 logo', 'prompt': logo,
-         'note': '透明底；只出图形不出文字（SPQR 由页面文字层负责）'},
+         'note': '军牌式（不透明）：深石底 + 暗金细描边 + 居中鹰徽；只出图形不出文字（SPQR 由页面文字层负责）'},
         {'file': 'gate-front.webp', 'name': '凯旋门正面（横）', 'dim': '凯旋门正面（横）',
          'prompt': gate_shot,
-         'note': '图片兜底只此一帧；与过渡视频首帧必须同门同光位；构图左右对称、门居中'},
+         'note': '⑨ 全缺时的通用兜底；构图左右对称、门居中，平时不登场'},
         {'file': 'gate-front-portrait.webp', 'name': '凯旋门竖版单帧', 'dim': '凯旋门竖版单帧',
          'prompt': gate_shot + '\n' + port_txt,
-         'note': '竖幅，门完整入画不裁立柱；可选，只在竖屏且没有视频时用'},
+         'note': '竖幅，门完整入画不裁立柱；可选，只在竖屏且 ⑨ 没出图时用'},
         {'file': 'gate.webp', 'name': '兜底内景', 'dim': '兜底内景',
          'prompt': gate_shot + '\n凯旋门内景与远去的军道，暗调，无人物，可作底层压暗',
          'note': '脚本补的后半句（原文档未给要点）；缺了也不影响可用性'},
-        {'file': 'marble.webp', 'name': '大理石纹理', 'dim': '大理石纹理', 'prompt': marble,
-         'note': '必须能无缝平铺；出图后先拼 2×2 看接缝'},
     ]
+    # ⑨ 过渡画面 ×9：每个阵营一张，是「即将检阅」页整屏那一帧
+    for t in trans:
+        key = t['file'].replace('gate-', '').replace('.webp', '')
+        cn_tone = TONE_CN.get(key, '')
+        p = trans_tpl.replace('[画面内容]', t['scene']).replace('[阵营色调]', cn_tone)
+        p = '\n'.join(re.sub(r'^，+', '', x.strip()) for x in p.split('\n') if x.strip())
+        slots.append({'file': t['file'], 'name': '过渡画面 · ' + t['faction'], 'dim': TRANSITION_DIM,
+                      'prompt': p,
+                      'note': '「即将检阅」页整屏那一帧；缺了退该阵营横幅 → gate-front；九张之间同机位同光位'})
+    slots.append({'file': 'marble.webp', 'name': '大理石纹理', 'dim': '大理石纹理', 'prompt': marble,
+                  'note': '必须能无缝平铺；出图后先拼 2×2 看接缝'})
     for b in banners:
         key = b['file'].replace('faction-', '').replace('.webp', '')
         cn_tone = TONE_CN.get(key, '')

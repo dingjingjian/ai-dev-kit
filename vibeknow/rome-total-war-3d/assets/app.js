@@ -456,17 +456,16 @@
   });
   bdBackBtn.addEventListener('click',exitBuilder);
 
-  /* ================= 凯旋门过渡页 =================
-   * 首选素材是一段穿门视频（assets/video/gate.mp4），播完即进检阅页；
-   * 视频不在 / 编解码不支持 / 起播失败 / 播到一半出错 → 退回「单帧出图 + 推近」。
-   * 判定顺序：能不能放 H.264 → 起播成不成 → 播到一半会不会报错，
-   * 任一环失败都当场收回视频层并按图片模式重跑计时，页面不会卡在这一页。 */
-  var GATE_MS=7100,GATE_MS_MIN=3200,GATE_MS_MAX=9000;
-  var GATE_VIDEO_SRC='./assets/video/gate.mp4';
+  /* ================= 过渡页（即将检阅） =================
+   * 主素材是**按阵营取的一张过渡画面**：⑨ assets/tex/gate-<key>.webp，整段就是 7.1s
+   * 的缓慢推近（.gate-shot 的 shotPush 动画），播完即进检阅页。
+   * 取哪张图由 setGateArt() 写进 CSS 自定义属性 --gate-art，兜底链一并定在 CSS 里：
+   *   ⑨ gate-<key> → 该阵营横幅 → ③ gate-front（竖屏优先 ⑤）→ ⑥ gate
+   * 前一层 404 就露出下一层，JS 不参与判定 —— 没有「素材加载 / 起播失败」这类会卡住的
+   * 状态分支，页面永远停在这 7.1s 上，不存在提前或在原地卡死的可能。 */
+  var GATE_MS=7100;
   var gateTimer=null;
   var GATE_ELS='.gate-shot,.gate-caption,.gate-title,.gate-subtitle,.gate-route-name';
-  var gateVideoEl=document.getElementById('gateVideo');
-  var gateVideoLive=false;
   function resetGateAnim(){
     var els=document.querySelectorAll(GATE_ELS);
     for(var i=0;i<els.length;i++){
@@ -475,8 +474,8 @@
       els[i].style.animation='';
     }
   }
-  /* 字幕节奏跟着实际时长走：CSS 里那组延迟是照 7.1s 排的，
-     视频 6s 或 8s 时按比例缩放，整段淡出始终落在结束前 0.9s。 */
+  /* 字幕节奏按整段时长排：CSS 里那组延迟是照 7.1s 写的，
+     整段淡出始终落在结束前 0.9s。 */
   function setGateTiming(ms){
     var d={'.gate-title':ms*.14,'.gate-subtitle':ms*.21,'.gate-route-name':ms*.29};
     for(var k in d){
@@ -486,64 +485,21 @@
     var cap=document.querySelector('.gate-caption');
     if(cap)cap.style.animationDelay=Math.max(0,ms-900)+'ms';
   }
-  function setGateVideoMode(on){
-    gateVideoLive=!!on;
-    if(gateVideoEl)gateVideoEl.className='gate-video'+(on?' on':'');
-    try{document.body.classList[on?'add':'remove']('gate-video-on');}catch(e){}
+  /* 按阵营写过渡画面：专属图在前、该阵营横幅在后。
+     横幅是**零成本的顶替**（9 个阵营天然各不相同），所以专属图还没出画时，
+     这一页也已经「每阵营一张不同的图」；⑨ 落位后自动接管，不用改代码。
+     两层都没有（理论上不会）才会走到 CSS 里的 ③/⑤/⑥ 通用凯旋门。 */
+  function gateArtChain(key){
+    return ['./assets/tex/gate-'+key+'.webp','./assets/tex/faction-'+key+'.webp'];
+  }
+  function setGateArt(key){
+    var stage=document.querySelector('.gate-stage');
+    if(!stage)return;
+    var css=gateArtChain(key).map(function(u){return "url('"+u+"')";}).join(',');
+    stage.style.setProperty('--gate-art',css);
   }
   function leaveGate(){
     if(gateTimer){clearTimeout(gateTimer);gateTimer=null;}
-    if(gateVideoEl){try{gateVideoEl.pause();}catch(e){}}
-    setGateVideoMode(false);
-  }
-  function gateVideoFallback(){
-    if(st.page!=='gate')return;
-    setGateVideoMode(false);
-    if(gateVideoEl){try{gateVideoEl.pause();}catch(e){}}
-    if(gateTimer)clearTimeout(gateTimer);
-    resetGateAnim();          /* 图片动画从头来，避免接上一段已经走了一半的时间轴 */
-    setGateTiming(GATE_MS);
-    gateTimer=setTimeout(enterReview,GATE_MS);
-  }
-  function gateVideoSupported(){
-    if(!gateVideoEl||!gateVideoEl.canPlayType)return false;
-    try{
-      if(gateVideoEl.canPlayType('video/mp4; codecs="avc1.42E01E"'))return true;
-      return gateVideoEl.canPlayType('video/mp4')!=='';
-    }catch(e){return false;}
-  }
-  function tryGateVideo(){
-    if(!gateVideoSupported())return false;
-    if(!gateVideoEl.getAttribute('src'))gateVideoEl.setAttribute('src',GATE_VIDEO_SRC);
-    gateVideoEl.muted=true;
-    try{gateVideoEl.currentTime=0;}catch(e){}
-    var p=null;
-    try{p=gateVideoEl.play();}catch(e){return false;}
-    if(p&&p.then){
-      p.then(function(){
-        if(st.page!=='gate')return;
-        setGateVideoMode(true);
-        var ms=GATE_MS,d=gateVideoEl.duration;
-        if(d&&isFinite(d)&&d>0)ms=Math.round(d*1000);
-        ms=Math.max(GATE_MS_MIN,Math.min(GATE_MS_MAX,ms));
-        setGateTiming(ms);
-        if(gateTimer)clearTimeout(gateTimer);
-        gateTimer=setTimeout(enterReview,ms);
-      },function(){gateVideoFallback();});
-    }else{
-      setGateVideoMode(true);
-      if(gateTimer)clearTimeout(gateTimer);
-      gateTimer=setTimeout(enterReview,GATE_MS);
-    }
-    return true;
-  }
-  if(gateVideoEl){
-    gateVideoEl.addEventListener('error',function(){gateVideoFallback();});
-    gateVideoEl.addEventListener('ended',function(){
-      if(st.page!=='gate')return;
-      if(gateTimer)clearTimeout(gateTimer);
-      enterReview();
-    });
   }
   function enterGate(faction){
     hideToast();
@@ -560,10 +516,11 @@
       ? 'SPQR · LEGIONVM CODEX'
       : (faction.latin||'');
     gateRouteNameEl.textContent='即将检阅 · '+faction.unitIdx.length+' 队';
+    setGateArt(faction.key);
     if(gateTimer)clearTimeout(gateTimer);
     resetGateAnim();
     setGateTiming(GATE_MS);
-    if(!tryGateVideo())gateTimer=setTimeout(enterReview,GATE_MS);
+    gateTimer=setTimeout(enterReview,GATE_MS);
   }
 
   /* ================= 检阅页 ================= */

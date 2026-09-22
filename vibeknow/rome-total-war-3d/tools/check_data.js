@@ -80,19 +80,29 @@ else ok('首页 hero 轮播 ' + shotN + ' 层（8 个预设阵营横幅）');
 if (!html.includes('@keyframes heroCycle')) bad('index.html 缺 heroCycle 轮播关键帧');
 if (!html.includes('@keyframes shotPush')) bad('index.html 缺 shotPush 单帧缓推关键帧');
 
-/* 3b. 过渡页图片兜底：视频播不动时只退回**一帧**（不再是两帧交叉淡化） */
+/* 3b. 过渡页画面：整段只有**一帧**（不再是两帧交叉淡化，也没有视频层） */
 const gateShotN = (html.match(/class="gate-shot"/g) || []).length;
-if (gateShotN !== 1) bad('凯旋门页图片兜底应为单帧，实际 ' + gateShotN + ' 个 .gate-shot');
-else ok('凯旋门页图片兜底为单帧（竖屏优先 gate-front-portrait）');
+const gateBgN = (html.match(/class="gate-bg"/g) || []).length;
+if (gateShotN !== 1) bad('过渡页主画面应为单帧，实际 ' + gateShotN + ' 个 .gate-shot');
+if (gateBgN !== 1) bad('过渡页模糊铺底应为单层，实际 ' + gateBgN + ' 个 .gate-bg');
+if (gateShotN === 1 && gateBgN === 1) ok('过渡页画面为单帧 + 单层模糊铺底（竖屏优先 gate-front-portrait）');
 
-/* 3c. 过渡视频契约：页面元素、JS 里的路径、唯一文件名三者要对得上。
-   视频是可选素材（缺了退单帧图），所以这里只查"写了就得写对"，不查文件在不在。 */
-const VIDEO_SRC = './assets/video/gate.mp4';
-if (!html.includes('id="gateVideo"')) bad('index.html 缺过渡视频元素 #gateVideo');
-if (!app.includes(VIDEO_SRC)) bad('app.js 里的过渡视频路径应为 ' + VIDEO_SRC);
-if (app.indexOf(VIDEO_SRC) !== app.lastIndexOf(VIDEO_SRC)) bad('app.js 里过渡视频路径写了多处，应只有一处常量');
+/* 3c. 过渡画面契约：⑨ 按阵营取图 + 兜底链 + 视频设定确已下线。
+   ⑨ 是可选素材（缺了退该阵营横幅 → 通用凯旋门），所以这里只查"写了就得写对"，不查文件在不在。 */
+const GATE_ART = "'./assets/tex/gate-'+key+'.webp'";
+const GATE_ART_FB = "'./assets/tex/faction-'+key+'.webp'";
+if (!app.includes(GATE_ART)) bad('app.js 缺 ⑨ 过渡画面路径（应为 ' + GATE_ART + '）');
+if (!app.includes(GATE_ART_FB)) bad('app.js 缺 ⑨ 的第一层兜底（该阵营横幅 faction-<key>.webp）');
+if (!app.includes("--gate-art")) bad('app.js 未把过渡画面写进 CSS 变量 --gate-art');
+if (!html.includes('--gate-art')) bad('index.html 的 .gate-stage 缺自定义属性 --gate-art');
+if (!/--gate-art:none/.test(html)) bad('index.html 的 --gate-art 默认值应为 none（JS 没跑起来时退通用图）');
+const VIDEO_TRACES = ['gate.mp4', 'gateVideo', 'gate-video', 'setGateVideoMode', 'tryGateVideo'];
+VIDEO_TRACES.forEach((t) => {
+  if (html.includes(t)) bad('视频设定应已下线，但 index.html 里仍有：' + t);
+  if (app.includes(t)) bad('视频设定应已下线，但 app.js 里仍有：' + t);
+});
 if (!app.includes('enterReview')) bad('app.js 缺 enterReview（过渡结束后的落点）');
-ok('过渡视频契约：#gateVideo 元素 + 唯一路径常量 + 结束落点');
+ok('过渡画面契约：⑨ 按阵营取图 + 横幅兜底 + 视频设定已下线');
 
 /* 3d. 装备拆解契约：assets/gear.js（词表 + 槽位引用）与 units.js / index.html 对得上。
    判据：① 每个兵种都有 KIT；② KIT 的键是 units.js 里的 id；③ 值是 GEAR 里的 id；
@@ -125,7 +135,8 @@ Object.keys(GEAR).forEach(g => { if (!used[g]) bad('装备从未被任何兵种�
 const kitN = Object.keys(GEAR).length;
 const fillN = Object.keys(used).reduce((s, g) => s + used[g], 0);
 ok('装备表 ' + kitN + ' 件 · 覆盖 ' + fillN + ' 个槽位 · 48 兵种全部有装备表');
-const SCENE_SLOTS = slots.length + 9;
+/* 场景图位总数：logo/凯旋门横竖/兜底/大理石 5 + 阵营横幅 9 + 过渡画面 9（⑨ 与 ⑧ 的 key 同源） */
+const SCENE_SLOTS = slots.length + 9 + 9;
 
 /* 4. 阵营 key 与 CSS 主题一一对应 */
 FACTIONS.forEach(f => {

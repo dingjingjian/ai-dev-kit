@@ -5,7 +5,8 @@
  * 这个查「素材本身」（图在不在、够不够方、多大、总量超没超）。
  * 两者都过，才算素材齐了。
  *
- * 预算来源：docs/兵种图片素材需求.md §五、docs/场景配图需求.md §八、docs/背景音乐需求.md §一。
+ * 预算来源：docs/兵种图片素材需求.md §五、docs/场景配图需求.md §九（含 ⑨ 过渡画面）、
+ * docs/背景音乐需求.md §一。
  */
 const fs = require('fs');
 const path = require('path');
@@ -132,26 +133,36 @@ if (gTotal > 0.6 * MB) bad('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB �
 else ok('装备图合计 ' + (gTotal / MB).toFixed(2) + 'MB / 上限 0.60MB（' + gHave + '/' + gearIds.length + ' 张）'
   + (gOver || gNotSquare ? ' · 超重 ' + gOver + ' / 非方 ' + gNotSquare : ''));
 
-/* ---------- 2.5 过渡视频（凯旋门页；缺失自动退回单帧缓推，不计失败） ---------- */
-console.log('\n— 过渡视频 —');
-const VIDEO = { f: 'gate.mp4', max: 1200 * KB };
-const vp = path.join(ROOT, 'assets/video', VIDEO.f);
-if (!fs.existsSync(vp)) {
-  note('assets/video/gate.mp4 未生成 → 过渡页退回 gate-front（竖屏 gate-front-portrait）单帧缓推（页面照常跑）。规格见 docs/过渡视频需求.md');
-} else {
-  const vs = fs.statSync(vp);
-  if (vs.size > VIDEO.max) bad('gate.mp4 ' + (vs.size / KB).toFixed(0) + 'KB 超过上限 ' + (VIDEO.max / KB) + 'KB');
-  else ok('gate.mp4 ' + (vs.size / KB).toFixed(0) + 'KB / 上限 ' + (VIDEO.max / KB) + 'KB');
-  /* 只看前 12 字节的 ftyp 头：不是标准 MP4 就别往包里放 —— 后缀改名骗得过人眼，骗不过浏览器 */
-  const head = fs.readFileSync(vp).slice(0, 12);
-  if (head.length < 12 || head.toString('ascii', 4, 8) !== 'ftyp') {
-    bad('gate.mp4 不是标准 MP4（前 12 字节里没有 ftyp）—— 多半是别的文件改了后缀，请用 tools/prep_video.py 重新转码');
-  } else ok('gate.mp4 容器头正常（ftyp）');
-}
+/* ---------- 2.5 过渡画面（「即将检阅」页；每阵营一张，缺则退该阵营横幅 → 通用凯旋门） ---------- */
+console.log('\n— 过渡画面 —');
+const GATE_EACH = 110 * KB, GATE_ALL = 0.9 * MB;
+const gateSlots = FACTIONS.map(f => 'gate-' + f.key + '.webp').concat(['gate-custom.webp']);
+let gsHave = 0, gsTotal = 0, gsNotWide = 0;
+const gsMissing = [];
+gateSlots.forEach(f => {
+  const p = path.join(ROOT, 'assets/tex', f);
+  if (!fs.existsSync(p)) { gsMissing.push(f); return; }
+  gsHave++;
+  const st = fs.statSync(p);
+  gsTotal += st.size;
+  if (st.size > GATE_EACH) bad('tex/' + f + ' ' + (st.size / KB).toFixed(0) + 'KB 超过单图上限 ' + (GATE_EACH / KB) + 'KB');
+  const d = webpSize(fs.readFileSync(p));
+  if (!d) note('tex/' + f + ' 读不出尺寸（不是标准 WebP？）');
+  else if (d.w < 1280) { note('tex/' + f + ' 只有 ' + d.w + '×' + d.h + '，建议 1600×900'); gsNotWide++; }
+  else if (Math.abs(d.w / d.h - 16 / 9) > 0.02) { note('tex/' + f + ' 比例 ' + d.w + '×' + d.h + '（建议 16:9）'); gsNotWide++; }
+});
+if (gsMissing.length) {
+  note('⑨ 过渡画面缺 ' + gsMissing.length + '/9 张（每阵营一张）：' + gsMissing.join(', ')
+    + ' → 该阵营已退到自己的横幅 faction-<key>.webp，再退 ③ gate-front；页面照常跑。'
+    + '规格见 docs/场景配图需求.md §六');
+} else ok('⑨ 过渡画面 9 张齐备（每阵营一张）');
+if (gsTotal > GATE_ALL) bad('过渡画面合计 ' + (gsTotal / MB).toFixed(2) + 'MB 超过上限 0.90MB');
+else ok('过渡画面合计 ' + (gsTotal / MB).toFixed(2) + 'MB / 上限 0.90MB（' + gsHave + '/9 张）'
+  + (gsNotWide ? ' · 比例/尺寸偏离 ' + gsNotWide : ''));
 
 /* ---------- 3. 目录里有没有多余的文件 ---------- */
 const expectU = new Set(UNITS.map(u => u.id + '.webp'));
-const expectT = new Set(TEX_SLOTS.map(s => s.f));
+const expectT = new Set(TEX_SLOTS.map(s => s.f).concat(gateSlots));
 /* assets/units 下多了 card/ 子目录属正常，先看里面的文件是不是都对应得上 */
 const cardDir = path.join(ROOT, 'assets/units/card');
 if (fs.existsSync(cardDir)) {
@@ -210,6 +221,7 @@ let raw = 0;
 packFiles.forEach(f => { try { raw += fs.statSync(path.join(ROOT, f)).size; } catch (e) { } });
 console.log('将进包 ' + packFiles.length + ' 个文件 · 原始合计 ' + (raw / MB).toFixed(2) + ' MB');
 console.log('（3D 地球已移除：three.min.js / earth.jpg / clouds.png 约 1.34 MB 不再进包）');
+console.log('（过渡页已取消视频：⑨ 过渡画面 ×9 全出也只占 ≤0.90 MB，比原视频预算 1.20 MB 更省）');
 if (raw > 8 * MB) note('原始合计偏大，zip 体积会接近容器上传上限，注意核对');
 
 console.log(fail ? '\n❌ ' + fail + ' 项未通过（另有 ' + warn + ' 条提示）' : '\n✅ 全部通过' + (warn ? '（' + warn + ' 条提示）' : ''));
