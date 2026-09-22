@@ -1,0 +1,1 @@
+﻿{"name":"aos3d-tools","private":true,"type":"module","description":"BGM 构建与分析工具依赖（仅构建时需要）","dependencies":{"mpg123-decoder":"^1.0.3"}}

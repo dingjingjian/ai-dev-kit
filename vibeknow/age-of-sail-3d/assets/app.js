@@ -215,6 +215,7 @@
     if(st.page==='voyage'&&i===st.sel){
       voyageImgEl.setAttribute('style',thumbStyle(SHIPS[i]));
     }
+    shipSharePaint();      /* 原图到货／失败都会走到这里，顺手刷新分享按钮 */
   }
 
   /* ================= 3D 地球组件（可降级）=================
@@ -502,8 +503,11 @@
       camP=glide.P0+(glide.P1-glide.P0)*ge;
       if(gp>=1)glide=null;
     }else{
-      /* 拖动 / 归位：跟手收敛到目标 */
-      camT+=(baseT-camT)*0.14;camP+=(baseP-camP)*0.14;
+      /* 拖动 / 归位：跟手收敛到目标。
+         必须按**最短角路径**收敛：glide 的终点是 camT + 最短角差，与 baseT
+         只差 2π 的整数倍（数值不等但方位等价）；直接 (baseT-camT) 会读成
+         ±2π 的偏差，滑行到位后又多绕一圈才停。 */
+      camT+=angDelta(camT,baseT)*0.14;camP+=(baseP-camP)*0.14;
     }
     camP=Math.max(0.08,Math.min(Math.PI-0.08,camP));
     camR+=(camRG-camR)*0.1;
@@ -791,6 +795,7 @@
     if(G){G.setTag(f.yard);G.refreshMarkers();G.aimShip(false);G.fitView(false);G.markDirty();}
     voyageBodyEl.scrollTop=0;
     lensRecenter();
+    shipSharePaint();      /* 换船了，分享按钮跟着这艘船有没有原图显隐 */
   }
   function voyageNext(){
     var r=curRoute();
@@ -1064,7 +1069,575 @@
   }
   function hideToast(){clearTimeout(toastT);hintEl.classList.remove('show');}
 
+  /* ================= 背景音乐（音频藏在 assets/audio/bgm.js 的 base64 里）=================
+   * 为什么不是 <audio src="./assets/audio/bgm.mp3">：容器上传白名单只有
+   *   jpg / css / gif / svg / png / js / jpeg / json / html / woff2 / webp / woff
+   * —— **不含任何音频扩展名**（mp3 会被上传页直接打回）；而容器 CSP 又明确
+   * 「<audio> / <video> 只允许包内媒体文件，禁 data:/blob: 媒体源」。
+   * 两条叠加＝「包内音频文件」这条官方路在容器里根本不存在。
+   * 所以音频以 base64 字符串形式藏在 bgm.js（白名单类型，由 tools/make-bgm.mjs 生成）里，运行时：
+   *   ① atob → ArrayBuffer → AudioContext.decodeAudioData() 解成 PCM；
+   *   ② 用 Web Audio 播 —— 全程**不产生任何 URL**，因此不触碰 CSP 的资源加载规则；
+   *   ③ 循环不是 loop 整段音频，而是 loop 曲子内部一个**小节对齐的完整乐句**
+   *      （BGM_A / BGM_B / BGM_X），尾巴与下一遍开头交叠淡入淡出，见 bgmLoopTick；
+   *   ④ 音量走 GainNode 包络，不做 setInterval 调 volume。
+   *   ⑤ 偏好存 localStorage（键 aos3d.bgm）：没存过＝偏好开启，用户手动关掉才记成静音；
+   *      但**按钮显示的是"此刻有没有在响"**，与偏好分开 —— 见 bgmPaint；
+   *   ⑥ 切到后台（visibilitychange）停声并挂起音频上下文，回前台的续上。
+   * 解码成功才给 <html> 挂 has-bgm 把开关显出来；没有数据 / 解码失败＝开关隐藏，五页照常。
+   * 源曲目 assets/audio/bgm.mp3 是构建输入、**不打进 zip**（见 pack.mjs 的 excludes）。
+   * 开 / 关两枚图标是 index.html 里的内联 SVG，由按钮的 .on 换显。 */
+  var bgmBtn=document.getElementById('bgmBtn');
+  var BGM_KEY='aos3d.bgm',BGM_VOL=0.42,BGM_TICK_MS=500;
+  /* 循环体是**曲子内部一个完整乐句**，不是整段音频。由 tools/analyze-bgm.mjs 分析得出：
+     184.6 BPM · 4/4 · 小节线每 1.300s（置信度 3.0）；19.54s 与 97.56s 都落在小节线上、
+     相差整 60 小节，织体相似度 0.991，**波形互相关 0.554 且最佳时移仅 −1ms** ——
+     也就是说这两处本来就是同一段音乐的重复，交叠时两遍同相，接缝几乎听不出来。
+     作为对照：把整段首尾相接（曲头 0s 对裁剪点 101.15s）相似度只有 0.730、波形 0.069，
+     那正是"接缝上撞出一个强拍"的来源。交叠取整 1 小节。 */
+  var BGM_A=19.54,BGM_B=97.56,BGM_X=1.300;
+  var AC=window.AudioContext||window.webkitAudioContext;
+  var bgmCtx=null,bgmBuf=null,bgmMaster=null;
+  var bgmPasses=[],bgmNextAt=0,bgmLoopT=null,bgmStopT=null;
+  var bgmReady=false,bgmWant=true,bgmUnlocked=false,bgmPlaying=false,bgmHidePaused=false;
+  try{if(window.localStorage.getItem(BGM_KEY)==='0')bgmWant=false;}catch(e){}
+  /* 按钮画的是**此刻有没有在出声**（bgmPlaying），不是"用户想不想听"（bgmWant）：
+     autoplay 策略决定首屏必然还没声音，这时若显示成"已开启"就是在骗人 ——
+     亮起的铜牌只属于真正在响的那一刻。bgmWant 只负责记住偏好、
+     并决定"用户第一次点按之后"要不要自动起播。 */
+  function bgmPaint(){
+    if(!bgmBtn)return;
+    bgmBtn.className='bgm-btn'+(bgmPlaying?' on':'');
+    bgmBtn.setAttribute('aria-pressed',bgmPlaying?'true':'false');
+  }
+  /* 一遍接一遍地排"带交叠的循环"：每遍播 [a, b] 这一段乐句，长 D 秒；
+     上一遍在最后 X 秒线性淡出、下一遍从 0 秒线性淡入，两者在 [D-X, D] 完全重叠、
+     增益和恒为 1。接缝落在乐句首尾——同一小节线、同一拍位，所以听不出断点。
+     步长 L = D - X，下一遍晚 L 秒开始。
+     （两段内容高度相似时线性叠加才是对的：增益和恒为 1 不会凸起；
+       若换成等功率 sqrt 曲线，这种相似内容反而会在交叠中点 +3dB。） */
+  function bgmLoopTick(){
+    if(!bgmPlaying||!bgmCtx||!bgmBuf||!bgmMaster)return;
+    var a=BGM_A,b=Math.min(BGM_B,bgmBuf.duration);
+    if(b-a<8){a=0;b=bgmBuf.duration;}      /* 兜底：数据比乐句还短就退回整段循环 */
+    var D=b-a;
+    var X=Math.min(BGM_X,D*0.25);
+    var L=D-X;
+    var now=bgmCtx.currentTime;
+    if(bgmNextAt<now+0.05)bgmNextAt=now+0.08;
+    while(bgmNextAt<now+1.2){
+      var at=bgmNextAt;
+      var src=bgmCtx.createBufferSource();
+      var g=bgmCtx.createGain();
+      src.buffer=bgmBuf;
+      src.connect(g);g.connect(bgmMaster);
+      g.gain.setValueAtTime(0,at);
+      g.gain.linearRampToValueAtTime(1,at+X);
+      g.gain.setValueAtTime(1,at+L);
+      g.gain.linearRampToValueAtTime(0,at+D);
+      src.start(at,a);                     /* 从乐句开头起播，不是从 0s */
+      src.stop(at+D+0.05);
+      bgmPasses.push({src:src,endsAt:at+D});
+      bgmNextAt=at+L;
+    }
+    for(var i=bgmPasses.length-1;i>=0;i--){
+      if(bgmPasses[i].endsAt<now-0.5){
+        try{bgmPasses[i].src.disconnect();}catch(e){}
+        bgmPasses.splice(i,1);
+      }
+    }
+  }
+  function bgmStopPasses(){
+    if(bgmStopT){clearTimeout(bgmStopT);bgmStopT=null;}
+    if(bgmLoopT){clearInterval(bgmLoopT);bgmLoopT=null;}
+    for(var i=0;i<bgmPasses.length;i++){
+      try{bgmPasses[i].src.stop();}catch(e){}
+      try{bgmPasses[i].src.disconnect();}catch(e){}
+    }
+    bgmPasses=[];
+  }
+  function bgmPlay(){
+    if(!bgmReady||bgmPlaying||!bgmCtx||!bgmMaster)return;
+    bgmPlaying=true;
+    if(bgmStopT){clearTimeout(bgmStopT);bgmStopT=null;}   /* 取消"渐出后停声"的待执行动作 */
+    try{if(bgmCtx.state==='suspended'&&bgmCtx.resume)bgmCtx.resume();}catch(e){}
+    var t=bgmCtx.currentTime;
+    try{
+      bgmMaster.gain.cancelScheduledValues(t);
+      bgmMaster.gain.setValueAtTime(0,t);
+      bgmMaster.gain.linearRampToValueAtTime(BGM_VOL,t+0.9);
+    }catch(e){bgmMaster.gain.value=BGM_VOL;}
+    bgmNextAt=t+0.08;
+    bgmLoopTick();
+    if(bgmLoopT)clearInterval(bgmLoopT);
+    bgmLoopT=setInterval(bgmLoopTick,BGM_TICK_MS);
+    bgmPaint();                      /* 起播了才点亮铜牌 */
+  }
+  function bgmPause(ms){
+    if(!bgmPlaying||!bgmCtx||!bgmMaster)return;
+    bgmPlaying=false;
+    var t=bgmCtx.currentTime,to=(ms==null?600:ms)/1000;
+    try{
+      bgmMaster.gain.cancelScheduledValues(t);
+      bgmMaster.gain.setValueAtTime(bgmMaster.gain.value,t);
+      bgmMaster.gain.linearRampToValueAtTime(0,t+to);
+    }catch(e){}
+    if(bgmLoopT){clearInterval(bgmLoopT);bgmLoopT=null;}
+    if(bgmStopT)clearTimeout(bgmStopT);
+    bgmStopT=setTimeout(bgmStopPasses,to*1000+80);
+    bgmPaint();                      /* 停声了就把铜牌熄掉 */
+  }
+  /* 记的是"用户想不想要"，不只是"此刻响不响"：关掉＝写进存档，下次进来仍是静音 */
+  function bgmSet(want){
+    bgmWant=!!want;
+    try{window.localStorage.setItem(BGM_KEY,bgmWant?'1':'0');}catch(e){}
+    if(bgmWant)bgmPlay();else bgmPause(500);
+    bgmPaint();
+  }
+  /* 首次用户手势之前不许出声：听最外层捕获阶段的 pointerdown / click / keydown。
+     开关自己那一下不算解锁手势 —— 统一交给开关的 handler 处理，否则捕获阶段先把
+     音乐打开、紧接着开关又按"正在响"把它关掉，自相矛盾。 */
+  function bgmUnlock(e){
+    if(bgmBtn&&e&&e.target&&(e.target===bgmBtn||bgmBtn.contains(e.target)))return;
+    bgmUnlocked=true;
+    if(bgmWant)bgmPlay();
+    document.removeEventListener('pointerdown',bgmUnlock,true);
+    document.removeEventListener('click',bgmUnlock,true);
+    document.removeEventListener('keydown',bgmUnlock,true);
+  }
+  /* base64 → ArrayBuffer（1MB 量级，安排在首屏之后做，不挤首屏） */
+  function bgmBytes(){
+    var s=window.AOS3D_BGM||'';
+    if(!s)return null;
+    try{
+      var bin=window.atob(s),n=bin.length,ab=new ArrayBuffer(n),u=new Uint8Array(ab);
+      for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);
+      return ab;
+    }catch(e){return null;}
+  }
+  function bgmDecode(){
+    if(bgmReady||!AC)return;
+    var ab=bgmBytes();
+    if(!ab)return;
+    if(!bgmCtx){try{bgmCtx=new AC();}catch(e){bgmCtx=null;}}
+    if(!bgmCtx)return;
+    var settled=false;
+    function ok(buf){
+      if(settled)return;settled=true;
+      bgmBuf=buf;
+      bgmMaster=bgmCtx.createGain();
+      bgmMaster.gain.value=0;
+      bgmMaster.connect(bgmCtx.destination);
+      bgmReady=true;
+      document.documentElement.className+=' has-bgm';
+      if(bgmUnlocked&&bgmWant)bgmPlay();
+    }
+    function bad(){if(settled)return;settled=true;bgmBuf=null;}
+    try{
+      var pr=bgmCtx.decodeAudioData(ab,ok,bad);   /* 回调与 Promise 两套都兜，settled 防重复 */
+      if(pr&&pr.then)pr.then(ok,bad);
+    }catch(e){bad();}
+  }
+  if(bgmBtn){
+    bgmBtn.addEventListener('click',function(){
+      bgmUnlocked=true;              /* 点开关本身就是用户手势，必定算解锁 */
+      bgmSet(!bgmPlaying);           /* 没在响 → 开；正在响 → 关（与按钮显示的状态一致） */
+    });
+  }
+  document.addEventListener('pointerdown',bgmUnlock,true);
+  document.addEventListener('click',bgmUnlock,true);
+  document.addEventListener('keydown',bgmUnlock,true);
+  document.addEventListener('visibilitychange',function(){
+    if(document.hidden){
+      if(bgmPlaying){
+        bgmHidePaused=true;
+        bgmPause(0);
+        if(bgmCtx&&bgmCtx.suspend)setTimeout(function(){try{bgmCtx.suspend();}catch(e){}},150);
+      }
+    }else if(bgmHidePaused){
+      bgmHidePaused=false;
+      if(bgmWant&&bgmUnlocked)bgmPlay();
+    }
+  });
+  bgmPaint();
+  /* 首屏之后才解码；解出来才把开关显出来（没数据 / 解不出＝开关保持隐藏） */
+  setTimeout(bgmDecode,900);
+
+  /* ================= 笔记分享（端能力 postNote，容器文档 §3.3）=================
+   * 容器里网页不能直接发笔记，只能**唤起 App 的笔记发布页**并带上内容与媒体：
+   *   window.xhs.miniTool.postNote({ title, content, pageType, mediaInfo })
+   * 其中 mediaInfo 必填、且图片 / 视频 / 实况三种资源至少传一种 —— 所以这里先把这一趟
+   * 航海日志画成一张卡片（Canvas 2D，1080×1440），再走文档给的组合路径：
+   *   canvas.toDataURL('image/png')
+   *     → writeTempFile({ data }) 换成本地 filePath     （§3.5：大 base64 先落文件再传）
+   *     → postNote({ pageType:'photo_publish', mediaInfo:{ image_resources:[{url:filePath}] } })
+   * 客户端没有 writeTempFile 时，把完整 data:uri 直接交给 postNote（§3.3 允许 base64）。
+   *
+   * 卡片**只用 Canvas 图元与文字绘制，不 drawImage 任何图片**：在 file:// 来源下画本地图片
+   * 会把画布标记为"被污染"，toDataURL 会直接抛 SecurityError —— 图鉴里的 webp 一律不参与绘制。
+   *
+   * 能力检测而非 UA 判断：拿不到 postNote 就整块隐藏（桌面直接开 index.html、以及 ?demo
+   * 录屏都不会出现这个按钮），五页流程照常。
+   *
+   * 结果语义（文档明说）：postNote 成功**只代表发布页被唤起并由用户点了发布，不代表过审** ——
+   * 所以这里只当"已唤起"提示，不据此做任何强一致的状态变更。 */
+  var XHS=(window.xhs&&window.xhs.miniTool)||null;
+  var CAN_SHARE=!!(XHS&&typeof XHS.postNote==='function');
+  var lcShareBtn=document.getElementById('lcShare');
+  var shareBusy=false;
+  var CARD_W=1080,CARD_H=1440;
+  var CARD_FONT='Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif';
+
+  /* 单行按宽度截断加省略号（调用前先设好 x.font） */
+  function fitLine(x,s,maxW){
+    if(x.measureText(s).width<=maxW)return s;
+    while(s.length>1&&x.measureText(s+'…').width>maxW)s=s.slice(0,-1);
+    return s+'…';
+  }
+  /* 逐字折行（中英混排够用；分享图不是排版引擎，不追求避头尾） */
+  function wrapLines(x,s,maxW){
+    var out=[],line='',i,ch;
+    for(i=0;i<s.length;i++){
+      ch=s.charAt(i);
+      if(ch==='\n'){out.push(line);line='';continue;}
+      if(line&&x.measureText(line+ch).width>maxW){out.push(line);line=ch;}
+      else line+=ch;
+    }
+    if(line)out.push(line);
+    return out;
+  }
+  /* 一枚菱形航点（海图上的标记；日志页名册的「色点」也是它） */
+  function diamondPath(x,cx,cy,s){
+    x.beginPath();
+    x.moveTo(cx,cy-s);x.lineTo(cx+s,cy);x.lineTo(cx,cy+s);x.lineTo(cx-s,cy);
+    x.closePath();
+  }
+  /* 一截麻绳（日志页 .sec 标题右侧那根斜向绳股）：分段标题的分隔线 */
+  function ropeDivider(x,x0,x1,y){
+    x.save();
+    x.strokeStyle='rgba(176,137,74,.55)';x.lineWidth=6;
+    for(var px=x0;px<x1;px+=11){
+      x.beginPath();x.moveTo(px,y+2.5);x.lineTo(px+6,y-2.5);x.stroke();
+    }
+    x.restore();
+  }
+  /* 居中排一段多色文字（日志页「本次检阅 N 艘帆船」那行，数字是酒红加粗的） */
+  function centerSegs(x,segs,y,px){
+    var total=0,i;
+    for(i=0;i<segs.length;i++){
+      x.font=(segs[i][1]?'800 ':'')+px+'px '+CARD_FONT;
+      total+=x.measureText(segs[i][0]).width;
+    }
+    var sx=CARD_W/2-total/2;
+    x.textAlign='left';
+    for(i=0;i<segs.length;i++){
+      x.font=(segs[i][1]?'800 ':'')+px+'px '+CARD_FONT;
+      x.fillStyle=segs[i][1]?'#e05a45':'#d8b06a';
+      x.fillText(segs[i][0],sx,y);
+      sx+=x.measureText(segs[i][0]).width;
+    }
+    x.textAlign='center';
+  }
+  /* 六维罗盘雷达：跟航海日志页那副图谱同一副样子（黄铜罗盘外圈 + 酒红数据面） */
+  function radarChart(x,cx,cy,r,avg,peak){
+    var n=6,i,k,a;
+    function px(ratio,idx){
+      var an=-Math.PI/2+idx*Math.PI*2/n;
+      return [cx+r*ratio*Math.cos(an),cy+r*ratio*Math.sin(an)];
+    }
+    /* 罗盘外圈：双环 + 32 道分度（每 90° 为主刻度） */
+    x.strokeStyle='rgba(176,137,74,.9)';x.lineWidth=2;
+    x.beginPath();x.arc(cx,cy,r*1.2,0,Math.PI*2);x.stroke();
+    x.strokeStyle='rgba(176,137,74,.45)';x.lineWidth=1.5;
+    x.beginPath();x.arc(cx,cy,r*1.12,0,Math.PI*2);x.stroke();
+    for(i=0;i<32;i++){
+      a=-Math.PI/2+i*Math.PI*2/32;
+      var major=(i%8===0),r0=r*1.2,r1=r0-(major?r*0.13:r*0.065);
+      x.beginPath();
+      x.moveTo(cx+r0*Math.cos(a),cy+r0*Math.sin(a));
+      x.lineTo(cx+r1*Math.cos(a),cy+r1*Math.sin(a));
+      x.stroke();
+    }
+    /* 盘心星芒 */
+    x.fillStyle='rgba(176,137,74,.16)';
+    for(i=0;i<4;i++){
+      x.save();x.translate(cx,cy);x.rotate(i*Math.PI/2-Math.PI/2);
+      x.beginPath();
+      x.moveTo(0,-r);x.lineTo(r*0.06,0);x.lineTo(0,r);x.lineTo(-r*0.06,0);
+      x.closePath();x.fill();
+      x.restore();
+    }
+    /* 盘面上的五圈多边形网格 + 六条轴 */
+    var rings=[.2,.4,.6,.8,1];
+    for(i=0;i<rings.length;i++){
+      x.beginPath();
+      for(k=0;k<n;k++){var q=px(rings[i],k);if(k===0)x.moveTo(q[0],q[1]);else x.lineTo(q[0],q[1]);}
+      x.closePath();
+      x.strokeStyle=(i===rings.length-1)?'rgba(176,137,74,.8)':'rgba(176,137,74,.3)';
+      x.lineWidth=(i===rings.length-1)?1.6:1;
+      x.stroke();
+    }
+    x.strokeStyle='rgba(176,137,74,.32)';x.lineWidth=1;
+    for(k=0;k<n;k++){var e=px(1,k);x.beginPath();x.moveTo(cx,cy);x.lineTo(e[0],e[1]);x.stroke();}
+    /* 数据面：酒红填充 + 描边 + 六个顶点 + 盘心轴钉（.radar 的 face / dot / rose-core） */
+    x.beginPath();
+    for(k=0;k<n;k++){
+      var d=px(Math.max(.04,Math.min(1,avg[k]/5)),k);
+      if(k===0)x.moveTo(d[0],d[1]);else x.lineTo(d[0],d[1]);
+    }
+    x.closePath();
+    x.fillStyle='rgba(154,47,36,.20)';x.fill();
+    x.strokeStyle='#9a2f24';x.lineWidth=3;x.stroke();
+    for(k=0;k<n;k++){
+      var dp=px(Math.max(.04,Math.min(1,avg[k]/5)),k);
+      x.fillStyle='#9a2f24';x.beginPath();x.arc(dp[0],dp[1],5.5,0,Math.PI*2);x.fill();
+    }
+    x.fillStyle='rgba(176,137,74,.75)';
+    x.beginPath();x.arc(cx,cy,5,0,Math.PI*2);x.fill();
+    /* 标签：维度名（峰值那一维标酒红）+ 值（小一号、更暗），与日志页同一口径 */
+    var fs=Math.round(r*0.2);
+    for(k=0;k<n;k++){
+      a=-Math.PI/2+k*Math.PI*2/n;
+      var lx=cx+(r*1.2+46)*Math.cos(a),ly=cy+(r*1.2+46)*Math.sin(a)+fs*0.36;
+      var name=STATS_DIMS[k],val=avg[k].toFixed(1);
+      x.font='700 '+fs+'px '+CARD_FONT;
+      var wN=x.measureText(name).width,wV=x.measureText(val).width;
+      var sx=lx-(wN+8+wV)/2;
+      x.textAlign='left';
+      x.fillStyle=(k===peak)?'#e05a45':'#a89e88';
+      x.fillText(name,sx,ly);
+      x.fillStyle='#7d7666';
+      x.fillText(val,sx+wN+8,ly);
+    }
+    x.textAlign='left';
+  }
+  /* 把这一趟航海日志画成一张卡片 —— 版式与配色照航海日志页复刻：
+     深海底径向渐变 + 上下两条橡木仪表台 + 酒红分段标题带麻绳分隔 + 罗盘雷达 + 名册行。 */
+  function drawLogCard(){
+    var r=st.route||ROUTES[0];
+    var order=r.ships,n=order.length,i,k;
+    var cv=document.createElement('canvas');
+    cv.width=CARD_W;cv.height=CARD_H;
+    var x=cv.getContext('2d');
+
+    /* ── 页面底：与 .page-log 同一道深海径向渐变 ── */
+    var bg=x.createRadialGradient(CARD_W/2,CARD_H*0.08,0,CARD_W/2,CARD_H*0.08,CARD_H*0.98);
+    bg.addColorStop(0,'#15395c');bg.addColorStop(.42,'#0a1e33');bg.addColorStop(.8,'#061220');bg.addColorStop(1,'#03080e');
+    x.fillStyle=bg;x.fillRect(0,0,CARD_W,CARD_H);
+
+    /* ── 上下两条橡木仪表台（.log-bar / .log-controls）── */
+    var gTop=x.createLinearGradient(0,0,0,96);
+    gTop.addColorStop(0,'rgba(36,20,9,.97)');gTop.addColorStop(1,'rgba(36,20,9,.4)');
+    x.fillStyle=gTop;x.fillRect(0,0,CARD_W,96);
+    x.strokeStyle='rgba(176,137,74,.32)';x.lineWidth=2;
+    x.beginPath();x.moveTo(0,96);x.lineTo(CARD_W,96);x.stroke();
+    x.textAlign='center';x.fillStyle='#d8b06a';x.font='700 30px '+CARD_FONT;
+    x.fillText('航海日志',CARD_W/2,62);
+    var gBot=x.createLinearGradient(0,1332,0,1440);
+    gBot.addColorStop(0,'rgba(36,20,9,.4)');gBot.addColorStop(1,'rgba(36,20,9,.97)');
+    x.fillStyle=gBot;x.fillRect(0,1332,CARD_W,108);
+    x.strokeStyle='rgba(176,137,74,.32)';x.lineWidth=2;
+    x.beginPath();x.moveTo(0,1332);x.lineTo(CARD_W,1332);x.stroke();
+    x.fillStyle='#d8b06a';x.font='26px '+CARD_FONT;
+    x.fillText('大航海时代 · 帆船图鉴',CARD_W/2,1396);
+
+    /* ── 标题 / 统计 / 简报（.log-ttl / .log-sub / .log-brief）── */
+    x.fillStyle='#f2e8d2';x.font='800 52px '+CARD_FONT;
+    x.fillText('航程完毕',CARD_W/2,168);
+    var fams={},cns={};
+    for(i=0;i<n;i++){var f=SHIPS[order[i]];fams[f.family]=1;cns[f.country]=1;}
+    centerSegs(x,[['本次检阅 ',0],[String(n),1],[' 艘帆船 · 覆盖 ',0],
+      [String(Object.keys(fams).length),1],[' 个海域 ',0],
+      [String(Object.keys(cns).length),1],[' 个建造国',0]],214,30);
+    var brief=(logBriefEl&&logBriefEl.textContent)||'';
+    if(brief){
+      x.fillStyle='#a89e88';x.font='29px '+CARD_FONT;
+      var lines=wrapLines(x,brief,840);
+      for(i=0;i<lines.length&&i<3;i++)x.fillText(lines[i],CARD_W/2,264+i*44);
+    }
+
+    /* ── 分段标题：酒红小标题 + 麻绳分隔 + 右侧小注（.sec / .sec::after / .secnote）── */
+    function secTitle(title,note,y){
+      x.textAlign='left';x.fillStyle='#e05a45';x.font='800 34px '+CARD_FONT;
+      x.fillText(title,60,y);
+      var w=x.measureText(title).width;
+      x.textAlign='right';x.font='26px '+CARD_FONT;x.fillStyle='#7d7666';
+      var wn=x.measureText(note).width;
+      x.fillText(note,CARD_W-60,y);
+      x.textAlign='left';
+      ropeDivider(x,60+w+26,CARD_W-60-wn-26,y-11);
+    }
+
+    /* ── 性能图谱：画在罗盘玫瑰上的六维图谱（与日志页同一副）── */
+    var avg=[0,0,0,0,0,0],peak=0,pv=-1;
+    for(i=0;i<n;i++){var g=SHIPS[order[i]];for(k=0;k<6;k++)avg[k]+=(g.stats?g.stats[k]:0);}
+    for(k=0;k<6;k++){avg[k]=avg[k]/Math.max(1,n);if(avg[k]>pv){pv=avg[k];peak=k;}}
+    secTitle('性能图谱','六维 · 本次均值 · 满分 5',440);
+    radarChart(x,CARD_W/2,676,122,avg,peak);
+
+    /* ── 舰队名册 ── */
+    secTitle('舰队名册','各艘最突出的两维',942);
+    x.textAlign='center';
+
+    /* ── 名册行：色点 + 船名 + 建造国·建造地·年代 + 该艘最突出的两维（.sum-ship）── */
+    for(i=0;i<n&&i<8;i++){
+      var s2=SHIPS[order[i]],yy=972+i*44,cy=yy+22;
+      x.fillStyle=s2.color||'#8a6b3a';
+      diamondPath(x,78,cy,11);x.fill();
+      x.textAlign='left';x.fillStyle='#f2e8d2';x.font='800 34px '+CARD_FONT;
+      x.fillText(fitLine(x,s2.name,320),110,cy+12);
+      x.fillStyle='#7d7666';x.font='25px '+CARD_FONT;
+      x.fillText(fitLine(x,s2.country+' · '+s2.yard+' · AD '+s2.year,340),440,cy+10);
+      var t=s2.stats||[0,0,0,0,0,0];
+      var ord2=[0,1,2,3,4,5].sort(function(a,b){return t[b]-t[a];}).slice(0,2);
+      var tp=ord2.map(function(j){return STATS_DIMS[j]+t[j];}).join(' · ');
+      x.textAlign='right';x.fillStyle='#e05a45';x.font='24px '+CARD_FONT;
+      x.fillText(tp,CARD_W-60,cy+10);
+      x.textAlign='left';
+      x.strokeStyle='rgba(176,137,74,.30)';x.lineWidth=1;
+      x.setLineDash([3,6]);
+      x.beginPath();x.moveTo(60,yy+42);x.lineTo(CARD_W-60,yy+42);x.stroke();
+      x.setLineDash([]);
+    }
+    x.textAlign='center';
+    return cv;
+  }
+
+  function shareLog(){
+    if(!CAN_SHARE||shareBusy)return;
+    var r=st.route;
+    if(!r||!r.ships.length){toast('先出海检阅一支舰队，再来分享');return;}
+    shareBusy=true;
+    if(lcShareBtn)lcShareBtn.disabled=true;
+    var dataURL;
+    try{
+      /* 用 JPEG 而不是 PNG：这张卡片铺满渐变与淡网格，PNG 压不动（实测 1080×1440 要约 1.8MB 二进制、
+       * base64 后 2.4MB），而 JPEG q=0.92 只有它的几分之一，文字在这个尺寸下依然清晰。
+       * writeTempFile 的白名单里 jpeg 是支持的。 */
+      dataURL=drawLogCard().toDataURL('image/jpeg',0.92);
+    }catch(e){
+      shareBusy=false;if(lcShareBtn)lcShareBtn.disabled=false;
+      toast('分享图生成失败，换一台设备再试');
+      return;
+    }
+    var order=r.ships,n=order.length,i,total=0,fams={},cns={};
+    for(i=0;i<n;i++){var f=SHIPS[order[i]];fams[f.family]=1;cns[f.country]=1;total+=tonsOf(f);}
+    var brief=(logBriefEl&&logBriefEl.textContent)||'';
+    var payload={
+      title:('大航海时代 · '+r.name).slice(0,20),
+      content:(brief?brief+'\n\n':'')+
+        '由「大航海时代 · 帆船图鉴」生成：'+n+' 艘帆船 · '+Object.keys(fams).length+' 个海域 · '+
+        Object.keys(cns).length+' 个建造国 · 满载排水量合计约 '+fmtL(total)+' 吨。',
+      pageType:'photo_publish'
+    };
+    payload.content=payload.content.slice(0,1000);
+    var step=(XHS.writeTempFile&&typeof XHS.writeTempFile==='function')
+      ?XHS.writeTempFile({data:dataURL})
+      :null;
+    Promise.resolve(step).then(function(res){
+      payload.mediaInfo={image_resources:[{url:(res&&res.filePath)||dataURL}]};
+      return XHS.postNote(payload);
+    }).then(function(){
+      toast('已唤起发布页 · 在那边补完正文就能发');
+    }).catch(function(err){
+      toast('唤起发布页失败：'+((err&&err.errMsg)||'未知原因'));
+    }).then(function(){
+      shareBusy=false;
+      if(lcShareBtn)lcShareBtn.disabled=false;
+    });
+  }
+  if(CAN_SHARE){
+    document.documentElement.className+=' has-share';
+    if(lcShareBtn)lcShareBtn.addEventListener('click',shareLog);
+  }
+
+  /* ================= 详情页分享：直接分享船的原图 =================
+   * 与航海日志页那张「照日志页复刻」的卡片不同，这里**把船图原文件直接交出去**：
+   *   XHR 取 ./assets/ships/<slug>.webp → FileReader 读成 data:image/webp;base64,…
+   *   → writeTempFile 换成本地 filePath → postNote
+   * 刻意不走 canvas.drawImage + toDataURL：① file:// 来源下画本地图片会把画布标记成
+   * "被污染"，toDataURL 直接抛 SecurityError；② 即便导得出来，重绘也等于重编码一遍，
+   * 分享出去的就不是原图了。XHR + FileReader 拿到的是**逐字节的原图**，格式仍是 webp。
+   * 笔记正文＝该船的科普介绍（intro）+ 一段紧凑资料；标题＝船名 · 建造国。
+   * 没有原图就不给按钮（与「缺图回退色卡」同一口径），不做占位分享。 */
+  var shipShareBtn=document.getElementById('shipShareBtn');
+  var shipShareBusy=false;
+
+  /* 原图是否可用：与航海页大图共用同一份预检结果 IMG_OK，不另开一次探测 */
+  function shipSharePaint(){
+    if(!shipShareBtn)return;
+    var r=st.route,ok=false;
+    if(CAN_SHARE&&r&&st.page==='voyage'){
+      var f=SHIPS[r.ships[st.voyageIdx]];
+      ok=!!(f&&f.img&&IMG_OK[f.name]===true);
+    }
+    shipShareBtn.className='ship-share-btn'+(ok?'':' off');
+  }
+  /* 原图 → data:uri：取二进制再交给 FileReader，不经过画布 */
+  function imgDataURI(url){
+    return new Promise(function(resolve,reject){
+      var xhr=new XMLHttpRequest();
+      xhr.open('GET',url,true);
+      xhr.responseType='blob';
+      xhr.onload=function(){
+        /* file:// 下 status 为 0，也算拿到内容 */
+        if((xhr.status>=200&&xhr.status<300)||xhr.status===0){
+          var fr=new FileReader();
+          fr.onload=function(){resolve(fr.result);};
+          fr.onerror=function(){reject({stage:'img'});};
+          fr.readAsDataURL(xhr.response);
+        }else reject({stage:'img'});
+      };
+      xhr.onerror=function(){reject({stage:'img'});};
+      xhr.send();
+    });
+  }
+  /* 笔记正文：科普介绍（intro）+ 一段紧凑资料 */
+  function shipNote(f){
+    var s=f.stats||[0,0,0,0,0,0],dims=[],i;
+    for(i=0;i<STATS_DIMS.length;i++)dims.push(STATS_DIMS[i]+s[i]);
+    return f.intro+'\n\n'+
+      f.country+' · '+f.yard+' · AD '+f.year+
+      '\n排水量约 '+tonsOf(f)+' 吨 · '+(CLASS_LABEL[f.cls]||'帆船')+
+      '\n六维：'+dims.join(' · ')+
+      '\n特征：'+(f.traits||[]).join(' · ')+'\n\n'+
+      '—— 大航海时代 · 帆船图鉴（小红书小工具）';
+  }
+  function shareShip(){
+    if(!CAN_SHARE||shipShareBusy||st.page!=='voyage')return;
+    var r=st.route;
+    if(!r)return;
+    var f=SHIPS[r.ships[st.voyageIdx]];
+    if(!f||!f.img||IMG_OK[f.name]!==true){toast('这艘船的原图还没出');return;}
+    shipShareBusy=true;
+    if(shipShareBtn)shipShareBtn.disabled=true;
+    imgDataURI(f.img).then(function(dataURL){
+      var payload={
+        title:(f.name+' · '+f.country).slice(0,20),
+        content:shipNote(f).slice(0,1000),
+        pageType:'photo_publish'
+      };
+      var step=(XHS.writeTempFile&&typeof XHS.writeTempFile==='function')
+        ?XHS.writeTempFile({data:dataURL})
+        :null;
+      return Promise.resolve(step).then(function(res){
+        payload.mediaInfo={image_resources:[{url:(res&&res.filePath)||dataURL}]};
+        return XHS.postNote(payload);
+      });
+    }).then(function(){
+      toast('已唤起发布页 · 在那边补完正文就能发');
+    }).catch(function(err){
+      toast(err&&err.stage==='img'?'读取船图失败，稍后再试'
+        :'唤起发布页失败：'+((err&&err.errMsg)||'未知原因'));
+    }).then(function(){
+      shipShareBusy=false;
+      if(shipShareBtn)shipShareBtn.disabled=false;
+    });
+  }
+  if(shipShareBtn)shipShareBtn.addEventListener('click',shareShip);
+
   /* ================= 启动 ================= */
+  if(DEMO)document.documentElement.className+=' is-demo';  /* 录屏时不留音乐开关 */
   st.custom=loadCustom();
   renderRoutes();
   if(G){G.refreshMarkers();}

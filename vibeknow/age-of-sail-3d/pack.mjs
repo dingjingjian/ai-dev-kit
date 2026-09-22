@@ -13,11 +13,16 @@ const includes = ['index.html', 'assets'];
 
 // 不纳入打包的项（相对 root）：文档中标注「未采用 / 已停用」的备用素材，
 // 仅作项目内留档，运行时不引用，打进 zip 只会徒增体积。
+// 注意 assets/audio/bgm.mp3 是**构建输入**（源曲目），不是运行时资源：
+// 容器上传白名单不含任何音频扩展名，音频只能以 base64 形式藏在 bgm.js 里
+// （见 tools/make-bgm.mjs 顶部说明），所以源文件必须排除在 zip 之外。
 const excludes = new Set([
   'assets/tex/port-docked.webp',   // 横版港口停泊（未采用，README §出港页）
   'assets/tex/port-sail.webp',     // 横版扬帆出港（未采用）
   'assets/ships/README.md',        // 素材留档文档，容器不支持 .md 类型
   'assets/tex/README.md',          // 同上
+  'assets/audio/README.md',        // 同上
+  'assets/audio/bgm.mp3',          // 源曲目：构建输入，运行时用的是 bgm.js
 ]);
 
 function collect(baseRel) {

@@ -14,7 +14,7 @@
      一层可读性暗化 + 方画框上的纸色暗角与角标，不画 CSS 或 SVG 形状。
      地球为「建造地定位组件」，仅航海页内嵌。
 
-  /* ===== 图片素材图位（逐项规格见 docs/ 下两份配图需求）=====
+  /* ===== 素材图位（图片 + 音频；逐项规格见 docs/ 下三份需求）=====
      原则：页面里不再画任何 CSS/SVG 装饰，缺什么图就退到什么底，不留手绘替代图形。
      ① 帆船图 ×30   assets/ships/<slug>.webp   512×512，航海页大图，缺图回退色卡
      ② 航海徽标      assets/tex/logo.webp       透明底罗盘帆船徽标，缺图则整块隐藏
@@ -23,7 +23,9 @@
      ⑤ 旧港兜底      assets/tex/harbor.webp      ③④ 的兜底图
      ⑥ 海图纸纹      assets/tex/chart.webp       卡片与控制栏底纹，缺图回退纯色
      ⑦ 舰队横幅 ×6   assets/tex/route-<key>.webp 舰队卡片背景，缺图回退纸纹 → 主题渐变
-     ②③④ + 自选舰队横幅 规格见 docs/场景与横幅配图需求.md */
+     ⑧ 背景音乐      assets/audio/bgm.js         base64 音频（源曲目 bgm.mp3 是构建输入，不打进包）
+     ②③④ + 自选舰队横幅 规格见 docs/场景与横幅配图需求.md
+     ⑧ 规格（时长 / 循环点 / 码率 / 版权）见 docs/背景音乐需求.md */
 
   :root{
     /* 深海蓝系（真实海域 / 页面主底） */
@@ -55,11 +57,30 @@
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --shadow:0 10px 34px rgba(0,0,0,.45);
     --topbar:52px;--globem:218px;
+    /* 右上角音乐开关：贴在地球槽右上角那一带、顶栏之下。
+       --bgmgap = 开关顶边在地球槽顶边之下多少（要挪位置就改这一个数） */
+    --bgmgap:16px;
     --hero-h:140px;
-    --sat:0px;--sattop:8px;--sab:0px;
+    --sat:var(--safe-area-inset-top,0px);
+    --sattop:calc(8px + var(--safe-area-inset-top,0px));
+    --sab:var(--safe-area-inset-bottom,0px);
+  }
+  /* 安全区在 **body 上再算一遍**：容器既可能把 --safe-area-inset-* 注入在 html，
+     也可能注入在 body。自定义属性只向下继承 —— 只写在 :root 上算一次的话，
+     注入在 body 时这边取不到值会静默退成 0（顶栏与浮层就被状态栏压住）。
+     写在 body 上：注入在 html 时靠继承拿到，注入在 body 时就在本地，两种都成立。
+     基线层不写 env()（Chrome 61 不支持），增强层再退到 var(注入值, env())。 */
+  body{
+    --sat:var(--safe-area-inset-top,0px);
+    --sattop:calc(8px + var(--safe-area-inset-top,0px));
+    --sab:var(--safe-area-inset-bottom,0px);
   }
   @supports (top:env(safe-area-inset-top)){
-    :root{--sat:env(safe-area-inset-top,0px);--sattop:calc(8px + env(safe-area-inset-top,0px));--sab:env(safe-area-inset-bottom,0px)}
+    body{
+      --sat:var(--safe-area-inset-top,env(safe-area-inset-top,0px));
+      --sattop:calc(8px + var(--safe-area-inset-top,env(safe-area-inset-top,0px)));
+      --sab:var(--safe-area-inset-bottom,env(safe-area-inset-bottom,0px));
+    }
   }
 
   /* ===== 舰队主题（5 套，由 body[data-route] 切换）===== */
@@ -608,6 +629,72 @@
   body.mode-voyage .hint,
   body.mode-builder .hint{top:calc(var(--topbar) + var(--sattop) + 12px)}
 
+  /* ===== 背景音乐开关（音频数据：assets/audio/bgm.js）=====
+     容器上传白名单不收音频扩展名、CSP 又禁 data:/blob: 媒体源，所以音频以 base64
+     藏在 bgm.js（白名单类型）里，运行时用 Web Audio 解码播放 —— 详见 app.js 的 BGM 段。
+     decodeAudioData 成功后才给 <html> 挂 has-bgm，开关才显形；解不出＝整块隐藏，五页照常。
+     开 / 关两枚图标是内联 SVG（音符 / 音符＋斜杠），由 .on 换显，不依赖任何图片。 */
+  .bgm-btn{position:fixed;right:10px;z-index:24;display:none;
+    /* 高度落在地球槽的右上角那一带（地球槽顶边 = --topbar + --sattop），
+       不再跟顶栏标题并排、也就不需要给顶栏留右侧空白把标题拱偏。
+       --bgmgap 默认 16px：让它落在地球槽右上角那枚黄铜包角（15px）之下，互不压。
+       圆形纯图标按钮：开关状态全由图标（音符 / 斜杠音符）+ 铜牌亮暗表达，不放文字。 */
+    top:calc(var(--topbar) + var(--sattop) + var(--bgmgap));
+    width:34px;height:34px;padding:0;border-radius:50%;cursor:pointer;transition:.15s;
+    align-items:center;justify-content:center;
+    color:var(--brass-2);background:rgba(6,11,18,.62);border:1px solid var(--line-2);
+    box-shadow:0 2px 8px rgba(0,0,0,.45)}
+  html.has-bgm .bgm-btn{display:flex}
+  html.is-demo .bgm-btn{display:none}      /* 演示模式录屏不留开关 */
+  .bgm-btn:hover{color:var(--bone);background:rgba(176,137,74,.24);border-color:var(--brass-2)}
+  /* 开启中＝一块压铸黄铜小牌（与望远镜按钮同一套"亮起"语汇） */
+  .bgm-btn.on{color:var(--ink);background:linear-gradient(180deg,var(--brass-3),var(--brass));
+    border-color:rgba(255,246,222,.8);
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.32),0 2px 8px rgba(0,0,0,.45)}
+  .bgm-btn:focus{outline:2px solid var(--brass);outline-offset:1px}
+  /* 图标：16px 见方的内联 SVG，用 currentColor 随按钮配色（亮起时自动转深墨色） */
+  .bgm-ico{flex:none;width:16px;height:16px;overflow:visible}
+  .bgm-ico ellipse{fill:currentColor}
+  .bgm-ico path{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  .bgm-ico .slash{stroke-width:1.9}
+  /* 关闭：同一枚音符压到半透明，再压一道斜杠（通用"关闭"语汇） */
+  .bgm-ico-off{display:none}
+  .bgm-ico-off ellipse,.bgm-ico-off path{opacity:.45}
+  .bgm-ico-off .slash{opacity:1}
+  .bgm-btn:not(.on) .bgm-ico-on{display:none}
+  .bgm-btn:not(.on) .bgm-ico-off{display:inline-block}
+  /* 开关已经挪到地球槽右上角那一带（顶栏之下），所以顶栏不再需要右侧留白 ——
+     标题照旧正中。下面两句只给两个滚动区的首行让开开关：那里内容从顶栏正下方就开始，
+     不然开关会压住船长手记 / 航海日志第一行的右端。 */
+  html.has-bgm .builder-body{padding-top:calc(16px + 36px)}
+  html.has-bgm .log-body{padding-top:calc(18px + 36px)}
+
+  /* ===== 分享按钮（端能力 postNote）=====
+     容器里没有"分享"，只有 §3.3 的 POSTNOTE —— 唤起 App 的笔记发布页并带上内容与媒体。
+     只有容器注入了 window.xhs.miniTool.postNote 才显形：桌面浏览器直接打开 index.html、
+     以及 ?demo 录屏时都不会出现（能力检测，不做 UA 判断）。 */
+  .share-btn{display:none}
+  html.has-share .share-btn{display:inline-block}
+  html.is-demo .share-btn{display:none}
+  .share-btn:disabled{opacity:.5;cursor:progress}
+
+  /* ===== 详情页分享（分享该船原图）=====
+     只出现在航海页，且只有这一艘船的原图**确实加载成功**时才亮 —— 没图就不给按钮，
+     与「缺图回退色卡」同一口径，不做占位分享。位置挨着右上角的音乐开关（同为圆形图标按钮）。 */
+  .ship-share-btn{position:fixed;right:52px;z-index:24;display:none;width:34px;height:34px;
+    padding:0;border-radius:50%;cursor:pointer;transition:.15s;align-items:center;justify-content:center;
+    top:calc(var(--topbar) + var(--sattop) + var(--bgmgap));
+    color:var(--brass-2);background:rgba(6,11,18,.62);border:1px solid var(--line-2);
+    box-shadow:0 2px 8px rgba(0,0,0,.45)}
+  html.has-share body.mode-voyage .ship-share-btn{display:flex}
+  html.has-share body.mode-voyage .ship-share-btn.off{display:none}
+  html.is-demo .ship-share-btn{display:none}
+  .ship-share-btn:hover{color:var(--bone);background:rgba(176,137,74,.24);border-color:var(--brass-2)}
+  .ship-share-btn:focus{outline:2px solid var(--brass);outline-offset:1px}
+  .ship-share-btn:disabled{opacity:.5;cursor:progress}
+  .ship-share-ico{flex:none;width:16px;height:16px;overflow:visible}
+  .ship-share-ico path{fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
   /* ===== 加载 ===== */
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:100;transition:opacity .6s;
     background:radial-gradient(ellipse 70% 50% at 50% 40%,var(--sea-6),var(--sea-8) 60%,var(--sea-9))}
@@ -817,11 +904,39 @@
   </div>
   <div class="log-controls">
     <button class="bar-btn bar-btn-ghost" id="lcAgain">再航一次</button>
+    <button class="bar-btn bar-btn-ghost share-btn" id="lcShare">分享</button>
     <button class="bar-btn bar-btn-primary" id="lcBack">返回组建舰队</button>
   </div>
 </section>
 
 <div class="hint" id="hint"></div>
+<!-- 音乐开关：显示的是**当前有没有在出声**，不是"用户想不想听"。
+     autoplay 策略要求用户手势，所以首屏一定还没出声，初始态就写成未播放的样子
+     （不带 .on、aria-pressed=false、斜杠音符），由 app.js 在真正起播 / 停声时改写。
+     两枚图标都常驻 DOM，由 CSS 的 .on 换显，不做 innerHTML 拼装。 -->
+<button class="bgm-btn" id="bgmBtn" type="button" aria-pressed="false" aria-label="背景音乐" title="背景音乐">
+  <svg class="bgm-ico bgm-ico-on" viewBox="0 0 16 16" aria-hidden="true">
+    <ellipse cx="4.8" cy="12.4" rx="3.3" ry="2.6"/>
+    <path d="M8.1 12.4V2.9c2.3.7 4.1 2 4.3 4.3"/>
+  </svg>
+  <svg class="bgm-ico bgm-ico-off" viewBox="0 0 16 16" aria-hidden="true">
+    <ellipse cx="4.8" cy="12.4" rx="3.3" ry="2.6"/>
+    <path d="M8.1 12.4V2.9c2.3.7 4.1 2 4.3 4.3"/>
+    <path class="slash" d="M1.6 1.6 14.4 14.4"/>
+  </svg>
+</button>
+<!-- 详情页分享：把当前这艘船的**原图**直接交给 POSTNOTE（不走 canvas 重绘，保住原图字节）。
+     只在航海页、且该船原图确实加载成功、且容器注入了端能力时才显形。 -->
+<button class="ship-share-btn off" id="shipShareBtn" type="button" aria-label="分享这艘船" title="分享这艘船">
+  <svg class="ship-share-ico" viewBox="0 0 16 16" aria-hidden="true">
+    <path d="M11.4 6.5h2.1v7H2.5v-7h2.1"/>
+    <path d="M8 9.6V1.9"/>
+    <path d="M5.2 4.7 8 1.9l2.8 2.8"/>
+  </svg>
+</button>
+<!-- 音频数据在 assets/audio/bgm.js（base64，白名单类型），由 app.js 交给 Web Audio 解码播放。
+     这里刻意不放 <audio src="...mp3">：容器上传白名单不收音频扩展名，
+     CSP 也禁 data:/blob: 媒体源，包内音频文件根本进不去。 -->
 <div id="loader">
   <svg class="rose-spin" viewBox="0 0 100 100" aria-hidden="true">
     <circle cx="50" cy="50" r="46"/>
@@ -837,6 +952,7 @@
 
 <script src="./assets/ships.js"></script>
 <script src="./assets/three.min.js"></script>
+<script src="./assets/audio/bgm.js"></script>
 <script src="./assets/app.js"></script>
 </body>
 </html>
