@@ -59,25 +59,26 @@ reference/
 
 ## 总索引
 
-| 博主 | 工具名 | 类型 | 原文链接 | 亮点 | 归档日期 | 目录 |
-| --- | --- | --- | --- | --- | --- | --- |
-| 哲学咖啡师 | 我的户外烟花秀 | h5 | https://www.xiaohongshu.com/discovery/item/6aaeafa10000000028035c68?source=webshare&xhsshare=pc_web&xsec_token=ABASlAyw-oFk4DQ1E09kO4pGBCPEdt7uDgxP3uotmSgyI=&xsec_source=pc_share | 换城市/照片背景+手绘轮廓抠图+开关式烟花触发 | 2026-09-20 | zhexue-kafeishi-fireworks/ |
-| 哲学咖啡师 | 掌上博物馆 | h5 | https://www.xiaohongshu.com/discovery/item/6aa680510000000027017115?source=webshare&xhsshare=pc_web&xsec_token=ABsDDQqKSCJ6ra2Jw8P6hzv0mMskfKsXFV1i5aJ8DZnx0=&xsec_source=pc_share | 3D 展品 360°旋转/缩放+编号部件导览+系列化连载（#vibetool 参赛） | 2026-09-20 | zhexue-kafeishi-pocket-museum/ |
-| 猫哥 | 丝丝入扣（苏绣小工具） | h5 | https://www.xiaohongshu.com/discovery/item/6a8823880000000035026757?source=webshare&xhsshare=pc_web&xsec_token=ABjwmmtNGBw4T3KfDz7nGZAdLZOToZMB5YDH5zguCBhvc=&xsec_source=pc_share | 照片转苏绣针迹+飞针动画+针法密度参数化（GLM 5.3 生成） | 2026-09-20 | maoge-suxiu/ |
-| 词元AI编程 | 极速漂移 SPEED DRIFT | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a9e4a79000000001001cfbb?source=webshare&xhsshare=pc_web&xsec_token=ABjfgcEzSWOdluSkNocbyo4N5eb-Z6sM-xpWT2ujwxPXQ=&xsec_source=pc_share | 移动端 3D 漂移赛车+拖转/双指缩放入场动线+单点手感定位（#vibegame 参赛） | 2026-09-20 | ciyuan-ai-speed-drift/ |
-| CarryTzz | 哆啦A梦的家·串门探险记 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa27919000000000b001536?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMtUdaeLQD8xbmnKrVjV8n8M=&xsec_source=pc_share | 3D 探索寻宝+能力解锁+道具解谜链+双层收集结构（#vibecoding大赛 参赛） | 2026-09-20 | carrytzz-doraemon-house/ |
-| 倪的AI笔记 | 中国人能飞 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a8ec88d0000000028004e1d?source=webshare&xhsshare=pc_web&xsec_token=ABH92no4SUJ9uKAhFMk4qJj1-QeYASJDmF8mY6A5x-wFg=&xsec_source=pc_share | 像素风自动飞升攀高+单手双区操控+高度三件套HUD（#vibegame 参赛） | 2026-09-20 | nide-ai-fly/ |
-| Way的AI创造社 | 跳吧小球 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa56fe8000000002502e51a?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv4O-Y9usH1NQ_saM593eE3k=&xsec_source=pc_share | 星标货币皮肤商店+成就系统+版本更新召回运营，玩家破38万（#vibegame 参赛） | 2026-09-20 | way-ai-jump-ball/ |
-| 哈哈要去哪里 | 迷你飞行 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aabb29e000000002a004eaf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvFJdc8GnR1x9g2I6U4XLODM=&xsec_source=pc_share | Q版 3D 模拟飞行+多机型阵容+海报级宣传图（#vibegame 参赛） | 2026-09-20 | haha-mini-flight/ |
-| 左手 | 科目二挑战赛 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a964de100000000270080fe?source=webshare&xhsshare=pc_web&xsec_token=ABZs6wR8HZcFeuHtJqDOYFblF1dS7pzmheZDs_FUikkR0=&xsec_source=pc_share | 关卡制停车解谜+用时/擦撞/挪车三维结算+星级+科目二题材共鸣（#vibecoding 参赛） | 2026-09-20 | zuoshou-keer-parking/ |
-| 星空下的人 | 挖掘机抓猪 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aad360500000000270160bf?source=webshare&xhsshare=pc_web&xsec_token=ABETpofYcFUKQ_zp2e1gqaLGkaDxFcGDsHWH7uRjo6Al4=&xsec_source=pc_share | 热梗题材+玩家反馈驱动改默认视角+听劝式迭代叙事+评论投票（#vibegame 参赛） | 2026-09-20 | xingkong-excavator-pig/ |
-| 豆米AI | 下一个蓝点 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba?source=webshare&xhsshare=pc_web&xsec_token=AB9XjDaMmirGGm8W5Dc5rH1GkqfszYQJ_EplEG_4WQfGg=&xsec_source=pc_share | 三手势六阶段玩法+米到百万光年尺度尺HUD+真实系外行星结局+100KB零图片零音频（#vibegame 参赛） | 2026-09-20 | doumi-next-blue-dot/ |
-| 机器旁白 | 编钟演奏·三十秒学会弹《晴天》 | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6a969de6000000002800208c?source=webshare&xhsshare=pc_web&xsec_token=AB1omuMyMDrRAcOZGilD3vqXlNQfLL5gdHiOwFivPxaSw=&xsec_source=pc_share | 国乐编钟数字化（一钟双音/三层形制）+热门曲目嫁接+三十秒教学承诺（#vibecoding/#vibemusic 参赛，⚠️ 曲目版权仅作参考） | 2026-09-20 | jiqi-bianzhong-qingtian/ |
-| 木渡川 | 文物放大镜·掌上赏珍 | h5 教程 / webapp | https://www.xiaohongshu.com/discovery/item/6aa226ad0000000011031465?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMt_W-xOGTmZvHKhvK6HOdds=&xsec_source=pc_share | 3D 文物交互全流程教程+博物馆展签式版面+揭顶剖切/细节导览/图鉴导出完整观展动线（#国风vibecoding 参赛） | 2026-09-20 | muduchuan-relic-viewer/ |
-| 阿毛的脑洞 | 捏捏乐 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522?source=webshare&xhsshare=pc_web&xsec_token=ABcTHjdkq5QNPXfFz4D5TzMsSOIjq2rFkuUGpO2Oi98f8=&xsec_source=pc_share | 实物捏捏乐数字化+摸鱼场景定位+八种捏捏SKU化更新+评论区征集新模型（#vibegame 参赛） | 2026-09-20 | amao-squeeze-toy/ |
-| 闲话AI\|造物日记 | 月下寄笺局（月亮信） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2?source=webshare&xhsshare=pc_web&xsec_token=ABgyjiKnSj8-cKE2Iozok0qDqjOG9u-i57Z-4uXb7E3wo=&xsec_source=pc_share | 中秋节令情绪工具+「当面太浓烈微信怕唐突」痛点文案+「寄笺局」品牌化包装+可截图分享的个人化产出（#国风vibecoding 参赛） | 2026-09-20 | xianhua-moon-letter/ |
-| Mingo 🥕 | bala bala（解压球球） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b?source=webshare&xhsshare=pc_web&xsec_token=ABdAl8pX503j3i3ttrJOJ4N7GEJLepe3-I3lEmRKEbSGQ=&xsec_source=pc_share | 戳/按/扒拉触觉解压+照片自定义球（老板球梗）+粉圈解锁密码专享彩蛋+桌面时钟陪伴形态（#vibetool 参赛） | 2026-09-20 | mingo-bala-bala/ |
-| 生姜醋饭 | Piece of Moonlight（月相互动音乐） | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6a9e7f0e0000000028035dd9?source=webshare&xhsshare=pc_web&xsec_token=ABRPKZVc37eJxffwd4-y1n57h5JKGNT8u0ZTmFUsA1tTs=&xsec_source=pc_share | 15 种月相映射 C3–C5 音高+短按半拍/长按长音实时落谱+播放月亮反色高亮跟随+7 音色 4 主题+月相谱卡可保存分享（#国风vibecoding/#vibeart 参赛，中秋·月亮节） | 2026-09-20 | piece-of-moonlight/ |
+| 博主 | 工具名 | 类型 | 原文链接 | 亮点 | 归档日期 | 目录 | 画廊发布 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 哲学咖啡师 | 我的户外烟花秀 | h5 | https://www.xiaohongshu.com/discovery/item/6aaeafa10000000028035c68?source=webshare&xhsshare=pc_web&xsec_token=ABASlAyw-oFk4DQ1E09kO4pGBCPEdt7uDgxP3uotmSgyI=&xsec_source=pc_share | 换城市/照片背景+手绘轮廓抠图+开关式烟花触发 | 2026-09-20 | zhexue-kafeishi-fireworks/ | ✅ |
+| 哲学咖啡师 | 掌上博物馆 | h5 | https://www.xiaohongshu.com/discovery/item/6aa680510000000027017115?source=webshare&xhsshare=pc_web&xsec_token=ABsDDQqKSCJ6ra2Jw8P6hzv0mMskfKsXFV1i5aJ8DZnx0=&xsec_source=pc_share | 3D 展品 360°旋转/缩放+编号部件导览+系列化连载（#vibetool 参赛） | 2026-09-20 | zhexue-kafeishi-pocket-museum/ | ✅ |
+| 猫哥 | 丝丝入扣（苏绣小工具） | h5 | https://www.xiaohongshu.com/discovery/item/6a8823880000000035026757?source=webshare&xhsshare=pc_web&xsec_token=ABjwmmtNGBw4T3KfDz7nGZAdLZOToZMB5YDH5zguCBhvc=&xsec_source=pc_share | 照片转苏绣针迹+飞针动画+针法密度参数化（GLM 5.3 生成） | 2026-09-20 | maoge-suxiu/ | ✅ |
+| 词元AI编程 | 极速漂移 SPEED DRIFT | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a9e4a79000000001001cfbb?source=webshare&xhsshare=pc_web&xsec_token=ABjfgcEzSWOdluSkNocbyo4N5eb-Z6sM-xpWT2ujwxPXQ=&xsec_source=pc_share | 移动端 3D 漂移赛车+拖转/双指缩放入场动线+单点手感定位（#vibegame 参赛） | 2026-09-20 | ciyuan-ai-speed-drift/ | ✅ |
+| CarryTzz | 哆啦A梦的家·串门探险记 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa27919000000000b001536?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMtUdaeLQD8xbmnKrVjV8n8M=&xsec_source=pc_share | 3D 探索寻宝+能力解锁+道具解谜链+双层收集结构（#vibecoding大赛 参赛） | 2026-09-20 | carrytzz-doraemon-house/ | ✅ |
+| 倪的AI笔记 | 中国人能飞 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a8ec88d0000000028004e1d?source=webshare&xhsshare=pc_web&xsec_token=ABH92no4SUJ9uKAhFMk4qJj1-QeYASJDmF8mY6A5x-wFg=&xsec_source=pc_share | 像素风自动飞升攀高+单手双区操控+高度三件套HUD（#vibegame 参赛） | 2026-09-20 | nide-ai-fly/ | ✅ |
+| Way的AI创造社 | 跳吧小球 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa56fe8000000002502e51a?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv4O-Y9usH1NQ_saM593eE3k=&xsec_source=pc_share | 星标货币皮肤商店+成就系统+版本更新召回运营，玩家破38万（#vibegame 参赛） | 2026-09-20 | way-ai-jump-ball/ | ✅ |
+| 哈哈要去哪里 | 迷你飞行 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aabb29e000000002a004eaf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvFJdc8GnR1x9g2I6U4XLODM=&xsec_source=pc_share | Q版 3D 模拟飞行+多机型阵容+海报级宣传图（#vibegame 参赛） | 2026-09-20 | haha-mini-flight/ | ✅ |
+| 左手 | 科目二挑战赛 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6a964de100000000270080fe?source=webshare&xhsshare=pc_web&xsec_token=ABZs6wR8HZcFeuHtJqDOYFblF1dS7pzmheZDs_FUikkR0=&xsec_source=pc_share | 关卡制停车解谜+用时/擦撞/挪车三维结算+星级+科目二题材共鸣（#vibecoding 参赛） | 2026-09-20 | zuoshou-keer-parking/ | ✅ |
+| 星空下的人 | 挖掘机抓猪 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aad360500000000270160bf?source=webshare&xhsshare=pc_web&xsec_token=ABETpofYcFUKQ_zp2e1gqaLGkaDxFcGDsHWH7uRjo6Al4=&xsec_source=pc_share | 热梗题材+玩家反馈驱动改默认视角+听劝式迭代叙事+评论投票（#vibegame 参赛） | 2026-09-20 | xingkong-excavator-pig/ | ✅ |
+| 豆米AI | 下一个蓝点 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aaa7aa30000000026031dba?source=webshare&xhsshare=pc_web&xsec_token=AB9XjDaMmirGGm8W5Dc5rH1GkqfszYQJ_EplEG_4WQfGg=&xsec_source=pc_share | 三手势六阶段玩法+米到百万光年尺度尺HUD+真实系外行星结局+100KB零图片零音频（#vibegame 参赛） | 2026-09-20 | doumi-next-blue-dot/ | ✅ |
+| 机器旁白 | 编钟演奏·三十秒学会弹《晴天》 | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6a969de6000000002800208c?source=webshare&xhsshare=pc_web&xsec_token=AB1omuMyMDrRAcOZGilD3vqXlNQfLL5gdHiOwFivPxaSw=&xsec_source=pc_share | 国乐编钟数字化（一钟双音/三层形制）+热门曲目嫁接+三十秒教学承诺（#vibecoding/#vibemusic 参赛，⚠️ 曲目版权仅作参考） | 2026-09-20 | jiqi-bianzhong-qingtian/ | ✅ |
+| 木渡川 | 文物放大镜·掌上赏珍 | h5 教程 / webapp | https://www.xiaohongshu.com/discovery/item/6aa226ad0000000011031465?source=webshare&xhsshare=pc_web&xsec_token=ABFiDNjaWzftGW-0uFR5xOMt_W-xOGTmZvHKhvK6HOdds=&xsec_source=pc_share | 3D 文物交互全流程教程+博物馆展签式版面+揭顶剖切/细节导览/图鉴导出完整观展动线（#国风vibecoding 参赛） | 2026-09-20 | muduchuan-relic-viewer/ | ✅ |
+| 阿毛的脑洞 | 捏捏乐 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6aa36e010000000026017522?source=webshare&xhsshare=pc_web&xsec_token=ABcTHjdkq5QNPXfFz4D5TzMsSOIjq2rFkuUGpO2Oi98f8=&xsec_source=pc_share | 实物捏捏乐数字化+摸鱼场景定位+八种捏捏SKU化更新+评论区征集新模型（#vibegame 参赛） | 2026-09-20 | amao-squeeze-toy/ | ✅ |
+| 闲话AI\|造物日记 | 月下寄笺局（月亮信） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2?source=webshare&xhsshare=pc_web&xsec_token=ABgyjiKnSj8-cKE2Iozok0qDqjOG9u-i57Z-4uXb7E3wo=&xsec_source=pc_share | 中秋节令情绪工具+「当面太浓烈微信怕唐突」痛点文案+「寄笺局」品牌化包装+可截图分享的个人化产出（#国风vibecoding 参赛） | 2026-09-20 | xianhua-moon-letter/ | ✅ |
+| Mingo 🥕 | bala bala（解压球球） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b?source=webshare&xhsshare=pc_web&xsec_token=ABdAl8pX503j3i3ttrJOJ4N7GEJLepe3-I3lEmRKEbSGQ=&xsec_source=pc_share | 戳/按/扒拉触觉解压+照片自定义球（老板球梗）+粉圈解锁密码专享彩蛋+桌面时钟陪伴形态（#vibetool 参赛） | 2026-09-20 | mingo-bala-bala/ | ✅ |
+| 生姜醋饭 | Piece of Moonlight（月相互动音乐） | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6a9e7f0e0000000028035dd9?source=webshare&xhsshare=pc_web&xsec_token=ABRPKZVc37eJxffwd4-y1n57h5JKGNT8u0ZTmFUsA1tTs=&xsec_source=pc_share | 15 种月相映射 C3–C5 音高+短按半拍/长按长音实时落谱+播放月亮反色高亮跟随+7 音色 4 主题+月相谱卡可保存分享（#国风vibecoding/#vibeart 参赛，中秋·月亮节） | 2026-09-20 | piece-of-moonlight/ | ✅ |
+| AlazySong | 月之暗面（地球追月） | h5 游戏 | 待补（未取到含 xsec_token 的完整分享链接） | 复古未来主义街机小游戏，扮演追逐月亮的地球，四档难度 | 2026-09-23 | alazysong-moons-dark-side/ | ⬜ |
 
 > 新增工具时在此表追加一行；目录列指向本目录下的子目录路径。
 
@@ -89,21 +90,34 @@ reference/
 4. 回到本文件「总索引」表格追加一行。
 5. 积累到一定数量后，从本索引中选品，基于截图与亮点撰写图文笔记（笔记产物放对应自研项目的 `xiaohongshu/` 目录，不放本目录）。
 
-## 归档浏览工具（仓库根 `../vibecoding-gallery/`）
+## 与画廊（仓库根 `../vibecoding-gallery/`）同步：两阶段机制
 
 `vibecoding-gallery/` 把本目录归档的作品做成**复刻小红书信息流形态**的展示小工具：双列瀑布流 + 笔记详情页 + 扭蛋机「随机邂逅」彩蛋。
 它**不是参赛作品**，位于仓库根（与本目录同级），不占四个赛道目录，也不在 `TRACKS.md` 的赛道清单里。
 它会自动定位本目录 `reference/`，所以放在根或在 `reference/` 内都能直接跑。
 
+**本目录就是画廊的「蓄水池」**：日常只归档、不碰画廊；攒够一批（如 5~10 件）再批量发布进画廊。上方「总索引」表格的「画廊发布」列记录每条的发布状态（⬜ 待发布 / ✅ 已发布）。
+
+### 阶段一 · 积累期（日常，零风险，只动本目录）
+看到优秀作品就按上面规范归档，只做三件事：
+1. 建 `<博主名-工具名>/` + `screenshots/cover.*`；
+2. 填子目录 `README.md`（**必须含完整原文链接含 `xsec_token`**、简介、亮点）；
+3. 在本文件「总索引」追加一行，并把「画廊发布」列留空（⬜）。
+
+> ⚠️ 此阶段**不要**改 `vibecoding-gallery/` 任何文件（ORDER / main.js / 打包都不动）。
+> `xsec_token` 有时效，归档时务必贴当时能打开的完整链接；取不到令牌的在 README 标注，发布期照常保留、详情页标「未取到分享令牌」。
+
+### 阶段二 · 发布期（攒够 N 件后，一次性批量）
 ```bash
 cd ../vibecoding-gallery
-python _dev/make_covers.py   # 归档截图有变时重跑：重生成 covers/ 与 covers-data.js
-python _dev/build_zip.py     # 前置校验 → 构建 dist/ → 打包 vibecoding-gallery.zip
 ```
+1. **盘点**：`reference/` 的子目录（除 `README.md`）即待发布清单；与 `vibecoding-gallery/_dev/make_covers.py` 的 `ORDER` 取差集 → 本批发布项。
+2. `ORDER` 追加这批目录名（保持现有命名 / 顺序）→ 跑 `python _dev/make_covers.py` 生成封面 + 更新 `covers-data.js`。
+3. 在 `main.js` 的 `WORKS`（及 `NOTES`）为每条补数据（字段见 gallery README「新增作品」）→ 同步 `_dev/works_raw.json` 一条。
+4. 本文件「总索引」对应行的「画廊发布」列改为 ✅。
+5. `python _dev/build_zip.py` 校验 + 打包。
 
-新增 / 更新归档后的同步顺序：本目录建 `<博主-工具>/` 与 `screenshots/cover.png` → 填子 `README.md` → 本文件总索引追加一行 →
-`_dev/make_covers.py` 的 `ORDER` 加目录名并重跑 → `main.js` 的 `WORKS`（+`NOTES`）加一条 → `_dev/works_raw.json` 加一条 → 重新打包。
-（`build_zip.py` 会把 `main.js` 的链接与 `works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包。）
+> `build_zip.py` 会把 `main.js` 的链接与 `works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；发布期后本目录与画廊再次对齐，下一轮积累从空蓄水池重新开始。
 
 ## 约定
 

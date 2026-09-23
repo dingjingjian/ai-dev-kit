@@ -48,6 +48,7 @@ python _dev/build_zip.py     # 校验 + 打包 vibecoding-gallery.zip
 ```
 
 - **截图更新流程**：直接替换 `reference/<dir>/screenshots/` 里的图（文件名不限，脚本取最新一张），重跑 `make_covers.py` 即可——封面与瀑布流比例自动更新，无需改 `main.js`。
+- **两阶段机制（推荐）**：日常在 `reference/` 按规范积累归档、**暂不进本画廊**；攒够一批（如 5~10 件）再批量发布。完整流程见 [`reference/README.md`](../reference/README.md) 的「与画廊同步：两阶段机制」章节。
 - **新增作品**：在 `reference/` 按规范归档后，`make_covers.py` 的 `ORDER` 追加目录名，重跑生成封面，再在 `main.js` 的 `WORKS` 追加一条（`cover` / `noteId` / `link` 从脚本输出与归档 README 取）。
 - **链接（不得动参数）**：`WORKS[].link` 必须用归档 README 里的**完整原文链接**（含 `xsec_token` 等全部查询参数），去掉参数站外打不开。`build_zip.py` 会把 20 条链接与原始数据 `_dev/works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；页面展示与复制也都原样输出，不做裁剪。
 - **分享令牌（xsec_token）**：20 条里 `xianhua-moon-letter` **仍未取到** `xsec_token`（站外打不开），链接原样保留、详情页标注「未取到分享令牌」，拿到分享链接后同步补进该作品 README、`works_raw.json`、`main.js`；其余 19 条已带完整参数。`build_zip.py` 每次打包都会点名提醒缺令牌的条目。
