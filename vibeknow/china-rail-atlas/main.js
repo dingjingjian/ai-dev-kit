@@ -49,10 +49,10 @@ var IMG_STYLE_ARCH = "Clean architectural elevation illustration of one single r
    同样的占宽与高度区间），才能像同一个系列的封面，而不是四张各画各的素材图。
 
    封面不画具体车型，理由是三条：
-   1) 几何：封面显示框约 3.44:1（窄屏）～ 3.8:1（宽屏），object-fit:cover 只留源图中间约一半；
-      一节车正侧视约 6:1，四节并排要 ≈24:1。整车放进封面只有两条路——被压短成方盒子
+   1) 几何：封面显示框按源图 16:9（960×540）整幅铺满，不再纵向裁切；
+      一节车正侧视约 6:1，塞进 16:9 只有两条路——被压短成方盒子
       （旧版封面即如此，车厢又短又高），或者小到看不清。物件没有固定长宽比，
-      聚成一景正好吃满这条横带，还不必跟比例较劲。
+      聚成一景正好吃满整个画面，还不必跟比例较劲。
    2) 叙事：认型号是条目图的活（50 张都是具体型号、都对着实车照片画）；
       封面只要说清「这里是机车 / 客车 / 货车 / 车站」，不必抢条目图的活。
    3) 氛围：动轮与连杆、煤与铁锹、车厢门与皮箱、麻袋与木箱、铸铁站台灯——
@@ -237,6 +237,15 @@ var ITEMS = [
    feats:["交流异步牵引电机免维护特性好，适合长年高强度运用","功率约为此前国产直流传动机车的两倍以上","与交流传动客运机型共同构成和谐型大功率机车系列"],
    zh:"一台现代大功率货运电力机车，车体修长，两端司机室带倾斜的大玻璃，车顶两副受电弓那排银色母线贯通道，侧面几处简洁的百叶窗模块，蓝白相间的涂装，两台三轴转向架。",
    subject:"a modern Chinese HXD3 high-power AC electric freight locomotive, long clean boxy body with gently raked cab fronts and wide panoramic windshields, two diamond pantographs on the roof linked by a straight roof busbar, smooth flanks broken only by compact ventilation modules and a continuous row of small square windows, bold blue and white livery with a diagonal colour break at each cab, two three-axle bogies, full side elevation"},
+  {id:"loco-16", cat:"loco", name:"和谐电3D型电力机车", en:"HXD3D Electric",
+   kind:"准高速客运电力机车", era:"2013 年 — 至今",
+   tag:"今天普速火车最常见的牵引机车",
+   intro:"2013 年由大连机车车辆厂研制的和谐电3D型客运电力机车，功率大、起动加速快，同时具备向客车供电的能力，可以整列牵引 25T 型空调客车按 160 km/h 运行。它大量投入使用后,成为直达、特快旅客列车的主力机型，也是近年普速线路上最常见的客运机车。",
+   specs:[["问世时间","2013 年"],["标定功率","约 7200 kW 级"],["构造速度","160 km/h"],["列车供电","可向客车整列供电"]],
+   feats:["兼顾大功率与 160 km/h 速度等级，适配准高速客运","自带列车供电系统，免去加挂发电车","是目前普速客运线路上运用最普遍的客运电力机车"],
+   zh:"一台现代客运电力机车，车体平滑、两端司机室为倾斜的流线大窗，车顶两副受电弓和贯通母线，侧面近无百叶窗只有几道简洁散热口，白蓝或红黄涂装，两台三轴转向架。",
+   subject:"a modern Chinese HXD3D high-power electric passenger locomotive, sleek body with smoothly sloped cab fronts and large panoramic windshields, two roof pantographs with a connecting busbar, nearly flush smooth flanks with a few narrow slot vents, white base colour with broad blue sweeping panels along the lower body and thin gold lines, two three-axle bogies, full side elevation"},
+  /* ===================== 火车头 · 动车组 ===================== */
   {id:"loco-17", cat:"loco", name:"CRH2 型动车组", en:"CRH2 EMU (Hexie)",
    kind:"和谐号高速动车组", era:"2007 年 — 至今",
    tag:"中国高铁第一批主力车型，从引进技术到批量国产",
@@ -253,14 +262,6 @@ var ITEMS = [
    feats:["动力分散布置，加速快、轴重轻、车体轻量化的铝合金结构","试验速度 486.1 km/h 是当时轮轨交通的高位记录","与后来的复兴号共同构成中国高速列车的主力阵容"],
    zh:"一台银白涂装的高速动车组的头车（只画一节车，车头只出现在画面左端），车厢细长、高度很低，车头是细长的尖喙式流线鼻端，鼻翼两侧各有一个小圆头灯，司机窗为梯形并向后延伸成黑带，车体侧面一条蓝色饰带贯穿车窗下方，车窗为连续带式的密接车窗，右端是与车厢相接的平断面，不要画成两端都有车头。",
    subject:"a CRH380A Chinese high-speed EMU head car shown alone in strict side elevation, exactly one vehicle in the frame, long slim aluminium body, very long smoothly tapering streamlined nose at the LEFT end only ending in a low pointed tip, two small round headlights set into the nose shoulders, steeply raked trapezoid cab window merging into a black window band running along the coach, a continuous row of flush fitting windows, silver-white body with a single horizontal blue stripe, the RIGHT end is a plain flat coach end wall with a gangway connection and no nose, do NOT draw a nose or a second cab at the right end and do NOT draw two head cars coupled together, full side elevation"},
-  {id:"loco-16", cat:"loco", name:"和谐电3D型电力机车", en:"HXD3D Electric",
-   kind:"准高速客运电力机车", era:"2013 年 — 至今",
-   tag:"今天普速火车最常见的牵引机车",
-   intro:"2013 年由大连机车车辆厂研制的和谐电3D型客运电力机车，功率大、起动加速快，同时具备向客车供电的能力，可以整列牵引 25T 型空调客车按 160 km/h 运行。它大量投入使用后,成为直达、特快旅客列车的主力机型，也是近年普速线路上最常见的客运机车。",
-   specs:[["问世时间","2013 年"],["标定功率","约 7200 kW 级"],["构造速度","160 km/h"],["列车供电","可向客车整列供电"]],
-   feats:["兼顾大功率与 160 km/h 速度等级，适配准高速客运","自带列车供电系统，免去加挂发电车","是目前普速客运线路上运用最普遍的客运电力机车"],
-   zh:"一台现代客运电力机车，车体平滑、两端司机室为倾斜的流线大窗，车顶两副受电弓和贯通母线，侧面近无百叶窗只有几道简洁散热口，白蓝或红黄涂装，两台三轴转向架。",
-   subject:"a modern Chinese HXD3D high-power electric passenger locomotive, sleek body with smoothly sloped cab fronts and large panoramic windshields, two roof pantographs with a connecting busbar, nearly flush smooth flanks with a few narrow slot vents, white base colour with broad blue sweeping panels along the lower body and thin gold lines, two three-axle bogies, full side elevation"},
   {id:"loco-19", cat:"loco", name:"CR400AF 复兴号动车组", en:"CR400AF Fuxing EMU",
    kind:"中国标准动车组", era:"2017 年 — 至今",
    tag:"具有完全自主知识产权的中国标准高速列车",
