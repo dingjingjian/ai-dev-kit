@@ -6,8 +6,11 @@
  * 数据是唯一真源：
  *   CATS   —— 分类（key / tabZh 顶栏 2 字短名 / note / accent / icon）
  *   ITEMS  —— 条目（id / cat / name / en / kind / era / tag / intro / specs / feats / zh / subject）
- *   IMG_STYLE      —— 车辆类配图的统一风格前缀（图鉴式侧视插画）
- *   IMG_STYLE_ARCH —— 车站类配图的统一风格前缀（建筑正视立面插画）
+ *   IMG_STYLE         —— 车辆类条目图的统一风格前缀（图鉴式侧视插画）
+ *   IMG_STYLE_ARCH    —— 车站类条目图的统一风格前缀（建筑正视立面插画）
+ *   IMG_STYLE_COVER      —— 车辆类分类封面的风格前缀（写实棚拍静物，道具横排，与条目图分层）
+ *   IMG_STYLE_COVER_ARCH —— 车站类分类封面的风格前缀（写实棚拍静物，站台器物横排）
+ *   COVER_SUBJECTS       —— 四类封面各摆哪几件道具（英文主体描述，按分类 key 取）
  *
  * 配图：条目图 ./assets/img/<id>.<ext>，分类封面 ./assets/img/cover-<catKey>.<ext>；
  *       文件缺失时页面自动显示占位块（写明期望文件名），补图不需要改代码。
@@ -18,17 +21,68 @@
 
 /* ============================ 配图风格 ============================ */
 
-/* 车辆类（火车头 / 客车 / 货车）统一风格：博物馆式侧视插画。
+/* 车辆类（条目图）统一风格：博物馆式侧视插画。
    写法要点：
    1) 先把「性质 + 视角」说清楚，再讲画法，最后集中给负面项；
-   2) 构图用量化短句反复强调「主体只占画面中间一半高度」，压住模型「越大越好看」的默认倾向
+   2) 「只画一辆车」必须显式写死：动车组类条目只画一节头车，车头只在一端，
+      否则模型会把 CRH380A / CR400AF 画成两端都是车头的「双头车」（已实际踩坑）；
+   3) 构图用量化短句反复强调「主体只占画面中间一半高度」，压住模型「越大越好看」的默认倾向
       （页面用 object-fit:cover 裁切，主体过高会被卡片切掉）；
-   3) 画面里不得出现任何车型编号、文字、路徽、logo、人物与场景，型号只靠造型本身辨认。 */
-var IMG_STYLE = "Clean railway museum technical illustration, single rail vehicle shown in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background with no scenery and no ground line, no railway track, the vehicle is small in the frame and fully inside it, horizontally centered, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9";
+   4) 负面项里把「地线 / 轨道」拆开写死：早期版本只写 no ground line，模型仍会横贯画一条轨道线，
+      现改为「禁止地平线 + 允许极淡的接触阴影」，两头堵住；
+   5) 画面里不得出现任何车型编号、文字、路徽、logo、人物与场景，型号只靠造型本身辨认。 */
+var IMG_STYLE = "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9";
 
-/* 车站类统一风格：建筑正视立面插画。
+/* 车站类（条目图）统一风格：建筑正视立面插画。
    车站是横向很宽的建筑，务必整栋横向居中且不贴画框左右边缘（区别于车辆的「压低高度」）。 */
-var IMG_STYLE_ARCH = "Clean architectural elevation illustration of a single railway station building, strict front elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background with no scenery, no sky, no ground line, no vehicles, the whole building is small in the frame and fully inside it, horizontally centered, occupying only the middle half of the frame width and less than half of the frame height, wide empty background on all sides, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9";
+var IMG_STYLE_ARCH = "Clean architectural elevation illustration of one single railway station building, strict front elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, sky, clouds, trees, roads, vehicles and any horizontal ground line running across the image, only a very faint soft contact shadow hugging the base of the building, the whole building is small in the frame and fully inside it, horizontally centered with an equal empty margin at both sides, occupying only the middle half of the frame width and less than half of the frame height, wide empty background on all sides, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9";
+
+/* ============================ 分类封面风格 ============================ */
+
+/* 分类封面（4 张，列表页每个分组顶部的大图）与条目图分层：
+   条目图是图鉴式插画（信息优先），封面要的是**氛围与质感**（视觉优先），
+   所以封面改用写实棚拍**静物小品**：同一片浅暖白底上，把该类别的铁路物件**聚成一景**。
+
+   关键：封面是**一个完整画面**，不是「一排摆件」。
+   一组物件要有主次、有叠放遮挡、共用一个落脚阴影，读起来像一张拍出来的静物画；
+   四张封面共用同一套配方（同底色、同光位、同正交视角、同样的主件 + 陪衬结构、
+   同样的占宽与高度区间），才能像同一个系列的封面，而不是四张各画各的素材图。
+
+   封面不画具体车型，理由是三条：
+   1) 几何：封面显示框约 3.44:1（窄屏）～ 3.8:1（宽屏），object-fit:cover 只留源图中间约一半；
+      一节车正侧视约 6:1，四节并排要 ≈24:1。整车放进封面只有两条路——被压短成方盒子
+      （旧版封面即如此，车厢又短又高），或者小到看不清。物件没有固定长宽比，
+      聚成一景正好吃满这条横带，还不必跟比例较劲。
+   2) 叙事：认型号是条目图的活（50 张都是具体型号、都对着实车照片画）；
+      封面只要说清「这里是机车 / 客车 / 货车 / 车站」，不必抢条目图的活。
+   3) 氛围：动轮与连杆、煤与铁锹、车厢门与皮箱、麻袋与木箱、铸铁站台灯——
+      这些物件的材质与做旧，比一台干净的整车更有年代感。
+
+   写法要点：
+   1) 不要写 diorama —— 模型把它理解成「沙盘」，会自动补轨道、道砟、地面与地平线；
+   2) 轨道 / 道砟 / 地面 / 地平线 / 人物 / 文字逐项写死，只写 no ground line 挡不住；
+      但**允许一组物件共用一片极淡的落地阴影**（这是「成景」的关键），前提是不成一条直线；
+   3) 必须写清「一件主、其余靠/叠/压在前」，否则模型会把物件等距排成一行摆件；
+   4) 一律正交感平视（无透视、无景深），与条目图的正侧视 / 正立面同一套底子。
+
+   画面主体描述见下面的 COVER_SUBJECTS，改景只改那张表。 */
+var IMG_STYLE_COVER = "Premium large-format studio photograph of one complete composed still life scene, a small group of Chinese railway objects gathered tightly together as a single arrangement on a seamless flat pale warm off-white studio backdrop, one large dominant object anchoring the group slightly left of center with the smaller pieces leaning against it, resting on it, set down in front of it or stacked behind it so the objects overlap and read as one single picture instead of a row of separate items, the whole group sharing one soft pooled contact shadow where it meets the backdrop, everything seen in a straight-on orthographic view with no perspective, the group fully inside the frame, horizontally centered and spanning about 75 percent of the frame width, the tallest object not more than about 45 percent of the frame height, wide empty backdrop above and below, photorealistic materials, matte painted steel, cast iron, brass, weathered wood, canvas, enamel, glass and coal with believable dents, scratches and patina, soft large-area studio lighting from above and slightly to the front left, gentle ambient occlusion, calm warm neutral palette with an even tonal range, consistent series look, nothing else in the picture: no scenery, no landscape, no horizon, no straight ground line, no visible floor, no sky, no clouds, no rails, no track, no sleepers, no ballast, no gravel, no platform, no buildings, no complete locomotive, no complete carriage, no complete train, no extra objects, no overhead wires, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, no hands, landscape 16:9";
+
+var IMG_STYLE_COVER_ARCH = "Premium large-format studio photograph of one complete composed still life scene, a small group of old Chinese railway station fittings gathered tightly together as a single arrangement on a seamless flat pale warm off-white studio backdrop, one large dominant piece anchoring the group slightly left of center with the smaller pieces leaning against it, set down in front of it or stacked behind it so they overlap and read as one single picture instead of a row of separate items, the whole group sharing one soft pooled contact shadow where it meets the backdrop, everything seen in a straight-on orthographic view with no perspective, the group fully inside the frame, horizontally centered and spanning about 75 percent of the frame width, the tallest object not more than about 45 percent of the frame height, wide empty backdrop above and below, photorealistic materials, painted cast iron, riveted steel, pale stone, varnished timber, aged brass, frosted glass and worn leather with believable chipped paint and patina, soft large-area studio lighting from above and slightly to the front left, gentle ambient occlusion, calm warm neutral palette with an even tonal range, consistent series look, nothing else in the picture: no scenery, no landscape, no horizon, no straight ground line, no visible floor or platform surface, no sky, no clouds, no track, no rails, no ballast, no buildings, no station facade, no complete station, no vehicles, no overhead wires, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, no hands, landscape 16:9";
+
+/* 分类封面主体描述（英文，直接拼在风格串后面当提示词）：四类各**一景**，
+   写法是「一件主件 + 2～3 件陪衬 + 谁靠着谁 / 谁叠在谁前面」，不要写成并列清单。
+   只写「是什么 + 材质 + 年代特征」，不写具体型号，也不要点名任何一节的编号。
+   改景改这里，然后重跑 python _dev/gen_image_prompts.py。 */
+var COVER_SUBJECTS = {
+  loco: "the group is built around one large black steam locomotive driving wheel with its polished steel connecting rod, standing upright as the anchor slightly left of center, a round black smokebox door with a brass hinge band leaning against the wheel, an old brass locomotive headlamp with a domed top and a round glass lens set down in front of the wheel, and a worn iron coal shovel resting across a small heap of coal at the wheel's foot",
+
+  pax: "the group is built around one dark green passenger coach door panel with a single large sealed window, a cream beltline strip and a flush handle, standing as the anchor slightly left of center, a scuffed leather and canvas travel trunk with brass corner pieces set down in front of it, a steel vacuum flask and a chipped white enamel mug standing on the trunk, and a folded sleeping berth blanket with a pillow draped over the top of the trunk",
+
+  freight: "the group is built around one deep blue-grey steel gondola wagon side panel with pressed vertical corrugations and one large drop door, standing as the anchor slightly left of center, a full burlap sack leaning against the panel, a slatted wooden crate bound with steel strapping set down in front of the panel, a small heap of coal spilled at its foot, and a single freight wagon wheelset lying on the backdrop to the right",
+
+  station: "the group is built around one low section of a cast iron station platform canopy with a riveted steel truss and glass panels, standing as the anchor slightly left of center, an old cast iron platform lamp post with a domed frosted glass shade standing directly in front of it, a wooden waiting room bench with turned legs and iron armrests set down beside it, and a two wheeled station luggage trolley carrying two leather suitcases tucked behind the bench",
+};
 
 /* ============================ 分类 ============================ */
 
@@ -120,11 +174,11 @@ var ITEMS = [
   {id:"loco-08", cat:"loco", name:"东风5型内燃机车", en:"DF5 Shunter",
    kind:"车站与编组场调车机车", era:"1976 年 — 至今",
    tag:"不跑干线的幕后角色，把一列车的车厢编组起来",
-   intro:"东风5型是1976 年试制、1984 年改进定型的调车兼小运转内燃机车。它功率适中、车体短、两端司机室视野开阔，适合在编组站、货场与专用线上往返推送车列，承担解体、编组与取送作业，是铁路里作业频次最高的一类机车。",
+   intro:"东风5型是1976 年试制、1984 年改进定型的调车兼小运转内燃机车。它功率适中、车体短，外走廊式车体上司机室只设在车体一端，视野开阔，适合在编组站、货场与专用线上往返推送车列，承担解体、编组与取送作业，是铁路里作业频次最高的一类机车。",
    specs:[["问世时间","1976 年（1984 年改进定型）"],["动力类型","柴油机驱动牵引电动机"],["标定功率","约 1200 kW 级"],["典型用途","编组站调车 / 小运转 / 专用线取送"]],
-   feats:["车体短、转弯半径小，适应站场密集道岔","两端设司机室，来回推送不必掉头","是铁路作业频次最高的车型之一，也承担部分小运转列车"],
-   zh:"一台短车身的调车机车，车体很短，中间一段低矮的机械间，两端各有一个高起的司机室四周开满大窗，侧面一列散热百叶窗，外走廊配贯通式扶手，橙红色涂装，下方两台三轴转向架。",
-   subject:"a short Chinese DF5 diesel shunting locomotive, compact body with a very low central machinery compartment and two tall cabs pushed out to each end with large wraparound windows and flat angular fronts, a row of vertical ventilation louvers along the flank and a railed walkway with handrails running around the sides, two three-axle bogies beneath, body painted in a warm orange-red single tone, full side elevation"},
+   feats:["车体短、转弯半径小，适应站场密集道岔","外走廊式车体，司机与调车人员沿车侧走台作业，观察车列方便","是铁路作业频次最高的车型之一，也承担部分小运转列车"],
+   zh:"一台外走廊式调车机车，全车只有一端有司机室：司机室在前，后面是长长的低矮动力室，车尾是一道平直的机械间端墙（不要画第二个司机室，画面里只出现一个车头）；车身侧面是成列的散热百叶窗与若干检修门，车体两侧有带栏杆的贯通走台，橙黄涂装配白色腰带、车头排障器上有红白斜条，下方两台三轴转向架。",
+   subject:"a short Chinese DF5 diesel shunting locomotive shown in strict side elevation with exactly one driver cab, the cab at the LEFT end only with large windows and a flat slightly raked front, the rest of the body running back as a low full-length engine compartment ending in a plain flat vertical end wall at the RIGHT end with no second cab and no second windshield anywhere in the picture, full-length external side walkway with pipe handrails running the whole length of the body, rows of vertical ventilation louvers and a few square access doors along the flank, small exhaust stack and roof hatches on top, warm orange-yellow livery with a white waist band, red and white striped snowplow pilot beam at the front, two three-axle bogies, full side elevation"},
   {id:"loco-09", cat:"loco", name:"东风11型内燃机车", en:"DF11 High-speed Diesel",
    kind:"准高速客运内燃机车", era:"1992 年 — 至今",
    tag:"九十年代铁路大提速的主力，内燃客运的顶点",
@@ -183,6 +237,22 @@ var ITEMS = [
    feats:["交流异步牵引电机免维护特性好，适合长年高强度运用","功率约为此前国产直流传动机车的两倍以上","与交流传动客运机型共同构成和谐型大功率机车系列"],
    zh:"一台现代大功率货运电力机车，车体修长，两端司机室带倾斜的大玻璃，车顶两副受电弓那排银色母线贯通道，侧面几处简洁的百叶窗模块，蓝白相间的涂装，两台三轴转向架。",
    subject:"a modern Chinese HXD3 high-power AC electric freight locomotive, long clean boxy body with gently raked cab fronts and wide panoramic windshields, two diamond pantographs on the roof linked by a straight roof busbar, smooth flanks broken only by compact ventilation modules and a continuous row of small square windows, bold blue and white livery with a diagonal colour break at each cab, two three-axle bogies, full side elevation"},
+  {id:"loco-17", cat:"loco", name:"CRH2 型动车组", en:"CRH2 EMU (Hexie)",
+   kind:"和谐号高速动车组", era:"2007 年 — 至今",
+   tag:"中国高铁第一批主力车型，从引进技术到批量国产",
+   intro:"2007 年 4 月 18 日全国铁路第六次大提速，由南车四方引进日本川崎重工 E2 系技术制造的 CRH2 型动车组投入运用，担当时速 200–250 公里的动车组列车，是「和谐号」家族里投放最早、数量最多的一支。此后在它的基础上发展出 CRH2A、CRH2B、CRH2C 等衍生型号，既有线提速与早期高铁线上都留下过它的身影，也为后来的 CRH380A 积累了设计与制造经验。",
+   specs:[["问世时间","2007 年（第六次大提速投用）"],["技术来源","引进日本新干线 E2 系技术"],["编组形式","8 辆动力分散（4 动 4 拖）"],["最高运营速度","250 km/h"]],
+   feats:["中国铁路第六次大提速的开路车型，第一批大规模量产的和谐号","引进消化吸收后实现国产化，衍生出 CRH2A / 2B / 2C 等多个型号","银白车身配浅蓝腰带的车头造型，是很多人对「高铁」的第一印象"],
+   zh:"一台和谐号动车组的头车（只画一节车，车头只出现在画面左端），银白色细长车体，车头是较长而下探的流线鼻端，鼻端上方的风挡玻璃大而倾斜，车体侧面一条浅蓝色腰带走在车窗下方、到车头处微微上挑，车窗是连续的黑边大窗，车顶浅灰配一列空调罩，右端为与车厢相接的平断面，不要画成两端都有车头。",
+   subject:"a CRH2 Chinese high-speed EMU head car shown alone in strict side elevation, exactly one vehicle in the frame, long slim white aluminium body with a light grey roof, a moderately long smoothly tapering streamlined nose at the LEFT end only, the nose dipping low and ending in a rounded blunt tip, one large steeply raked windshield, a continuous dark-surround window band running along the coach, one light blue waist stripe below the windows sweeping up and wrapping around the low nose tip as a thin arc, flush air-conditioning fairings on the roof, the RIGHT end is a plain flat coach end wall with a gangway connection and no nose, do NOT draw a nose or a second cab at the right end and do NOT draw two head cars coupled together, full side elevation"},
+  {id:"loco-18", cat:"loco", name:"CRH380A 型动车组", en:"CRH380A EMU (Hexie)",
+   kind:"和谐号高速动车组", era:"2010 年 — 至今",
+   tag:"把中国高铁推到 486 km/h 的和谐号明星",
+   intro:"2010 年由南车青岛四方机车车辆股份有限公司研制的 CRH380A 型高速动车组投入运用，主要在京沪、武广等高速线上担当 300–350 km/h 级别的运营。它采用轻量化铝合金车体与低阻力流线车头，2010 年 12 月在京沪高铁先导段跑出 486.1 km/h 的试验速度，此后长期是中国高铁的主力车型之一。",
+   specs:[["问世时间","2010 年"],["编组形式","8 辆短编 / 16 辆长编动力分散"],["最高运营速度","350 km/h"],["试验速度","486.1 km/h（2010 年）"]],
+   feats:["动力分散布置，加速快、轴重轻、车体轻量化的铝合金结构","试验速度 486.1 km/h 是当时轮轨交通的高位记录","与后来的复兴号共同构成中国高速列车的主力阵容"],
+   zh:"一台银白涂装的高速动车组的头车（只画一节车，车头只出现在画面左端），车厢细长、高度很低，车头是细长的尖喙式流线鼻端，鼻翼两侧各有一个小圆头灯，司机窗为梯形并向后延伸成黑带，车体侧面一条蓝色饰带贯穿车窗下方，车窗为连续带式的密接车窗，右端是与车厢相接的平断面，不要画成两端都有车头。",
+   subject:"a CRH380A Chinese high-speed EMU head car shown alone in strict side elevation, exactly one vehicle in the frame, long slim aluminium body, very long smoothly tapering streamlined nose at the LEFT end only ending in a low pointed tip, two small round headlights set into the nose shoulders, steeply raked trapezoid cab window merging into a black window band running along the coach, a continuous row of flush fitting windows, silver-white body with a single horizontal blue stripe, the RIGHT end is a plain flat coach end wall with a gangway connection and no nose, do NOT draw a nose or a second cab at the right end and do NOT draw two head cars coupled together, full side elevation"},
   {id:"loco-16", cat:"loco", name:"和谐电3D型电力机车", en:"HXD3D Electric",
    kind:"准高速客运电力机车", era:"2013 年 — 至今",
    tag:"今天普速火车最常见的牵引机车",
@@ -191,40 +261,22 @@ var ITEMS = [
    feats:["兼顾大功率与 160 km/h 速度等级，适配准高速客运","自带列车供电系统，免去加挂发电车","是目前普速客运线路上运用最普遍的客运电力机车"],
    zh:"一台现代客运电力机车，车体平滑、两端司机室为倾斜的流线大窗，车顶两副受电弓和贯通母线，侧面近无百叶窗只有几道简洁散热口，白蓝或红黄涂装，两台三轴转向架。",
    subject:"a modern Chinese HXD3D high-power electric passenger locomotive, sleek body with smoothly sloped cab fronts and large panoramic windshields, two roof pantographs with a connecting busbar, nearly flush smooth flanks with a few narrow slot vents, white base colour with broad blue sweeping panels along the lower body and thin gold lines, two three-axle bogies, full side elevation"},
-
-  /* ===================== 火车头 · 动车组与磁浮 ===================== */
-  {id:"loco-17", cat:"loco", name:"CRH380A 型动车组", en:"CRH380A EMU (Hexie)",
-   kind:"和谐号高速动车组", era:"2010 年 — 至今",
-   tag:"把中国高铁推到 486 km/h 的和谐号明星",
-   intro:"2010 年由南车青岛四方机车车辆股份有限公司研制的 CRH380A 型高速动车组投入运用，主要在京沪、武广等高速线上担当 300–350 km/h 级别的运营。它采用轻量化铝合金车体与低阻力流线车头，2010 年 12 月在京沪高铁先导段跑出 486.1 km/h 的试验速度，此后长期是中国高铁的主力车型之一。",
-   specs:[["问世时间","2010 年"],["编组形式","8 辆短编 / 16 辆长编动力分散"],["最高运营速度","350 km/h"],["试验速度","486.1 km/h（2010 年）"]],
-   feats:["动力分散布置，加速快、轴重轻、车体轻量化的铝合金结构","试验速度 486.1 km/h 是当时轮轨交通的高位记录","与后来的复兴号共同构成中国高速列车的主力阵容"],
-   zh:"一列银白涂装的高速动车组的头部车厢，车厢细长，高度很低，车头呈尖锐流线并有一对小圆头灯，司机窗为梯形并向后延伸的黑带，车体两侧一横条蓝色饰带，车窗为连续带式的密接车窗。",
-   subject:"a CRH380A Chinese high-speed EMU head car, long slim aluminium body, very long smoothly tapering streamlined nose ending in a low pointed tip, two small round headlights set into the nose shoulders, steeply raked trapezoid cab window merging into a black window band running along the coach, a continuous row of flush fitting windows, silver-white body with a single horizontal blue stripe, full side elevation"},
-  {id:"loco-18", cat:"loco", name:"CR400AF 复兴号动车组", en:"CR400AF Fuxing EMU",
+  {id:"loco-19", cat:"loco", name:"CR400AF 复兴号动车组", en:"CR400AF Fuxing EMU",
    kind:"中国标准动车组", era:"2017 年 — 至今",
    tag:"具有完全自主知识产权的中国标准高速列车",
    intro:"2017 年 6 月 26 日，由中国铁路总公司牵头研制的中国标准动车组「复兴号」CR400AF 在京沪高铁首发。它在牵引、制动、网络控制等核心系统上实现自主化与标准化，可按 350 km/h 长期运营，并有 8 辆短编、17 辆超长编等多种编组，是目前中国高铁网络里运用最广的高速列车型号。",
    specs:[["问世时间","2017 年"],["编组形式","8 辆 / 17 辆动力分散"],["最高运营速度","350 km/h"],["网络电压","交流 25 kV"]],
    feats:["关键系统自主化，是全系列落成统一标准的「中国标准动车组」","17 辆超长编组运力更大，适配繁忙干线","长期承担京沪等主通道的高密度运营"],
-   zh:"一列复兴号动车组的头车，车体圆润修长，车头较钝而流畅，一对细长前灯斜插在鼻翼两侧，司机窗大而连贯、与侧面黑色窗带相接，车顶平滑仅一列空调罩，银灰车身配红色腰带，车窗连续布置。",
-   subject:"a China Railway CR400AF Fuxing high-speed EMU head car, long rounded albatross-style streamlined nose with a blunter taper than earlier designs, a pair of slim slanted headlight clusters set low beside the nose tip, a very large curved cab window flowing into a continuous black window band, flush continuous row of passenger windows, silver-grey lower body with a bold red stripe along the window band, full side elevation"},
-  {id:"loco-19", cat:"loco", name:"CR200J 型动车组", en:"CR200J Power-concentrated EMU",
+   zh:"一台复兴号动车组的头车（只画一节车，车头只出现在画面左端），车体圆润修长，车头是较钝而流畅的「鹰嘴」流线鼻端，一对细长前灯斜插在鼻翼两侧，司机窗大而连贯、与侧面黑色窗带相接，车顶平滑仅一列空调罩，银灰车身配红色腰带，车窗连续布置，右端是与车厢相接的平断面，不要画成两端都有车头。",
+   subject:"a China Railway CR400AF Fuxing high-speed EMU head car shown alone in strict side elevation, exactly one vehicle in the frame, long rounded albatross-style streamlined nose at the LEFT end only with a blunter taper than earlier designs, a pair of slim slanted headlight clusters set low beside the nose tip, a very large curved cab window flowing into a continuous black window band, flush continuous row of passenger windows, silver-grey lower body with a bold red stripe along the window band, the RIGHT end is a plain flat coach end wall with a gangway connection and no nose, do NOT draw a nose or a second cab at the right end and do NOT draw two head cars coupled together, full side elevation"},
+  {id:"loco-20", cat:"loco", name:"CR200J 型动车组", en:"CR200J Power-concentrated EMU",
    kind:"动力集中型动车组", era:"2019 年 — 至今",
    tag:"跑普速线路的「绿巨人」，把老线速度提到 160",
    intro:"2019 年投入运用的 CR200J 型动力集中型动车组，一端为一台电力动力车、另一端为控制车，中间是改造自 25T 型客车的拖车，可在既有普速线路上按 160 km/h 运行。它逐步替代了一批老旧的直达、特快列车，让非高铁线路上的普速出行体验明显改善，因绿色涂装也被称为「绿巨人」。",
    specs:[["问世时间","2019 年"],["编组形式","动力集中的动力车 + 拖车 + 控制车"],["最高运营速度","160 km/h"],["适用线路","既有电气化普速铁路"]],
    feats:["可在既有普速线路运行，无需新建高铁即可提速","两端均可操纵，省去机车摘挂与掉头作业","内饰按动车标准改造，乘车体验优于传统普速客车"],
-   zh:"一台扁方而不是流线型的电力动力车，前脸为竖直的大平面玻璃带斜角，车顶一副受电弓，车体平的侧面只有少量散热口，通身深绿并有一条奶黄色细腰带，下面是两台三轴转向架。",
-   subject:"a CR200J power-concentrated EMU power car, flat-fronted semi-streamlined end with a wide slightly raked window band and a smooth rounded roofline rather than a long nose, one diamond pantograph on the roof, plain flanks with a few narrow vents and a continuous row of passenger windows further back, deep green livery with a thin cream beltline and small cream cab corner blocks, two three-axle bogies, full side elevation"},
-  {id:"loco-20", cat:"loco", name:"上海磁浮列车", en:"Shanghai Maglev (Transrapid)",
-   kind:"高速磁浮列车", era:"2003 年 — 至今",
-   tag:"世界上首条商业运营的高速磁浮线",
-   intro:"上海磁浮列车示范运营线 2003 年开始试运行、2004 年投入商业运营，采用德国常导电磁悬浮技术，列车抱轨运行、不接触轨道，是世界上第一条商业化运营的高速磁浮线路。线路全长约 30 公里，连接龙阳路与浦东国际机场，最高运营速度 300 km/h，全程只需七八分钟，试验速度曾达 430 km/h。",
-   specs:[["投入运营","2004 年（2003 年试运行）"],["技术制式","常导电磁悬浮，抱轨式"],["最高运营速度","300 km/h（试验 430 km/h）"],["线路长度","约 30 公里"]],
-   feats:["世界上第一条商业化运营的高速磁浮线路","没有轮轨接触，靠电磁力悬浮与推进，噪声与磨耗都很小","全程七八分钟连接市区与浦东国际机场"],
-   zh:"一列磁浮列车的头车，车体短而高、圆润似飞机机身，车头大而圆钝几乎没有尖鼻翼，司机窗为大面积弧形玻璃，车体下部包住轨道有一层 T 形包覆裙板，没有任何车轮，白底配蓝色饰带。",
-   subject:"a Shanghai maglev train lead car, short tall aircraft-like rounded body with a very blunt almost circular nose, one large curved wraparound cab window, smooth continuous flanks with a row of small windows, a deep T-shaped skirt fairing wrapping the guideway along the underside with no visible wheels, white body with two horizontal blue stripes, full side elevation"},
+   zh:"一台扁方而不是流线型的电力动力车（只画一节动力车，车头只出现在画面左端），前脸是竖直的大平面玻璃略带斜角，车顶一副受电弓，车体侧面平整、只有少量散热口，通身深绿并有一条奶黄色细腰带，下面是两台三轴转向架，右端不要画第二个车头。",
+   subject:"a CR200J power-concentrated EMU power car shown alone in strict side elevation, exactly one vehicle in the frame, flat-fronted semi-streamlined cab at the LEFT end only with a wide slightly raked window band and a smooth rounded roofline rather than a long nose, one diamond pantograph on the roof, plain flanks with a few narrow vents and a continuous row of passenger windows further back, deep green livery with a thin cream beltline and small cream cab corner blocks, two three-axle bogies, the RIGHT end is a plain flat car end wall with no nose, do NOT draw a nose or a second cab at the right end, full side elevation"},
 
   /* ===================== 客运车厢 ===================== */
   {id:"pax-01", cat:"pax", name:"21 型客车", en:"Type 21 Coach",
@@ -281,8 +333,8 @@ var ITEMS = [
    intro:"硬卧车是中国普速列车上最常见的卧铺车型，以 25G 型硬卧车为代表。车厢一侧为纵向走廊，另一侧是若干组半开放的隔间，每组上下三层共六个铺位，配小桌、边座与行李架。不设包厢门，票价适中，是长途夜车最经济也最有生活气息的选择。",
    specs:[["代表型号","YW25G"],["布置","半开放式隔间，每组上下三层"],["典型定员","约 66 人"],["运行环境","长途普速夜车"]],
    feats:["双层三条铺位的隔间设计，让一节车厢既能坐也能躺","取消包厢门换来更高的载客效率与更低票价","配行李架、边座与小桌，是长途旅客的标准化方案"],
-   zh:"一节硬卧车厢，侧墙上部是一排连续的观景大窗，下部还有一排位置稍高的磨砂小窗、按隔间分组而不形成通长玻璃带，车窗之间的墙板略宽，每个端部一个塞拉门，橙红色涂装配白色窗带，两台空气弹簧转向架。",
-   subject:"a Chinese YW25G hard sleeper coach, continuous row of large sealed windows along the upper flank with smaller frosted compartment windows spaced below it, plain side panels between the window groups, one plug door near each end, orange-red body with a white window band, smooth underfloor skirt, two air-spring bogies, full side elevation"},
+   zh:"一节硬卧车厢，深墨绿色涂装、车体中部一条黄色腰带贯通全车（不是橙红涂装，也不是白色窗带），侧墙只有一排小窗：约十来个尺寸偏小的矩形窗等距分布、位置偏高，窗与窗之间留着较宽的绿色墙板，不连成通长玻璃带；两端各有一扇带窗的车门，车顶是浅灰圆弧顶只带几个小通风器，车下是敞开的底架（转向架、蓄电池箱与制动装置外露，不封裙板），两台转向架。",
+   subject:"a Chinese YW25G hard sleeper coach in strict side elevation, deep forest green body with one continuous yellow waist stripe running the full length just below the windows, a single row of about eleven small widely spaced rectangular windows set high on the flank with wide plain green panels between them and no continuous glazed window band, one narrow passenger door with a window near each end, light grey curved roof with only a few small roof vents, open underframe showing bogies, battery boxes and brake equipment instead of a smooth skirt, two standard bogies, no lettering and no running numbers on the body, full side elevation"},
   {id:"pax-08", cat:"pax", name:"软卧车", en:"Soft Sleeper Coach",
    kind:"RW25T 型软卧车", era:"2000 年代 — 至今",
    tag:"带门包厢的四人隔间，是普通列车上的头等舱",

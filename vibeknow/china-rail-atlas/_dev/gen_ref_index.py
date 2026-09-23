@@ -30,11 +30,17 @@ def main():
     lines = []
     lines.append("# 参考照片索引（生图参考）")
     lines.append("")
-    lines.append("照片均来自 Wikimedia Commons（可溯源、可自由使用的授权），")
-    lines.append("仅作生图参考，不随项目分发。每个条目 1–3 张，")
+    lines.append("照片以 Wikimedia Commons 为主（可溯源、可自由使用的授权）；")
+    lines.append("个别条目使用**用户提供**或官方站点图，来源与许可在表中逐张标注。")
+    lines.append("全部照片仅作生图造型参考，不随项目分发。每个条目 1–3 张，")
     lines.append("落盘于 `_dev/ref/<条目id>-NN.jpg`。")
     lines.append("")
     lines.append("「外观要点」是看图提炼的关键特征，生成插画时应写进提示词或据此校对。")
+    lines.append("")
+    lines.append("> 分类封面（`cover-*`）**不指定参考照片**：现版封面画的是铁路物件聚成的一景")
+    lines.append(">（动轮与连杆、车厢门与皮箱、麻袋与木箱、站台雨棚与站台灯……），")
+    lines.append("> 组景描述见 `main.js` 的 `COVER_SUBJECTS`，按文字要点生图即可。")
+    lines.append("> 表中 `cover-pax` / `cover-station` 两行是旧版「多件并排」封面留下的备用照片，现已停用。")
     lines.append("")
     short = []
     for cat in ["loco", "pax", "freight", "station"]:
@@ -57,10 +63,12 @@ def main():
                 cells.append("`%s`" % p["file"])
                 lic = p.get("license", "?")
                 au = p.get("author", "")
-                srcs.append("[%s](%s) · %s%s" % (
-                    p["title"].replace("File:", ""),
-                    p["source"], lic,
-                    ("，" + au) if au else ""))
+                title = p["title"].replace("File:", "")
+                # 用户提供 / 官方站点图可能没有来源页，此时不渲染成链接
+                if p.get("source"):
+                    srcs.append("[%s](%s) · %s%s" % (title, p["source"], lic, ("，" + au) if au else ""))
+                else:
+                    srcs.append("%s · %s%s" % (title, lic, ("，" + au) if au else ""))
             lines.append("| %s `%s` | %s | %s | %s |" % (
                 name, bid, "、".join(cells), "；".join(srcs), notes.get(bid, "")))
         lines.append("")

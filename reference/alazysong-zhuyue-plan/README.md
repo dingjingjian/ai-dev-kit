@@ -1,11 +1,11 @@
-# 月之暗面（地球追月）
+# 逐月计划
 
 ## 元信息
 
 - **作者**：AlazySong
-- **工具名**：月之暗面（待确认，暂以截图中 CLASS "月之暗面" 为归档名）
+- **工具名**：逐月计划
 - **类型**：h5 游戏（小红书小工具 / 街机小游戏）
-- **原文链接**：待补（未取到含 `xsec_token` 的完整分享链接）
+- **原文链接**：https://www.xiaohongshu.com/discovery/item/6ab24d0400000000340351d0?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLJ7A1o_BROcR0EDGfiwEne8=&xsec_source=pc_share
 - **归档日期**：2026-09-23
 - **归档截图**：screenshots/cover.jpg
 
@@ -32,5 +32,5 @@
 
 ## 备注
 
-- 作品正式名待确认，归档名取自截图中 "CLASS 月之暗面"。
+- 作品正式名已确认为「逐月计划」，归档目录已重命名为 alazysong-zhuyue-plan。
 - 拿到小红书原文链接（含 `xsec_token`）后补到本文件「原文链接」处，并同步到总索引表格。

@@ -25,26 +25,27 @@
 
 | 分类 | 数量 | 条目（按问世年代排列） |
 |------|------|------|
-| 火车头 | 20 | 龙号机车、解放型、前进型、人民型、上游型、东风型、东风4型、东风5型、东风11型、东风8B型、韶山1型、韶山3型、韶山4型、韶山8型、和谐电3型、和谐电3D型、CRH380A、CR400AF 复兴号、CR200J、上海磁浮列车 |
+| 火车头 | 20 | 龙号机车、解放型、前进型、人民型、上游型、东风型、东风4型、东风5型、东风11型、东风8B型、韶山1型、韶山3型、韶山4型、韶山8型、和谐电3型、和谐电3D型、CRH2、CRH380A、CR400AF 复兴号、CR200J |
 | 客运车厢 | 10 | 21 型、22 型、双层客车、25G 型、25K 型、25T 型、硬卧车、软卧车、餐车、空调发电车 |
 | 货运车厢 | 10 | C62 敞车、G60 罐车、N17 平车、K18 漏斗车、C64 敞车、P64 棚车、X2K 集装箱平车、C70 敞车、P70 棚车、D26 长大货物车 |
 | 著名车站 | 10 | 哈尔滨站、郑州站、青龙桥站、北京站、广州站、上海站、拉萨站、北京南站、武汉站、上海虹桥站 |
 
 ## 参考照片与配图流水线
 
-- **参考照片已就位**：54 个条目中 51 个已在 `_dev/ref/` 落盘 1–3 张真实照片（共 133 张，来源 Wikimedia Commons，可溯源），见 [`_dev/ref-index.md`](_dev/ref-index.md)。
+- **参考照片已就位**：51 个条目已在 `_dev/ref/` 落盘 1–3 张照片（共 132 张，多数来源 Wikimedia Commons、可溯源；CRH2 的 2 张为用户提供），逐张来源与许可见 [`_dev/ref-index.md`](_dev/ref-index.md)。
 - **外观要点已提炼**：每个条目的造型识别点写在 `_dev/ref_notes.json`，并汇总进 [`_dev/ref-index.md`](_dev/ref-index.md) 的「外观要点」列，供生图时写进提示词或校对。
-- **配图施工图**：逐张的「统一风格串 + 主体描述 + 完整提示词 + 参考照片」由 [`_dev/gen_image_prompts.py`](_dev/gen_image_prompts.py) 从 `main.js` 派生到 [`_dev/IMAGE_PROMPTS.md`](_dev/IMAGE_PROMPTS.md)。改条目数据改 `main.js`，重跑脚本即可同步。
+- **配图施工图**：逐张的「风格串 + 主体描述 + 完整提示词 + 参考照片」由 [`_dev/gen_image_prompts.py`](_dev/gen_image_prompts.py) 从 `main.js` 派生到 [`_dev/IMAGE_PROMPTS.md`](_dev/IMAGE_PROMPTS.md)。改条目数据改 `main.js`，重跑脚本即可同步。
+- **风格分两层**：条目图（50 张）是**图鉴式插画**（正侧视 / 正立面、浅暖白底、信息优先）；分类封面（4 张）是**写实棚拍静物小品**（同一片浅暖白底、氛围优先）——封面把该类别的铁路物件**聚成一景**（一景一图，不是一排摆件）：动轮与连杆 + 煤堆铁锹 / 车厢门 + 皮箱与搪瓷缸 / 敞车侧板 + 麻袋木箱 / 站台雨棚 + 站台灯木椅行李车。**不画具体车型**：封面显示框约 3.4:1 塞不下整车，硬塞只会把车厢压短，而认型号本来就是条目图的活。四张共用一套配方（同底色、同光位、同正交视角、同样的主件 + 陪衬结构），所以看起来是一个系列。风格串与组景描述都在 `main.js`（`IMG_STYLE_COVER*` / `COVER_SUBJECTS`），要求在 [`_dev/image-spec.md`](_dev/image-spec.md)。
 - **生图后处理**：生成图落到 `_dev/raw_img/<base>.png`（或 jpg），跑 `python _dev/process_images.py` 自动缩放 + 转 WebP + 压体积到预算（条目图 ≤45 KB、封面 ≤90 KB、合计 ≤2 MB），输出到 `assets/img/`。
 
-> 4 个分类封面是「四台/四车/四站并排」的合成图，无单一真实照片；K18 漏斗车在 Commons 无库存照，按文字描述生图。其余无库存型号（G60→GHK 系列、P64→P70、D26→DQ45）已在 ref-index 注明近似来源。
+> 4 个分类封面是**铁路物件聚成的静物小品**（不画具体车型，也不指定参考照片，组景描述见 `main.js` 的 `COVER_SUBJECTS`）；CRH2 的参考照片由用户提供，K18 漏斗车在 Commons 无库存照、按文字要点生图。其余无库存型号（G60→GHK 系列、P64→P70、D26→DQ45）已在 ref-index 注明近似来源。
 
 ## 目录结构
 
 ```
 china-rail-atlas/
 ├── index.html              # 单文件图鉴（列表 + 详情 + 占位块）
-├── main.js                 # 数据真源：CATS / ITEMS / IMG_STYLE / IMG_STYLE_ARCH
+├── main.js                 # 数据真源：CATS / ITEMS / 四条风格串（IMG_STYLE / _ARCH / _COVER / _COVER_ARCH）
 ├── assets/img/             # 生成的 .webp 落位处（含 README 说明）
 └── _dev/                   # 生图辅助（不随站点分发）
     ├── image-spec.md       # 配图交付要求（唯一真源）
@@ -53,7 +54,7 @@ china-rail-atlas/
     ├── fetch_refs.py       # 参考照片抓取（Wikimedia Commons）
     ├── process_images.py   # 原图 → WebP 压图
     ├── build_zip.py        # 打包整站
-    ├── ref/                # 133 张参考照片（不随站点分发）
+    ├── ref/                # 132 张参考照片 + _meta.json（不随站点分发）
     ├── ref_notes.json      # 逐条外观要点
     ├── ref-index.md        # 参考照片索引
     └── IMAGE_PROMPTS.md    # 配图施工图

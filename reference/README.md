@@ -78,7 +78,9 @@ reference/
 | 闲话AI\|造物日记 | 月下寄笺局（月亮信） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6a9c2c180000000026018fe2?source=webshare&xhsshare=pc_web&xsec_token=ABgyjiKnSj8-cKE2Iozok0qDqjOG9u-i57Z-4uXb7E3wo=&xsec_source=pc_share | 中秋节令情绪工具+「当面太浓烈微信怕唐突」痛点文案+「寄笺局」品牌化包装+可截图分享的个人化产出（#国风vibecoding 参赛） | 2026-09-20 | xianhua-moon-letter/ | ✅ |
 | Mingo 🥕 | bala bala（解压球球） | h5 互动工具 | https://www.xiaohongshu.com/discovery/item/6aae76ec0000000029019a9b?source=webshare&xhsshare=pc_web&xsec_token=ABdAl8pX503j3i3ttrJOJ4N7GEJLepe3-I3lEmRKEbSGQ=&xsec_source=pc_share | 戳/按/扒拉触觉解压+照片自定义球（老板球梗）+粉圈解锁密码专享彩蛋+桌面时钟陪伴形态（#vibetool 参赛） | 2026-09-20 | mingo-bala-bala/ | ✅ |
 | 生姜醋饭 | Piece of Moonlight（月相互动音乐） | h5 音乐工具 | https://www.xiaohongshu.com/discovery/item/6a9e7f0e0000000028035dd9?source=webshare&xhsshare=pc_web&xsec_token=ABRPKZVc37eJxffwd4-y1n57h5JKGNT8u0ZTmFUsA1tTs=&xsec_source=pc_share | 15 种月相映射 C3–C5 音高+短按半拍/长按长音实时落谱+播放月亮反色高亮跟随+7 音色 4 主题+月相谱卡可保存分享（#国风vibecoding/#vibeart 参赛，中秋·月亮节） | 2026-09-20 | piece-of-moonlight/ | ✅ |
-| AlazySong | 月之暗面（地球追月） | h5 游戏 | 待补（未取到含 xsec_token 的完整分享链接） | 复古未来主义街机小游戏，扮演追逐月亮的地球，四档难度 | 2026-09-23 | alazysong-moons-dark-side/ | ⬜ |
+| AlazySong | 逐月计划 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab24d0400000000340351d0?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLJ7A1o_BROcR0EDGfiwEne8=&xsec_source=pc_share | 复古未来主义街机小游戏，扮演追逐月亮的地球，四档难度 | 2026-09-23 | alazysong-zhuyue-plan/ | ⬜ |
+| Xiu | 乒乓大战 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab149aa0000000035013640?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxemDwsvSSTmKdqKsLwa9kRC8=&xsec_source=pc_share | 俯视角乒乓球休闲小游戏，含「快推·强攻」技能选择暗示 | 2026-09-23 | xiu-pingpang-dazhan/ | ⬜ |
+| Neo | 叠叠（赛博户外叠石头） | h5 小工具 / 休闲小游戏 | https://www.xiaohongshu.com/discovery/item/6aabb5610000000026016bdf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvKMlWU-B3j3zuEhtmcqAAvs=&xsec_source=pc_share | 户外解压叠石头，春日溪畔场景，「我的小石塔」计数 + 日记体文案 | 2026-09-23 | neo-diedie/ | ⬜ |
 
 > 新增工具时在此表追加一行；目录列指向本目录下的子目录路径。
 

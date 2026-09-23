@@ -94,7 +94,10 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
    图片未就位时 .shot-ph 显示「配图待生成 + 期望文件名」，加载成功后覆盖其上。
    补图不需要改代码：按同名文件放进 assets/img/ 即可。 */
 .shot{position:relative; overflow:hidden; background:#eeece6; border-bottom:1px solid var(--line-2); height:150px;}
+/* 分类封面（.sm）：窄屏 104px ≈ 3.44:1。宽屏若沿用 104px，608px 宽会变成 5.8:1 的细条，
+   把封面里那台车顶底切掉，所以 560px 起加高到 160px（≈3.8:1），让两种屏的裁切幅度接近。 */
 .shot.sm{height:104px;}
+@media(min-width:560px){.shot.sm{height:160px;}}
 .shot.lg{height:210px; border-bottom:none;}
 .shot-img{
   position:absolute; top:0;right:0;bottom:0;left:0;

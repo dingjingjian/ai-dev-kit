@@ -686,11 +686,37 @@
   ]
  },
  "loco-17": {
-  "name": "CRH380A 型动车组",
+  "name": "CRH2 型动车组",
   "cat": "loco",
   "photos": [
    {
     "file": "loco-17-01.jpg",
+    "title": "CRH2A 型动车组侧面（用户提供照片）",
+    "source": "",
+    "license": "未标注许可",
+    "author": "用户提供",
+    "orig": "640x373",
+    "kb": 102,
+    "quality": "lapvar 1036 mean 147"
+   },
+   {
+    "file": "loco-17-02.jpg",
+    "title": "CRH2A 型动车组侧前方（用户提供照片）",
+    "source": "",
+    "license": "未标注许可",
+    "author": "用户提供",
+    "orig": "1080x609",
+    "kb": 344,
+    "quality": "lapvar 995 mean 126"
+   }
+  ]
+ },
+ "loco-18": {
+  "name": "CRH380A 型动车组",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-18-01.jpg",
     "title": "File:CRH380A-2921 and 2922@BJX (20170917180414).jpg",
     "source": "https://commons.wikimedia.org/wiki/File:CRH380A-2921_and_2922@BJX_(20170917180414).jpg",
     "license": "CC BY-SA 4.0",
@@ -700,7 +726,7 @@
     "quality": "lapvar 1845 mean 90"
    },
    {
-    "file": "loco-17-02.jpg",
+    "file": "loco-18-02.jpg",
     "title": "File:CR400AF-2007 and CRH380A-2800@FTP (20220620141416).jpg",
     "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2007_and_CRH380A-2800@FTP_(20220620141416).jpg",
     "license": "CC BY-SA 4.0",
@@ -710,7 +736,7 @@
     "quality": "lapvar 2074 mean 146"
    },
    {
-    "file": "loco-17-03.jpg",
+    "file": "loco-18-03.jpg",
     "title": "File:202309 CRH380A-2657 after arrival at Nanningdong as G418.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:202309_CRH380A-2657_after_arrival_at_Nanningdong_as_G418.jpg",
     "license": "CC BY-SA 4.0",
@@ -721,12 +747,12 @@
    }
   ]
  },
- "loco-18": {
+ "loco-19": {
   "name": "CR400AF 复兴号动车组",
   "cat": "loco",
   "photos": [
    {
-    "file": "loco-18-01.jpg",
+    "file": "loco-19-01.jpg",
     "title": "File:CR400AF-2022@BJX (20171017100036).jpg",
     "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022@BJX_(20171017100036).jpg",
     "license": "CC BY-SA 4.0",
@@ -736,7 +762,7 @@
     "quality": "lapvar 1471 mean 69"
    },
    {
-    "file": "loco-18-02.jpg",
+    "file": "loco-19-02.jpg",
     "title": "File:CR400AF-2022 at Shoupakou (20171017091039).jpg",
     "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022_at_Shoupakou_(20171017091039).jpg",
     "license": "CC BY-SA 4.0",
@@ -746,7 +772,7 @@
     "quality": "lapvar 1221 mean 106"
    },
    {
-    "file": "loco-18-03.jpg",
+    "file": "loco-19-03.jpg",
     "title": "File:CR400AF-2022 at Shoupakou (20171017091040).jpg",
     "source": "https://commons.wikimedia.org/wiki/File:CR400AF-2022_at_Shoupakou_(20171017091040).jpg",
     "license": "CC BY-SA 4.0",
@@ -754,78 +780,6 @@
     "orig": "5943x3849",
     "kb": 186,
     "quality": "lapvar 1332 mean 115"
-   }
-  ]
- },
- "loco-19": {
-  "name": "CR200J 型动车组",
-  "cat": "loco",
-  "photos": [
-   {
-    "file": "loco-19-01.jpg",
-    "title": "File:Double-heading CR200J EMU train.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:Double-heading_CR200J_EMU_train.jpg",
-    "license": "CC BY-SA 4.0",
-    "author": "CaiDie",
-    "orig": "4000x3000",
-    "kb": 169,
-    "quality": "lapvar 991 mean 116"
-   },
-   {
-    "file": "loco-19-02.jpg",
-    "title": "File:CR200J-6002 (D127) Train in Xi'an Railway Station, Sep 18 2024.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:CR200J-6002_(D127)_Train_in_Xi%27an_Railway_Station,_Sep_18_2024.jpg",
-    "license": "CC BY-SA 4.0",
-    "author": "P. K. Koo",
-    "orig": "4032x3024",
-    "kb": 260,
-    "quality": "lapvar 1854 mean 108"
-   },
-   {
-    "file": "loco-19-03.jpg",
-    "title": "File:CR200J-2015 at Taicangnan Railway Station 20251026.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:CR200J-2015_at_Taicangnan_Railway_Station_20251026.jpg",
-    "license": "CC BY 4.0",
-    "author": "4084470 0.smil",
-    "orig": "4096x3072",
-    "kb": 194,
-    "quality": "lapvar 1360 mean 144"
-   }
-  ]
- },
- "loco-20": {
-  "name": "上海磁浮列车",
-  "cat": "loco",
-  "photos": [
-   {
-    "file": "loco-20-01.jpg",
-    "title": "File:The Shanghai Transrapid maglev train.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:The_Shanghai_Transrapid_maglev_train.jpg",
-    "license": "CC BY-SA 2.0",
-    "author": "Lars Plougmann",
-    "orig": "5437x3624",
-    "kb": 181,
-    "quality": "lapvar 995 mean 111"
-   },
-   {
-    "file": "loco-20-02.jpg",
-    "title": "File:Shanghai Maglev Line from platform of Longyang Road Station (Shanghai Maglev) 2.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:Shanghai_Maglev_Line_from_platform_of_Longyang_Road_Station_(Shanghai_Maglev)_2.jpg",
-    "license": "CC BY-SA 4.0",
-    "author": "そらみみ",
-    "orig": "4007x3005",
-    "kb": 124,
-    "quality": "lapvar 771 mean 136"
-   },
-   {
-    "file": "loco-20-03.jpg",
-    "title": "File:Train of Shanghai Maglev at Longyang Road Station.jpg",
-    "source": "https://commons.wikimedia.org/wiki/File:Train_of_Shanghai_Maglev_at_Longyang_Road_Station.jpg",
-    "license": "CC BY-SA 4.0",
-    "author": "そらみみ",
-    "orig": "4032x3024",
-    "kb": 158,
-    "quality": "lapvar 984 mean 117"
    }
   ]
  },
@@ -1637,6 +1591,42 @@
     "orig": "4608x3456",
     "kb": 198,
     "quality": "lapvar 1051 mean 102"
+   }
+  ]
+ },
+ "loco-20": {
+  "name": "CR200J 型动车组",
+  "cat": "loco",
+  "photos": [
+   {
+    "file": "loco-20-01.jpg",
+    "title": "File:Double-heading CR200J EMU train.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:Double-heading_CR200J_EMU_train.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "CaiDie",
+    "orig": "4000x3000",
+    "kb": 169,
+    "quality": "lapvar 991 mean 116"
+   },
+   {
+    "file": "loco-20-02.jpg",
+    "title": "File:CR200J-6002 (D127) Train in Xi'an Railway Station, Sep 18 2024.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR200J-6002_(D127)_Train_in_Xi%27an_Railway_Station,_Sep_18_2024.jpg",
+    "license": "CC BY-SA 4.0",
+    "author": "P. K. Koo",
+    "orig": "4032x3024",
+    "kb": 260,
+    "quality": "lapvar 1854 mean 108"
+   },
+   {
+    "file": "loco-20-03.jpg",
+    "title": "File:CR200J-2015 at Taicangnan Railway Station 20251026.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:CR200J-2015_at_Taicangnan_Railway_Station_20251026.jpg",
+    "license": "CC BY 4.0",
+    "author": "4084470 0.smil",
+    "orig": "4096x3072",
+    "kb": 194,
+    "quality": "lapvar 1360 mean 144"
    }
   ]
  }

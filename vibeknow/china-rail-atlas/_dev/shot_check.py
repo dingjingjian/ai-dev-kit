@@ -4,7 +4,8 @@
   1. 四分类分组齐全、条目数正确（机车 20 / 客车 10 / 货车 10 / 车站 10 = 50）
   2. 顶栏 5 个 tab 单行放下，且 tab 行没有横向滚动区
   3. 配图缺失时占位块可见并显示条目名（不含仓库路径）
-  4. 图片框高度 = 卡片 150 / 分类封面 104 / 详情 hero 210（Chrome 61 无 aspect-ratio，靠固定高度）
+  4. 图片框高度 = 卡片 150 / 分类封面窄屏 104、宽屏 160 / 详情 hero 210
+     （Chrome 61 无 aspect-ratio，靠固定高度 + 断点）
   5. 年代徽标：列表只显示起始年份，详情显示完整跨度；卡片 meta 行显示「类型 · 英文名」
   6. 详情页区块齐全（介绍 / 关键参数 / 亮点 / AI 配图提示词），参数与亮点数量正确
   7. 提示词 = 该类风格串 + 条目的主体描述；车站类用建筑立面串（front elevation）
@@ -25,6 +26,7 @@ OUT = Path(__file__).resolve().parent / "_shots"
 OUT.mkdir(exist_ok=True)
 
 SHOT_CARD, SHOT_COVER, SHOT_HERO = 150, 104, 210
+SHOT_COVER_WIDE = 160   # 560px 起封面加高，别让宽屏变成 5.8:1 的细条
 TITLE = "中国铁路图鉴"
 EXPECT_PER_CAT = [20, 10, 10, 10]
 failures = []
@@ -89,6 +91,14 @@ with sync_playwright() as p:
     check(heights[0] == SHOT_CARD and heights[1] == SHOT_COVER,
           "卡片图片框 %dpx、分类封面 %dpx" % (heights[0], heights[1]),
           "图片框高度 = %s，期望 [%d, %d]" % (heights, SHOT_CARD, SHOT_COVER))
+
+    # 宽屏封面加高（560px 断点）：608px 宽 ÷ 104px 会变成 5.8:1 的细条，把封面主体切掉
+    page.set_viewport_size({"width": 768, "height": 844})
+    wide_h = page.evaluate("() => Math.round(document.querySelector('.cat-cover .shot').getBoundingClientRect().height)")
+    check(wide_h == SHOT_COVER_WIDE,
+          "宽屏（768px）分类封面 %dpx" % wide_h,
+          "宽屏分类封面高度 = %d，期望 %d" % (wide_h, SHOT_COVER_WIDE))
+    page.set_viewport_size({"width": 390, "height": 844})
 
     ph = page.evaluate("""() => {
       const box = document.querySelector('.card .shot');
