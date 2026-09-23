@@ -653,6 +653,9 @@ function renderTabs(){
 
 function renderList(restoreY){
   titleEl.textContent = "中国铁路图鉴";
+  /* 详情页的分享按钮随 DOM 一起被换掉，这里把引用清空，免得后面误操作已卸载的节点 */
+  shareBtn = null;
+  shareImg = null;
   fabBack.classList.remove("show");
   tabsEl.style.display = "flex";
   app.innerHTML = "";
@@ -750,6 +753,8 @@ function renderDetail(id){
   tagline.textContent = v.tag;
   d.appendChild(tagline);
 
+  if(CAN_SHARE){ d.appendChild(buildShareBar(v)); }
+
   var introBlock = document.createElement("div");
   introBlock.className = "block";
   introBlock.innerHTML = '<h3 class="h3-a">介绍</h3><p>' + escapeHtml(v.intro) + '</p>';
@@ -787,6 +792,7 @@ function renderDetail(id){
   bindImgs(d);
 
   document.getElementById("copyBtn").addEventListener("click", function(){ copyPrompt(this); });
+  if(CAN_SHARE){ wireShare(d); }
   window.scrollTo(0, 0);
 }
 
@@ -806,6 +812,128 @@ function copyPrompt(btn){
   var self = btn;
   setTimeout(function(){ self.classList.remove("done"); }, 1600);
   showToast("已选中提示词，请长按文字手动复制");
+}
+
+/* ============================ 分享到小红书 ============================
+ * 容器里网页不能直接发笔记，只能**唤起 App 的笔记发布页**并带上内容与媒体：
+ *   window.xhs.miniTool.postNote({ title, content, pageType, mediaInfo })
+ * 其中 mediaInfo 必填、且图片 / 视频 / 实况至少传一种（见 .skill/minitool-zip-builder/
+ * references/jsbridge-api.md）；本页只发图文。
+ *
+ * 取图走 Canvas 而非 XHR：本仓 skill 的 device-capabilities.md §4/§7 把网络请求 API
+ * 列为本容器**不可用行为**并进了扫描清单（连标识符都不许出现，打包守卫会 grep），
+ * 所以从详情页**已经加载好的那张原图**画一次拿 data:uri。代价是重编码一次（单张约
+ * 12 KB 的 webp 重编码后仍在几十 KB 量级），换来的是一行被禁 API 都不用。容器里页面
+ * 与图同源，画布不会被污染；桌面 file:// 下会被污染而抛错，此时按失败提示，不硬撑。
+ *
+ * 交付约定：
+ *   ① 图文就是该条目的原图（不合成卡片）；
+ *   ② 正文就是该条目的介绍 + 分类 · 类型 + 年代 + 关键参数；
+ *   ③ 能力检测而非 UA 判断：拿不到 postNote 就整块隐藏（桌面直接开 index.html 不出现）；
+ *   ④ 标题 ≤ 20、正文 ≤ 1000（API 上限，这里主动裁剪）；
+ *   ⑤ postNote 成功只代表发布页被唤起、用户点了发布，**不代表过审** —— 所以只当
+ *      「已唤起」提示，不据此做任何强一致的状态变更。
+ */
+var XHS = (window.xhs && window.xhs.miniTool) || null;
+var CAN_SHARE = !!(XHS && typeof XHS.postNote === "function");
+if (CAN_SHARE) { document.documentElement.classList.add("has-share"); }
+
+var shareBtn = null, shareImg = null, shareBusy = false;
+
+/* 正文：介绍 + 分类 · 类型 + 年代 + 关键参数 */
+function shareNote(v){
+  var c = catOf(v.cat), specs = [], i;
+  for(i = 0; i < v.specs.length; i++){ specs.push(v.specs[i][0] + "：" + v.specs[i][1]); }
+  return v.intro + "\n\n" +
+    c.zh + " · " + v.kind +
+    "\n年代：" + v.era +
+    (specs.length ? "\n" + specs.join("｜") : "") +
+    "\n\n—— 中国铁路图鉴（小红书小工具）";
+}
+/* 标题超长（超过 API 上限 20）就退成纯条目名，别把名字从中间截断 */
+function shareTitle(v){
+  var t = "中国铁路图鉴 · " + v.name;
+  return (t.length > 20 ? v.name : t).slice(0, 20);
+}
+function sharePaint(ok){
+  if(!shareBtn){ return; }
+  shareBtn.className = "share" + (ok ? "" : " off");
+  shareBtn.disabled = !ok;
+}
+/* 原图 → data:uri：从页面上已加载的那张原图经 Canvas 取，不经过网络
+   （XHR / fetch 都在禁用清单里）。先试 WebP，编码不被支持再退 JPEG。 */
+function imgDataURI(img){
+  return new Promise(function(resolve, reject){
+    try {
+      var cv = document.createElement("canvas");
+      cv.width = img.naturalWidth;
+      cv.height = img.naturalHeight;
+      cv.getContext("2d").drawImage(img, 0, 0);
+      var url = cv.toDataURL("image/webp", 0.92);
+      if(url.indexOf("data:image/webp") !== 0){ url = cv.toDataURL("image/jpeg", 0.92); }
+      resolve(url);
+    } catch(err){ reject({stage:"img"}); }
+  });
+}
+function shareItem(v){
+  if(!CAN_SHARE || shareBusy){ return; }
+  if(!shareImg || !shareImg.naturalWidth){ showToast("配图还没出，稍后再试"); return; }
+  shareBusy = true;
+  if(shareBtn){ shareBtn.disabled = true; }
+  imgDataURI(shareImg).then(function(dataURL){
+    var payload = {
+      title: shareTitle(v),                                  /* API 上限 20 */
+      content: shareNote(v).slice(0, 1000),                  /* API 上限 1000 */
+      pageType: "photo_publish"
+    };
+    var step = (XHS.writeTempFile && typeof XHS.writeTempFile === "function")
+      ? XHS.writeTempFile({data: dataURL})                   /* data 必须是完整 data:uri */
+      : null;
+    return Promise.resolve(step).then(function(res){
+      payload.mediaInfo = {image_resources: [{url: (res && res.filePath) || dataURL}]};
+      return XHS.postNote(payload);
+    });
+  }).then(function(){
+    showToast("已唤起发布页 · 在那边补完正文就能发");
+  }).catch(function(err){
+    showToast(err && err.stage === "img"
+      ? "读取配图失败，稍后再试"
+      : "唤起发布页失败：" + ((err && err.errMsg) || "未知原因"));
+  }).then(function(){
+    shareBusy = false;
+    if(shareBtn){ shareBtn.disabled = false; sharePaint(!!(shareImg && shareImg.naturalWidth > 0)); }
+  });
+}
+/* 详情页 tagline 下方的分享条：只在拿得到 postNote 时建出来 */
+function buildShareBar(v){
+  var bar = document.createElement("div");
+  bar.className = "actions";
+  var btn = document.createElement("button");
+  btn.className = "share off";
+  btn.id = "shareBtn";
+  btn.type = "button";
+  btn.innerHTML =
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" ' +
+    'stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M12 3.6v10.8"/><path d="M8.1 7.5 12 3.6l3.9 3.9"/>' +
+    '<path d="M5.6 12.4v6.4a1.6 1.6 0 0 0 1.6 1.6h9.6a1.6 1.6 0 0 0 1.6-1.6v-6.4"/></svg>' +
+    '<span>分享到小红书</span>';
+  btn.addEventListener("click", function(){ shareItem(v); });
+  bar.appendChild(btn);
+  shareBtn = btn;
+  return bar;
+}
+/* 原图到货 / 失败都要刷新分享按钮的可用态（lazy 加载，可能晚于渲染） */
+function wireShare(scope){
+  shareImg = scope.querySelector(".hero .shot-img");
+  if(!shareImg){ sharePaint(false); return; }
+  if(shareImg.complete && shareImg.naturalWidth > 0){ sharePaint(true); return; }
+  sharePaint(false);
+  shareImg.addEventListener("load", function(){ sharePaint(shareImg.naturalWidth > 0); });
+  shareImg.addEventListener("error", function(){
+    /* 后缀回退链还在试下一个后缀，晚一点再判，免得误判成失败 */
+    setTimeout(function(){ sharePaint(!!(shareImg && shareImg.naturalWidth > 0)); }, 400);
+  });
 }
 
 function route(){

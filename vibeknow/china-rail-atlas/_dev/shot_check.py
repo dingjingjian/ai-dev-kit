@@ -4,14 +4,16 @@
   1. 四分类分组齐全、条目数正确（机车 20 / 客车 10 / 货车 10 / 车站 10 = 50）
   2. 顶栏 5 个 tab 单行放下，且 tab 行没有横向滚动区
   3. 配图缺失时占位块可见并显示条目名（不含仓库路径）
-  4. 图片框高度 = 卡片 150 / 分类封面窄屏 104、宽屏 160 / 详情 hero 210
-     （Chrome 61 无 aspect-ratio，靠固定高度 + 断点）
+  4. 图片框高度 = 卡片 150 / 详情 hero 210（固定高度）；分类封面按源图 16:9 整幅铺满，
+     高度随宽度走（Chrome 61 无 aspect-ratio，靠 padding-bottom:56.25% 撑高），故按比例核对
   5. 年代徽标：列表只显示起始年份，详情显示完整跨度；卡片 meta 行显示「类型 · 英文名」
   6. 详情页区块齐全（介绍 / 关键参数 / 亮点 / AI 配图提示词），参数与亮点数量正确
   7. 提示词 = 该类风格串 + 条目的主体描述；车站类用建筑立面串（front elevation）
   8. 详情页不含开发信息（assets/img、.webp 等）
   9. 从详情返回列表能回到离开时的滚动位置
  10. 分类筛选：点某个 tab 后只剩一个分组
+ 11. 分享到小红书：拿不到 postNote 时整块隐藏；注入桥桩后按钮出现、原图到货即转可用，
+     点击先 writeTempFile 落临时文件再 postNote，标题 / 正文按 API 上限裁剪且内容正确
 
 用法：python _dev/shot_check.py
 """
@@ -25,8 +27,8 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = Path(__file__).resolve().parent / "_shots"
 OUT.mkdir(exist_ok=True)
 
-SHOT_CARD, SHOT_COVER, SHOT_HERO = 150, 104, 210
-SHOT_COVER_WIDE = 160   # 560px 起封面加高，别让宽屏变成 5.8:1 的细条
+SHOT_CARD, SHOT_HERO = 150, 210
+COVER_RATIO = 9.0 / 16.0   # 分类封面按源图 960×540 整幅铺满，显示框恒为 16:9
 TITLE = "中国铁路图鉴"
 EXPECT_PER_CAT = [20, 10, 10, 10]
 failures = []
@@ -42,7 +44,10 @@ def check(cond, ok_msg, bad_msg):
 
 
 with sync_playwright() as p:
-    browser = p.chromium.launch()
+    # --allow-file-access-from-files：本自检直接用 file:// 打开 index.html，
+    # 而「分享」要把页面里的原图经 Canvas 取成 data:uri —— 不放开这条，
+    # file:// 下画布会被判为被污染、toDataURL 抛 SecurityError（容器里同源，不存在这一步）。
+    browser = p.chromium.launch(args=["--allow-file-access-from-files"])
     # DPR 取 1：断言都用 CSS 像素，整页截图又高又长（DPR2 单张可达 5MB），没必要翻四倍
     page = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
 
@@ -84,20 +89,25 @@ with sync_playwright() as p:
           "tab 行数 %d、scrollW=%d > clientW=%d" % (row["rows"], row["scrollW"], row["clientW"]))
 
     heights = page.evaluate("""() => {
-      const c = document.querySelector('.card .shot');
-      const v = document.querySelector('.cat-cover .shot');
-      return [Math.round(c.getBoundingClientRect().height), Math.round(v.getBoundingClientRect().height)];
+      const c = document.querySelector('.card .shot').getBoundingClientRect();
+      const v = document.querySelector('.cat-cover .shot').getBoundingClientRect();
+      return {card: Math.round(c.height), coverW: v.width, coverH: v.height};
     }""")
-    check(heights[0] == SHOT_CARD and heights[1] == SHOT_COVER,
-          "卡片图片框 %dpx、分类封面 %dpx" % (heights[0], heights[1]),
-          "图片框高度 = %s，期望 [%d, %d]" % (heights, SHOT_CARD, SHOT_COVER))
+    cover_ok = abs(heights["coverH"] - heights["coverW"] * COVER_RATIO) <= 1.5
+    check(heights["card"] == SHOT_CARD and cover_ok,
+          "卡片图片框 %dpx；分类封面 %d×%d ≈ 16:9" % (heights["card"], heights["coverW"], heights["coverH"]),
+          "图片框异常 = %s，期望卡片 %dpx、封面 16:9" % (heights, SHOT_CARD))
 
-    # 宽屏封面加高（560px 断点）：608px 宽 ÷ 104px 会变成 5.8:1 的细条，把封面主体切掉
+    # 宽屏：封面容器受 --page(640px) 限制，不该被拉宽成别的比例
     page.set_viewport_size({"width": 768, "height": 844})
-    wide_h = page.evaluate("() => Math.round(document.querySelector('.cat-cover .shot').getBoundingClientRect().height)")
-    check(wide_h == SHOT_COVER_WIDE,
-          "宽屏（768px）分类封面 %dpx" % wide_h,
-          "宽屏分类封面高度 = %d，期望 %d" % (wide_h, SHOT_COVER_WIDE))
+    wide = page.evaluate("""() => {
+      const v = document.querySelector('.cat-cover .shot').getBoundingClientRect();
+      return {w: v.width, h: v.height};
+    }""")
+    check(abs(wide["h"] - wide["w"] * COVER_RATIO) <= 1.5 and wide["w"] < 620,
+          "宽屏（768px）分类封面 %d×%d 仍为 16:9、未超出 640px 页面宽"
+          % (wide["w"], wide["h"]),
+          "宽屏分类封面异常：%s，期望 16:9 且宽 < 620" % wide)
     page.set_viewport_size({"width": 390, "height": 844})
 
     ph = page.evaluate("""() => {
@@ -156,6 +166,13 @@ with sync_playwright() as p:
           "详情页不含仓库路径 / 文件名等开发信息",
           "详情页出现开发信息：%s" % detail_text[:120])
 
+    share_off = page.evaluate("""() => ({
+      has: document.documentElement.className.indexOf('has-share') >= 0,
+      btn: document.querySelectorAll('.share').length})""")
+    check(not share_off["has"] and share_off["btn"] == 0,
+          "拿不到 postNote 时分享整块隐藏（能力检测而非 UA 判断）",
+          "不该出现分享按钮：%s" % share_off)
+
     page.screenshot(path=str(OUT / "detail-loco.png"), full_page=True)
 
     print("—— 详情页（车站类：走建筑立面风格串） ——")
@@ -187,6 +204,63 @@ with sync_playwright() as p:
           "「车站」tab 只剩一个分组（10 项）",
           "车站筛选后分组 %d、卡片 %d，期望 1 / 10" % (st_sections, st_cards))
     page.screenshot(path=str(OUT / "list-station.png"), full_page=True)
+
+    print("—— 分享到小红书（注入桥桩） ——")
+    sp = browser.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=1)
+    # 注意：add_init_script 的字符串是「直接执行的脚本」，不要写成箭头函数（那只是个从不执行的表达式）
+    sp.add_init_script("""
+      window.__share = [];
+      window.xhs = { miniTool: {
+        writeTempFile: function (o) {
+          window.__share.push({api: 'writeTempFile', head: String(o.data).slice(0, 22),
+                               len: String(o.data).length});
+          return Promise.resolve({filePath: '/tmp/cra-share.webp'});
+        },
+        postNote: function (o) {
+          window.__share.push({api: 'postNote', title: o.title, content: o.content,
+                               pageType: o.pageType, url: o.mediaInfo.image_resources[0].url});
+          return Promise.resolve({errMsg: 'postNote:ok'});
+        }
+      }};
+    """)
+    sp.goto(URL + "#/v/loco-01")
+    sp.wait_for_selector("#shareBtn")
+    sp.wait_for_function(
+        "() => { const i = document.querySelector('.hero .shot-img'); return !!(i && i.naturalWidth > 0); }")
+    sp.wait_for_timeout(150)
+    ready = sp.evaluate("""() => { const b = document.getElementById('shareBtn');
+      return {cls: b.className, dis: b.disabled,
+              has: document.documentElement.className.indexOf('has-share') >= 0}; }""")
+    check(ready["has"] and "off" not in ready["cls"] and not ready["dis"],
+          "拿得到 postNote 时分享按钮出现，且原图到货后转为可用",
+          "分享按钮状态异常：%s" % ready)
+
+    intro_text = sp.evaluate("() => document.querySelector('.block p').innerText")
+    sp.click("#shareBtn")
+    sp.wait_for_timeout(500)
+    rec = sp.evaluate("window.__share")
+    sp.screenshot(path=str(OUT / "share.png"), full_page=False)
+
+    ok_calls = (len(rec) == 2 and rec[0]["api"] == "writeTempFile" and rec[1]["api"] == "postNote")
+    check(ok_calls and rec[0]["head"].startswith("data:image/"),
+          "先 writeTempFile 落临时文件（%s…，%d 字符）再 postNote"
+          % (rec[0]["head"] if rec else "?", rec[0]["len"] if rec else 0),
+          "桥调用异常：%s" % rec)
+    note = rec[1] if len(rec) > 1 else {}
+    check(note.get("title") == "中国铁路图鉴 · 龙号机车" and len(note.get("title") or "") <= 20,
+          "标题为条目名且 ≤20（%s）" % note.get("title"), "标题异常：%r" % note.get("title"))
+    check(note.get("pageType") == "photo_publish" and note.get("url") == "/tmp/cra-share.webp",
+          "pageType=photo_publish，媒体用 writeTempFile 返回的 filePath",
+          "图文参数异常：%s" % note)
+    body = note.get("content") or ""
+    check(body.startswith(intro_text) and "年代：1881 年 — 1930 年代" in body
+          and "火车头 · 第一台中国造蒸汽机车" in body
+          and "—— 中国铁路图鉴" in body and len(body) <= 1000,
+          "正文是该条目介绍 + 分类 · 类型 + 年代 + 关键参数（%d 字）" % len(body),
+          "正文异常：%s" % body[:80])
+    after = sp.evaluate("""() => ({dis: document.getElementById('shareBtn').disabled})""")
+    check(not after["dis"], "唤起后按钮恢复可点（busy 复位）", "按钮未复位：%s" % after)
+    sp.close()
 
     check(not js_errors, "无 JS 运行时错误", "JS 报错：%s" % js_errors[:3])
     browser.close()

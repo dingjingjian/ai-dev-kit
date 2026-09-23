@@ -177,6 +177,21 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 .detail h2{font-size:23px; font-weight:700; letter-spacing:-.025em; margin-bottom:3px;}
 .detail .en-name{font-size:13px; color:var(--ink-3);}
 .detail .tagline{font-size:13.5px; color:var(--ink-2); line-height:1.6; margin:10px 0 18px;}
+/* 分享到小红书：只在容器里（拿得到 postNote）才由 JS 在 tagline 下方建出来。
+   与 .copy-btn 同一套「主操作」语言（分类色实底 + 胶囊 + 微投影），
+   分类色由详情页写在根元素上的 --accent 决定。 */
+.actions{display:flex; margin:0 0 16px;}
+.share{
+  display:inline-flex; align-items:center;
+  padding:9px 17px; border-radius:999px;
+  background:var(--accent); color:#fff; font-size:13px; font-weight:600; letter-spacing:.02em;
+  box-shadow:0 6px 16px -8px rgba(22,24,29,.45);
+  transition:transform .18s var(--ease), opacity .18s var(--ease);
+}
+.share svg{width:15px; height:15px; margin-right:7px; flex-shrink:0;}
+.share:active{transform:scale(.96);}
+/* 原图还没就位 / 正在唤起发布页时压暗，避免点了没反应 */
+.share.off{opacity:.38; box-shadow:none;}
 .block{
   background:var(--card); border-radius:14px; border:1px solid var(--line);
   box-shadow:0 1px 2px rgba(20,22,28,.03);
@@ -239,6 +254,7 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 .section-head > * + *{margin-left:8px;}
 .card-head > * + *{margin-left:6px;}
 .copy-btn > * + *{margin-left:6px;}
+.share > * + *{margin-left:7px;}
 .block h3 > * + *{margin-left:8px;}
 
 /* 悬浮操作按钮 */
