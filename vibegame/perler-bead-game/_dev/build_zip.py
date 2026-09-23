@@ -50,7 +50,7 @@ if failed:
 if DIST.exists():
     shutil.rmtree(DIST)
 DIST.mkdir(parents=True)
-for name in ("index.html", "main.js"):
+for name in ("index.html", "main.js", "bgm.js", "icon.jpg"):
     shutil.copy2(ROOT / name, DIST / name)
 print(f"\ndist: {sorted(p.name for p in DIST.iterdir())}")
 

@@ -581,12 +581,17 @@ const PALETTE = [
 const PAL = {}; PALETTE.forEach(p=>PAL[p.code]=p.hex);
 const MODES = {copy:'临摹',challenge:'挑战'};
 
-// ==================== 音效引擎：Web Audio 程序化合成（零外部文件）====================
-// 音色全部实时合成：木鱼/梆子（放豆）、编钟（通关）、古筝拨弦（背景音乐）、带通噪声（擦除/熨烫）
+// ==================== 音效引擎：Web Audio 程序化合成 + 文件 BGM ====================
+// 交互音效实时合成：木鱼/梆子（放豆）、编钟（通关）、古筝拨弦（回退 BGM）、带通噪声（擦除/熨烫）；
+// 背景音乐优先用 bgm.js 的 window.PBG_BGM（base64 mp3），无文件时回退程序化五声音阶。
 const SFX=(function(){
   let ctx=null, master=null, sfxBus=null, bgmBus=null, noiseBuf=null;
   let on=true, bgmOn=true, unlocked=false;
   let bgmTimer=null, bgmIdx=4, lastPlace=0;
+  // 文件 BGM（bgm.js 的 window.PBG_BGM）相关状态
+  let bgmLoadTried=false, bgmFilePlaying=false, bgmReady=false, bgmBuf=null;
+  let bgmPasses=[], bgmNextAt=0, bgmLoopT=null, bgmFirstPass=true;
+  const BGM_XFADE=3, BGM_TICK_MS=500;
   // C 宫五声音阶（宫商角徵羽），跨两个八度
   const PENTA=[261.63,293.66,329.63,392.00,440.00,523.25,587.33,659.25,783.99,880.00];
 
@@ -676,7 +681,78 @@ const SFX=(function(){
     src.start(t,Math.random()*0.5); src.stop(t+dur+0.05);
   }
 
-  // --- 背景音乐：五声音阶随机游走 ---
+  // --- 背景音乐：优先文件（bgm.js 的 window.PBG_BGM），无文件回退程序化五声音阶 ---
+  // 文件曲：atob → Uint8Array → decodeAudioData 解成 PCM，用 Web Audio 循环播放，
+  // 全程不产生任何 URL，不触碰 CSP 的媒体源规则；循环靠“尾/头交叠淡入淡出”接缝听不出。
+  function loadBgm(){
+    if(bgmLoadTried) return; bgmLoadTried=true;
+    if(typeof window.PBG_BGM!=='string'||!window.PBG_BGM) return;   // 没文件＝回退程序化
+    try{
+      const bin=atob(window.PBG_BGM);
+      const arr=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+      const c=ensure(); if(!c) return;
+      c.decodeAudioData(arr.buffer, function(buf){
+        bgmBuf=buf; bgmReady=true;
+        if(unlocked&&on&&bgmOn){ bgmStop(); bgmStart(); }   // 解码完成切到文件曲
+      }, function(){ bgmReady=false; });
+    }catch(e){ bgmReady=false; }
+  }
+  function bgmLoopTick(){
+    if(!bgmFilePlaying||!ctx||!bgmBuf) return;
+    const D=bgmBuf.duration;
+    const X=Math.min(BGM_XFADE, D*0.2);
+    const L=D-X;
+    const now=ctx.currentTime;
+    if(bgmNextAt<now+0.05) bgmNextAt=now+0.08;
+    while(bgmNextAt<now+1.2){
+      const at=bgmNextAt;
+      const src=ctx.createBufferSource(), g=ctx.createGain();
+      src.buffer=bgmBuf; src.connect(g); g.connect(bgmBus);
+      const fin=bgmFirstPass?Math.min(X,1.2):X; bgmFirstPass=false;
+      g.gain.setValueAtTime(0,at);
+      g.gain.linearRampToValueAtTime(1,at+fin);
+      g.gain.setValueAtTime(1,at+L);
+      g.gain.linearRampToValueAtTime(0,at+D);
+      src.start(at); src.stop(at+D+0.05);
+      bgmPasses.push({src:src,endsAt:at+D});
+      bgmNextAt=at+L;
+    }
+    for(let i=bgmPasses.length-1;i>=0;i--){
+      if(bgmPasses[i].endsAt<now-0.5){ try{bgmPasses[i].src.disconnect();}catch(e){} bgmPasses.splice(i,1); }
+    }
+  }
+  function startFileBgm(){
+    if(bgmFilePlaying) return;
+    bgmFilePlaying=true; bgmFirstPass=true;
+    try{ if(ctx.state==='suspended'&&ctx.resume) ctx.resume(); }catch(e){}
+    try{ bgmBus.gain.cancelScheduledValues(ctx.currentTime); bgmBus.gain.value=0.55; }catch(e){}
+    bgmNextAt=ctx.currentTime+0.08;
+    bgmLoopTick();
+    if(bgmLoopT) clearInterval(bgmLoopT);
+    bgmLoopT=setInterval(bgmLoopTick, BGM_TICK_MS);
+  }
+  function stopFileBgm(){
+    bgmFilePlaying=false;
+    if(bgmLoopT){ clearInterval(bgmLoopT); bgmLoopT=null; }
+    if(ctx&&bgmBus){ try{ bgmBus.gain.cancelScheduledValues(ctx.currentTime); bgmBus.gain.setTargetAtTime(0.0001,ctx.currentTime,0.03); }catch(e){} }
+    const passes=bgmPasses.slice(); bgmPasses=[];
+    setTimeout(function(){
+      passes.forEach(function(p){ try{p.src.stop();}catch(e){} try{p.src.disconnect();}catch(e){} });
+      if(bgmBus) try{ bgmBus.gain.value=0.55; }catch(e){}
+    },140);
+  }
+  // 统一入口：有文件播文件，没文件回退程序化随机游走
+  function bgmStart(){
+    if(!on||!bgmOn||!unlocked||!ctx) return;
+    if(bgmReady&&bgmBuf) startFileBgm();
+    else if(!bgmTimer) bgmTick();
+  }
+  function bgmStop(){
+    if(bgmTimer){ clearTimeout(bgmTimer); bgmTimer=null; }   // 先停程序化，避免双声叠加
+    if(bgmReady&&bgmBuf) stopFileBgm();
+  }
+  // 程序化五声音阶随机游走（无音频文件时的回退）
   function bgmTick(){
     bgmTimer=null;
     if(!on||!bgmOn||!ctx) return;
@@ -690,26 +766,26 @@ const SFX=(function(){
     if(Math.random()<0.18) pluck(PENTA[Math.min(PENTA.length-1,bgmIdx+2)],t+0.28,1.2,0.07,bgmBus); // 高音点缀
     bgmTimer=setTimeout(bgmTick,1000+Math.random()*800);
   }
-  function stopBgm(){ if(bgmTimer){ clearTimeout(bgmTimer); bgmTimer=null; } }
 
   const api={
     unlock:function(){
       const c=ensure(); if(!c) return;
       if(c.state==='suspended') c.resume();
-      if(!unlocked){ unlocked=true; if(on&&bgmOn&&!bgmTimer) bgmTick(); }
+      loadBgm();                                            // 在用户手势内解码文件 BGM
+      if(!unlocked){ unlocked=true; bgmStart(); }
     },
     isOn:function(){ return on; },
     isBgmOn:function(){ return bgmOn; },
     setOn:function(v){
       on=v;
       if(master&&ctx) master.gain.setTargetAtTime(v?0.85:0,ctx.currentTime,0.02);
-      if(!v) stopBgm();
-      else if(bgmOn&&unlocked&&!bgmTimer) bgmTick();
+      if(!v) bgmStop();
+      else if(bgmOn&&unlocked) bgmStart();
     },
     setBgm:function(v){
       bgmOn=v;
-      if(!v) stopBgm();
-      else if(on&&unlocked&&!bgmTimer) bgmTick();
+      if(!v) bgmStop();
+      else if(on&&unlocked) bgmStart();
     },
     load:function(){
       try{
