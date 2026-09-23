@@ -49,7 +49,8 @@ print("源时长: %.2f s" % dur)
 # --- 抽取 + 重编码（解 AAC → 单声道 → 22.05k → 64kbps mp3）---
 tmp = os.path.join(PROJ, "_dev", "_bgm_tmp.mp3")
 cmd = [ff, "-y", "-i", SRC, "-vn", "-ac", "1", "-ar", "22050", "-b:a", "%dk" % KBPS]
-if dur and dur > CAP:
+# 探测失败（dur=0）或源长于 cap 时都截断到 cap；源短于 cap 时 -t 不会裁掉尾部
+if (not dur) or dur > CAP:
     cmd += ["-t", str(CAP)]
 cmd += [tmp]
 subprocess.run(cmd, stderr=subprocess.DEVNULL, check=True)
