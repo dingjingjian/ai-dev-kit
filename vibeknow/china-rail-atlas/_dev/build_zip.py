@@ -36,6 +36,8 @@ def collect():
             continue
         if p.suffix == ".log":
             continue
+        if p.suffix == ".md":
+            continue
         if rel.name in INCLUDE_FILES or rel.parts[0] in INCLUDE_DIRS:
             out.append(p)
     return out
