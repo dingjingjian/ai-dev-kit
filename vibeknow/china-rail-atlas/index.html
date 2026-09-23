@@ -3,13 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#f5f4f0">
+<meta name="theme-color" content="#2d5340">
 <title>中国铁路图鉴</title>
 <style>
 :root{
   --bg:#f5f4f0; --card:#ffffff; --ink:#16181d; --ink-2:#5c636f; --ink-3:#989faa;
   --line:#e6e4dd; --line-2:#efeee9;
   --accent:#1f6f4f; --accent-soft:#e8f2ec;
+  /* 国铁「刷绿」顶栏配色：车体绿三档（高光 / 主色 / 暗部）+ 腰线黄 + 奶白水牌。
+     绿偏蓝灰、黄取中黄，避开草绿与柠檬黄，更接近刷绿客车的漆面。 */
+  --rail-green:#3d6552; --rail-green-mid:#325743; --rail-green-deep:#274534;
+  --rail-yellow:#f0c62c;
+  --rail-plate:#faf7ee; --rail-plate-ink:#1f2c24; --rail-plate-line:#2c4437;
   --safe-top:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --safe-bottom:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
   --safe-l:var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
@@ -31,16 +36,19 @@ button{font-family:inherit;cursor:pointer;border:none;outline:none;background:no
 code{font-family:"SF Mono",Menlo,Consolas,monospace;}
 
 /* ============ 顶栏（吸顶容器：topbar + tabs 合一，免硬编码偏移） ============
+   国铁「刷绿」设计：墨绿车体漆面 + 底部黄色腰线（25G 式）+ 白底黑字水牌标题。
    基线为 Chrome 61：不写 backdrop-filter 也能用，模糊只作增强层。 */
 .topwrap{
   position:sticky; top:0; z-index:20;
   padding-top:var(--safe-top);
-  background:rgba(245,244,240,.97);
-  border-bottom:1px solid var(--line);
+  /* 三段纵向渐变模拟漆面高光→主色→暗部；黄色腰线用 border-bottom，再压 1px 深绿收边 */
+  background:linear-gradient(180deg,var(--rail-green) 0%,var(--rail-green-mid) 52%,var(--rail-green-deep) 100%);
+  border-bottom:4px solid var(--rail-yellow);
+  box-shadow:0 1px 0 rgba(26,42,34,.32);
 }
 @supports ((-webkit-backdrop-filter:blur(18px)) or (backdrop-filter:blur(18px))){
   .topwrap{
-    background:rgba(245,244,240,.82);
+    background:linear-gradient(180deg,rgba(61,101,82,.92) 0%,rgba(50,87,67,.92) 52%,rgba(39,69,52,.92) 100%);
     -webkit-backdrop-filter:saturate(180%) blur(18px);
     backdrop-filter:saturate(180%) blur(18px);
   }
@@ -50,8 +58,20 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
   display:flex; align-items:center;
   height:var(--bar-h); padding:0 12px;
 }
-.topbar h1{font-size:17px; font-weight:600; letter-spacing:-.02em; flex:1; text-align:center;}
-.topbar .spacer{width:36px; flex-shrink:0;}
+/* 水牌：白底黑字 + 双线框（外框 border、内细线 inset shadow），字距放宽像铭牌排版。
+   h1 不再 flex:1，收缩到内容宽，两侧 spacer flex:1 把水牌推到正中。 */
+.topbar h1{
+  flex:0 1 auto; min-width:0; text-align:center; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis;
+  font-size:15px; font-weight:700; letter-spacing:.14em; text-indent:.14em;
+  color:var(--rail-plate-ink); background:var(--rail-plate);
+  padding:4px 13px; border-radius:3px;
+  border:1px solid var(--rail-plate-line);
+  box-shadow:inset 0 0 0 2px var(--rail-plate),
+             inset 0 0 0 3px rgba(44,68,55,.5),
+             0 2px 5px rgba(20,34,28,.34);
+}
+.topbar .spacer{flex:1; min-width:0;}
 
 /* 分类 tab：2 字短名 + 自动换行，不用横向滚动。
    理由（沿用 vehicle-atlas 结论）：吸顶栏里套横向滚动容器，低端 Android 上渲染残缺，
@@ -62,15 +82,18 @@ code{font-family:"SF Mono",Menlo,Consolas,monospace;}
   display:flex; flex-wrap:wrap;
   padding:0 12px 4px;
 }
+/* tab 落在绿漆面上：未选中为半透明白描边（车窗玻璃感），选中点亮为腰线黄。 */
 .tab{
   flex-shrink:0; margin:0 5px 8px 0; padding:6px 10px; border-radius:999px;
-  font-size:13px; font-weight:500; color:var(--ink-2);
-  background:var(--card); border:1px solid var(--line); white-space:nowrap;
+  font-size:13px; font-weight:500;
+  color:rgba(255,255,255,.95);
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3); white-space:nowrap;
   transition:background .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
 }
 .tab:active{transform:scale(.95);}
 .tab.active{
-  background:var(--ink); color:#fff; border-color:var(--ink);
+  background:var(--rail-yellow); color:#243324; border-color:var(--rail-yellow);
+  font-weight:600;
   box-shadow:0 3px 10px -4px rgba(0,0,0,.5);
 }
 
