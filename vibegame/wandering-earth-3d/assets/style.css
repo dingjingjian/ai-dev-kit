@@ -8,6 +8,10 @@
   --warn:#ffb84d;
   --danger:#ff4d5e;
   --ok:#7fd0a8;
+  /* 顶部/底部安全区：优先取小工具容器注入的变量，其次 env()，都没有则 0（对齐 vibegame/ai-calculator 写法）。
+     每个元素的 top/bottom 都先给一条纯像素基线声明，Chrome 61 丢弃下面那条 calc 后自动回落，无需额外兼容分支。 */
+  --sat:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{
@@ -22,22 +26,37 @@ html,body{
   position:fixed;top:0;left:0;width:100%;height:100%;display:block;
 }
 
-/* 倒计时（左上大字） */
-#countdown{
-  position:fixed;left:16px;top:16px;top:max(16px,env(safe-area-inset-top));
+/* 计时（左上）：正计时，不设时限，唯一死线是身后的氦闪壳 */
+#clock{
+  position:fixed;left:16px;top:14px;
+  top:calc(14px + var(--sat));
   display:flex;align-items:baseline;
   font-variant-numeric:tabular-nums;
   z-index:10;pointer-events:none;
   text-shadow:0 2px 12px rgba(0,0,0,.6);
 }
-#cd-num{font-size:52px;font-weight:800;line-height:1;color:var(--txt);letter-spacing:-1px}
-#cd-unit{font-size:18px;font-weight:600;color:var(--mut);margin-left:3px}
-#countdown.urgent #cd-num{color:var(--danger);animation:pulse .6s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+#clock-num{font-size:34px;font-weight:700;line-height:1;color:var(--txt);letter-spacing:-.5px}
 
-/* 顶部方向罗盘 */
+/* 后视镜（顶部居中）：帧只是装饰，3D 画面由主 renderer 用 scissor 画在同一块 canvas 的这块矩形里 */
+#mirror-frame{
+  position:fixed;left:50%;transform:translateX(-50%);
+  top:14px;
+  top:calc(14px + var(--sat));
+  width:132px;height:68px;
+  border:1px solid var(--line);border-radius:8px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.5);
+  z-index:12;pointer-events:none;transition:opacity .3s;
+}
+#mirror-frame.hide{opacity:0}
+#mirror-label{
+  position:absolute;left:0;right:0;bottom:3px;text-align:center;
+  font-size:9px;letter-spacing:.5px;color:#9fd8ff;text-shadow:0 1px 4px rgba(0,0,0,.9);
+}
+
+/* 顶部方向罗盘（后视镜下方） */
 #compass{
-  position:fixed;left:50%;top:max(14px,env(safe-area-inset-top));
+  position:fixed;left:50%;top:90px;
+  top:calc(90px + var(--sat));
   transform:translateX(-50%);
   display:flex;align-items:center;gap:7px;
   background:var(--panel);border:1px solid var(--line);border-radius:20px;
@@ -52,7 +71,8 @@ html,body{
 
 /* 遥测（右上） */
 #telemetry{
-  position:fixed;right:14px;top:max(16px,env(safe-area-inset-top));
+  position:fixed;right:14px;top:14px;
+  top:calc(14px + var(--sat));
   display:flex;flex-direction:column;gap:4px;
   z-index:10;pointer-events:none;
 }
@@ -66,26 +86,50 @@ html,body{
 .tm-v.good{color:var(--ok)}
 .tm-v.bad{color:var(--danger)}
 
-/* 能量条（右上遥测下方） */
-#energy-wrap{position:fixed;right:14px;top:max(92px,calc(env(safe-area-inset-top) + 76px));width:130px;z-index:10;pointer-events:none;transition:opacity .3s}
-#energy-wrap.hide{opacity:0}
+/* 过热条（右上遥测下方）：空 → 热，满值即过热锁定 */
+#heat-wrap{
+  position:fixed;right:14px;top:98px;
+  top:calc(98px + var(--sat));
+  width:130px;z-index:10;pointer-events:none;transition:opacity .3s;
+}
+#heat-wrap.hide{opacity:0}
 .en-label{font-size:10px;color:var(--mut);display:block;margin-bottom:3px;text-align:right}
-#energy-track{height:6px;border-radius:3px;background:rgba(120,160,220,.15);overflow:hidden}
-#energy-fill{height:100%;width:100%;border-radius:3px;background:linear-gradient(90deg,#ff4d5e,#ffb84d,#7fd0a8);transition:width .1s}
-
-/* 越轨进度（顶部罗盘下方） */
-#milestones{position:fixed;left:50%;top:max(52px,calc(env(safe-area-inset-top) + 42px));transform:translateX(-50%);display:flex;gap:5px;z-index:12;pointer-events:none;transition:opacity .3s}
-#milestones.hide{opacity:0}
-.ms-dot{width:22px;height:22px;border-radius:50%;border:1.5px solid rgba(120,160,220,.22);display:flex;align-items:center;justify-content:center;font-size:9px;color:rgba(120,160,220,.3);background:rgba(12,18,34,.6);transition:all .3s}
-.ms-dot.passed{border-color:var(--ok);color:var(--ok);background:rgba(127,208,168,.15);box-shadow:0 0 6px rgba(127,208,168,.4)}
+#heat-track{height:6px;border-radius:3px;background:rgba(120,160,220,.15);overflow:hidden}
+#heat-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5cc8ff,#7fd0a8,#ffb84d);transition:width .1s}
+#heat-wrap.hot #heat-fill{background:linear-gradient(90deg,#7fd0a8,#ffb84d,#ff4d5e)}
+#heat-wrap.locked #heat-tag{color:var(--danger);font-weight:600}
+#heat-wrap.locked #heat-fill{background:linear-gradient(90deg,#ff4d5e,#ff8a4d);animation:heatLock .5s ease-in-out infinite}
+@keyframes heatLock{0%,100%{opacity:1}50%{opacity:.5}}
 
 /* 小地图（左下角） */
-#radar{position:fixed;left:12px;bottom:max(96px,calc(env(safe-area-inset-bottom) + 88px));width:104px;height:104px;z-index:11;pointer-events:none;transition:opacity .3s}
+#radar{
+  position:fixed;left:12px;bottom:96px;
+  bottom:calc(96px + var(--sab));
+  width:104px;height:104px;z-index:11;pointer-events:none;transition:opacity .3s;
+}
 #radar.hide{opacity:0}
+
+/* 弹弓引导：投影到「下一颗要掠射的行星」的屏幕位置上 */
+#aim{
+  position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
+  z-index:11;pointer-events:none;transition:opacity .2s;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+  background:rgba(12,18,34,.74);border:1px solid var(--acc);border-radius:12px;
+  padding:3px 9px;font-size:10px;
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+}
+#aim.hide{opacity:0}
+#aim-name{font-weight:700;color:var(--acc)}
+#aim-dist{color:var(--mut);font-variant-numeric:tabular-nums}
+#aim-tag{color:var(--ok)}
+#aim.risk{border-color:var(--danger)}
+#aim.risk #aim-tag{color:var(--danger)}
+#aim.risk #aim-name{color:var(--danger)}
 
 /* 影响球预警 */
 #warn{
-  position:fixed;left:50%;top:120px;top:max(120px,calc(env(safe-area-inset-top) + 96px));
+  position:fixed;left:50%;top:126px;
+  top:calc(126px + var(--sat));
   transform:translateX(-50%);
   font-size:12px;color:var(--warn);
   background:var(--panel);border:1px solid var(--warn);border-radius:14px;
@@ -112,7 +156,11 @@ html,body{
 @keyframes flashA{0%{opacity:1}100%{opacity:0}}
 
 /* 逃逸进度条 */
-#progress{position:fixed;left:16px;right:16px;bottom:max(58px,calc(env(safe-area-inset-bottom) + 50px));z-index:10;pointer-events:none;transition:opacity .3s}
+#progress{
+  position:fixed;left:16px;right:16px;bottom:58px;
+  bottom:calc(58px + var(--sab));
+  z-index:10;pointer-events:none;transition:opacity .3s;
+}
 #progress.hide{opacity:0}
 #prog-track{height:5px;border-radius:3px;background:rgba(120,160,220,.15);overflow:hidden}
 #prog-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5cc8ff,#7fd0a8);transition:width .15s}
@@ -120,7 +168,8 @@ html,body{
 
 /* 开场提示 */
 #hint{
-  position:fixed;left:50%;bottom:28px;bottom:max(28px,calc(env(safe-area-inset-bottom) + 20px));
+  position:fixed;left:50%;bottom:28px;
+  bottom:calc(28px + var(--sab));
   transform:translateX(-50%);
   font-size:13px;color:var(--mut);
   background:var(--panel);border:1px solid var(--line);border-radius:18px;

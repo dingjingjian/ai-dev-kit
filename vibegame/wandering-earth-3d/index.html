@@ -10,9 +10,11 @@
 <body>
   <canvas id="stage"></canvas>
 
-  <div id="countdown">
-    <span id="cd-num">30</span><span id="cd-unit">s</span>
+  <div id="clock">
+    <span id="clock-num">0:00</span>
   </div>
+
+  <div id="mirror-frame"><span id="mirror-label">后视镜 · 身后</span></div>
 
   <div id="compass">
     <svg id="cmp-svg" width="26" height="26" viewBox="0 0 26 26">
@@ -22,17 +24,21 @@
     <span id="cmp-label">逃离太阳</span>
   </div>
 
-  <div id="milestones"></div>
-
   <div id="telemetry">
     <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">1.00 AU</span></div>
     <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">29.8 km/s</span></div>
     <div class="tm-row"><span class="tm-k">逃逸比</span><span id="tm-esc" class="tm-v">0.71</span></div>
   </div>
 
-  <div id="energy-wrap">
-    <span class="en-label">发动机能量</span>
-    <div id="energy-track"><div id="energy-fill"></div></div>
+  <div id="heat-wrap">
+    <span class="en-label" id="heat-tag">发动机温度</span>
+    <div id="heat-track"><div id="heat-fill"></div></div>
+  </div>
+
+  <div id="aim">
+    <span id="aim-name">木星</span>
+    <span id="aim-dist">3.40 AU</span>
+    <span id="aim-tag">可掠射加速</span>
   </div>
 
   <div id="warn"></div>
@@ -66,8 +72,8 @@
         <text x="140" y="33" text-anchor="middle" font-size="6" fill="#888">躲行星</text>
       </svg>
       <div class="bf-demo"><div class="bf-finger"></div></div>
-      <div class="bf-ops"><b>拖动</b>＝推力 · 能量有限不能一直推</div>
-      <div class="bf-ops2">脉冲时推力翻倍 · 借行星弹弓加速</div>
+      <div class="bf-ops"><b>拖动</b>＝推力 · 烧满会过热锁定，松手降温</div>
+      <div class="bf-ops2">脉冲乘波 ×1.8 · 借行星引力弹弓加速</div>
       <button id="bf-btn" class="bf-btn" type="button">出发</button>
     </div>
   </div>
