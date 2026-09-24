@@ -1,813 +1,803 @@
 /**
- * 表现层：状态机、相机、输入、2D 叠加层、HUD。
+ * 流浪地球 · 逃逸截断 —— 主程序
  *
- * 三段式：
- *   prologue  刹车时代过场（不可操作，点击推进 / 可跳过）
- *   play      逃逸时代（玩家拖出箭头点火，绕日加速）
- *   rebellion 第 10 圈触发：叛乱 → 处决 → 太阳氦闪（前两幕冻结时间）
- *   over      结算
+ * 结构：
+ *   1. 物理核心 createGame（纯 JS，不依赖 THREE，无头自检可直接调用）
+ *   2. 渲染层（依赖 THREE + DOM，无 THREE 时跳过）
  *
- * 相机是**双档自动切换**：平时拉远以太阳为中心看整条轨道（轨道变化一目了然，
- * 这是判断"这一推有没有用"的唯一依据），点火执行时拉近看地球与尾焰。
- * 拖动瞄准期间相机冻结 —— 否则锚在地球上的箭头会跟着乱飘。
- *
- * 屏幕方向 → 世界方向的映射（相机方位固定俯视，故为常量）：
- *   屏幕右 → 世界 +X，屏幕下 → 世界 +Z。
+ * 玩法：太阳氦闪壳从第 0 秒持续膨胀追击，玩家以第三人称实时拖动地球往外飞，
+ *       躲耀斑脉冲、躲五颗行星、借木星弹弓，30 秒内逃出。
  */
-(function () {
+(function (global) {
   'use strict';
-  var M3D = window.M3D;
-  var W = M3D.WORLD;
-  var mat4 = M3D.mat4;
-  var O = M3D.orbit;
-  var G_SUN = W.G_SUN;
-  var FLASH_LAP = M3D.GAME_CONST.FLASH_LAP;
 
-  // 单次点火的速度增量上限（游戏单位/秒）；满燃料 19 → 约 6 次点火机会
-  var DV_MAX = 3.0;
-  var AIM_DEAD = 12;        // 拖动死区（px）
-  var AIM_FULL = 0.30;      // 达满推力所需拖动距离（屏幕短边比例）
+  // ============================================================
+  //  常量（数值真源，与 DESIGN.md 对齐）
+  // ============================================================
+  var AU = 100;
+  var SUN_R = 10;
+  var EARTH_R = 3.4;
+  var G_SUN = 11000;
+  var V_CIRC = Math.sqrt(G_SUN / AU);          // ≈ 10.49
+  var ESCAPE_R = 4200;                          // 胜利距离门槛（42 AU，冥王星外）
 
-  // ---- DOM ----
+  var THRUST_ACC = 7.0;
+  var SUBSTEP = 0.0045;
+  var MAX_SUB = 900;
+  var SAFE_FRAMES = 60;
+
+  var ROUND_TIME = 90;
+  var INTRO_TIME = 2.8;                        // 开场过场时长（秒）：俯视太阳系 → 聚焦地球
+  var BASE_GROW = 4.0;
+  var PULSE_TIMES = [10, 20, 35, 55, 75];
+  var PULSE_GAIN = 4;
+  var PULSE_DUR = 1.0;
+  var PULSE_WARN = 0.3;
+
+  var ENERGY_MAX = 100;
+  var ENERGY_DRAIN = 32;             // 满推每秒消耗（~3.1 秒耗完）
+  var ENERGY_REGEN = 12;             // 不推每秒回复（~8.3 秒回满）
+  var PULSE_THRUST_BOOST = 1.8;      // 脉冲时推力效率加成
+
+  var PLANETS = [
+    { key: 'mercury', name: '水星', rad: 2.0, orbitR: 0.39 * AU, gm: 3, capR: 18, spin: 0.35, tex: 'MERCURY_TEXTURE_URI', color: 0xb5ada0 },
+    { key: 'venus', name: '金星', rad: 3.2, orbitR: 0.72 * AU, gm: 8, capR: 26, spin: 0.20, tex: 'VENUS_TEXTURE_URI', color: 0xebd99f },
+    { key: 'mars', name: '火星', rad: 2.4, orbitR: 1.52 * AU, gm: 5, capR: 22, spin: 0.30, tex: 'MARS_TEXTURE_URI', color: 0xcc7a56 },
+    { key: 'jupiter', name: '木星', rad: 9.0, orbitR: 5.20 * AU, gm: 500, capR: 45, spin: 0.55, tex: 'JUPITER_TEXTURE_URI', color: 0xdbc29e },
+    { key: 'saturn', name: '土星', rad: 7.6, orbitR: 9.54 * AU, gm: 380, capR: 40, spin: 0.45, tex: 'SATURN_TEXTURE_URI', color: 0xe0d4a8, ring: true },
+    { key: 'uranus', name: '天王星', rad: 5.0, orbitR: 19.2 * AU, gm: 100, capR: 35, spin: 0.38, procColor: 0x4fd4e0 },
+    { key: 'neptune', name: '海王星', rad: 4.8, orbitR: 30.1 * AU, gm: 90, capR: 33, spin: 0.32, procColor: 0x3a5fd8 },
+    { key: 'pluto', name: '冥王星', rad: 1.8, orbitR: 39.5 * AU, gm: 2, capR: 15, spin: 0.24, procColor: 0x8a7a6a }
+  ];
+  var START_ANGLES = [0.6, 2.4, 4.6, 1.3, 3.8, 5.2, 2.0, 4.0];
+
+  // 真实单位换算
+  var AU_KM = 1.495978707e8;
+  var REAL_SEC_PER_GAME_SEC = 5.26e5;
+  var KM_PER_UNIT = AU_KM / AU;
+  var YEARS_PER_GAME_SEC = REAL_SEC_PER_GAME_SEC / 3.15576e7;
+  var KMS_PER_UNIT = KM_PER_UNIT / REAL_SEC_PER_GAME_SEC;
+
+  var TAU = Math.PI * 2;
+  function len3(v) { return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
+
+  // ============================================================
+  //  物理核心（纯 JS，无 THREE 依赖）
+  // ============================================================
+  function createGame() {
+    var g = {};
+    var st = g.state = {
+      status: 'flying',
+      reason: '', culprit: '',
+      t: 0,
+      pos: [AU, 0, 0],
+      vel: [0, 0, V_CIRC],
+      spin: 0,
+      thrustDir: [0, 0, 0], thrustMag: 0,
+      rSun: AU, rSunAU: 1, speedKms: V_CIRC * KMS_PER_UNIT,
+      shellR: SUN_R, shellV: BASE_GROW,
+      escapeRatio: 0,
+      warn: '',
+      planets: [],
+      frames: 0,
+      pulseWarn: 0,
+      energy: ENERGY_MAX,
+      thrustEff: 1
+    };
+
+    var pAng = START_ANGLES.slice();
+    var pW = [];
+    var tmpP = [0, 0, 0], tmpV = [0, 0, 0];
+    for (var i = 0; i < PLANETS.length; i++) {
+      pW.push(Math.sqrt(G_SUN / Math.pow(PLANETS[i].orbitR, 3)));
+      st.planets.push({ pos: [0, 0, 0], vel: [0, 0, 0], angle: pAng[i] });
+    }
+
+    function planetPos(i, out) {
+      var d = PLANETS[i];
+      out[0] = Math.cos(pAng[i]) * d.orbitR; out[1] = 0; out[2] = Math.sin(pAng[i]) * d.orbitR;
+      return out;
+    }
+    function planetVel(i, out) {
+      var d = PLANETS[i], w = pW[i];
+      out[0] = -Math.sin(pAng[i]) * d.orbitR * w; out[1] = 0; out[2] = Math.cos(pAng[i]) * d.orbitR * w;
+      return out;
+    }
+    function syncPlanets() {
+      for (var i = 0; i < PLANETS.length; i++) {
+        st.planets[i].angle = pAng[i];
+        planetPos(i, st.planets[i].pos);
+        planetVel(i, st.planets[i].vel);
+      }
+    }
+
+    // 氦闪膨胀生长率
+    function growRate(t) {
+      var r = BASE_GROW;
+      for (var i = 0; i < PULSE_TIMES.length; i++) {
+        var pt = PULSE_TIMES[i];
+        if (t >= pt && t < pt + PULSE_DUR) r *= PULSE_GAIN;
+      }
+      if (t > 20) r += (t - 20) * (t - 20) * 0.01;
+      return r;
+    }
+
+    // 脉冲预警（脉冲前 PULSE_WARN 秒内返回 1）
+    function pulseWarnLevel(t) {
+      for (var i = 0; i < PULSE_TIMES.length; i++) {
+        var pt = PULSE_TIMES[i];
+        if (t > pt - PULSE_WARN && t < pt) return 1;
+      }
+      return 0;
+    }
+
+    function fail(status, reason, culprit) {
+      st.status = status; st.reason = reason; st.culprit = culprit || '';
+      st.thrustMag = 0;
+    }
+
+    function check() {
+      var p = st.pos, v = st.vel;
+      var rSun = len3(p);
+      st.rSun = rSun; st.rSunAU = rSun / AU;
+
+      if (rSun < SUN_R + EARTH_R) { fail('crashed', '地球坠入太阳', '太阳'); return; }
+      if (rSun < st.shellR) { fail('burned', '被氦闪烈焰吞没', '太阳'); return; }
+
+      st.warn = '';
+      if (st.frames > SAFE_FRAMES) {
+        for (var i = 0; i < PLANETS.length; i++) {
+          var d = PLANETS[i];
+          var pp = planetPos(i, tmpP);
+          var dx = p[0] - pp[0], dy = p[1] - pp[1], dz = p[2] - pp[2];
+          var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          if (dist < d.rad + EARTH_R) { fail('crashed', '撞上' + d.name, d.name); return; }
+          if (dist < d.capR) {
+            var pv = planetVel(i, tmpV);
+            var vx = v[0] - pv[0], vy = v[1] - pv[1], vz = v[2] - pv[2];
+            var vrel = Math.sqrt(vx * vx + vy * vy + vz * vz);
+            var vesc = Math.sqrt(2 * d.gm / dist);
+            if (vrel < vesc) { fail('caught', '被' + d.name + '引力捕获', d.name); return; }
+            st.warn = '进入' + d.name + '引力范围 · 相对速度 ' + (vrel * KMS_PER_UNIT).toFixed(1) +
+              ' / 逃逸阈值 ' + (vesc * KMS_PER_UNIT).toFixed(1) + ' km/s';
+          }
+        }
+      }
+
+      var sp = len3(v);
+      st.escapeRatio = sp / Math.sqrt(2 * G_SUN / Math.max(1, rSun));
+      // 胜利：达到逃逸能量（逃逸比 ≥ 1）且飞出距离门槛
+      if (st.escapeRatio >= 1 && rSun > ESCAPE_R) {
+        st.status = 'escaped';
+        st.reason = '逃出太阳系，奔向比邻星';
+      }
+    }
+
+    function substep(h, tNow) {
+      for (var i = 0; i < PLANETS.length; i++) pAng[i] += pW[i] * h;
+
+      var p = st.pos, v = st.vel;
+      var ax = 0, ay = 0, az = 0;
+      var r2 = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
+      var r = Math.sqrt(r2) || 1e-6;
+      var k = G_SUN / (r2 * r);
+      ax -= p[0] * k; ay -= p[1] * k; az -= p[2] * k;
+
+      for (i = 0; i < PLANETS.length; i++) {
+        var pp = planetPos(i, tmpP);
+        var dx = pp[0] - p[0], dy = pp[1] - p[1], dz = pp[2] - p[2];
+        var d2 = dx * dx + dy * dy + dz * dz;
+        var d = Math.sqrt(d2) || 1e-6;
+        if (d < 1e-4) continue;
+        var f = PLANETS[i].gm / (d2 * d);
+        ax += dx * f; ay += dy * f; az += dz * f;
+      }
+
+      if (st.thrustMag > 0 && st.thrustEff > 0) {
+        var ta = THRUST_ACC * st.thrustMag * st.thrustEff;
+        ax += st.thrustDir[0] * ta;
+        ay += st.thrustDir[1] * ta;
+        az += st.thrustDir[2] * ta;
+      }
+
+      v[0] += ax * h; v[1] += ay * h; v[2] += az * h;
+      p[0] += v[0] * h; p[1] += v[1] * h; p[2] += v[2] * h;
+      st.spin += h * 0.35;
+
+      // 壳膨胀积分（用子步精确时间，脉冲期内积分不失真）
+      st.shellV = growRate(tNow);
+      st.shellR += st.shellV * h;
+
+      check();
+    }
+
+    g.setThrust = function (dir, mag) {
+      if (st.status !== 'flying') { st.thrustMag = 0; return; }
+      if (!dir || mag <= 0) { st.thrustMag = 0; return; }
+      var l = len3(dir) || 1;
+      st.thrustDir[0] = dir[0] / l; st.thrustDir[1] = dir[1] / l; st.thrustDir[2] = dir[2] / l;
+      st.thrustMag = Math.max(0, Math.min(1, mag));
+    };
+
+    g.step = function (dtReal) {
+      if (st.status !== 'flying') { st.thrustMag = 0; return; }
+      var dt = dtReal;
+      // 能量管理：推力消耗 / 不推回复
+      if (st.thrustMag > 0 && st.energy > 0) {
+        st.energy = Math.max(0, st.energy - ENERGY_DRAIN * st.thrustMag * dt);
+      } else if (st.thrustMag === 0) {
+        st.energy = Math.min(ENERGY_MAX, st.energy + ENERGY_REGEN * dt);
+      }
+      // 实际推力效率：能量低于 25 线性衰减；脉冲时乘波加成
+      var eff = st.energy > 25 ? 1 : st.energy / 25;
+      if (growRate(st.t) > BASE_GROW) eff *= PULSE_THRUST_BOOST;
+      st.thrustEff = eff;
+      var n = Math.max(1, Math.min(Math.ceil(dt / SUBSTEP), MAX_SUB));
+      var h = dt / n;
+      var tNow = st.t;
+      for (var i = 0; i < n; i++) {
+        tNow += h;
+        substep(h, tNow);
+        if (st.status !== 'flying') break;
+      }
+      st.t = tNow;
+      st.frames += 1;
+      var sp = len3(st.vel);
+      st.speedKms = sp * KMS_PER_UNIT;
+      st.pulseWarn = pulseWarnLevel(st.t);
+      syncPlanets();
+      // 30 秒耗尽仍未逃出 → 失败
+      if (st.status === 'flying' && st.t >= ROUND_TIME) {
+        fail('timeout', '90 秒耗尽，未能逃出太阳系', '');
+      }
+    };
+
+    g.debugSet = function (pos, vel) {
+      st.pos[0] = pos[0]; st.pos[1] = pos[1]; st.pos[2] = pos[2];
+      st.vel[0] = vel[0]; st.vel[1] = vel[1]; st.vel[2] = vel[2];
+      st.frames = SAFE_FRAMES + 1;
+    };
+
+    g.reset = function () {
+      st.status = 'flying'; st.reason = ''; st.culprit = '';
+      st.t = 0; st.pos[0] = AU; st.pos[1] = 0; st.pos[2] = 0;
+      st.vel[0] = 0; st.vel[1] = 0; st.vel[2] = V_CIRC;
+      st.spin = 0; st.thrustMag = 0;
+      st.rSun = AU; st.rSunAU = 1; st.speedKms = V_CIRC * KMS_PER_UNIT;
+      st.shellR = SUN_R; st.shellV = BASE_GROW; st.escapeRatio = 0;
+      st.warn = ''; st.frames = 0; st.pulseWarn = 0;
+      st.energy = ENERGY_MAX; st.thrustEff = 1;
+      for (var i = 0; i < PLANETS.length; i++) pAng[i] = START_ANGLES[i];
+      syncPlanets();
+    };
+
+    syncPlanets();
+    st.speedKms = V_CIRC * KMS_PER_UNIT;
+    return g;
+  }
+
+  // 导出物理核心（无头自检用）
+  global.M3D = global.M3D || {};
+  global.M3D.createGame = createGame;
+  global.M3D.WORLD = { AU: AU, SUN_R: SUN_R, EARTH_R: EARTH_R, G_SUN: G_SUN, V_CIRC: V_CIRC, planets: PLANETS };
+  global.M3D.CONST = { THRUST_ACC: THRUST_ACC, ROUND_TIME: ROUND_TIME, BASE_GROW: BASE_GROW, PULSE_TIMES: PULSE_TIMES, KMS_PER_UNIT: KMS_PER_UNIT, YEARS_PER_GAME_SEC: YEARS_PER_GAME_SEC };
+
+  // ============================================================
+  //  渲染层（依赖 THREE + DOM；无 THREE 时跳过，物理核心仍可用）
+  // ============================================================
+  if (typeof THREE === 'undefined' || typeof document === 'undefined') return;
+
   var canvas = document.getElementById('stage');
-  var elPhase = document.getElementById('phase');
-  var elLap = document.getElementById('lap');
-  var elDist = document.getElementById('tm-dist');
-  var elSpeed = document.getElementById('tm-speed');
-  var elEsc = document.getElementById('tm-esc');
-  var elApa = document.getElementById('tm-apa');
-  var elYear = document.getElementById('tm-year');
-  var elFuelFill = document.getElementById('fuel-fill');
-  var elFuelNum = document.getElementById('fuel-num');
-  var elWarn = document.getElementById('warn');
-  var elAim = document.getElementById('aim');
-  var elGuide = document.getElementById('guide');
-  var elStory = document.getElementById('story');
-  var elStYear = document.getElementById('st-year');
-  var elStTitle = document.getElementById('st-title');
-  var elStText = document.getElementById('st-text');
-  var elStFill = document.getElementById('st-fill');
-  var elStHint = document.getElementById('st-hint');
-  var elStSkip = document.getElementById('st-skip');
-  var elResult = document.getElementById('result');
-  var elRsTitle = document.getElementById('rs-title');
-  var elRsText = document.getElementById('rs-text');
-  var elRsStat = document.getElementById('rs-stat');
-  var elRsBtn = document.getElementById('rs-btn');
-  var elFlash = document.getElementById('flash');
-  var elLoader = document.getElementById('loader');
-  var elFallback = document.getElementById('fallback');
-  var elSound = document.getElementById('btn-sound');
-  var tsBtns = [].slice.call(document.querySelectorAll('.ts-btn'));
-
-  // ---- 渲染器 ----
-  var renderer = null;
-  try { renderer = M3D.createRenderer(canvas); } catch (e) { renderer = null; }
-  if (!renderer) {
-    if (elLoader) elLoader.classList.add('hide');
-    if (elFallback) elFallback.style.display = 'flex';
+  var gl = null;
+  try { gl = canvas.getContext('webgl2') || canvas.getContext('webgl'); } catch (e) { }
+  if (!gl) {
+    document.getElementById('fallback').classList.add('show');
+    document.getElementById('loader').classList.add('hide');
     return;
   }
-  renderer.camera.near = 0.5;
-  renderer.camera.far = 60000;
-  renderer.setClearColor(0.006, 0.010, 0.020);
-  renderer.stars.setAlpha(1);
 
-  // 2D 叠加层（轨道线 / 箭头 / 标注）：与 WebGL 画布同尺寸，纯绘制、不收事件
-  var fxCanvas = document.getElementById('fx');
-  var fctx = fxCanvas ? fxCanvas.getContext('2d') : null;
+  var W = innerWidth, H = innerHeight, DPR = Math.min(devicePixelRatio || 1, 1.5);
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(DPR); renderer.setSize(W, H, false);
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
 
-  var world = M3D.buildWorld(renderer);
-  var game = M3D.createGame();
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(60, W / H, 0.5, 8000);
+
+  // ---- 星空天球 ----
+  function starfieldTex() {
+    var w = 2048, h = 1024, c = document.createElement('canvas'); c.width = w; c.height = h;
+    var x = c.getContext('2d');
+    var bg = x.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, '#04050c'); bg.addColorStop(.5, '#080a1a'); bg.addColorStop(1, '#04050c');
+    x.fillStyle = bg; x.fillRect(0, 0, w, h);
+    for (var i = 0; i < 4200; i++) { x.fillStyle = 'rgba(255,255,255,' + (.15 + Math.random() * .5) + ')'; x.fillRect(Math.random() * w, Math.random() * h, 1, 1); }
+    for (var j = 0; j < 220; j++) { x.fillStyle = 'rgba(255,255,255,' + (.82 + Math.random() * .18) + ')'; x.fillRect(Math.random() * w, Math.random() * h, 1, 1); }
+    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  var sky = new THREE.Mesh(new THREE.SphereGeometry(4000, 48, 32), new THREE.MeshBasicMaterial({ map: starfieldTex(), side: THREE.BackSide, depthWrite: false }));
+  scene.add(sky);
+
+  // ---- 光照 ----
+  scene.add(new THREE.AmbientLight(0x223044, 0.6));
+  var sunLight = new THREE.PointLight(0xfff2d0, 2.5, 0, 1.2); sunLight.position.set(0, 0, 0); scene.add(sunLight);
+
+  // ---- 工具：base64 data URI → THREE.Texture ----
+  function dataTex(uri) {
+    if (typeof uri !== 'string') return null;
+    var img = new Image();
+    var tex = new THREE.Texture(img);
+    tex.encoding = THREE.sRGBEncoding;
+    img.onload = function () { tex.needsUpdate = true; };
+    img.src = uri;
+    return tex;
+  }
+  function plainTex(col) { var c = document.createElement('canvas'); c.width = c.height = 4; c.getContext('2d').fillStyle = col; c.getContext('2d').fillRect(0, 0, 4, 4); return new THREE.CanvasTexture(c); }
+  function procPlanetTex(base) {
+    var c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    var x = c.getContext('2d');
+    var br = (base >> 16) & 255, bg = (base >> 8) & 255, bb = base & 255;
+    x.fillStyle = 'rgb(' + br + ',' + bg + ',' + bb + ')'; x.fillRect(0, 0, 512, 256);
+    for (var i = 0; i < 14; i++) {
+      var y = (i / 14) * 256;
+      x.fillStyle = 'rgba(255,255,255,' + (0.06 + Math.random() * 0.1) + ')';
+      x.fillRect(0, y, 512, 6 + Math.random() * 10);
+    }
+    for (var j = 0; j < 40; j++) {
+      x.fillStyle = 'rgba(' + br + ',' + bg + ',' + bb + ',' + (0.1 + Math.random() * 0.15) + ')';
+      x.beginPath(); x.arc(Math.random() * 512, Math.random() * 256, 8 + Math.random() * 25, 0, 6.283); x.fill();
+    }
+    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+
+  // ---- 太阳 ----
+  function sunTex() {
+    var c = document.createElement('canvas'); c.width = c.height = 512; var x = c.getContext('2d');
+    x.fillStyle = '#ff7a14'; x.fillRect(0, 0, 512, 512);
+    for (var i = 0; i < 5200; i++) { x.fillStyle = 'rgba(255,' + (170 + Math.random() * 80 | 0) + ',' + (30 + Math.random() * 90 | 0) + ',' + (Math.random() * .45) + ')'; x.beginPath(); x.arc(Math.random() * 512, Math.random() * 512, 1.5 + Math.random() * 7, 0, 6.283); x.fill(); }
+    return new THREE.CanvasTexture(c);
+  }
+  var sunGroup = new THREE.Group(); scene.add(sunGroup);
+  var sunCore = new THREE.Mesh(new THREE.SphereGeometry(SUN_R, 48, 48), new THREE.MeshBasicMaterial({ map: sunTex() }));
+  sunGroup.add(sunCore);
+  var sunGlow = new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.25, 36, 28), new THREE.MeshBasicMaterial({ color: 0xff7a14, side: THREE.BackSide, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false }));
+  sunGroup.add(sunGlow);
+  var sunHalo = new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.8, 32, 24), new THREE.MeshBasicMaterial({ color: 0xff4a14, side: THREE.BackSide, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
+  sunGroup.add(sunHalo);
+
+  // ---- 地球（冰封场景：真实贴图 + 冷色 tint + 半透明冰壳叠加）----
+  function iceOverlayTex() {
+    var c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+    var x = c.getContext('2d');
+    x.fillStyle = 'rgba(255,255,255,0)'; x.fillRect(0, 0, 1024, 512);
+    for (var i = 0; i < 55; i++) {                          // 冰原斑块
+      var px = Math.random() * 1024, py = Math.random() * 512, r = 40 + Math.random() * 120;
+      var g = x.createRadialGradient(px, py, 0, px, py, r);
+      g.addColorStop(0, 'rgba(225,238,250,0.55)');
+      g.addColorStop(0.55, 'rgba(190,215,238,0.30)');
+      g.addColorStop(1, 'rgba(190,215,238,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+    }
+    x.fillStyle = 'rgba(245,250,255,0.65)';                 // 极冠加厚
+    x.fillRect(0, 0, 1024, 58); x.fillRect(0, 454, 1024, 58);
+    x.strokeStyle = 'rgba(18,38,66,0.35)'; x.lineWidth = 1.2; // 冰裂缝
+    for (var j = 0; j < 40; j++) {
+      x.beginPath(); var sx = Math.random() * 1024, sy = 64 + Math.random() * 384;
+      x.moveTo(sx, sy);
+      for (var k = 0; k < 5; k++) { sx += (Math.random() - 0.5) * 80; sy += (Math.random() - 0.5) * 80; x.lineTo(sx, sy); }
+      x.stroke();
+    }
+    var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  var earthGroup = new THREE.Group(); scene.add(earthGroup);
+  var earthMat = new THREE.MeshStandardMaterial({ map: dataTex(global.EARTH_TEXTURE_URI) || plainTex('#3a5a7a'), color: 0x8aa8c8, roughness: .8, metalness: .06 });
+  var earthMesh = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 48, 32), earthMat); earthGroup.add(earthMesh);
+  var iceShellMat = new THREE.MeshStandardMaterial({ map: iceOverlayTex(), transparent: true, opacity: .75, roughness: .9, metalness: .02, depthWrite: false });
+  var iceShell = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.004, 48, 32), iceShellMat); earthGroup.add(iceShell);
+  var cloudMat = new THREE.MeshStandardMaterial({ color: 0xdde8f5, transparent: true, opacity: .2, roughness: 1, depthWrite: false }); // 冰封地球少云
+  var clouds = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.012, 48, 32), cloudMat); earthGroup.add(clouds);
+  var atmo = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4a86c8, side: THREE.BackSide, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false }));
+  earthGroup.add(atmo);
+  // 推力尾焰
+  var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.35, EARTH_R * 1.8, 12), new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  thrustFlame.visible = false; earthGroup.add(thrustFlame);
+  var _flameAxis = new THREE.Vector3(0, 1, 0), _flameDir = new THREE.Vector3();
+
+  // ---- 行星发动机光柱（局部 -Z 半球 = 后方，engineGroup 随推力方向转向）----
+  var engineGroup = new THREE.Group(); earthGroup.add(engineGroup);
+  var engines = [];
+  var goldenAngle = Math.PI * (3 - Math.sqrt(5));
+  var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.05, EARTH_R * 0.45, 6);
+  var engineMatTpl = { color: 0x5cc8ff, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false };
+  for (var ei = 0; ei < 48; ei++) {
+    var ez = -0.05 - (ei / 47) * 0.95;          // -Z 半球（后方喷射侧），密集分布模拟万台发动机
+    var err = Math.sqrt(Math.max(0, 1 - ez * ez));
+    var eth = ei * goldenAngle;
+    var enx = Math.cos(eth) * err, eny = Math.sin(eth) * err, enz = ez;
+    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial(engineMatTpl));
+    cone.position.set(enx * EARTH_R * 1.08, eny * EARTH_R * 1.08, enz * EARTH_R * 1.08);
+    cone.quaternion.setFromUnitVectors(_flameAxis, new THREE.Vector3(enx, eny, enz));
+    engineGroup.add(cone);
+    engines.push(cone);
+  }
+  var _zAxis = new THREE.Vector3(0, 0, 1), _negZAxis = new THREE.Vector3(0, 0, -1);
+  var _targetQuat = new THREE.Quaternion();
+
+  // ---- 3D 引导箭头（指向远离太阳方向，第一次推力后消失）----
+  var guideArrow = new THREE.ArrowHelper(new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0, 0), 28, 0x5cc8ff, 10, 6);
+  guideArrow.visible = false; scene.add(guideArrow);
+  var guideHidden = false;
+
+  // ---- 八行星 + 轨道线 + 发光标记 ----
+  var glowTex = (function () { var c = document.createElement('canvas'); c.width = c.height = 64; var x = c.getContext('2d'); var g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
+  var planetMeshes = [];
+  for (var pi = 0; pi < PLANETS.length; pi++) {
+    (function (def) {
+      var pcol = def.procColor != null ? def.procColor : def.color;
+      var orbit = new THREE.Mesh(new THREE.RingGeometry(def.orbitR - 1, def.orbitR + 1, 128), new THREE.MeshBasicMaterial({ color: pcol, side: THREE.DoubleSide, transparent: true, opacity: .12, depthWrite: false }));
+      orbit.rotation.x = Math.PI / 2; scene.add(orbit);
+      var tex = def.procColor != null ? procPlanetTex(def.procColor) : (dataTex(global[def.tex]) || plainTex('#888'));
+      var mat = new THREE.MeshStandardMaterial({ map: tex, roughness: .85 });
+      var mesh = new THREE.Mesh(new THREE.SphereGeometry(def.rad, 40, 28), mat); scene.add(mesh);
+      var glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: pcol, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
+      glow.scale.set(Math.max(def.rad * 3, 10), Math.max(def.rad * 3, 10), 1); scene.add(glow);
+      var ring = null;
+      if (def.ring) {
+        ring = new THREE.Mesh(new THREE.RingGeometry(def.rad * 1.4, def.rad * 2.2, 72), new THREE.MeshBasicMaterial({ color: 0xd4c89c, side: THREE.DoubleSide, transparent: true, opacity: .55, depthWrite: false }));
+        ring.rotation.x = Math.PI / 2; scene.add(ring);
+      }
+      planetMeshes.push({ def: def, mesh: mesh, ring: ring, glow: glow });
+    })(PLANETS[pi]);
+  }
+
+  // ---- 物理 ----
+  var game = createGame();
   var st = game.state;
-  var audio = M3D.createAudio ? M3D.createAudio() : null;
 
-  var mode = 'prologue';        // prologue | play | rebellion | over
-  var rebellionDone = false;
-  var flash = 0;                // 白闪强度 0..1
-  var nearTimer = 0;            // 点火后保持近景的余时（秒）
-  var elapsed = 0;              // 用于脉冲动画
+  // ---- 音效（程序化 WebAudio，首次触摸解锁）----
+  var AC = window.AudioContext || window.webkitAudioContext;
+  var actx = null, rumbleGain = null;
+  function initAudio() {
+    if (!AC || actx) return;
+    try { actx = new AC(); } catch (e) { return; }
+    if (actx.state === 'suspended' && actx.resume) actx.resume();
+    // 点火隆隆声：循环白噪声 + 低通滤波，音量随推力
+    var len = (actx.sampleRate * 2) | 0;
+    var buf = actx.createBuffer(1, len, actx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    var src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+    var lp = actx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 130;
+    rumbleGain = actx.createGain(); rumbleGain.gain.value = 0;
+    src.connect(lp); lp.connect(rumbleGain); rumbleGain.connect(actx.destination);
+    src.start();
+  }
+  function sfxOsc(type, f0, f1, dur, vol) {
+    if (!actx || actx.state !== 'running') return;
+    var t0 = actx.currentTime;
+    var o = actx.createOscillator(), g = actx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t0);
+    o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(actx.destination);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function sfxBoom() { sfxOsc('sawtooth', 90, 28, 0.9, 0.5); sfxOsc('sine', 55, 20, 1.2, 0.6); }  // 耀斑/氦闪爆音
+  function sfxTick() { sfxOsc('square', 1100, 1100, 0.05, 0.08); }                                 // 倒计时滴答
+  function sfxWin()  { sfxOsc('sine', 523, 784, 0.5, 0.25); setTimeout(function () { sfxOsc('sine', 659, 1046, 0.8, 0.25); }, 220); }
+  function sfxLose() { sfxOsc('sine', 220, 60, 1.1, 0.35); }
 
-  // ============================================================
-  //  剧情
-  // ============================================================
-  var story = M3D.createStory({
-    onSound: function (name) { playSound(name); },
-    onBeat: function (phase, i, beat) { syncStory(); },
-    onEnd: function (phase) {
-      if (phase === 'prologue') enterPlay();
-      else endRebellion();
-    }
-  });
+  // ---- 输入：触屏拖动 = 推力方向 + 强度 ----
+  var AIM_DEAD = 12, AIM_FULL = 0.25;
+  var pointer = null, pinchDist = 0, userZoom = 1;
+  var shortSide = Math.min(W, H);
 
-  function syncStory() {
-    if (!story.active) return;
-    var v = story.view;
-    if (elStTitle) elStTitle.textContent = v.title;
-    if (elStText) elStText.textContent = v.text;
-    if (elStYear) {
-      elStYear.textContent = story.phase === 'prologue'
-        ? '刹车时代 · 第 ' + Math.round(v.year) + ' 年'
-        : '逃逸时代';
-    }
+  function screenToWorldDir(dx, dy) {
+    // 相机朝向：从后方看地球，forward = camera 方向
+    var fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+    var upW = new THREE.Vector3(0, 1, 0);
+    var right = new THREE.Vector3().crossVectors(fwd, upW).normalize();
+    var up = new THREE.Vector3().crossVectors(right, fwd).normalize();
+    // 屏幕拖动 (dx, dy)，dy 向下为正 → 世界 right*dx - up*dy
+    var dir = new THREE.Vector3().addScaledVector(right, dx).addScaledVector(up, -dy);
+    dir.y = 0; // 推力在 XZ 平面
+    if (dir.lengthSq() < 1e-6) return null;
+    dir.normalize();
+    return [dir.x, dir.y, dir.z];
   }
 
-  function showStoryLayer(on) {
-    if (elStory) elStory.classList.toggle('show', !!on);
-    document.body.classList.toggle('in-story', !!on);
-    if (on && elStHint) elStHint.textContent = '点击任意处继续 · 右上角可跳过';
-  }
-
-  function startPrologue() {
-    mode = 'prologue';
-    showStoryLayer(true);
-    story.play('prologue');
-    syncStory();
-  }
-
-  function enterPlay() {
-    mode = 'play';
-    showStoryLayer(false);
-    game.start();
-    if (elPhase) elPhase.textContent = '逃逸时代';
-    startTutorial();
-  }
-
-  function startRebellion() {
-    rebellionDone = true;
-    mode = 'rebellion';
-    showStoryLayer(true);
-    story.play('rebellion');
-    syncStory();
-  }
-
-  function endRebellion() {
-    mode = 'play';
-    showStoryLayer(false);
-    if (elPhase) elPhase.textContent = '逃逸时代';
-  }
-
-  // ============================================================
-  //  音效
-  // ============================================================
-  function unlockAudio() { if (audio && audio.unlock) audio.unlock(); }
-
-  function playSound(name) {
-    if (!audio) return;
-    if (name === 'ignite') { audio.clank(1.2); audio.beep('go'); flash = Math.max(flash, 0.5); }
-    else if (name === 'chime') audio.chime();
-    else if (name === 'boom') { audio.clank(2.0); audio.thud(); flash = 1; }
-  }
-
-  // ============================================================
-  //  相机：双档自动切换
-  // ============================================================
-  var camT = [0, 0, 0], camDist = 320, camElev = 0.92;
-
-  function cameraWants() {
-    if (mode === 'prologue') {
-      var sc = story.scene;
-      if (sc && sc.cam === 'near') return { t: st.pos, d: 44 };
-      return { t: [0, 0, 0], d: 330 };
-    }
-    if (st.burning || nearTimer > 0) return { t: st.pos, d: 54 };
-    var el = st.orbit;
-    var apo = (el && isFinite(el.ra)) ? el.ra : st.rSun;
-    return { t: [0, 0, 0], d: Math.max(320, Math.min(2800, apo * 2.4)) };
-  }
-
-  function updateCamera(dt) {
-    if (!aim.active) {                       // 瞄准期间冻结相机
-      var want = cameraWants();
-      var k = 1 - Math.exp(-dt * 2.4);
-      camT[0] += (want.t[0] - camT[0]) * k;
-      camT[1] += (want.t[1] - camT[1]) * k;
-      camT[2] += (want.t[2] - camT[2]) * k;
-      camDist += (want.d - camDist) * k;
-    }
-    var c = renderer.camera;
-    var d = camDist * wheelBias;                  // wheelBias：用户滚轮的额外缩放
-    var ce = Math.cos(camElev) * d, se = Math.sin(camElev) * d;
-    c.eye[0] = camT[0]; c.eye[1] = camT[1] + se; c.eye[2] = camT[2] + ce;
-    c.target[0] = camT[0]; c.target[1] = camT[1]; c.target[2] = camT[2];
-    c.up[0] = 0; c.up[1] = 1; c.up[2] = 0;
-    c.fov = 50 * Math.PI / 180;
-  }
-
-  function updateLight() {
-    var c = renderer.camera;
-    var dx = c.eye[0] - c.target[0], dy = c.eye[1] - c.target[1], dz = c.eye[2] - c.target[2];
-    var l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-    renderer.light.dir[0] = dx / l; renderer.light.dir[1] = dy / l; renderer.light.dir[2] = dz / l;
-  }
-
-  // ============================================================
-  //  输入：拖出箭头 → 松手执行点火
-  // ============================================================
-  var aim = { active: false, sx: 0, sy: 0, x: 0, y: 0, dirX: 0, dirZ: 0, dv: 0, valid: false };
-  var predictEl = null;      // 瞄准时的预测轨道要素
-
-  function canControl() {
-    if (mode === 'play') return true;
-    if (mode === 'rebellion' && !story.freeze) return true;   // 氦闪幕允许自救
-    return false;
-  }
-
-  function localXY(e) {
-    var r = canvas.getBoundingClientRect();
-    return [e.clientX - r.left, e.clientY - r.top];
-  }
-
-  function updateAim() {
-    var dx = aim.x - aim.sx, dy = aim.y - aim.sy;
-    var d = Math.sqrt(dx * dx + dy * dy);
-    aim.valid = d >= AIM_DEAD;
-    var w = Math.min(canvas.clientWidth, canvas.clientHeight) || 400;
-    var mag = Math.max(0, Math.min(1, (d - AIM_DEAD) / (w * AIM_FULL)));
-    aim.dv = mag * DV_MAX;
-    var l = d || 1;
-    aim.dirX = dx / l; aim.dirZ = dy / l;
-    predictEl = aim.valid
-      ? O.afterDv(st.pos[0], st.pos[2], st.vel[0], st.vel[2], G_SUN, aim.dirX * aim.dv, aim.dirZ * aim.dv, predictEl || {})
-      : null;
+  function updateThrustFromPointer() {
+    if (!pointer) { game.setThrust(null, 0); return; }
+    var dx = pointer.cx - pointer.sx, dy = pointer.cy - pointer.sy;
+    var dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < AIM_DEAD) { game.setThrust(null, 0); return; }
+    var dir = screenToWorldDir(dx, dy);
+    if (!dir) { game.setThrust(null, 0); return; }
+    var mag = Math.min(1, (dist - AIM_DEAD) / (shortSide * AIM_FULL - AIM_DEAD));
+    game.setThrust(dir, mag);
   }
 
   canvas.addEventListener('pointerdown', function (e) {
-    unlockAudio();
-    if (mode === 'prologue') { story.tap(); syncStory(); return; }
-    if (mode === 'over') return;
-    if (!canControl()) return;
-    if (st.status !== 'ready' && st.status !== 'flying') return;
-    var p = localXY(e);
-    aim.active = true; aim.sx = p[0]; aim.sy = p[1]; aim.x = p[0]; aim.y = p[1];
-    aim.dv = 0; aim.valid = false; predictEl = null;
-    if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
-    advanceTutorial(1);
+    initAudio(); // 用户手势内解锁音频
+    if (st.status !== 'flying' || introT < INTRO_TIME) return;
+    if (e.isPrimary === false) return; // 双指第二指交给 pinch
+    pointer = { sx: e.clientX, sy: e.clientY, cx: e.clientX, cy: e.clientY, id: e.pointerId };
+    hideHint(); guideHidden = true; guideArrow.visible = false;
   });
-
   canvas.addEventListener('pointermove', function (e) {
-    if (!aim.active) return;
-    var p = localXY(e);
-    aim.x = p[0]; aim.y = p[1];
-    updateAim();
+    if (pointer && e.pointerId === pointer.id) { pointer.cx = e.clientX; pointer.cy = e.clientY; updateThrustFromPointer(); }
+  });
+  function endPointer(e) { if (pointer && e.pointerId === pointer.id) { pointer = null; game.setThrust(null, 0); } }
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+
+  // 双指捏合缩放
+  var pointers = {};
+  canvas.addEventListener('pointerdown', function (e) { pointers[e.pointerId] = { x: e.clientX, y: e.clientY }; });
+  canvas.addEventListener('pointerup', function (e) {
+    delete pointers[e.pointerId];
+    if (Object.keys(pointers).length < 2) pinchDist = 0; // 防残留导致下次捏合跳变
+  });
+  canvas.addEventListener('pointercancel', function (e) {
+    delete pointers[e.pointerId];
+    if (Object.keys(pointers).length < 2) pinchDist = 0;
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    if (!pointers[e.pointerId]) return;
+    pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var ids = Object.keys(pointers);
+    if (ids.length === 2) {
+      var a = pointers[ids[0]], b = pointers[ids[1]];
+      var d = Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
+      if (pinchDist > 0) userZoom = Math.max(0.5, Math.min(2.2, userZoom * (d / pinchDist)));
+      pinchDist = d;
+    }
   });
 
-  function endAim(commit) {
-    if (!aim.active) return;
-    aim.active = false;
-    if (commit && aim.valid && st.fuel > 0) {
-      var got = game.commitBurn(aim.dirX, aim.dirZ, aim.dv);
-      if (got > 0) nearTimer = 1.4;
-      advanceTutorial(2);
-    }
-    aim.valid = false; aim.dv = 0; predictEl = null;
-  }
-  canvas.addEventListener('pointerup', function () { endAim(true); });
-  canvas.addEventListener('pointercancel', function () { endAim(false); });
-  canvas.addEventListener('pointerleave', function () { endAim(false); });
-
-  canvas.addEventListener('wheel', function (e) {
-    e.preventDefault();
-    wheelBias = Math.max(0.5, Math.min(2.2, wheelBias * (e.deltaY > 0 ? 1.12 : 0.89)));
-  }, { passive: false });
-  var wheelBias = 1;
-
-  // ============================================================
-  //  引导（三步，学会后不再出现）
-  // ============================================================
-  var TUT_KEY = 'we3d_tutorial_done';
-  var tut = { on: false, step: 0, t: 0 };
-
-  function startTutorial() {
-    var seen = false;
-    try { seen = window.localStorage.getItem(TUT_KEY) === '1'; } catch (e) { seen = false; }
-    if (seen) { tut.on = false; return; }
-    tut.on = true; tut.step = 1; tut.t = 0;
-    setGuide('在屏幕上拖出箭头，为行星发动机设定点火方向');
+  // ---- 相机：第三人称跟拍 ----
+  var camPos = new THREE.Vector3(0, 380, 0.01), camLook = new THREE.Vector3(0, 0, 0);
+  var camBackBase = 55, camUpBase = 28;
+  var introT = 0;
+  function updateCamera(dt) {
+    var ep = st.pos;
+    var r = len3(ep) || 1;
+    var dirX = ep[0] / r, dirZ = ep[2] / r; // 径向（远离太阳方向）
+    var camBack = camBackBase * userZoom;
+    if (st.shellR > SUN_R * 2) camBack += (st.shellR - SUN_R * 2) * 0.6;
+    // 相机始终从太阳侧看地球往外飞：偏移 = -径向 * camBack（朝太阳方向后退）
+    var tx = ep[0] - dirX * camBack;
+    var ty = ep[1] + camUpBase * userZoom;
+    var tz = ep[2] - dirZ * camBack;
+    var k = 1 - Math.exp(-dt * 4);
+    camPos.x += (tx - camPos.x) * k; camPos.y += (ty - camPos.y) * k; camPos.z += (tz - camPos.z) * k;
+    camLook.x += (ep[0] - camLook.x) * k; camLook.y += (ep[1] - camLook.y) * k; camLook.z += (ep[2] - camLook.z) * k;
+    camera.position.copy(camPos); camera.lookAt(camLook);
   }
 
-  function advanceTutorial(toStep) {
-    if (!tut.on) return;
-    if (toStep === 1 && tut.step === 1) { tut.step = 2; setGuide('松手执行点火。橙色虚线是点火后的新轨道'); }
-    else if (toStep === 2 && tut.step === 2) { tut.step = 3; tut.t = 0; setGuide('近日点附近点火最省力。留意轨道上的近日点标记'); }
+  // ---- HUD ----
+  var elCd = document.getElementById('cd-num'), elCdWrap = document.getElementById('countdown');
+  var elDist = document.getElementById('tm-dist'), elSpeed = document.getElementById('tm-speed'), elEsc = document.getElementById('tm-esc');
+  var elWarn = document.getElementById('warn'), elDanger = document.getElementById('danger'), elHint = document.getElementById('hint');
+  var elBrief = document.getElementById('brief'), elBfBtn = document.getElementById('bf-btn'), briefClosed = false;
+  var elCompass = document.getElementById('compass'), elCmpSvg = document.getElementById('cmp-svg');
+  var elProg = document.getElementById('progress'), elProgFill = document.getElementById('prog-fill'), elProgLabel = document.getElementById('prog-label');
+  var elEnergyWrap = document.getElementById('energy-wrap'), elEnergyFill = document.getElementById('energy-fill');
+  var elMilestones = document.getElementById('milestones'), msDots = [], maxRSun = 0;
+  for (var mi = 0; mi < PLANETS.length; mi++) {
+    var dot = document.createElement('div'); dot.className = 'ms-dot'; dot.textContent = PLANETS[mi].name.charAt(0);
+    elMilestones.appendChild(dot); msDots.push(dot);
+  }
+  var elRadar = document.getElementById('radar'), radarCtx = elRadar.getContext('2d');
+  elRadar.width = 104; elRadar.height = 104;
+  var elResult = document.getElementById('result'), elRsTitle = document.getElementById('rs-title'), elRsText = document.getElementById('rs-text'), elRsStat = document.getElementById('rs-stat'), elRsBtn = document.getElementById('rs-btn'), elFlash = document.getElementById('flash');
+
+  function hideHint() { if (elHint) elHint.classList.add('hide'); }
+
+  function updateHUD() {
+    var remain = Math.max(0, ROUND_TIME - st.t);
+    elCd.textContent = remain.toFixed(1);
+    elCdWrap.classList.toggle('urgent', remain < 10);
+    elDist.textContent = st.rSunAU.toFixed(2) + ' AU';
+    elSpeed.textContent = st.speedKms.toFixed(1) + ' km/s';
+    elEsc.textContent = st.escapeRatio.toFixed(2);
+    elEsc.className = 'tm-v' + (st.escapeRatio >= 1 ? ' good' : '');
+    var prog = Math.min(1, st.rSun / ESCAPE_R);
+    elProgFill.style.width = (prog * 100).toFixed(0) + '%';
+    elProgLabel.textContent = '逃逸进度 ' + (prog * 100).toFixed(0) + '%';
+    elEnergyFill.style.width = (st.energy / ENERGY_MAX * 100).toFixed(0) + '%';
+    maxRSun = Math.max(maxRSun, st.rSun);
+    for (var mi2 = 0; mi2 < PLANETS.length; mi2++) {
+      if (maxRSun > PLANETS[mi2].orbitR) msDots[mi2].classList.add('passed');
+    }
+    if (st.pulseWarn > 0) { elWarn.textContent = '⚠ 耀斑脉冲 · 乘波加速全推！'; elWarn.classList.add('show'); }
+    else if (st.warn) { elWarn.textContent = st.warn; elWarn.classList.add('show'); }
+    else elWarn.classList.remove('show');
+    // 危险红边：脉冲预警 或 接近壳
+    var danger = st.pulseWarn > 0 || (st.rSun - st.shellR < 30);
+    elDanger.classList.toggle('active', danger && st.status === 'flying');
   }
 
-  function setGuide(text) {
-    if (!elGuide) return;
-    elGuide.textContent = text;
-    elGuide.classList.toggle('show', !!text);
+  function drawRadar() {
+    var rw = 104, cx = 52, cy = 52, scl = 48 / ESCAPE_R;
+    radarCtx.clearRect(0, 0, rw, rw);
+    radarCtx.fillStyle = 'rgba(12,18,34,.65)'; radarCtx.fillRect(0, 0, rw, rw);
+    radarCtx.strokeStyle = 'rgba(120,160,220,.12)'; radarCtx.lineWidth = 1; radarCtx.strokeRect(0.5, 0.5, rw - 1, rw - 1);
+    radarCtx.fillStyle = '#ff7a14'; radarCtx.beginPath(); radarCtx.arc(cx, cy, 3, 0, 6.283); radarCtx.fill();
+    radarCtx.strokeStyle = 'rgba(255,74,20,.5)'; radarCtx.beginPath(); radarCtx.arc(cx, cy, st.shellR * scl, 0, 6.283); radarCtx.stroke();
+    for (var ri = 0; ri < PLANETS.length; ri++) {
+      var pp = st.planets[ri], pc = PLANETS[ri].procColor != null ? PLANETS[ri].procColor : PLANETS[ri].color;
+      radarCtx.fillStyle = 'rgb(' + ((pc >> 16) & 255) + ',' + ((pc >> 8) & 255) + ',' + (pc & 255) + ')';
+      radarCtx.beginPath(); radarCtx.arc(cx + pp.pos[0] * scl, cy + pp.pos[2] * scl, 2, 0, 6.283); radarCtx.fill();
+    }
+    var ex = cx + st.pos[0] * scl, ey = cy + st.pos[2] * scl;
+    radarCtx.fillStyle = '#5cc8ff'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 2.5, 0, 6.283); radarCtx.fill();
+    radarCtx.strokeStyle = 'rgba(92,200,255,.4)'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 5, 0, 6.283); radarCtx.stroke();
   }
 
-  function updateTutorial(dt) {
-    if (!tut.on) return;
-    if (tut.step === 3) {
-      tut.t += dt;
-      if (tut.t > 5) {
-        tut.on = false;
-        setGuide('');
-        try { window.localStorage.setItem(TUT_KEY, '1'); } catch (e) { /* 隐私模式下忽略 */ }
-      }
-    }
-  }
-
-  // ============================================================
-  //  场景表现：发动机阵列 / 月球 / 太阳膨胀 / 地表
-  // ============================================================
-  var moonAngle = 0, moonR = W.EARTH_R * 4, moonAlpha = 1, moonGone = false;
-  var burnGlow = 0;
-  var swallowed = [false, false, false, false, false];   // 被氦闪吞没的行星（轨道环一并隐藏）
-
-  function setSunScale(s) {
-    var m = world.sun.core.modelMatrix;
-    mat4.identity(m);
-    mat4.scale(m, m, [s, s, s]);
-    mat4.copy(world.sun.glow.modelMatrix, m);
-    mat4.copy(world.sun.halo.modelMatrix, m);
-  }
-
-  function updateScene(dt) {
-    var sc = story.scene;
-    var engines = sc ? sc.engines : 1;
-    var spinRate = sc ? sc.spin : 0;
-    var city = sc ? sc.city : 0.1;
-    var flood = sc ? sc.flood : 0;
-    var storm = sc ? sc.storm : 0.2;
-    var sunAnom = sc ? sc.sunAnom : 0.3;
-    var sunMul = sc ? sc.sunMul : 1;
-
-    // 序章期间自转由剧情脚本驱动；进入逃逸时代后地球已停转
-    if (mode === 'prologue') st.spin += spinRate * dt;
-
-    // 行星发动机：常亮微光 + 点火时全亮
-    var want = engines * (0.28 + 0.72 * burnGlow);
-    M3D.updateEngines(world.engines, world.earth.body.modelMatrix, want);
-
-    // 地表：迁入地下城后城市灯光熄灭，只剩发动机的光
-    var c = 0.5 + city * 0.5;
-    world.earth.body.color[0] = c; world.earth.body.color[1] = c; world.earth.body.color[2] = c;
-    // 海啸：云层加厚翻涌；风暴：大气壳增强
-    world.earth.clouds.alpha = 0.55 + flood * 0.4;
-    world.earth.atmo.atmoStrength = 1.0 + storm * 0.9;
-
-    // 太阳：异常增亮 → 氦闪膨胀
-    world.sun.halo.alpha = 0.22 + sunAnom * 0.5;
-    setSunScale(sunMul);
-    st.flashR = sunMul > 1.25 ? W.SUN_R * sunMul : 0;
-
-    // 被膨胀的太阳吞没的内行星
-    var sunR = W.SUN_R * sunMul;
-    for (var i = 0; i < world.planets.length; i++) {
-      var def = W.planets[i];
-      if (sunR > def.orbitR && !swallowed[i]) {
-        swallowed[i] = true;
-        world.planets[i].mesh.visible = false;
-        if (world.planets[i].ring) world.planets[i].ring.visible = false;
-      }
-    }
-
-    // 月球：绕地 → 被推离 → 消失
-    var moon = world.moon, plume = world.moonPlume;
-    var mm = sc ? sc.moon : 'gone';
-    if (mm === 'orbit') {
-      moonAngle += dt * 0.45; moonR = W.EARTH_R * 4; moonAlpha = 1;
-    } else if (mm === 'leave') {
-      moonAngle += dt * 0.45;
-      moonR += dt * W.EARTH_R * 1.5;
-      moonAlpha = Math.max(0, moonAlpha - dt * 0.16);
-    } else {
-      moonAlpha = 0;
-    }
-    var showMoon = moonAlpha > 0.02;
-    moon.visible = showMoon; plume.visible = showMoon && mm === 'leave';
-    if (showMoon) {
-      var mx = st.pos[0] + Math.cos(moonAngle) * moonR;
-      var mz = st.pos[2] + Math.sin(moonAngle) * moonR;
-      M3D.placeSphere(moon.modelMatrix, [mx, 0, mz], moonAngle * 0.5, 0);
-      moon.alpha = moonAlpha;
-      // 尾焰朝远离地球的一侧
-      var ox = mx - st.pos[0], oz = mz - st.pos[2];
-      var ol = Math.sqrt(ox * ox + oz * oz) || 1;
-      M3D.orientUp(plume.modelMatrix, [ox / ol, 0, oz / ol]);
-      mat4.translate(plume.modelMatrix, plume.modelMatrix,
-        [mx + ox / ol * 1.9, 0, mz + oz / ol * 1.9]);
-      plume.alpha = moonAlpha * 0.9;
-    }
-
-    // 推力尾焰（预定量点火或持续推力期间）
-    var th = world.thruster;
-    var dirX = 0, dirZ = 0, mag = 0;
-    if (st.burn) { dirX = st.burn.dx; dirZ = st.burn.dz; mag = 1; }
-    else if (st.thrustMag > 0) { dirX = st.thrustDir[0]; dirZ = st.thrustDir[2]; mag = st.thrustMag; }
-    if (mag > 0) {
-      var bx = st.pos[0] - dirX * W.EARTH_R, by = 0 - 0 * W.EARTH_R, bz = st.pos[2] - dirZ * W.EARTH_R;
-      M3D.orientUp(th.modelMatrix, [-dirX, 0, -dirZ]);
-      mat4.translate(th.modelMatrix, th.modelMatrix, [bx, by, bz]);
-      th.visible = true;
-      th.alpha = 0.45 + 0.45 * mag;
-    } else {
-      th.visible = false;
-    }
-
-    burnGlow += ((st.burning ? 1 : 0) - burnGlow) * Math.min(1, dt * 6);
-  }
-
-  function renderBodies() {
-    M3D.placeEarth(world.earth, st.pos, st.spin);
-    for (var i = 0; i < world.planets.length; i++) {
-      var p = world.planets[i], ps = st.planets[i];
-      M3D.placeSphere(p.mesh.modelMatrix, ps.pos, p.angle, 0.32);
-      if (p.ring) M3D.placeSphere(p.ring.modelMatrix, ps.pos, p.angle * 0.4, 0.47);
-    }
-  }
-
-  // ============================================================
-  //  2D 叠加层：轨道线 / 预测线 / 近日点 / 影响球 / 箭头
-  // ============================================================
-  var pr = { x: 0, y: 0, visible: false };
-  var pt2 = [0, 0];
-  var pv = [0, 0, 0];
-
-  // 世界坐标 → 屏幕像素（renderer.project 收的是 [x,y,z] 数组 + 输出对象）
-  function proj(x, z) { pv[0] = x; pv[1] = 0; pv[2] = z; renderer.project(pv, pr); return pr; }
-
-  function strokeOrbit(el, dashed, color, width, maxR) {
-    if (!el) return;
-    var n = 190;
-    var t0 = el.theta;
-    var span = el.bound ? Math.PI * 2 : Math.PI * 0.9;
-    if (!el.bound) t0 = el.theta - span * 0.5;
-    fctx.beginPath();
-    var started = false;
-    for (var i = 0; i <= n; i++) {
-      var th = t0 + span * (i / n);
-      O.pointAt(el, th, pt2);
-      var r = Math.sqrt(pt2[0] * pt2[0] + pt2[1] * pt2[1]);
-      if (maxR && r > maxR) { started = false; continue; }
-      var p = proj(pt2[0], pt2[1]);
-      if (!p.visible) { started = false; continue; }
-      if (!started) { fctx.moveTo(p.x, p.y); started = true; }
-      else fctx.lineTo(p.x, p.y);
-    }
-    fctx.strokeStyle = color;
-    fctx.lineWidth = width;
-    fctx.setLineDash(dashed ? [5, 6] : []);
-    fctx.stroke();
-    fctx.setLineDash([]);
-  }
-
-  function drawFx() {
-    if (!fctx) return;
-    var cw = fxCanvas.clientWidth, ch = fxCanvas.clientHeight;
-    fctx.clearRect(0, 0, cw, ch);
-    var camR = camDist * wheelBias;
-    var far = camR > 150;
-
-    // 3D 轨道环只在远景有意义：近景下它们是横穿屏幕的色带
-    var showRings = camR > 230;
-    world.earthOrbit.visible = showRings;
-    for (var r0 = 0; r0 < world.orbits.length; r0++) {
-      world.orbits[r0].visible = showRings && !swallowed[r0];
-    }
-
-    // 地球当前轨道（序章是近景叙事，不画轨道线）
-    if (mode !== 'prologue') strokeOrbit(st.orbit, false, 'rgba(92,200,255,0.55)', 1.3, 0);
-    // 瞄准时的预测轨道
-    if (aim.valid && predictEl) strokeOrbit(predictEl, true, 'rgba(255,184,77,0.9)', 1.4, 0);
-
-    // 行星影响球（只在靠近时画，避免画面噪音）
-    for (var j = 0; j < W.planets.length; j++) {
-      var d = W.planets[j], ps = st.planets[j];
-      var ddx = st.pos[0] - ps.pos[0], ddz = st.pos[2] - ps.pos[2];
-      var dist = Math.sqrt(ddx * ddx + ddz * ddz);
-      if (dist > d.capR * 4.5) continue;
-      var pc = proj(ps.pos[0], ps.pos[2]);
-      if (!pc.visible) continue;
-      var edge = proj(ps.pos[0], ps.pos[2] + d.capR);
-      var rad = Math.abs(edge.x - pc.x) + Math.abs(edge.y - pc.y);
-      if (!(rad > 1)) continue;
-      var danger = dist < d.capR;
-      fctx.beginPath();
-      fctx.arc(pc.x, pc.y, rad, 0, Math.PI * 2);
-      fctx.strokeStyle = danger ? 'rgba(255,140,90,0.75)' : 'rgba(140,170,220,0.2)';
-      fctx.lineWidth = danger ? 1.4 : 1;
-      fctx.setLineDash(danger ? [4, 4] : [2, 6]);
-      fctx.stroke();
-      fctx.setLineDash([]);
-      if (dist < d.capR * 2.6) {
-        fctx.fillStyle = danger ? 'rgba(255,170,120,0.95)' : 'rgba(160,185,220,0.6)';
-        fctx.font = '11px -apple-system, "PingFang SC", sans-serif';
-        fctx.textAlign = 'center';
-        fctx.fillText(d.name + (danger ? ' · 引力捕获区' : ''), pc.x, pc.y - rad - 6);
-      }
-    }
-
-    // 近日点标记（轨道够扁才画；近圆轨道近日点没有意义）
-    var el = st.orbit;
-    if (el && el.e > 0.03 && mode !== 'prologue') {
-      O.pointAt(el, 0, pt2);
-      var pp = proj(pt2[0], pt2[1]);
-      if (pp.visible) {
-        var pulse = st.peri > 0.45 ? 5 + Math.sin(elapsed * 4) * 2.5 + st.peri * 5 : 5;
-        fctx.beginPath(); fctx.arc(pp.x, pp.y, pulse, 0, Math.PI * 2);
-        fctx.strokeStyle = st.peri > 0.45 ? 'rgba(255,184,77,0.95)' : 'rgba(92,200,255,0.75)';
-        fctx.lineWidth = 1.3; fctx.stroke();
-        fctx.beginPath(); fctx.arc(pp.x, pp.y, 1.6, 0, Math.PI * 2);
-        fctx.fillStyle = st.peri > 0.45 ? 'rgba(255,184,77,1)' : 'rgba(92,200,255,1)';
-        fctx.fill();
-        fctx.fillStyle = st.peri > 0.45 ? 'rgba(255,184,77,0.95)' : 'rgba(150,180,215,0.7)';
-        fctx.font = '11px -apple-system, "PingFang SC", sans-serif';
-        fctx.textAlign = 'left';
-        fctx.fillText(st.peri > 0.45 ? '近日点 · 点火窗口' : '近日点', pp.x + 9, pp.y + 4);
-      }
-    }
-
-    // 地球标记：远景下地球只有几个像素 —— 可见时画准星，出画时在屏幕边缘指示方向
-    if (far && st.status !== 'crashed' && mode !== 'prologue') {
-      var pe = proj(st.pos[0], st.pos[2]);
-      var cx = cw / 2, cy = ch / 2, mg = 30;
-      var ix, iy, off = false;
-      if (pe.visible) { ix = pe.x; iy = pe.y; }
-      else {
-        off = true;
-        var sE = Math.sin(camElev);
-        var dxs = st.pos[0], dys = st.pos[2] * sE;
-        var dl = Math.sqrt(dxs * dxs + dys * dys) || 1;
-        dxs /= dl; dys /= dl;
-        var hw = cw / 2 - mg, hh = ch / 2 - mg;
-        var tE = Math.min(hw / Math.max(1e-6, Math.abs(dxs)), hh / Math.max(1e-6, Math.abs(dys)));
-        ix = cx + dxs * tE; iy = cy + dys * tE;
-      }
-      var R0 = off ? 7 : 9;
-      fctx.strokeStyle = off ? 'rgba(92,200,255,0.95)' : 'rgba(232,238,251,0.9)';
-      fctx.lineWidth = 1.2;
-      fctx.beginPath(); fctx.arc(ix, iy, R0, 0, Math.PI * 2); fctx.stroke();
-      fctx.beginPath();
-      fctx.moveTo(ix - R0 - 5, iy); fctx.lineTo(ix - R0 + 1, iy);
-      fctx.moveTo(ix + R0 - 1, iy); fctx.lineTo(ix + R0 + 5, iy);
-      fctx.moveTo(ix, iy - R0 - 5); fctx.lineTo(ix, iy - R0 + 1);
-      fctx.moveTo(ix, iy + R0 - 1); fctx.lineTo(ix, iy + R0 + 5);
-      fctx.stroke();
-      if (off) {
-        var ang = Math.atan2(iy - cy, ix - cx);
-        fctx.save();
-        fctx.translate(ix, iy);
-        fctx.rotate(ang);
-        fctx.beginPath();
-        fctx.moveTo(R0 + 13, 0);
-        fctx.lineTo(R0 + 5, -4.5); fctx.lineTo(R0 + 5, 4.5);
-        fctx.closePath();
-        fctx.fillStyle = 'rgba(92,200,255,0.95)';
-        fctx.fill();
-        fctx.restore();
-      }
-    }
-
-    // 推力箭头（从地球屏幕位置出发，沿拖动方向）
-    if (aim.active && aim.valid) {
-      var pa = proj(st.pos[0], st.pos[2]);
-      var dx = aim.x - aim.sx, dy = aim.y - aim.sy;
-      var d2 = Math.sqrt(dx * dx + dy * dy) || 1;
-      var len = Math.min(96, 26 + (aim.dv / DV_MAX) * 70);
-      var ux = dx / d2, uy = dy / d2;
-      var x1 = pa.x + ux * len, y1 = pa.y + uy * len;
-      fctx.strokeStyle = 'rgba(255,184,77,0.95)';
-      fctx.lineWidth = 2.2; fctx.lineCap = 'round';
-      fctx.beginPath(); fctx.moveTo(pa.x, pa.y); fctx.lineTo(x1, y1); fctx.stroke();
-      var hs = 8;
-      fctx.beginPath();
-      fctx.moveTo(x1, y1);
-      fctx.lineTo(x1 - ux * hs - uy * hs * 0.6, y1 - uy * hs + ux * hs * 0.6);
-      fctx.lineTo(x1 - ux * hs + uy * hs * 0.6, y1 - uy * hs - ux * hs * 0.6);
-      fctx.closePath();
-      fctx.fillStyle = 'rgba(255,184,77,0.95)'; fctx.fill();
-      // 起点圆环
-      fctx.beginPath(); fctx.arc(pa.x, pa.y, 4, 0, Math.PI * 2);
-      fctx.strokeStyle = 'rgba(255,184,77,0.8)'; fctx.lineWidth = 1.4; fctx.stroke();
-    }
-  }
-
-  // ============================================================
-  //  HUD
-  // ============================================================
-  var hudTick = 0;
-  var KMS = M3D.GAME_UNITS.KMS_PER_UNIT;
-
-  function updateHud() {
-    hudTick++;
-    if (hudTick % 4 !== 0) return;
-
-    if (mode === 'prologue') {
-      if (elPhase) elPhase.textContent = '序章 · 刹车时代';
-      if (elLap) elLap.textContent = '刹车时代 · 42 年';
-    } else if (mode === 'rebellion') {
-      if (elPhase) elPhase.textContent = '叛乱';
-      if (elLap) elLap.textContent = '第 ' + st.lap + ' / ' + st.lapTotal + ' 圈';
-    } else {
-      if (elPhase) elPhase.textContent = '逃逸时代';
-      var lapTxt = '第 ' + Math.max(0, Math.min(st.lapTotal, st.lap)) + ' / ' + st.lapTotal + ' 圈';
-      if (elLap) {
-        elLap.textContent = lapTxt;
-        elLap.classList.toggle('reached', st.escapeRatio >= 1);
-      }
-    }
-
-    if (elDist) elDist.textContent = st.rSunAU.toFixed(2) + ' AU';
-    if (elSpeed) elSpeed.textContent = st.speedKms.toFixed(1) + ' km/s';
-    if (elEsc) {
-      elEsc.textContent = st.escapeRatio.toFixed(2);
-      elEsc.className = 'tm-v' + (st.escapeRatio >= 1 ? ' ok' : '');
-      elEsc.title = '≥ 1.00 即具备脱离太阳引力的速度';
-    }
-    if (elApa) {
-      elApa.textContent = st.orbit
-        ? (isFinite(st.orbit.ra) ? (st.orbit.ra / W.AU).toFixed(2) + ' AU' : '脱离轨道')
-        : '—';
-    }
-    if (elYear) {
-      elYear.textContent = mode === 'prologue'
-        ? Math.round(story.view.year) + ' 年'
-        : st.years.toFixed(1) + ' 年';
-    }
-
-    var f = Math.max(0, st.fuel);
-    if (elFuelFill) {
-      elFuelFill.style.width = (f * 100).toFixed(1) + '%';
-      elFuelFill.className = f <= 0.001 ? 'out' : (f < 0.25 ? 'low' : '');
-    }
-    if (elFuelNum) elFuelNum.textContent = (f * 100).toFixed(0) + '% · 余 ' + (f * W.fuelDv * KMS).toFixed(1) + ' km/s';
-
-    if (elWarn) {
-      elWarn.textContent = st.warn || '';
-      elWarn.style.opacity = st.warn ? '1' : '0';
-    }
-
-    if (elAim) {
-      if (aim.active && aim.valid) {
-        var gain = Math.round(M3D.GAME_CONST.OBERTH_GAIN * st.peri * 100);
-        elAim.textContent = '点火 Δv ' + (aim.dv * KMS).toFixed(1) + ' km/s'
-          + (gain > 0 ? '　近日点效率 +' + gain + '%' : '');
-        elAim.style.opacity = '1';
-      } else {
-        elAim.style.opacity = '0';
-      }
-    }
-  }
-
-  // ============================================================
-  //  结算
-  // ============================================================
-  var RESULT_TITLE = { escaped: '飞出太阳系', crashed: '任务失败', caught: '任务失败', burned: '任务失败' };
-
-  function statRow(k, v) {
-    return '<div class="tm-row"><span class="tm-k">' + k + '</span><span class="tm-v">' + v + '</span></div>';
-  }
-
+  var resultShownAt = 0;
   function showResult() {
-    mode = 'over';
-    var good = st.status === 'escaped';
-    if (elRsTitle) {
-      elRsTitle.textContent = RESULT_TITLE[st.status] || '任务结束';
-      elRsTitle.className = 'rs-title ' + (good ? 'good' : 'bad');
-    }
-    if (elRsText) elRsText.textContent = st.reason;
-    if (elRsStat) {
-      elRsStat.innerHTML =
-        statRow('任务时间', st.years.toFixed(2) + ' 年') +
-        statRow('绕日圈数', Math.max(0, st.lap) + ' 圈') +
-        statRow('最远距离', (st.maxR / W.AU).toFixed(2) + ' AU') +
-        statRow('剩余燃料', (st.fuel * 100).toFixed(0) + '%');
-    }
-    if (elResult) elResult.classList.add('show');
-    if (audio) audio.silence();
+    var win = st.status === 'escaped';
+    elRsTitle.textContent = win ? '逃出太阳系' : '任务失败';
+    elRsTitle.className = 'rs-title ' + (win ? 'win' : 'lose');
+    elRsText.textContent = st.reason;
+    elRsStat.innerHTML = '距日 ' + st.rSunAU.toFixed(2) + ' AU · 速度 ' + st.speedKms.toFixed(1) + ' km/s · 用时 ' + st.t.toFixed(1) + ' s';
+    elResult.classList.add('show');
+    resultShownAt = performance.now();
+    if (win) sfxWin(); else sfxLose();
   }
 
   function restart() {
+    elResult.classList.remove('show');
     game.reset();
-    rebellionDone = false;
-    flash = 0; nearTimer = 0; burnGlow = 0;
-    moonAngle = 0; moonR = W.EARTH_R * 4; moonAlpha = 1;
-    setSunScale(1);
-    st.flashR = 0;
-    swallowed = [false, false, false, false, false];
-    for (var i = 0; i < world.planets.length; i++) {
-      world.planets[i].mesh.visible = true;
-      if (world.planets[i].ring) world.planets[i].ring.visible = true;
-      world.orbits[i].visible = true;
-    }
-    if (elResult) elResult.classList.remove('show');
-    if (elFlash) elFlash.style.opacity = '0';
-    // 重开不再重播序章（重开成本低是设计的一部分），直接进逃逸时代
-    mode = 'play';
-    showStoryLayer(false);
-    game.start();
-    if (elPhase) elPhase.textContent = '逃逸时代';
-    tut.on = false; setGuide('');
+    pointer = null; userZoom = 1; pinchDist = 0;
+    prevT = 0; lastTickSec = -1; introT = 0;
+    camPos.set(0, 380, 0.01); camLook.set(0, 0, 0);
+    if (elHint) elHint.classList.remove('hide');
+    briefClosed = false; elBrief.classList.remove('show');
+    guideHidden = false; guideArrow.visible = false;
+    maxRSun = 0; for (var ri2 = 0; ri2 < msDots.length; ri2++) msDots[ri2].classList.remove('passed');
   }
 
-  if (elRsBtn) elRsBtn.addEventListener('click', restart);
-  if (elStSkip) elStSkip.addEventListener('click', function () { unlockAudio(); story.skip(); });
-
-  // ---- 时间倍率与声音 ----
-  function setTimeScale(v) {
-    st.timeScale = v;
-    for (var i = 0; i < tsBtns.length; i++) {
-      tsBtns[i].classList.toggle('active', parseFloat(tsBtns[i].dataset.ts) === v);
-    }
-  }
-  tsBtns.forEach(function (b) {
-    b.addEventListener('click', function () { setTimeScale(parseFloat(b.dataset.ts)); });
+  elRsBtn.addEventListener('click', restart);
+  elBfBtn.addEventListener('click', function () { briefClosed = true; elBrief.classList.remove('show'); });
+  // 结算页出现 1 秒后，点面板任意处也可重开（防误触）
+  elResult.addEventListener('click', function (e) {
+    if (e.target === elRsBtn) return;
+    if (performance.now() - resultShownAt > 1000) restart();
   });
-  setTimeScale(1);
 
-  if (elSound) {
-    elSound.addEventListener('click', function () {
-      if (!audio) return;
-      var m = !audio.isMuted();
-      audio.setMuted(m);
-      elSound.classList.toggle('on', !m);
-      elSound.classList.toggle('off', m);
-      elSound.textContent = m ? '静音' : '声';
-    });
-    elSound.classList.add('on');
+  // ---- 主循环 ----
+  var last = performance.now();
+  var loaderHidden = false;
+  var prevT = 0, lastTickSec = -1;
+  function flashScreen() {
+    if (!elFlash) return;
+    elFlash.classList.remove('on');
+    void elFlash.offsetWidth; // 强制重排以重启动画
+    elFlash.classList.add('on');
   }
-
-  // ============================================================
-  //  主循环
-  // ============================================================
-  var dpr = Math.min(window.devicePixelRatio || 1, 2);
-  function doResize() {
-    var w = canvas.clientWidth || window.innerWidth;
-    var h = canvas.clientHeight || window.innerHeight;
-    renderer.resize(w, h, dpr);
-    if (fxCanvas) {
-      fxCanvas.width = Math.round(w * dpr);
-      fxCanvas.height = Math.round(h * dpr);
-      fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-  }
-  window.addEventListener('resize', doResize);
-
-  var last = 0, loaderHidden = false, audioTick = 0;
   function frame(now) {
-    var dt = last ? Math.min((now - last) / 1000, 0.05) : 0;
+    var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    elapsed += dt;
 
-    // 剧情推进
-    story.update(dt);
-    if (story.active) {
-      syncStory();
-      if (elStFill) elStFill.style.width = (story.view.progress * 100).toFixed(1) + '%';
-    }
-
-    // 物理：叛乱前两幕冻结时间
-    if (!(story.active && story.freeze)) game.step(dt);
-
-    // 第 10 圈触发叛乱与氦闪
-    if (mode === 'play' && !rebellionDone && st.lap >= FLASH_LAP) startRebellion();
-
-    if (nearTimer > 0) nearTimer -= dt;
-    updateTutorial(dt);
-
-    renderBodies();
-    updateScene(dt);
-    updateCamera(dt);
-    updateLight();
-    if (renderer.particles && renderer.particles.update) renderer.particles.update(dt);
-    renderer.render(dt);
-    drawFx();
-    updateHud();
-
-    // 白闪衰减
-    if (flash > 0) {
-      flash = Math.max(0, flash - dt * 1.3);
-      if (elFlash) elFlash.style.opacity = (flash * 0.85).toFixed(3);
-    }
-
-    // 发动机隆隆声（限频，避免每帧调 WebAudio）
-    if (audio) {
-      audioTick++;
-      if (audioTick % 5 === 0) {
-        var sc2 = story.scene;
-        audio.setRumble((sc2 ? sc2.engines : 1) * (0.16 + 0.84 * burnGlow), 0.35);
+    // 开场过场：俯视太阳系 → 聚焦地球（物理冻结）
+    if (introT < INTRO_TIME) {
+      introT += dt;
+      var s = Math.min(1, introT / INTRO_TIME);
+      var e = s * s * (3 - 2 * s); // smoothstep
+      camPos.set(AU * e, 380 * (1 - e) + camUpBase * e, 0.01 * (1 - e) - camBackBase * e);
+      camLook.set(AU * e, 0, 0);
+      camera.position.copy(camPos); camera.lookAt(camLook);
+    } else if (briefClosed && st.status === 'flying') {
+      game.step(dt);
+      // 耀斑脉冲触发边沿：白闪 + 爆音
+      for (var pi2 = 0; pi2 < PULSE_TIMES.length; pi2++) {
+        if (prevT < PULSE_TIMES[pi2] && st.t >= PULSE_TIMES[pi2]) { flashScreen(); sfxBoom(); }
       }
+      // 最后 10 秒整秒滴答
+      var remain = Math.max(0, ROUND_TIME - st.t);
+      var sec = Math.ceil(remain);
+      if (remain < 10 && remain > 0 && sec !== lastTickSec) { lastTickSec = sec; sfxTick(); }
+      prevT = st.t;
+    }
+    if (introT >= INTRO_TIME && !briefClosed) elBrief.classList.add('show');
+    // 点火隆隆声音量跟随推力
+    if (rumbleGain && actx && actx.state === 'running') {
+      rumbleGain.gain.setTargetAtTime(st.thrustMag * 0.22, actx.currentTime, 0.06);
     }
 
-    // 胜负结算
-    if (mode === 'play' || mode === 'rebellion') {
-      if (st.status === 'crashed' || st.status === 'caught' || st.status === 'burned' || st.status === 'escaped') {
-        showResult();
+    // 更新天体位置
+    earthGroup.position.set(st.pos[0], st.pos[1], st.pos[2]);
+    // 地球整体（含发动机）平滑转向前进方向；有推力时混入推力方向加快响应
+    var sp = len3(st.vel) || 1;
+    var vx = st.vel[0] / sp, vz = st.vel[2] / sp;
+    if (st.thrustMag > 0) {
+      vx = vx * 0.6 + st.thrustDir[0] * st.thrustMag * 0.4;
+      vz = vz * 0.6 + st.thrustDir[2] * st.thrustMag * 0.4;
+    }
+    _flameDir.set(vx, 0, vz);
+    if (_flameDir.lengthSq() > 1e-6) {
+      _flameDir.normalize();
+      _targetQuat.setFromUnitVectors(_zAxis, _flameDir);
+      earthGroup.quaternion.slerp(_targetQuat, 1 - Math.exp(-dt * 6));
+    }
+    var engOp = 0.4 + st.thrustMag * 0.6;
+    for (var egi = 0; egi < engines.length; egi++) engines[egi].material.opacity = engOp;
+    // 尾焰（局部坐标：earthGroup 已旋转，尾焰固定在局部 -Z 后方）
+    if (st.thrustMag > 0) {
+      thrustFlame.visible = true;
+      thrustFlame.position.set(0, 0, -EARTH_R * 1.0);
+      thrustFlame.quaternion.setFromUnitVectors(_flameAxis, _negZAxis);
+      thrustFlame.scale.y = 0.6 + st.thrustMag * 1.2;
+    } else thrustFlame.visible = false;
+
+    // 太阳壳膨胀
+    var scale = st.shellR / SUN_R;
+    sunGroup.scale.setScalar(scale);
+
+    // 行星
+    for (var i = 0; i < planetMeshes.length; i++) {
+      var pm = planetMeshes[i], pp = st.planets[i];
+      pm.mesh.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
+      pm.mesh.rotation.y = pp.angle * 3;
+      if (pm.ring) pm.ring.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
+      if (pm.glow) pm.glow.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
+    }
+
+    // 3D 引导箭头：指向远离太阳方向
+    if (briefClosed && !guideHidden && st.status === 'flying') {
+      _flameDir.set(st.pos[0], 0, st.pos[2]);
+      var gr = _flameDir.length();
+      if (gr > 1) {
+        _flameDir.normalize();
+        guideArrow.position.set(st.pos[0] + _flameDir.x * EARTH_R * 1.8, EARTH_R * 1.2, st.pos[2] + _flameDir.z * EARTH_R * 1.8);
+        guideArrow.setDirection(_flameDir);
+        guideArrow.visible = true;
       }
-    }
+    } else guideArrow.visible = false;
 
-    if (!loaderHidden) { if (elLoader) elLoader.classList.add('hide'); loaderHidden = true; }
+    if (introT >= INTRO_TIME) updateCamera(dt);
+
+    // 顶部罗盘：箭头指向逃离太阳方向
+    if (briefClosed && st.status === 'flying') {
+      elCompass.classList.remove('hide');
+      elProg.classList.remove('hide');
+      elEnergyWrap.classList.remove('hide');
+      elMilestones.classList.remove('hide');
+      elRadar.classList.remove('hide');
+      camera.updateMatrixWorld();
+      var m = camera.matrixWorld.elements;
+      var dx = st.pos[0], dz = st.pos[2], dr = Math.sqrt(dx * dx + dz * dz);
+      if (dr > 1) {
+        dx /= dr; dz /= dr;
+        var sx = dx * m[0] + dz * m[2];
+        var sy = dx * m[4] + dz * m[6];
+        elCmpSvg.style.transform = 'rotate(' + (Math.atan2(sx, sy) * 180 / Math.PI).toFixed(1) + 'deg)';
+        if (st.thrustMag > 0) {
+          elCompass.classList.toggle('good', st.thrustDir[0] * dx + st.thrustDir[2] * dz > 0.7);
+        } else elCompass.classList.remove('good');
+      }
+    } else { elCompass.classList.add('hide'); elProg.classList.add('hide'); elEnergyWrap.classList.add('hide'); elMilestones.classList.add('hide'); elRadar.classList.add('hide'); }
+
+    updateHUD();
+    drawRadar();
+
+    if (st.status !== 'flying' && !elResult.classList.contains('show')) showResult();
+
+    if (!loaderHidden) { document.getElementById('loader').classList.add('hide'); loaderHidden = true; }
+
+    renderer.render(scene, camera);
     requestAnimationFrame(frame);
   }
-
-  doResize();
-  // 初始机位：序章从地球近景开始
-  camT[0] = st.pos[0]; camT[1] = st.pos[1]; camT[2] = st.pos[2];
-  camDist = 44;
-  startPrologue();
   requestAnimationFrame(frame);
-})();
+
+  // 窗口缩放
+  addEventListener('resize', function () {
+    W = innerWidth; H = innerHeight; shortSide = Math.min(W, H);
+    renderer.setSize(W, H, false);
+    camera.aspect = W / H; camera.updateProjectionMatrix();
+  });
+})(typeof window !== 'undefined' ? window : this);

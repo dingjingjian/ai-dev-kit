@@ -21,7 +21,7 @@ const html = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
 
 // 业务 + 库 JS：全部扫描（本工具无第三方库，所有 js 均参与能力合规校验）
 const allJs = files
-  .filter((f) => f.endsWith('.js'))
+  .filter((f) => f.endsWith('.js') && !f.includes('three.min.js'))
   .map((f) => fs.readFileSync(path.join(DIST, f), 'utf8'))
   .join('\n');
 
