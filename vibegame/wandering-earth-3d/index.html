@@ -3,103 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>流浪地球 · 逃出太阳系</title>
+  <title>流浪地球 · 逃逸截断</title>
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
-  <div id="app">
-    <main id="stage-wrap">
-      <canvas id="stage"></canvas>
-      <canvas id="fx"></canvas>
+  <canvas id="stage"></canvas>
 
-      <header id="topbar">
-        <div class="tb-left">
-          <div id="phase" class="tb-phase">序章 · 刹车时代</div>
-          <div id="lap" class="tb-lap">第 0 / 15 圈</div>
-        </div>
-        <div class="tb-right">
-          <div class="ts-group" role="group" aria-label="时间倍率">
-            <button class="ts-btn active" data-ts="1" type="button">1×</button>
-            <button class="ts-btn" data-ts="2" type="button">2×</button>
-            <button class="ts-btn" data-ts="4" type="button">4×</button>
-          </div>
-          <button id="btn-sound" class="icon-btn" type="button" aria-label="声音开关">声</button>
-        </div>
-      </header>
-
-      <section id="telemetry">
-        <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">1.00 AU</span></div>
-        <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">29.8 km/s</span></div>
-        <div class="tm-row"><span class="tm-k">逃逸比</span><span id="tm-esc" class="tm-v">0.71</span></div>
-        <div class="tm-row"><span class="tm-k">远日点</span><span id="tm-apa" class="tm-v">1.00 AU</span></div>
-        <div class="tm-row"><span class="tm-k">任务时间</span><span id="tm-year" class="tm-v">0.0 年</span></div>
-      </section>
-
-      <div id="warn"></div>
-      <div id="aim"></div>
-      <div id="guide"></div>
-
-      <footer id="bottom">
-        <div class="fuel-head">
-          <span>行星发动机燃料</span>
-          <span id="fuel-num">100%</span>
-        </div>
-        <div class="fuel-track"><div id="fuel-fill"></div></div>
-      </footer>
-
-      <div id="story">
-        <button id="st-skip" type="button">跳过</button>
-        <div class="st-inner">
-          <div id="st-year" class="st-year"></div>
-          <h2 id="st-title" class="st-title"></h2>
-          <p id="st-text" class="st-text"></p>
-          <div class="st-bar"><div id="st-fill"></div></div>
-          <div id="st-hint" class="st-hint"></div>
-        </div>
-      </div>
-
-      <div id="result">
-        <div class="rs-inner">
-          <div id="rs-title" class="rs-title"></div>
-          <div id="rs-text" class="rs-text"></div>
-          <div id="rs-stat" class="rs-stat"></div>
-          <button id="rs-btn" class="rs-btn" type="button">重新开始</button>
-        </div>
-      </div>
-
-      <div id="flash"></div>
-
-      <div id="loader">
-        <div class="loader-spin"></div>
-        <p>正在加载三维场景…</p>
-      </div>
-      <div id="fallback" class="fallback">
-        <svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
-          <circle cx="32" cy="32" r="24" fill="#2b6fd6"/>
-          <path d="M14 26c6-4 12 2 18-1s12-5 18-1v6c-6-4-12-1-18 1s-12 4-18 1z" fill="#7fd0a8"/>
-          <path d="M14 40c6-4 12 2 18-1s12-5 18-1v4c-6-4-12-1-18 1s-12 4-18 1z" fill="#7fd0a8"/>
-        </svg>
-        <p class="fb-text">当前环境不支持 WebGL</p>
-        <p class="fb-sub">无法显示 3D 内容，请升级浏览器或更换设备</p>
-      </div>
-    </main>
+  <div id="countdown">
+    <span id="cd-num">30</span><span id="cd-unit">s</span>
   </div>
 
-  <script src="./assets/math.js"></script>
+  <div id="compass">
+    <svg id="cmp-svg" width="26" height="26" viewBox="0 0 26 26">
+      <circle cx="13" cy="13" r="11" fill="none" stroke="rgba(120,160,220,.22)" stroke-width="1"/>
+      <path id="cmp-arr" d="M13 3 L8 14 L13 11 L18 14 Z" fill="#5cc8ff"/>
+    </svg>
+    <span id="cmp-label">逃离太阳</span>
+  </div>
+
+  <div id="milestones"></div>
+
+  <div id="telemetry">
+    <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">1.00 AU</span></div>
+    <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">29.8 km/s</span></div>
+    <div class="tm-row"><span class="tm-k">逃逸比</span><span id="tm-esc" class="tm-v">0.71</span></div>
+  </div>
+
+  <div id="energy-wrap">
+    <span class="en-label">发动机能量</span>
+    <div id="energy-track"><div id="energy-fill"></div></div>
+  </div>
+
+  <div id="warn"></div>
+  <div id="danger"></div>
+  <div id="flash"></div>
+
+  <div id="hint">拖动屏幕 · 把地球推离太阳</div>
+
+  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
+
+  <canvas id="radar"></canvas>
+
+  <div id="brief">
+    <div class="bf-inner">
+      <div class="bf-title">逃出太阳系</div>
+      <svg class="bf-svg" viewBox="0 0 200 140">
+        <defs>
+          <radialGradient id="sunG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffec80"/><stop offset="60%" stop-color="#ff7a14"/><stop offset="100%" stop-color="#c43a00"/></radialGradient>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5cc8ff"/></marker>
+        </defs>
+        <circle cx="60" cy="70" r="10" fill="url(#sunG)"/>
+        <circle cx="60" cy="70" r="18" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".7"/>
+        <circle cx="60" cy="70" r="28" fill="none" stroke="#ff4a14" stroke-width="1" stroke-dasharray="3 3" opacity=".4"/>
+        <text x="60" y="100" text-anchor="middle" font-size="8" fill="#ff7a14">氦闪膨胀</text>
+        <circle cx="92" cy="70" r="4" fill="#5cc8ff" stroke="#fff" stroke-width=".5"/>
+        <text x="92" y="62" text-anchor="middle" font-size="7" fill="#5cc8ff">地球</text>
+        <line x1="96" y1="70" x2="170" y2="70" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="150" y="64" text-anchor="middle" font-size="8" fill="#5cc8ff">逃出冥王星</text>
+        <circle cx="140" cy="40" r="3" fill="#cc7a56" opacity=".7"/>
+        <circle cx="160" cy="105" r="5" fill="#dbc29e" opacity=".7"/>
+        <text x="140" y="33" text-anchor="middle" font-size="6" fill="#888">躲行星</text>
+      </svg>
+      <div class="bf-demo"><div class="bf-finger"></div></div>
+      <div class="bf-ops"><b>拖动</b>＝推力 · 能量有限不能一直推</div>
+      <div class="bf-ops2">脉冲时推力翻倍 · 借行星弹弓加速</div>
+      <button id="bf-btn" class="bf-btn" type="button">出发</button>
+    </div>
+  </div>
+
+  <div id="result">
+    <div class="rs-inner">
+      <div id="rs-title" class="rs-title"></div>
+      <div id="rs-text" class="rs-text"></div>
+      <div id="rs-stat" class="rs-stat"></div>
+      <button id="rs-btn" class="rs-btn" type="button">重新开始</button>
+    </div>
+  </div>
+
+  <div id="loader">
+    <div class="loader-spin"></div>
+    <p>正在加载三维场景…</p>
+  </div>
+
+  <div id="fallback">
+    <h2>无法启动 3D 场景</h2>
+    <p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Safari。</p>
+  </div>
+
   <script src="./assets/earth-data.js"></script>
-  <script src="./assets/clouds-data.js"></script>
   <script src="./assets/mercury-data.js"></script>
   <script src="./assets/venus-data.js"></script>
   <script src="./assets/mars-data.js"></script>
   <script src="./assets/jupiter-data.js"></script>
   <script src="./assets/saturn-data.js"></script>
-  <script src="./assets/orbit.js"></script>
-  <script src="./assets/engine.js"></script>
-  <script src="./assets/bodies.js"></script>
-  <script src="./assets/game.js"></script>
-  <script src="./assets/story.js"></script>
-  <script src="./assets/audio.js"></script>
+  <script src="./assets/three.min.js"></script>
   <script src="./assets/app.js"></script>
 </body>
 </html>
