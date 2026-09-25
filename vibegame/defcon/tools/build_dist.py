@@ -14,9 +14,10 @@ dist/index.html 与源 index.html 的唯一差异：
 
 用法：
   python tools/build_dist.py          # 同步 dist + 重打 defcon.zip + 列出产物体积
-  python tools/build_dist.py --check  # 只校验 dist 是否与源一致，不写盘
+  python tools/build_dist.py --check  # 只校验，不写盘（dist 与源、zip 与 dist 两层都比）
 """
 import hashlib
+import io
 import pathlib
 import re
 import sys
@@ -29,6 +30,30 @@ NODE_ID = re.compile(r' data-page-node-id="[^"]*"')
 
 # 需要进包的东西。顺序固定，保证 zip 里的条目顺序可复现。
 COPY_DIRS = ["src", "assets"]                  # 逐字节复制
+
+
+def force_utf8_output():
+    """Windows 上 Python 的 stdout 编码取自 locale（中文系统即 GBK），
+    与本文件输出里的「✓ / ✗ / ─」冲突时**直接抛 UnicodeEncodeError 打断脚本** ——
+    `--check` 的成功分支恰好用 ✓，于是校验通过反而报错退出，最容易被误读成校验失败。
+    统一强制 UTF-8（Windows Terminal / chcp 65001 下才是对的显示），
+    并对个别环境也放不出的字符退化成替代符而不是崩。
+    Python < 3.7 没有 reconfigure，回落到手工包一层 TextIOWrapper。"""
+    for name in ("stdout", "stderr"):
+        stream = getattr(sys, name)
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+            continue
+        except Exception:
+            pass
+        try:
+            buf = getattr(stream, "buffer", None)
+            if buf is None:
+                continue
+            setattr(sys, name, io.TextIOWrapper(buf, encoding="utf-8", errors="replace",
+                                                line_buffering=True))
+        except Exception:
+            pass
 
 
 def build():
@@ -78,7 +103,34 @@ def pack(files):
     return ZIP.stat().st_size
 
 
+def check_zip(files):
+    """校验 defcon.zip 的内容与期望产物是否一致。
+
+    为什么必须单独比一层：`--check` 原来只比 dist 与源。dist/ 是 .gitignore 的本地产物，
+    而 **defcon.zip 是入库的提交物** —— 改了 src 忘了重打，zip 里跑的还是旧逻辑，
+    而且 dist 与源完全一致、校验全绿，谁都看不出来。
+    本次修改前 render.js 就正好停在这个状态（源已改、zip 里是上一版），
+    所以把 zip 也纳入 --check 的判定，让这类漂移当场红掉。"""
+    if not ZIP.exists():
+        return ["defcon.zip 不存在（跑一次无参 build_dist.py 生成）"]
+
+    with zipfile.ZipFile(ZIP) as z:
+        got = {info.filename: z.read(info.filename) for info in z.infolist()}
+
+    problems = []
+    for rel in sorted(files):
+        if rel not in got:
+            problems.append("zip 缺 %s" % rel)
+        elif hashlib.md5(got[rel]).hexdigest() != hashlib.md5(files[rel]).hexdigest():
+            problems.append("zip 里的 %s 不是最新的（与源不一致）" % rel)
+    for rel in sorted(got):
+        if rel not in files:
+            problems.append("zip 多出 %s" % rel)
+    return problems
+
+
 def main():
+    force_utf8_output()
     check_only = "--check" in sys.argv
     files = build()
     changed, missing, orphans = sync(files, check_only)
@@ -94,8 +146,15 @@ def main():
         print("\ndist 里的孤儿文件（源已无此文件，手工确认后删除）：%s" % ", ".join(orphans))
 
     if check_only:
-        ok = not (changed or missing)
-        print("\n%s" % ("dist 已与源一致 ✓" if ok else "dist 与源不一致 ✗（去掉 --check 重新生成）"))
+        zip_problems = check_zip(files)
+        if zip_problems:
+            print("\nzip 内容与期望产物不一致：")
+            for p in zip_problems:
+                print("  · %s" % p)
+        # 孤儿文件同样算不一致：它们在 src 里已经不存在，却会被打进 zip
+        ok = not (changed or missing or orphans or zip_problems)
+        print("\n%s" % ("dist 与源、zip 与 dist 全部一致 ✓" if ok
+                        else "校验未通过 ✗（去掉 --check 重新生成）"))
         return 0 if ok else 1
 
     size = pack(files)

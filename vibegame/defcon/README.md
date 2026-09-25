@@ -23,6 +23,10 @@
 
 终局按「存续规模」排名。赢不是灭了对手，是谁的存续规模大。
 
+终局面板除排名与复盘外，还有一个**「分享战报」**：现场用 Canvas 画一张 750×1000 的竖版战报
+（全球战损 / 六方排名 / 关键节点），经容器 JSBridge 唤起小红书笔记发布页；容器外的浏览器里
+退化为页内预览，可长按保存。
+
 顶栏「≡」打开抽屉：各方存续规模、单位图例（六边形 = 发射井，三角 = 防空，椭圆 = 雷达）与全部城市列表。敌方单位默认不可见，只有被雷达捕获并弹道溯源标记后才会显形。
 
 ## 三条设计主线
@@ -38,6 +42,13 @@
 - 渲染：three.js r149（本地，无 CDN）+ 一张 2048×1024 等距圆柱地球贴图 + 手写 bloom 后处理（亮度提取 → 两趟高斯 → 叠加，含自动降级）
 - 逻辑 10 Hz 固定步长 + 渲染 60 fps 插值，确定性便于无头测试
 - 红线：离线运行不联网、无 `fetch` / `Worker` / `eval`、脚本全外置、无外部资源
+- **终局战报分享**：`ui.buildReport()` 用 Canvas 2D 现画 750×1000（3:4）竖版战报（全球战损 / 六方排名表 /
+  复盘三行 / 页脚），`toDataURL` 后经容器 JSBridge 发出去 ——
+  `writeTempFile`（data:uri → 临时 filePath）→ `postNote`（唤起笔记发布页）。
+  降级链：没有 `writeTempFile` 就直接把 data:uri 交给 `postNote`；没有 `postNote` 就 `saveImageToPhotosAlbum`；
+  容器外（PC 预览没有 `window.xhs`）落到页内预览层 + 引导长按保存（小工具禁用 `a[download]` / blob 下载，
+  没有别的通路）。标题 18 字（上限 20），**正文与字段都不带话题**（正文不写 `#` 标签，也不传 `postNote.tags`）；
+  `ctx.letterSpacing` / `ctx.roundRect` 超出 Chrome 61 基线，均自绘。详见 `DESIGN.md §11.24`
 - 音频：全部 WebAudio 现场合成，不引任何音频文件。10 个音效按**触发源**分三档——世界事件档（任一方触发都会响：DEFCON 跃迁 / 拦截 / 核爆 / 己方城市被毁 / 终局）、玩家指令档（只在玩家自己操作时响：发射 / 选中目标 = 雷达 ping / 指令被拒）、界面档（tap 通用点击 / pick 决策确认）；总线挂压缩器，密集触发时叠加升调而非丢弃
 - **`launch` 只在玩家自己按下「发射」时响**，敌方发射不在音效层广播 —— 这是有意的信息模型：敌方开火只能靠雷达捕获 + 弹道溯源发现，音效不提前泄露「有人发射了」。因此 `MIN_GAP.launch` / `MAX_STACK.launch` 虽然按密集发射配，实际只在玩家连打（齐射 / 反复点）时才会叠加
 - 界面音刻意做轻：`tap` 只有 35 ms、峰值 0.16，一局要按几十次，稍厚就会变成噪音；`pick` 略重用于不可逆决策。两档音高与事件音错开，闭眼也能分辨点的是什么
@@ -98,7 +109,7 @@ src/
   ai.js             # AI 决策
   render.js         # three.js 渲染（球体、单位、导弹、城市光点与定位环、特效）
   audio.js          # WebAudio 程序化音频（10 个音效 + 三段落 BGM，不引任何音频文件，默认开启）
-  ui.js             # HUD、事件卡、城市列表、终局复盘
+  ui.js             # HUD、事件卡、城市列表、终局复盘与战报分享（Canvas 出图 + JSBridge 发笔记）
   game.js           # 主循环、事件绑定
 tests/              # 无头校验脚本，不进提交包
 tools/              # 构建与实测脚本（landmask 生成、dist 同步、音频探针），不进提交包
@@ -137,12 +148,19 @@ DESIGN.md           # 设计文档
 
 ```bash
 python tools/build_dist.py          # 同步 dist/ 并重打 defcon.zip
-python tools/build_dist.py --check  # 只校验 dist/ 是否与源一致
+python tools/build_dist.py --check  # 只校验，不写盘：dist 与源、zip 与 dist 两层都过
 node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs dist
 ```
 
 `dist/index.html` 与源 `index.html` 的唯一差异是**去掉 `data-page-node-id`**（设计稿 D2C 工具留下的产物标记，
 提交包不需要）。这一步固定在 `build_dist.py` 里做，不要再手改 `dist/`。
+
+`--check` 必须比两层，缺一层就漏检：`dist/` 是 `.gitignore` 的本地产物，而 `defcon.zip` 是**入库的提交物** ——
+只比 dist 与源的话，「改了 `src/` 忘了重打 zip」会让校验全绿、提交上去的却是旧逻辑
+（本项目真发生过：`render.js` 的源已改、zip 里停在上一版）。故 `--check` 同时逐字节比对
+zip 与期望产物，并把「dist 里的孤儿文件」（源已删、却仍会被打进 zip）一并算作不一致。
+另：脚本强制 stdout 为 UTF-8（Windows 中文 locale 是 GBK，`✓` 会直接抛
+`UnicodeEncodeError` 打断脚本，让「校验通过」反而退出码非 0）。
 
 产物须符合工作区根 `.skill/minitool-zip-builder/` 的小工具打包规范。核心要求：
 

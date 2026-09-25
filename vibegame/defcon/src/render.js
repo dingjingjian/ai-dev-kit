@@ -60,6 +60,15 @@
   var radarRings = [];
   var tgtRing = null, tgtRingT = 0;        // 选中目标的锁定环（§12，独立于城市环，带脉冲）
   var quality = 1;             // 1=默认档 0=降级档（DESIGN §7.5）
+  /* performance-budget §5：运行时掉帧自动降档的观测器。
+   * 不认机型名单，只认真实帧耗时：连续 SLOW_LIMIT 帧慢到 SLOW_FRAME 以下才降一档，
+   * 且只降一次（降级档就是最低档）。开场那几十帧在集中上传贴图 / 编译 bloom，
+   * 本来就慢，用 WARMUP_FRAMES 跳过，别一进场就误降。 */
+  var slowFrames = 0;
+  var warmupFrames = 0;
+  var SLOW_FRAME = 1 / 24;     // < 24 FPS 记为掉帧
+  var SLOW_LIMIT = 90;         // 连续掉帧阈值（约 3.7s）
+  var WARMUP_FRAMES = 60;      // 预热期不计入观测
   var CITY_RING_MUL = 1.55;    // 定位环直径 / 光点直径
   var CITY_RING_ALPHA = 0.55;  // 定位环基础亮度（环是辅助信息，不能盖过光点）
   var CITY_PULSE_SEC = 0.25;   // 受击辉光脉冲时长（DESIGN §11.6）
@@ -1467,9 +1476,21 @@
     }
   }
 
+  /* performance-budget §5：只在拿到真实帧耗时后才降档 ——
+   * 达不到 24 FPS 就把 DPR 拉到 1 并关掉 bloom（setQuality 内部会重算 drawing buffer）。 */
+  function watchPerf(dt) {
+    if (quality !== 1) return;                       // 已在最低档
+    if (warmupFrames < WARMUP_FRAMES) { warmupFrames++; return; }
+    if (!(dt > 0)) return;
+    if (dt < SLOW_FRAME) { slowFrames = 0; return; }  // 够快，掉帧计数清零
+    slowFrames++;
+    if (slowFrames >= SLOW_LIMIT) { slowFrames = 0; setQuality(0); }
+  }
+
   // dt 为真实帧间隔；state 由 game.js 按固定步长推进，这里只做表现层同步
   function frame(state, dt) {
     if (!api.ok || !renderer) return;
+    watchPerf(dt);
     syncCities(state, dt);
     syncUnits(state);
     syncRadarRings(state);

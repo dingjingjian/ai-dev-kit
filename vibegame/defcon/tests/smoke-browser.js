@@ -218,6 +218,52 @@ async function runCase(browser, opt) {
   });
   var shot2 = await sampleShot(page);
   await page.screenshot({ path: path.join(ROOT, 'docs', opt.shotB) });
+
+  /* 终局 + 分享战报（§11.24）：把战争段推到计时临界让主循环自然翻到 over，
+   * 再真实点一次「分享战报」。
+   * 浏览器里没有 window.xhs.miniTool（那是容器注入的），所以这一下必然落到页内预览层 ——
+   * 正好把「Canvas 战报图能不能画出来、尺寸对不对、PNG 解不解得开」整条链路验掉；
+   * JSBridge 那一段只能在真机/模拟器里验，这里不假装测过。 */
+  await page.evaluate(function () {
+    var st = window.DC.game.state;
+    if (st.phase === 'war') st.t = window.DC.CONFIG.warSeconds - 0.2;
+  });
+  await page.waitForTimeout(1400);
+  var overProbe = await page.evaluate(function () {
+    var g = function (id) { return document.getElementById(id); };
+    return {
+      phase: window.DC.game.state.phase,
+      overShown: g('over').classList.contains('show'),
+      rankRows: g('ovBody').children.length,
+      recapRows: g('ovRecap').children.length,
+      shareBtn: !!g('share'),
+      reportShown: g('report').classList.contains('show')
+    };
+  });
+  await page.click('#share');
+  await page.waitForTimeout(900);
+  var shareProbe = await page.evaluate(function () {
+    var g = function (id) { return document.getElementById(id); };
+    var img = g('rpImg');
+    var src = (img && img.getAttribute('src')) || '';
+    return {
+      reportShown: g('report').classList.contains('show'),
+      imgIsPng: src.indexOf('data:image/png;base64,') === 0,
+      srcLen: src.length,
+      decoded: !!(img && img.complete && img.naturalWidth > 0),
+      w: img ? img.naturalWidth : 0,
+      h: img ? img.naturalHeight : 0,
+      hint: (g('rpHint') || {}).textContent || '',
+      // 分享正文：话题要留空（用户在发布页自己加），这里直接读将要提交给 postNote 的字符串
+      noteText: window.DC.ui.reportText(window.DC.game.state)
+    };
+  });
+  await page.click('#rpClose');
+  await page.waitForTimeout(400);
+  var reportClosed = await page.evaluate(function () {
+    return document.getElementById('report').classList.contains('show');
+  });
+
   await page.close();
 
   // 已知无害噪声：逐条写明理由，且仍会打印出来，绝不静默吞掉。
@@ -235,6 +281,7 @@ async function runCase(browser, opt) {
   return {
     opt: opt, setupProbe: setupProbe, probe: probe, shot1: shot1, cardProbe: cardProbe, pickProbe: pickProbe,
     warPre: warPre, drawerOpen: drawerOpen, selProbe: selProbe, warPost: warPost, war: war, shot2: shot2,
+    overProbe: overProbe, shareProbe: shareProbe, reportClosed: reportClosed,
     errors: real, knownNoise: allowedHits,
     reqFails: reqFails.filter(function (u) { return !/earth\.jpg|favicon/i.test(u); })
   };
@@ -275,6 +322,24 @@ function verdict(r) {
   if (q.ammo !== w.ammo - 1) bad.push('弹头未扣减');
   if (r.shot1.whiteFrac > 0.08 || r.shot1.meanLum > 120) bad.push('首屏画面过曝');
   if (r.shot2.whiteFrac > 0.08 || r.shot2.meanLum > 160) bad.push('核战画面过曝');
+  /* §11.24 终局与分享：容器外的正确行为是落到页内预览（没有 JSBridge，也没有相册），
+   * 所以这里断的是「预览层弹出 + 图真的是一张 750×1000 的 PNG」，不是「笔记发出去了」。 */
+  var g = r.overProbe, h = r.shareProbe;
+  if (g.phase !== 'over' || !g.overShown) bad.push('终局面板未弹出（phase=' + g.phase + '）');
+  if (g.rankRows !== 6) bad.push('终局排名行数 ' + g.rankRows);
+  if (g.recapRows !== 3) bad.push('终局复盘行数 ' + g.recapRows);
+  if (!g.shareBtn) bad.push('缺少分享战报按钮');
+  if (!h.reportShown || !h.decoded) bad.push('容器外分享未落到战报预览层');
+  if (!h.imgIsPng) bad.push('战报图不是 PNG data:uri');
+  if (h.w !== 750 || h.h !== 1000) bad.push('战报图尺寸 ' + h.w + '×' + h.h + '（应 750×1000）');
+  // 纯色/空白 PNG 压缩后极小；这一条是「图真画上去了」的粗筛
+  if (h.srcLen < 30000) bad.push('战报图过小（' + h.srcLen + ' 字符），疑似空白');
+  if (!/app|App/.test(h.hint)) bad.push('战报预览缺少引导文案');
+  /* 分享正文不带话题：正文里出现 # 就等于替用户决定了标签，这是明确的产品口径 */
+  if (typeof h.noteText !== 'string' || !h.noteText) bad.push('分享正文为空');
+  if (/#/.test(h.noteText)) bad.push('分享正文带话题标签');
+  if (h.noteText.length > 1000) bad.push('分享正文超 1000 字（' + h.noteText.length + '）');
+  if (r.reportClosed) bad.push('战报预览关不掉（会一直盖住终局面板）');
   if (r.errors.length) bad.push('控制台错误 ' + r.errors.length + ' 条');
   if (r.reqFails.length) bad.push('资源加载失败 ' + r.reqFails.join(','));
   return bad;
@@ -334,6 +399,12 @@ function verdict(r) {
     console.log('  war 弹头 / 点击发射   : ' + w.ammo + ' / ' + w.launched + '→' + q.launched + '（余 ' + q.ammo + '）');
     console.log('  全场发射 / 拦截       : ' + r.war.launched + ' / ' + r.war.intercepts);
     console.log('  战争画面 近白/亮度    : ' + (r.shot2.whiteFrac * 100).toFixed(2) + '% / ' + r.shot2.meanLum.toFixed(1));
+    console.log('  终局面板 排名/复盘    : ' + r.overProbe.rankRows + ' 行 / ' + r.overProbe.recapRows + ' 行');
+    console.log('  分享战报 预览层       : ' + (r.shareProbe.reportShown && r.shareProbe.decoded ? '✓' : '✗') +
+      ' · ' + r.shareProbe.w + '×' + r.shareProbe.h + ' PNG ' + (r.shareProbe.srcLen / 1024).toFixed(0) + ' KB' +
+      ' · 关闭 ' + (r.reportClosed ? '✗' : '✓'));
+    console.log('  分享正文 无话题/长度  : ' + (/#/.test(r.shareProbe.noteText) ? '✗ 带话题' : '✓ 无话题') +
+      ' / ' + r.shareProbe.noteText.length + ' 字');
     console.log('  控制台错误 / 资源失败 : ' + (r.errors.length ? '✗ ' + r.errors.length : '✓') + ' / ' +
                 (r.reqFails.length ? '✗ ' + r.reqFails.join(',') : '✓'));
     r.errors.slice(0, 6).forEach(function (e) { console.log('      · ' + e.slice(0, 200)); });

@@ -103,6 +103,9 @@
     el.flash = $('flash'); el.alarm = $('alarm');
     el.over = $('over'); el.ovBody = $('ovBody'); el.ovRecap = $('ovRecap');
     el.ovTotal = $('ovTotal');
+    // 终局分享（见文件末尾「终局战报图」）：战报按钮 / 一行反馈 / 容器外的预览层
+    el.shareBtn = $('share'); el.shareTip = $('shareTip');
+    el.report = $('report'); el.rpImg = $('rpImg'); el.rpHint = $('rpHint'); el.rpClose = $('rpClose');
 
     pending = null; salvo = 1;
     sig.factions = ''; sig.cities = ''; sig.card = ''; sig.choice = -2;
@@ -138,6 +141,11 @@
 
     if (el.fireBtn) el.fireBtn.addEventListener('click', function () { fire(); });
     if (el.salvoBtn) el.salvoBtn.addEventListener('click', function () { sfx('tap'); toggleSalvo(); });
+
+    /* 分享战报：按下用界面档 tap，成功/失败才由 shareReport 自己补 pick / deny ——
+     * 分享是异步的，「点了一下」和「真的发出去了」是两件事，两声不该叠在同一刻。 */
+    if (el.shareBtn) el.shareBtn.addEventListener('click', function () { sfx('tap'); shareReport(); });
+    if (el.rpClose) el.rpClose.addEventListener('click', function () { sfx('tap'); closeReport(); });
 
     /* 倍速：危机博弈每回合 20 秒、战争 3 分钟，看熟了会想快进。
      * 只加速时间推进（game.js 的 acc 累积），逻辑仍是 10 Hz 固定步长 —— 战局结果与倍速无关。 */
@@ -735,7 +743,33 @@
       el.ovBody.appendChild(tr);
     });
     buildRecap(state);
+    /* 分享入口每局复位：上一局的「已唤起发布页 / 已取消」不该留在新一局的按钮下面。
+     * （「再来一局」走整页 reload，这里主要防的是调试期手动重入 showOver。） */
+    setShareBusy(false);
+    setShareTip('');
     el.over.classList.add('show');
+  }
+
+  function factionName(code) {
+    var f = DC.FACTIONS_BY_CODE[code];
+    return f ? f.name : code;
+  }
+
+  /* 终局复盘的三个口径（§12 P1：导火索 / 首枚落地 / 你的战果）。
+   * 只抽「读哪几个字段、命中率怎么算」，不抽文案 ——
+   * 终局面板要富文本（加粗 / 高亮），战报图只能画纯文本，各拼各的句子；
+   * 但两者必须站在同一份数字上，否则改了一处另一处就开始说谎。 */
+  function recapFacts(state) {
+    var st = state.stats[state.playerFaction] || { launched: 0, hits: 0, lost: 0, casualties: 0 };
+    var fired = st.hits + st.lost;
+    return {
+      round: state.round,
+      by: state.maxedBy,
+      first: state.firstImpact,
+      stats: st,
+      // 命中率的分母是「打到敌人头上的 + 被拦掉的」：发射了但还在飞的不算，避免终局读数虚低
+      rate: fired > 0 ? (st.hits / fired * 100) : 0
+    };
   }
 
   /* 终局复盘（§12 P1）：三行关键节点。
@@ -757,30 +791,382 @@
       el.ovRecap.appendChild(d);
       return v;
     }
-    function nameOf(code) {
-      var f = DC.FACTIONS_BY_CODE[code];
-      return f ? f.name : code;
-    }
+
+    var f = recapFacts(state);
 
     // 1. 导火索：触发全面开战的那一下（MAX 选项 / 核弹落地 / 回合数失控）
-    var fuse = state.maxedBy
-      ? '第 <b>' + state.round + '</b> 回合 · ' + state.maxedBy
-      : '危机失控 —— 未触发拉满就打满了回合上限';
-    row('导火索', fuse);
+    row('导火索', f.by
+      ? '第 <b>' + f.round + '</b> 回合 · ' + f.by
+      : '危机失控 —— 未触发拉满就打满了回合上限');
 
     // 2. 首枚落地：谁先开的第一枪
-    var fi = state.firstImpact;
-    row('首枚落地', fi
-      ? '第 <b>' + fi.round + '</b> 回合 · <span class="hl">' + nameOf(fi.from) +
-        '</span> 命中 ' + nameOf(fi.to) + ' 的 <b>' + fi.city + '</b>'
+    row('首枚落地', f.first
+      ? '第 <b>' + f.first.round + '</b> 回合 · <span class="hl">' + factionName(f.first.from) +
+        '</span> 命中 ' + factionName(f.first.to) + ' 的 <b>' + f.first.city + '</b>'
       : '本局无核弹落地 —— 六方全部克制住了');
 
     // 3. 你的战果：发射/命中/被拦三件套，回答「我的弹都去哪了」
-    var st = state.stats[state.playerFaction] || { launched: 0, hits: 0, lost: 0, casualties: 0 };
-    var rate = (st.hits + st.lost) > 0 ? (st.hits / (st.hits + st.lost) * 100) : 0;
+    var st = f.stats;
     row('你的战果', '发射 <b>' + st.launched + '</b> 枚 · 命中 <span class="hl">' + st.hits +
-      '</span>（' + rate.toFixed(0) + '%）· 被拦 ' + st.lost +
+      '</span>（' + f.rate.toFixed(0) + '%）· 被拦 ' + st.lost +
       ' · 己方战损 <b>' + st.casualties.toFixed(1) + 'M</b>');
+  }
+
+  /* ─────────────────── 终局战报图与分享（§11.24）───────────────────
+   * 战报图在本地用 Canvas 2D 画，不引任何外部资源；画完交给容器 JSBridge 发出去：
+   *
+   *   画布 data:uri → writeTempFile（换成临时 filePath）→ postNote（唤起笔记发布页）
+   *
+   * 固定 750×1000（3:4）而不跟设备 DPR —— 这是「要发出去的图」，输出尺寸必须与设备无关，
+   * 否则同一份战报在不同手机上发出来的版式各不相同。小红书图文笔记首图也是 3:4。
+   *
+   * 容器外（PC 预览 / 桌面浏览器）没有 window.xhs.miniTool：小工具红线又禁用
+   * a[download] 与 blob 下载，所以退化到页内预览 + 引导长按保存，见 openReport。
+   */
+  var REPORT_W = 750, REPORT_H = 1000;
+  var shareBusy = false;
+
+  /* Canvas 字体串：中文走 sans-serif 的系统字形回退，数字 / 代号走 monospace 让列对齐。 */
+  function rpFont(ctx, px, weight, mono) {
+    ctx.font = (weight ? weight + ' ' : '') + px + 'px ' + (mono ? 'monospace' : 'sans-serif');
+  }
+
+  /* 字距：ctx.letterSpacing 到 Chrome 99 才有，基线 WebView 61 用不了 —— 逐字画。
+   * 只给页眉这类短文本用，长句不铺字距（逐字画会丢掉整段的排版优化）。 */
+  function rpSpaced(ctx, text, x, y, spacing) {
+    for (var i = 0; i < text.length; i++) {
+      ctx.fillText(text.charAt(i), x, y);
+      x += ctx.measureText(text.charAt(i)).width + spacing;
+    }
+  }
+
+  /* 圆角矩形路径：roundRect 到 Chrome 99 才有，基线用二次曲线画。 */
+  function rpPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  /* 战报图上的复盘三行：与 DOM 面板同一份数字（recapFacts），只是去掉富文本标记。 */
+  function reportRecapLines(state, f) {
+    var st = f.stats;
+    return [
+      { k: '导火索', v: f.by
+        ? '第 ' + f.round + ' 回合 · ' + f.by
+        : '危机失控 —— 未触发拉满就打满了回合上限' },
+      { k: '首枚落地', v: f.first
+        ? '第 ' + f.first.round + ' 回合 · ' + factionName(f.first.from) + ' 命中 ' +
+          factionName(f.first.to) + ' 的 ' + f.first.city
+        : '本局无核弹落地 —— 六方全部克制住了' },
+      { k: '你的战果', v: '发射 ' + st.launched + ' 枚 · 命中 ' + st.hits + '（' +
+        f.rate.toFixed(0) + '%）· 被拦 ' + st.lost + ' · 己方战损 ' + st.casualties.toFixed(1) + 'M' }
+    ];
+  }
+
+  /* 笔记正文。上限 1000 字（jsbridge-api.md §postNote）。
+   * 「话题」一律不带：正文里不写 # 标签，也不传 postNote 的 tags 字段
+   * （该字段不在本仓库 API 规范的字段表内，未声明字段不传是硬约定）。 */
+  function reportText(state) {
+    var f = recapFacts(state);
+    var rk = S.ranking(state);
+    var rank = S.myRank(state);
+    var top = rk[0] || { name: '—', popLeft: 0 };
+    var lines = [
+      '核战危机 DEFCON · 终局战报',
+      '我的阵营：' + factionName(state.playerFaction) + (rank ? ' · 第 ' + rank + ' 名' : ''),
+      '全球战损 ' + (S.globalCasualties(state) / 100).toFixed(2) + ' 亿',
+      '存续规模最大：' + top.name + ' ' + top.popLeft.toFixed(1) + 'M',
+      ''
+    ];
+    reportRecapLines(state, f).forEach(function (ln) {
+      lines.push(ln.k + '：' + ln.v);
+    });
+    lines.push('');
+    lines.push('六方相互威慑的球面核战博弈 —— 这场博弈没有赢家，愿世界和平。');
+    return lines.join('\n');
+  }
+
+  /* 画战报图，返回 data:uri。拿不到 2D 上下文或画布被污染时返回 null，
+   * 由调用方走「生成失败」分支 —— 不在这里抛。 */
+  function buildReport(state) {
+    var cv = document.createElement('canvas');
+    cv.width = REPORT_W; cv.height = REPORT_H;
+    var ctx = cv.getContext('2d');
+    if (!ctx) return null;
+
+    var fac = DC.FACTIONS_BY_CODE[state.playerFaction] ||
+      { name: state.playerFaction, color: '#7fd4e8' };
+    var rk = S.ranking(state);
+    var rank = S.myRank(state);
+    var dead = S.globalCasualties(state);
+    var f = recapFacts(state);
+    var me = null;
+    rk.forEach(function (r) { if (r.code === state.playerFaction) me = r; });
+
+    var M = 56, i;
+
+    // ── 底：深空渐变 + 军事沙盘细网格 + 一圈细边（与游戏内质感同源）
+    var bg = ctx.createLinearGradient(0, 0, 0, REPORT_H);
+    bg.addColorStop(0, '#060c16'); bg.addColorStop(0.6, '#04070d'); bg.addColorStop(1, '#0b0406');
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, REPORT_W, REPORT_H);
+
+    ctx.strokeStyle = 'rgba(127,212,232,.05)'; ctx.lineWidth = 1;
+    for (i = 0; i <= REPORT_W; i += 50) {
+      ctx.beginPath(); ctx.moveTo(i + 0.5, 0); ctx.lineTo(i + 0.5, REPORT_H); ctx.stroke();
+    }
+    for (i = 0; i <= REPORT_H; i += 50) {
+      ctx.beginPath(); ctx.moveTo(0, i + 0.5); ctx.lineTo(REPORT_W, i + 0.5); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(127,212,232,.22)';
+    ctx.strokeRect(0.5, 0.5, REPORT_W - 1, REPORT_H - 1);
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.lineWidth = 1;
+
+    // ── 页眉
+    rpFont(ctx, 22, '700', true);
+    ctx.fillStyle = '#7fd4e8';
+    rpSpaced(ctx, 'NUCLEAR CRISIS · DEFCON', M, 88, 3);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(127,212,232,.55)';
+    ctx.fillText('#vibegame', REPORT_W - M, 88);
+    ctx.textAlign = 'left';
+
+    rpFont(ctx, 52, '700', false);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('终局战报', M, 152);
+    rpFont(ctx, 26, '700', true);
+    ctx.fillStyle = 'rgba(127,212,232,.8)';
+    ctx.textAlign = 'right';
+    ctx.fillText(rank > 0 ? '第 ' + rank + ' 名 / ' + rk.length : '终局清算', REPORT_W - M, 150);
+    ctx.textAlign = 'left';
+
+    ctx.strokeStyle = 'rgba(127,212,232,.28)';
+    ctx.beginPath(); ctx.moveTo(M, 176); ctx.lineTo(REPORT_W - M, 176); ctx.stroke();
+
+    // ── 我方阵营块：左侧阵营色条 + 色块 + 名称 / 性格，右侧存续规模（主排序键）
+    var boxY = 200, boxH = 92, boxW = REPORT_W - M * 2;
+    ctx.fillStyle = 'rgba(127,212,232,.05)';
+    rpPath(ctx, M, boxY, boxW, boxH, 6); ctx.fill();
+    ctx.fillStyle = fac.color;
+    rpPath(ctx, M, boxY, 6, boxH, 3); ctx.fill();
+    ctx.fillRect(M + 26, boxY + 28, 22, 22);
+
+    rpFont(ctx, 30, '700', false);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(fac.name || '', M + 62, boxY + 50);
+
+    rpFont(ctx, 19, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.62)';
+    ctx.fillText(fac.trait || fac.region || '', M + 62, boxY + 78);
+
+    rpFont(ctx, 17, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.55)';
+    ctx.textAlign = 'right';
+    ctx.fillText('存续规模', REPORT_W - M - 26, boxY + 38);
+    rpFont(ctx, 32, '700', true);
+    ctx.fillStyle = '#7fd4e8';
+    ctx.fillText((me ? me.popLeft : 0).toFixed(1) + 'M', REPORT_W - M - 26, boxY + 78);
+    ctx.textAlign = 'left';
+
+    // ── 全球战损：整张图最大的一行字（反战表达要的是体感，不是小数精度）
+    rpFont(ctx, 20, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.55)';
+    rpSpaced(ctx, '全球战损', M, 344, 4);
+
+    var numStr = (dead / 100).toFixed(2);
+    rpFont(ctx, 92, '700', true);
+    ctx.fillStyle = '#e24b4a';
+    ctx.fillText(numStr, M, 434);
+    var wNum = ctx.measureText(numStr).width;
+    rpFont(ctx, 28, '400', false);
+    ctx.fillStyle = 'rgba(226,75,74,.8)';
+    ctx.fillText('亿', M + wNum + 12, 430);
+    /* 说明文字右对齐钉死在版心右侧，不跟着数字宽度走 ——
+     * 战损从 0.00 到 50.00 时数字宽度差 1 个字，「亿」后面的字会横跳。 */
+    rpFont(ctx, 19, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.5)';
+    ctx.textAlign = 'right';
+    ctx.fillText('六方对峙到清算的总代价', REPORT_W - M, 430);
+    ctx.textAlign = 'left';
+
+    // ── 排名表：与终局面板同列（# / 阵营 / 造成 / 战损 / 存续），本方整行高亮
+    ctx.strokeStyle = 'rgba(127,212,232,.28)';
+    ctx.beginPath(); ctx.moveTo(M, 464); ctx.lineTo(REPORT_W - M, 464); ctx.stroke();
+
+    var colIdx = M, colName = M + 62, colKill = 430, colLost = 540, colLeft = REPORT_W - M;
+    rpFont(ctx, 17, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.5)';
+    ctx.fillText('#', colIdx, 496);
+    ctx.fillText('阵营', colName, 496);
+    ctx.textAlign = 'right';
+    ctx.fillText('造成', colKill, 496);
+    ctx.fillText('战损', colLost, 496);
+    ctx.fillText('存续', colLeft, 496);
+    ctx.textAlign = 'left';
+
+    ctx.strokeStyle = 'rgba(127,212,232,.14)';
+    ctx.beginPath(); ctx.moveTo(M, 510); ctx.lineTo(REPORT_W - M, 510); ctx.stroke();
+
+    var rowY = 550, step = 47;
+    rk.forEach(function (r, k) {
+      var mine = r.code === state.playerFaction;
+      if (mine) {
+        ctx.fillStyle = 'rgba(127,212,232,.09)';
+        ctx.fillRect(M - 10, rowY - 30, boxW + 20, step - 6);
+      }
+      rpFont(ctx, 21, '700', true);
+      ctx.fillStyle = 'rgba(190,215,230,.5)';
+      ctx.fillText(String(k + 1), colIdx, rowY);
+
+      var rf = DC.FACTIONS_BY_CODE[r.code] || {};
+      ctx.fillStyle = rf.color || '#7fd4e8';
+      ctx.fillRect(colName, rowY - 15, 12, 12);
+      rpFont(ctx, 22, mine ? '700' : '400', false);
+      ctx.fillStyle = mine ? '#ffffff' : 'rgba(214,232,240,.88)';
+      ctx.fillText(r.name, colName + 22, rowY);
+
+      rpFont(ctx, 21, '400', true);
+      ctx.fillStyle = 'rgba(214,232,240,.72)';
+      ctx.textAlign = 'right';
+      ctx.fillText(r.killed.toFixed(1), colKill, rowY);
+      ctx.fillText(r.casualties.toFixed(1), colLost, rowY);
+      rpFont(ctx, 22, '700', true);
+      ctx.fillStyle = '#7fd4e8';
+      ctx.fillText(r.popLeft.toFixed(1) + 'M', colLeft, rowY);
+      ctx.textAlign = 'left';
+
+      rowY += step;
+    });
+
+    // ── 复盘三行
+    ctx.strokeStyle = 'rgba(127,212,232,.28)';
+    ctx.beginPath(); ctx.moveTo(M, 812); ctx.lineTo(REPORT_W - M, 812); ctx.stroke();
+
+    var ly = 852;
+    reportRecapLines(state, f).forEach(function (ln) {
+      rpFont(ctx, 16, '400', false);
+      ctx.fillStyle = 'rgba(190,215,230,.5)';
+      ctx.fillText(ln.k, M, ly);
+      rpFont(ctx, 17, '400', false);
+      ctx.fillStyle = 'rgba(214,232,240,.9)';
+      ctx.fillText(ln.v, M + 90, ly);
+      ly += 34;
+    });
+
+    // ── 页脚
+    ctx.strokeStyle = 'rgba(127,212,232,.14)';
+    ctx.beginPath(); ctx.moveTo(M, 944); ctx.lineTo(REPORT_W - M, 944); ctx.stroke();
+    rpFont(ctx, 19, '400', false);
+    ctx.fillStyle = 'rgba(190,215,230,.62)';
+    ctx.fillText('这场博弈没有赢家 —— 反对战争，珍爱和平', M, 978);
+
+    return cv.toDataURL('image/png');
+  }
+
+  /* 容器注入的 JSBridge 入口：PC 预览 / 老客户端上可能整体不存在，一律先判空。 */
+  function miniTool() {
+    var x = global.xhs;
+    return (x && x.miniTool) ? x.miniTool : null;
+  }
+
+  function setShareTip(msg) {
+    if (!el.shareTip) return;
+    el.shareTip.textContent = msg || '';
+    el.shareTip.classList.toggle('show', !!msg);
+  }
+
+  function setShareBusy(busy) {
+    shareBusy = busy;
+    if (!el.shareBtn) return;
+    el.shareBtn.classList.toggle('busy', busy);
+    el.shareBtn.textContent = busy ? '生成中…' : '分享战报';
+  }
+
+  function openReport(url, hint) {
+    if (!el.report) return;
+    if (el.rpImg) el.rpImg.src = url;
+    if (el.rpHint) el.rpHint.textContent = hint || '';
+    el.report.classList.add('show');
+  }
+
+  function closeReport() {
+    if (el.report) el.report.classList.remove('show');
+  }
+
+  /* 分享入口（终局面板的「分享战报」）。
+   * 三种环境三种走法，全部失败时兜底到页内预览 —— 玩家至少拿得到这张图。 */
+  function shareReport() {
+    if (shareBusy) return;
+    var state = cur;
+    if (!state || state.phase !== 'over') return;
+
+    var url = null;
+    try { url = buildReport(state); } catch (e) { url = null; }
+    if (!url) { sfx('deny'); setShareTip('战报图生成失败，请再试一次。'); return; }
+
+    var mt = miniTool();
+    if (!mt) {
+      /* 容器外（PC 预览 / 桌面浏览器）：既没有 JSBridge 也没有系统相册，
+       * 页内展示是唯一通路 —— 引导长按保存，别让玩家点了没反应。 */
+      openReport(url, '已生成战报图。在小红书 App 内打开本作品，点「分享战报」可直接唤起笔记发布页；此处可长按图片保存。');
+      return;
+    }
+
+    var content = reportText(state);
+    setShareBusy(true);
+    setShareTip('');
+
+    /* 先落临时文件再发笔记：战报 PNG 的 base64 有一两百 KB，直接塞进
+     * mediaInfo.image_resources[].url 要走很长的上行；writeTempFile 换成 filePath 更稳。
+     * 老客户端没有 writeTempFile 就退回直接传 data:uri —— postNote 同样接受完整 data:uri。
+     * writeTempFile 失败也不阻断：拿 data:uri 继续试，最坏也还有相册那条路。 */
+    var ready;
+    if (mt.writeTempFile) {
+      ready = mt.writeTempFile({ data: url }).then(function (r) {
+        return (r && r.filePath) ? r.filePath : url;
+      }, function () { return url; });
+    } else {
+      ready = Promise.resolve(url);
+    }
+
+    ready.then(function (path) {
+      if (mt.postNote) {
+        return mt.postNote({
+          title: '核战危机 DEFCON · 终局战报',
+          content: content,
+          pageType: 'photo_publish',
+          mediaInfo: { image_resources: [{ url: path }] }
+        }).then(function () { return 'note'; });
+      }
+      if (mt.saveImageToPhotosAlbum) {
+        return mt.saveImageToPhotosAlbum({ filePath: path }).then(function () { return 'album'; });
+      }
+      return 'none';                       // 端能力一个都没有，落到页内预览
+    }).then(function (how) {
+      setShareBusy(false);
+      if (how === 'none') {
+        openReport(url, '当前环境没有可用的端能力，战报图已显示在这里，可长按保存。');
+        return;
+      }
+      sfx('pick');
+      setShareTip(how === 'album'
+        ? '已保存到相册 —— 可从相册发笔记。'
+        : '已唤起笔记发布页 —— 在发布页确认即发出。');
+    }).catch(function (err) {
+      setShareBusy(false);
+      /* 用户在小红书发布页点取消也会走 reject，这不是失败：
+       * 再弹一次预览图或报错都是骚扰。errMsg 形如 "postNote:fail cancel"。 */
+      var msg = (err && err.errMsg) ? String(err.errMsg) : '';
+      if (msg.toLowerCase().indexOf('cancel') >= 0) { setShareTip('已取消分享。'); return; }
+      sfx('deny');
+      openReport(url, '分享没有成功，战报图已显示在这里，可长按保存后自行发布。');
+    });
   }
 
   /* ───────────────────────── 每帧 ───────────────────────── */
@@ -831,6 +1217,12 @@
     update: update,
     buildCityList: buildCityList,
     showOver: showOver,
+    /* 战报生成与分享对外暴露：无头脚本量不了画布，但浏览器冒烟要能直接调它验通路
+     * （reportText 一并暴露，是为了让「正文不带话题」这条可断言，而不是只能读源码确认）。 */
+    buildReport: buildReport,
+    reportText: reportText,
+    shareReport: shareReport,
+    closeReport: closeReport,
     deny: deny,
     selectTarget: selectTarget,
     clearTarget: clearTarget,

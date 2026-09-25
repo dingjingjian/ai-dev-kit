@@ -324,9 +324,12 @@
   #setup .hint{font-family:var(--sans);font-size:11px;color:var(--text-dim);
     line-height:1.8;margin-top:12px;border-top:1px solid rgba(127,212,232,.14);padding-top:11px}
 
-  /* ── 终局 ── */
+  /* ── 终局 ──
+     面板加了「分享战报」一档（分享 / 再来一局），内容比原先多一行，
+     故给个 86% 高度上限 + 纵向滚动兜底：矮屏（≤700px 高）上不让面板顶出视口。 */
   #over{left:50%;top:50%;transform:translate(-50%,-50%);width:92%;max-width:400px;
-    z-index:35;padding:18px;border:1px solid var(--line);display:none}
+    z-index:35;padding:18px;border:1px solid var(--line);display:none;
+    max-height:86%;overflow-y:auto;-webkit-overflow-scrolling:touch}
   #over.show{display:block}
   #over h2{font-family:var(--sans);font-size:16px;color:#fff;font-weight:600;margin-bottom:3px}
   /* 全球伤亡：整局最该被看见的数字 —— 标签一行、数字一行（标题已说"战损通报"，
@@ -356,9 +359,32 @@
   #ovRecap .rv{color:var(--text);flex:1}
   #ovRecap .rv b{color:#fff;font-weight:600}
   #ovRecap .rv .hl{color:var(--amber)}
-  #again{margin-top:14px;width:100%;min-height:44px;background:rgba(127,212,232,.08);
+  /* 终局两键：分享战报（主操作，提亮）/ 再来一局。共用一条按钮样式，
+     只有分享键改配色 —— 不新增第二套按钮外观。 */
+  #over .ovbtns{display:flex;gap:8px;margin-top:14px}
+  #over .ovbtns button{flex:1;min-height:44px;background:rgba(127,212,232,.08);
     border:1px solid var(--line);color:var(--cyan);font-family:var(--mono);
     font-size:12px;letter-spacing:2px;cursor:pointer}
+  #share{color:#fff;background:rgba(127,212,232,.16);border-color:rgba(127,212,232,.45)}
+  /* 生成中：按钮降亮度并改文案，避免连点重复出图 */
+  #share.busy{opacity:.5}
+  #shareTip{margin-top:8px;font-size:10.5px;color:var(--text-dim);line-height:1.65;display:none}
+  #shareTip.show{display:block}
+  /* ── 战报预览（容器外兜底）──
+     小工具容器里走 JSBridge 直接唤起笔记发布页，不同时弹这个；
+     只有 PC 预览 / 桌面浏览器（没有 window.xhs.miniTool）才退到这里：
+     小工具红线禁用 a[download] 与 blob 下载，页内展示 + 引导长按保存是唯一通路。 */
+  #report{left:50%;top:50%;transform:translate(-50%,-50%);width:92%;max-width:400px;
+    z-index:38;padding:14px;border:1px solid var(--line);display:none;
+    max-height:88%;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  #report.show{display:block}
+  #report img{display:block;width:100%;border:1px solid var(--line);background:#04070d}
+  #report .rhint{margin-top:9px;font-size:11px;color:var(--text-dim);line-height:1.7;
+    font-family:var(--sans)}
+  #report .rhint b{color:var(--cyan);font-weight:600}
+  #report .rclose{margin-top:10px;width:100%;min-height:44px;background:rgba(127,212,232,.08);
+    border:1px solid var(--line);color:var(--text);font-family:var(--mono);font-size:12px;
+    letter-spacing:2px;cursor:pointer}
 
   /* ── DEFCON 1 提醒：跌到 1 是一次性事件，必须有明确的"核打击权限已解锁"告知 ──
      放在地球上方偏上，3 秒自动淡出；只在跨越到 1 的那一刻弹一次。 */
@@ -441,6 +467,7 @@
   html:not(.supports-flex-gap) #legend .lrow > .ld{margin-left:auto}
   html:not(.supports-flex-gap) #pickList > * + *{margin-top:6px}
   html:not(.supports-flex-gap) .pick > * + *{margin-left:10px}
+  html:not(.supports-flex-gap) #over .ovbtns > * + *{margin-left:8px}
   html:not(.supports-flex-gap) #ovRecap > * + *{margin-top:7px}
   html:not(.supports-flex-gap) #ovRecap .rc > * + *{margin-left:9px}
   html:not(.supports-flex-gap) #fallback > * + *{margin-top:10px}
@@ -574,7 +601,19 @@
   <table data-page-node-id="Yaw5VjYn65952yYmRlBGvj"><thead data-page-node-id="VFPodxkGb64j1AjUZg6jmz"><tr data-page-node-id="piShv5xd1CusIDTA5yPBNA"><th data-page-node-id="MCToee99TreFMcm8pdopHD">#</th><th data-page-node-id="PGBA098rmHYUh8MSPbawUB">阵营</th><th data-page-node-id="297tVeKG4Dj9o1ZUGcLas8">造成</th><th data-page-node-id="gQhWX04FKckAHswzxqHjY6">战损</th><th data-page-node-id="f9v8uDVOyJ5UdBhpORb0Mj">存续</th></tr></thead>
   <tbody id="ovBody" data-page-node-id="DoPmGw1cGmRMcfs31mO7LB"></tbody></table>
   <div id="ovRecap" data-page-node-id="bN7xRv2LkQwT5c8YdZs3Mp"></div>
-  <button type="button" id="again" data-page-node-id="Z5iD2aCR9gKYubGvGTyWL6">再来一局</button>
+  <div class="ovbtns">
+    <button type="button" id="share">分享战报</button>
+    <button type="button" id="again" data-page-node-id="Z5iD2aCR9gKYubGvGTyWL6">再来一局</button>
+  </div>
+  <div id="shareTip"></div>
+</div>
+
+<!-- 战报预览：只在容器外（无 window.xhs.miniTool）弹出，见上面 CSS 注释。
+     img 初始不带 src —— 空 src 会让浏览器按当前页面地址发一次请求。 -->
+<div id="report" class="hud panel">
+  <img id="rpImg" alt="终局战报">
+  <p class="rhint" id="rpHint"></p>
+  <button type="button" class="rclose" id="rpClose">关闭</button>
 </div>
 
 <div id="loader" data-page-node-id="o5FZYaP2OKJG2AdGR2xWW1">正在装载作战地图…</div>

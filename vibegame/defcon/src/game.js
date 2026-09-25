@@ -149,11 +149,13 @@
 
     /* ── 主循环 ─────────────────────────────────────────────── */
 
+    var rafId = 0;               // 当前排队的 requestAnimationFrame id（0 = 未排队）
     var last = (global.performance && performance.now) ? performance.now() : Date.now();
     var acc = 0;
     var MAX_STEP = 0.25;         // 单帧最多补 0.25s，防止切后台回来后一次性追帧卡死
 
     function loop(now) {
+      rafId = global.requestAnimationFrame(loop);
       var dt = (now - last) / 1000;
       last = now;
       if (!(dt > 0)) dt = 0;
@@ -170,9 +172,30 @@
 
       DC.render.frame(state, dt);
       DC.ui.update(state);
-      global.requestAnimationFrame(loop);
     }
-    global.requestAnimationFrame(loop);
+
+    /* performance-budget §4：页面不可见必须停掉 requestAnimationFrame ——
+     * 后台继续跑只是白烧 GPU / CPU，回到前台还要一次性补算一堆帧。
+     * 重新可见时先把时间基准拉到当前再把累积器清零，否则 dt 会被后台时长放大
+     *（MAX_STEP 只兜得住单帧上限，兜不住持续的低帧）。 */
+    function startLoop() {
+      if (rafId) return;
+      last = (global.performance && performance.now) ? performance.now() : Date.now();
+      acc = 0;
+      rafId = global.requestAnimationFrame(loop);
+    }
+
+    function stopLoop() {
+      if (!rafId) return;
+      global.cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stopLoop(); else startLoop();
+    }, false);
+
+    startLoop();
 
     // 便于调试与无头核查
     DC.game = {

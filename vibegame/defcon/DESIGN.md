@@ -478,6 +478,9 @@ earth-3d 只有一张贴图，没有矢量国界、城市数据、单位系统�
 - 不使用 `fetch` / `XHR` / `Worker` / `eval` / `new Function` / WebAssembly
 - JS 语法不超出 ES2017（Chrome 61 基线）
 - 无 `<base href>`、无 `<iframe>` / `<object>`、无自建 CSP `<meta>`
+- 端能力只经 `window.xhs.miniTool.*`（当前用到 `writeTempFile` / `postNote` / `saveImageToPhotosAlbum`，见 §11.24），
+  字段以 `.skill/minitool-zip-builder/references/jsbridge-api.md` 为准，**未声明字段不传**；
+  调用前一律判空并有降级路径（PC 预览里这个全局对象整体不存在）
 - 打包时压缩 `dist/` 目录**内容**而非目录本身，确保 `index.html` 在 zip 根
 
 > **已核查**：three.js r149 不含 `eval` / `new Function` / `Worker` / `WebAssembly`。其内部的 `fetch` 仅存在于 `FileLoader` 与 `ImageBitmapLoader`，本项目不调用这两个 loader，不触发。
@@ -762,6 +765,39 @@ earth-3d 只有一张贴图，没有矢量国界、城市数据、单位系统�
 - **口径**：**旋转 = 单指专属，缩放 = 双指专属**，两者互斥不并行。`touch-action:none` 的
   `#stage` 已挡住浏览器默认手势，本次不需要动 CSS。
 - **关联文件**：`src/render.js`（`dragging` / `pinch` 声明 + `bindCam`）。
+
+### 11.24 [✅ 已落地] 终局战报分享（Canvas 出图 → 唤起笔记发布页）
+
+- **需求**（用户）：终局加一个「分享战报」。
+- **口径**：小工具容器**没有** `share` 类 API，`window.open` / `target="_blank"` / 外链 / 小工具互跳全部被禁，
+  「分享出去」在容器内只有三条合法通路 —— 发笔记（`postNote`）、存相册（`saveImageToPhotosAlbum`）、
+  带图发评论（`interactionOpenApi`）。本作走前两条，**以发笔记为主**：战报是「想让人看到」的东西，
+  存相册只是它失败时的退路，单独做一个「存相册」按钮会把主次搞乱。
+- **出图**：`ui.buildReport(state)` 用 Canvas 2D 现画一张 **750×1000（3:4）** 的竖版战报，
+  内容为页眉（作品名 + `#vibegame`）/ 主标题 + 名次 / 我方阵营块（色条 + 名称 + 性格 + 存续规模）/
+  全球战损（整张图最大的字）/ 六方排名表（本方整行高亮）/ 复盘三行 / 页脚。
+  数据全部取自 `sim.ranking` / `sim.globalCasualties` / `recapFacts`，**不新增统计口径**。
+- **分享链路**：`canvas.toDataURL('image/png')` → `writeTempFile({ data })` 换成临时 `filePath`
+  → `postNote({ title, content, pageType:'photo_publish', mediaInfo:{ image_resources:[{ url:filePath }] } })`。
+  先落临时文件再发是规范推荐路径：战报 PNG 的 base64 约 340 KB，直接塞进 `mediaInfo.url` 要走很长的上行。
+- **降级链**（每一档都是「上一档不可用」而不是「上一档失败就重来」）：
+  1. 没有 `writeTempFile`（老客户端）→ 直接把完整 data:uri 交给 `postNote`；
+  2. 没有 `postNote` → `saveImageToPhotosAlbum`；
+  3. 两个端能力都没有 / 容器外（PC 预览、桌面浏览器没有 `window.xhs`）→ **页内预览层** + 引导长按保存；
+  4. 用户在小红书发布页点取消（`errMsg` 含 `cancel`）→ 只提示「已取消」，不报错、不弹预览。
+  第 3 条是必需的：小工具红线禁用了 `a[download]` 与 blob 下载，页内展示是唯一不违规的兜底。
+- **兼容与红线**：`ctx.letterSpacing`（Chrome 99）与 `ctx.roundRect`（Chrome 99）超出基线 WebView 61，
+  分别用逐字绘制与二次曲线路径自己实现；标题长度 18 字（上限 20）。
+  **正文与字段都不带话题**：正文不写 `#` 标签，也不传 `postNote.tags`
+  （该字段不在本仓库 `jsbridge-api.md` 的字段表内，未声明字段一律不传）——
+  话题交由用户在发布页自行添加，小工具不替用户决定带什么标签。
+  （战报图页眉右上角的 `#vibegame` 是画面内的赛道落款，不是笔记话题，保留。）
+- **验收**：`tests/smoke-browser.js` 新增终局 + 分享段 —— 把战争段推到计时临界自然翻到 `over`，
+  真实点击「分享战报」，断「预览层弹出 + `#rpImg` 是 750×1000 的 PNG data:uri + 解码成功 + 关得掉」；
+  http 与 file:// 双通道通过（实测 750×1000 / 约 338 KB PNG）。
+  **JSBridge 那一段（`writeTempFile` / `postNote`）只能在真机或模拟器里验，此处未实测。**
+- **关联文件**：`src/ui.js`（`buildReport` / `shareReport` / `openReport` / `recapFacts` / `reportRecapLines`）、
+  `index.html`（`#share` / `#shareTip` / `#report`）、`tests/smoke-browser.js`。
 
 ---
 
