@@ -2,8 +2,14 @@
   var cv=document.getElementById('stage');
   var gl=null;try{gl=cv.getContext('webgl2')||cv.getContext('webgl')}catch(e){}
   if(!gl||typeof THREE==='undefined'){document.getElementById('fallback').classList.add('show');document.getElementById('loader').classList.add('hide');return;}
+  /* 关掉 GL 的抖动（DITHER 默认是开的！）。GPU 把 float 结果写进 8bit 缓冲时会做有序抖动，
+   * 在近黑的夜空里就变成一层肉眼可见的斜纹/方格网——"星空背景是方格子"多半就是它。
+   * 关掉后靠贴图自身足够多的层次来避免色阶带。*/
+  try{gl.disable(gl.DITHER);}catch(e){}
 
-  var W=innerWidth,H=innerHeight,DPR=Math.min(devicePixelRatio||1,1.5);
+  /* DPR 上限 2（原 1.5）：手机上 canvas 按 1.5 倍渲染再被系统放大，星点/光圈边缘会发糊发方；
+   * 放到 2 倍清爽很多，性能由末尾的自适应降采样兜底（帧时间超 40ms 就逐步降回 1）。*/
+  var W=innerWidth,H=innerHeight,DPR=Math.min(devicePixelRatio||1,2);
   var renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(DPR);renderer.setSize(W,H,false);
   renderer.outputEncoding=THREE.sRGBEncoding;
@@ -14,27 +20,66 @@
   var camera=new THREE.PerspectiveCamera(50,W/H,0.1,5000);
   var R=1.6;
 
-  /* ===== 背景星空天球（程序化银河贴图，偏靛蓝月夜）===== */
+  /* ===== 背景星空天球（深空底色 + 银河带贴图）=====
+   * 贴图只画"连续的大面积亮雾"（底色 + 银河带 + 冷暖尘埃 + 极点压暗），一颗硬点都不画；
+   * 具体星星全部交给下面的 Points 软点层，这样星星不再是贴图里被放大成方块的 1px 白点。
+   * 银河带在贴图里画成水平带（左右边界天然连续、不会在球面接缝露馅），再由 GALAXY_TILT
+   * 把天球整体绕 Z 倾斜成一条大圆；星点层的银道面用同一个倾角，两者才对得上。
+   */
+  var GALAXY_TILT=1.15;
   function starfieldTex(){
-    var w=2048,h=1024,c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d');
-    var bg=x.createLinearGradient(0,0,0,h);bg.addColorStop(0,'#040814');bg.addColorStop(.5,'#080d1c');bg.addColorStop(1,'#040814');
+    var w=2048,h=1024,c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d'),i;
+    var bg=x.createLinearGradient(0,0,0,h);
+    bg.addColorStop(0,'#03060e');bg.addColorStop(.5,'#070c19');bg.addColorStop(1,'#03060e');
     x.fillStyle=bg;x.fillRect(0,0,w,h);
-    x.save();x.translate(w/2,h/2);x.rotate(-0.4);x.translate(-w/2,-h/2);
-    for(var i=0;i<22;i++){var px=Math.random()*w,py=h/2+(Math.random()-0.5)*h*0.3,r=80+Math.random()*180;
-      var gg=x.createRadialGradient(px,py,0,px,py,r),hue=Math.random(),c1=hue<.5?'rgba(120,140,220,':'rgba(200,170,120,';
-      gg.addColorStop(0,c1+(0.04+Math.random()*.05)+')');gg.addColorStop(1,'rgba(0,0,0,0)');x.fillStyle=gg;x.fillRect(0,0,w,h);}
-    for(var i=0;i<4000;i++){var px=Math.random()*w,py=h/2+(Math.random()-0.5)*h*0.32;
-      var d=Math.abs(py-h/2)/(h*0.16),b=(1-d*d)*(.3+Math.random()*.6);if(b<=0)continue;
-      x.fillStyle='rgba(255,255,255,'+b+')';x.fillRect(px,py,1,1);}
-    x.restore();
-    for(var i=0;i<3800;i++){var px=Math.random()*w,py=Math.random()*h,b=.15+Math.random()*.5;
-      x.fillStyle='rgba(255,255,255,'+b+')';x.fillRect(px,py,1,1);}
-    for(var i=0;i<200;i++){var px=Math.random()*w,py=Math.random()*h,b=.82+Math.random()*.18;
-      x.fillStyle='rgba(255,255,255,'+b+')';x.fillRect(px,py,1,1);}
+    // 银河主体：以赤道线为中心叠几层软渐变，越靠中心越亮（合起来接近高斯剖面）
+    function band(col,spread,peak){
+      var g=x.createLinearGradient(0,h/2-spread,0,h/2+spread);
+      g.addColorStop(0,'rgba('+col+',0)');g.addColorStop(.2,'rgba('+col+','+(peak*.45)+')');
+      g.addColorStop(.5,'rgba('+col+','+peak+')');g.addColorStop(.8,'rgba('+col+','+(peak*.45)+')');
+      g.addColorStop(1,'rgba('+col+',0)');
+      x.fillStyle=g;x.fillRect(0,h/2-spread,w,spread*2);
+    }
+    band('118,142,225',h*0.30,0.075);band('138,162,235',h*0.17,0.075);
+    band('178,192,230',h*0.075,0.075);band('218,220,235',h*0.028,0.07);
+    // 斑块工具：软斑只填各自包围盒（整幅 fill 太慢）；贴近左右边界的多画一份，跨贴图接缝不露边
+    function blot(px,py,r,col,a){
+      var g2=x.createRadialGradient(0,0,0,0,0,r);
+      g2.addColorStop(0,'rgba('+col+','+a+')');g2.addColorStop(1,'rgba('+col+',0)');
+      for(var k=-1;k<=1;k++){
+        if(k&&px>w*.1&&px<w*.9)continue;
+        x.save();x.translate(px+k*w,py);x.fillStyle=g2;x.fillRect(-r,-r,r*2,r*2);x.restore();
+      }
+    }
+    // 带内宽幅软云：银河的过渡尽量由"云"来完成，而不是靠一层层平滑渐变 —— 渐变的色阶台阶
+    // 只能靠噪点打散，而噪点会在天球上被放大成格子，所以这里先减少对渐变的依赖
+    for(i=0;i<46;i++){
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.32,180+Math.random()*240,Math.random()<.5?'150,170,230':'200,196,225',.008+Math.random()*.014);
+    }
+    // 全天空极淡的星云底噪，避免背景死平
+    for(i=0;i<16;i++)blot(Math.random()*w,Math.random()*h,120+Math.random()*260,Math.random()<.5?'150,170,230':'200,175,140',.010+Math.random()*.018);
+    // 带内亮云（偏冷）与暖尘（偏黄）交错，做出银河的明暗层次
+    for(i=0;i<120;i++){
+      var warm=Math.random()<.45;
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.36,36+Math.random()*200,warm?'206,176,132':'150,172,232',.02+Math.random()*.045);
+    }
+    // 暗尘带：压在亮云上，银河才有"沟壑"而不是一片均匀亮雾
+    for(i=0;i<34;i++){
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.20,60+Math.random()*230,'6,9,22',.04+Math.random()*.07);
+    }
+    // 银极压暗：带外更暗，纵深更足（同时避开球面两极的贴图畸变）
+    var vg=x.createLinearGradient(0,0,0,h);
+    vg.addColorStop(0,'rgba(0,0,0,.34)');vg.addColorStop(.34,'rgba(0,0,0,0)');
+    vg.addColorStop(.66,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.34)');
+    x.fillStyle=vg;x.fillRect(0,0,w,h);
+    /* 这里不再铺任何"逐像素噪点"。
+     * 天球贴图在屏幕上是被放大的（默认取景约 2.6 倍），贴图里 1 纹素的噪点会被放大成
+     * 2~3px 的方块颗粒，在近黑的暗部看着就是一格一格的"方格子"——这正是要避免的。
+     * 色阶台阶改由上面的云团来打散（云团的边界是不规则形状，不会看成网格）。 */
     var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
   }
   var sky=new THREE.Mesh(new THREE.SphereGeometry(3500,48,32),new THREE.MeshBasicMaterial({map:starfieldTex(),side:THREE.BackSide,depthWrite:false}));
-  scene.add(sky);
+  sky.rotation.z=GALAXY_TILT;scene.add(sky);
 
   /* ===== 光照 =====
    * 阳光跟随相机：方向光的方位始终与视线保持约 35° 夹角，
@@ -80,14 +125,26 @@
   mainTilt.add(atmo);
 
   /* ===== 月亮（参考 earth-3d 的地月系统：贴图月球 + 公转轨道）=====
-   * 轨道半径 3.0、月球半径 0.36，与相机默认取景配合，保证在地月同框范围内。
+   * 半径：按真实地月半径比取值（月球 1737.4km / 地球 6371km ≈ 0.2727）→ R*0.2727 ≈ 0.436。
+   * 轨道面：取 y=0 即黄道面，环心落在地心，与地球 23.5° 自转轴倾角分开表达 —— 真实月球轨道相对
+   *       黄道只倾 5.1°（不跟着赤道走），所以既不挂进 mainTilt、也不另加倾斜（5.1° 在这个尺度近似为平）。
+   * 轨道半径 3.0：为与地球同框做了大幅压缩（真实 384400km ≈ 60.3 个地球半径，此处仅 1.875 个），
+   *       属示意；正圆、偏心率 0.055 未体现，地心当焦点（真实是地月质心，但质心在地球内部，可忽略）。
+   * 公转周期：真实为地球自转的 27.32 倍（恒星月 27.32 天 vs 地球 1 天）。照抄则 24 分钟才绕一圈、
+   *       画面里几乎钉住不动，故取 8 倍（EARTH_SPIN 0.12 / 8 = 0.015，约 7 分钟一圈）：是刻意加速，
+   *       但保证"月球必须比地球自转慢"这个方向没错。要严格等比，把下面 /8 换成 /27.32。
    */
-  var MOON_R=0.36,MOON_ORBIT=3.0,MOON_SPEED=0.16;
+  var MOON_R=R*0.2727,MOON_ORBIT=3.0,MOON_SPEED=0.12/8;
   var moonSys=new THREE.Group();scene.add(moonSys);
   var moonOrbit=new THREE.Group();moonSys.add(moonOrbit);
   var moonMat=new THREE.MeshStandardMaterial({map:plainTex('#c9c9c6'),roughness:.95,metalness:0});
   var moon=new THREE.Mesh(new THREE.SphereGeometry(MOON_R,32,32),moonMat);
   moon.position.set(MOON_ORBIT,0,0);moonOrbit.add(moon);
+  /* 潮汐锁定：月球公转一周恰好自转一周，永远以同一面朝地球。这里由 moonOrbit 连带月面同步旋转。
+   * 但 SphereGeometry 把贴图 u=0.5 贴在局部 +X，而 moon.jpg 是「近地面居中」的全月图（u=0.5 即近地面），
+   * 月球又正好停在 moonOrbit 的 +X 上 —— 不处理就会把背面锁给地球，故整体绕 Y 预旋 π。
+   * （同 earth-3d 的 moon.rotation.y=mAng+Math.PI，那边因为月球不在旋转父级里才写成角度相加。）*/
+  moon.rotation.y=Math.PI;
   var moonGlow=new THREE.Sprite(new THREE.SpriteMaterial({map:radialTex('rgba(226,232,245,.18)','rgba(170,185,215,.05)','rgba(170,185,215,0)'),blending:THREE.AdditiveBlending,transparent:true,depthWrite:false}));
   moonGlow.scale.set(MOON_R*5.2,MOON_R*5.2,1);moon.add(moonGlow);
   var moonOrbitLine=(function(){
@@ -105,6 +162,31 @@
   var ringTex=radialTex('rgba(232,236,245,.7)','rgba(180,200,240,.22)','rgba(160,180,220,0)');
   var goldGlowTex=radialTex('rgba(255,235,170,.98)','rgba(212,182,106,.5)','rgba(180,150,80,0)');
   var goldRingTex=radialTex('rgba(255,225,150,.8)','rgba(212,182,106,.3)','rgba(180,150,80,0)');
+  /* 光圈样式：细环描边 + 压暗底盘。
+   * 原来每个标记只有两张"软白圆盘"，落在雪地、冰川、云这类亮地表上就跟背景糊成一片；
+   * 现在多加两层：一层压暗底盘（中心轻压、光圈半径处压得更重，等于给光圈描一圈暗中边），
+   * 一张细环把光圈的边界定住 —— 亮地表靠"暗底 + 亮环"的反差看清，
+   * 深色海面上依旧是一片干净的月光。 */
+  function thinRingTex(){
+    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
+    var g=x.createRadialGradient(64,64,0,64,64,64);
+    g.addColorStop(0,'rgba(255,255,255,0)');g.addColorStop(.44,'rgba(255,255,255,0)');
+    g.addColorStop(.482,'rgba(255,255,255,.45)');g.addColorStop(.5,'rgba(255,255,255,1)');
+    g.addColorStop(.518,'rgba(255,255,255,.45)');g.addColorStop(.56,'rgba(255,255,255,0)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g;x.fillRect(0,0,s,s);
+    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+  }
+  var ringLineTex=thinRingTex();
+  var shadeTex=(function(){
+    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
+    var g=x.createRadialGradient(64,64,0,64,64,64);
+    g.addColorStop(0,'rgba(3,6,15,.36)');g.addColorStop(.3,'rgba(3,6,15,.3)');
+    g.addColorStop(.45,'rgba(3,6,15,.54)');g.addColorStop(.62,'rgba(3,6,15,.5)');
+    g.addColorStop(.78,'rgba(3,6,15,.15)');g.addColorStop(1,'rgba(3,6,15,0)');
+    x.fillStyle=g;x.fillRect(0,0,s,s);
+    return new THREE.CanvasTexture(c);
+  })();
   var MOON_COL=new THREE.Color('#e8ecf5');
   var GOLD_COL=new THREE.Color('#d4b66a');
   var DIM_COL=new THREE.Color('#5a6a8a');
@@ -116,30 +198,85 @@
       grp.position.copy(ll2v(m.lat,m.lon,R*1.012));
       grp.lookAt(0,0,0);grp.rotateX(Math.PI);
       var dot=new THREE.Mesh(new THREE.SphereGeometry(0.05,14,14),new THREE.MeshBasicMaterial({color:MOON_COL.clone(),transparent:true,opacity:.95}));
-      var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone()}));
+      var shade=new THREE.Sprite(new THREE.SpriteMaterial({map:shadeTex,transparent:true,depthWrite:false,depthTest:false,opacity:.92}));
+      shade.scale.set(0.68,0.68,1);
+      var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.6}));
       glow.scale.set(0.42,0.42,1);
-      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.85}));
+      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.7}));
       ring.scale.set(0.66,0.66,1);
+      var line=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.9}));
+      line.scale.set(0.66,0.66,1);
       var hit=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,depthTest:false}));
-      grp.add(dot);grp.add(glow);grp.add(ring);grp.add(hit);
+      // depthTest 全关，靠 renderOrder 手动定层序：暗底盘 → 光晕 → 软晕 → 细环 → 中心点
+      shade.renderOrder=10;glow.renderOrder=11;ring.renderOrder=12;line.renderOrder=13;dot.renderOrder=14;
+      grp.add(shade);grp.add(glow);grp.add(ring);grp.add(line);grp.add(dot);grp.add(hit);
       markerGroup.add(grp);
-      markers.push({myth:m,grp:grp,dot:dot,glow:glow,ring:ring,hit:hit,sel:false,dim:false,front:false});
+      markers.push({myth:m,grp:grp,dot:dot,glow:glow,ring:ring,line:line,shade:shade,hit:hit,sel:false,dim:false,front:false});
     }
   })();
 
-  /* ===== 星空点 ===== */
-  var stars=(function(){
-    var n=3200,geo=new THREE.BufferGeometry(),pos=new Float32Array(n*3),col=new Float32Array(n*3);
-    for(var i=0;i<n;i++){var u=Math.random()*2-1,v=Math.random()*6.2832,s=Math.sqrt(1-u*u),Rr=1000+Math.random()*600;
-      pos[i*3]=Rr*s*Math.cos(v);pos[i*3+1]=Rr*u;pos[i*3+2]=Rr*s*Math.sin(v);
-      var b=.25+Math.random()*.75,t=Math.random();
-      if(t<.18){col[i*3]=b*.75;col[i*3+1]=b*.82;col[i*3+2]=b;}
-      else if(t<.28){col[i*3]=b;col[i*3+1]=b*.9;col[i*3+2]=b*.72;}
-      else{col[i*3]=b;col[i*3+1]=b;col[i*3+2]=b;}}
-    geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
-    geo.setAttribute('color',new THREE.BufferAttribute(col,3));
-    var p=new THREE.Points(geo,new THREE.PointsMaterial({size:0.5,sizeAttenuation:true,vertexColors:true,transparent:true,opacity:.9,depthWrite:false}));
-    scene.add(p);return p;
+  /* ===== 星空点 =====
+   * 星星用软圆点精灵（Points）画，不再依赖贴图里的 1px 方块：
+   * 分 4 档大小 + 每颗独立亮度/色温 + 银道面聚集，最亮的一档带十字星芒。
+   * 关掉 sizeAttenuation：星星尺寸只跟屏幕有关，拉近拉远不会被放大成方块；
+   * size 单位是设备像素，故乘 DPR（脚本开头已把 DPR 上限压到 1.5）。
+   */
+  function gaussRand(){var u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v);}
+  function starTex(spike){
+    var s=64,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d'),i;
+    var g=x.createRadialGradient(32,32,0,32,32,32);
+    g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.2,'rgba(255,255,255,.88)');
+    g.addColorStop(.38,'rgba(255,255,255,.3)');g.addColorStop(.62,'rgba(255,255,255,.07)');
+    g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g;x.fillRect(0,0,s,s);
+    if(spike){
+      var bars=[[1,0],[0,1],[.7,.7],[-.7,.7]];
+      for(i=0;i<4;i++){
+        x.save();x.translate(32,32);x.rotate(Math.atan2(bars[i][1],bars[i][0]));
+        var lg=x.createLinearGradient(0,0,31,0);
+        lg.addColorStop(0,'rgba(255,255,255,.5)');lg.addColorStop(.3,'rgba(255,255,255,.12)');lg.addColorStop(1,'rgba(255,255,255,0)');
+        x.fillStyle=lg;x.fillRect(0,-.7,31,1.4);x.restore();
+      }
+    }
+    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+  }
+  /* 小尺寸星点专用：亮核更集中。1~2px 的星点会被缩到亚像素、等于对整张精灵做平均，
+   * 光晕摊得越开越暗，所以这一档不能用上面那张大光晕。*/
+  function dotCoreTex(){
+    var s=32,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
+    var g=x.createRadialGradient(16,16,0,16,16,16);
+    g.addColorStop(0,'rgba(255,255,255,1)');g.addColorStop(.16,'rgba(255,255,255,.94)');
+    g.addColorStop(.32,'rgba(255,255,255,.46)');g.addColorStop(.55,'rgba(255,255,255,.1)');
+    g.addColorStop(.78,'rgba(255,255,255,.02)');g.addColorStop(1,'rgba(255,255,255,0)');
+    x.fillStyle=g;x.fillRect(0,0,s,s);
+    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+  }
+  var stars=new THREE.Group();stars.rotation.z=GALAXY_TILT;scene.add(stars);
+  (function buildStars(){
+    var dot=dotCoreTex(),soft=starTex(false),flare=starTex(true);
+    // bandP：这一档有多大比例收拢到银道面附近；maxB：这一档亮度的上限
+    var tiers=[{n:5600,size:1.5,tex:dot,op:.9,bandP:.8,maxB:.72},
+               {n:3000,size:2.2,tex:dot,op:.92,bandP:.7,maxB:.82},
+               {n:1000,size:3.3,tex:soft,op:.96,bandP:.55,maxB:.95},
+               {n:160,size:5.2,tex:flare,op:1,bandP:.38,maxB:1}];
+    for(var k=0;k<tiers.length;k++){
+      var T=tiers[k],n=T.n,pos=new Float32Array(n*3),col=new Float32Array(n*3);
+      for(var i=0;i<n;i++){
+        var u=Math.random()*2-1,v=Math.random()*6.2832,sp=Math.sqrt(1-u*u);
+        var dx=sp*Math.cos(v),dy=u,dz=sp*Math.sin(v);
+        if(Math.random()<T.bandP)dy*=Math.abs(gaussRand())*.28; // 压向银道面
+        var L=Math.sqrt(dx*dx+dy*dy+dz*dz)||1,rad=1000+Math.random()*600;
+        pos[i*3]=dx/L*rad;pos[i*3+1]=dy/L*rad;pos[i*3+2]=dz/L*rad;
+        var b=T.maxB*(.34+Math.pow(Math.random(),2)*.66),ct=Math.random();
+        if(ct<.6){col[i*3]=b*.86;col[i*3+1]=b*.92;col[i*3+2]=b;}     // 偏冷白
+        else if(ct<.88){col[i*3]=b;col[i*3+1]=b;col[i*3+2]=b*.99;}   // 白
+        else{col[i*3]=b;col[i*3+1]=b*.88;col[i*3+2]=b*.7;}           // 暖黄
+      }
+      var geo=new THREE.BufferGeometry();
+      geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+      geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+      stars.add(new THREE.Points(geo,new THREE.PointsMaterial({map:T.tex,size:T.size*DPR,sizeAttenuation:false,vertexColors:true,transparent:true,opacity:T.op,depthWrite:false,blending:THREE.AdditiveBlending})));
+    }
   })();
 
   /* ===== 纹理加载（容错）===== */
@@ -161,6 +298,25 @@
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
     camera.lookAt(0,0,0);
     updateSun();
+  }
+  /* 开场视角（也是"重置视角"）正对的那个点：中国·嫦娥奔月 */
+  var HOME_LAT=35,HOME_LON=105;
+  (function(){
+    for(var i=0;i<MYTHS.length;i++){
+      if(MYTHS[i].civ==='中国'){HOME_LAT=MYTHS[i].lat;HOME_LON=MYTHS[i].lon;return;}
+    }
+  })();
+  /* 把相机方位对到某个经纬度（即"正对该点"所需的角度）。
+   * 别自己手写"自转 + 地轴倾角"的矩阵：这里漏过 mainTilt 的 23.5°，
+   * 飞过去横向没事、纵向会偏十几度。直接取标记的世界变换最稳。 */
+  var _aim=new THREE.Vector3();
+  function aimLatLon(lat,lon){
+    _aim.copy(ll2v(lat,lon,1));
+    mainTilt.updateMatrixWorld(true);
+    _aim.applyMatrix4(mainSpin.matrixWorld);
+    var len=_aim.length()||1;
+    phiG=Math.acos(Math.max(-1,Math.min(1,_aim.y/len)));
+    thetaG=shortAngle(theta,Math.atan2(_aim.x,_aim.z));
   }
 
   /* ===== 手势：单指旋转 / 双指缩放，区分点击与拖动 ===== */
@@ -238,13 +394,7 @@
   }
   function selectMarker(i){
     selIdx=i;
-    var m=markers[i];
-    var local=ll2v(m.myth.lat,m.myth.lon,1);
-    var e=mainSpin.rotation.y,cs=Math.cos(e),sn=Math.sin(e);
-    var wx=local.x*cs+local.z*sn,wy=local.y,wz=-local.x*sn+local.z*cs;
-    var len=Math.hypot(wx,wy,wz)||1;
-    phiG=Math.acos(Math.max(-1,Math.min(1,wy/len)));
-    thetaG=shortAngle(theta,Math.atan2(wx,wz));
+    aimLatLon(markers[i].myth.lat,markers[i].myth.lon);
     if(!userZoomed)radiusG=fitR()*0.82;
     showCard(i);
   }
@@ -320,14 +470,7 @@
         for(var k=0;k<btns.length;k++)btns[k].classList.toggle('on',btns[k].getAttribute('data-r')===rid);
         // 选中后把当前 tab 滚到可视区域居中（同 solar-system-3d dock 逻辑）
         try{btn.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}catch(_){btn.scrollIntoView(true);}
-        if(rid!=='all'){
-          var local=ll2v(rlat,rlon,1);
-          var e=mainSpin.rotation.y,cs=Math.cos(e),sn=Math.sin(e);
-          var wx=local.x*cs+local.z*sn,wy=local.y,wz=-local.x*sn+local.z*cs;
-          var len=Math.hypot(wx,wy,wz)||1;
-          phiG=Math.acos(Math.max(-1,Math.min(1,wy/len)));
-          thetaG=shortAngle(theta,Math.atan2(wx,wz));
-        }
+        if(rid!=='all')aimLatLon(rlat,rlon);
         clearSelection();
       };}(r.id,r.lat,r.lon,b));
       tabsEl.appendChild(b);
@@ -365,7 +508,7 @@
   bind('swClouds',function(v){showClouds=v;clouds.visible=v;});
   bind('swMoon',function(v){showMoon=v;moonSys.visible=v;});
   bind('swLabel',function(v){showLabel=v;});
-  document.getElementById('bReset').addEventListener('click',function(){thetaG=0.6;phiG=1.15;radiusG=fitR();userZoomed=false;clearSelection();});
+  document.getElementById('bReset').addEventListener('click',function(){aimLatLon(HOME_LAT,HOME_LON);radiusG=fitR();userZoomed=false;clearSelection();});
   document.getElementById('bTop').addEventListener('click',function(){phiG=0.02;});
   var sheet=document.getElementById('sheet'),scrim=document.getElementById('scrim');
   function openSheet(v){sheet.classList.toggle('show',v);scrim.classList.toggle('show',v);}
@@ -389,6 +532,8 @@
       m.front=front;
       m.glow.visible=front&&(sel||inReg);
       m.ring.visible=front&&(sel||inReg);
+      m.line.visible=front&&(sel||inReg);
+      m.shade.visible=front&&(sel||inReg);
       m.dot.visible=front&&(sel||inReg);
       if(!front){continue;}
       var pulse=0.5+0.5*Math.sin(t*2.4+i*0.7);
@@ -396,23 +541,30 @@
         var g=0.5*(1+0.4*pulse),r=0.78*(1+0.45*pulse);
         m.glow.material.color.copy(GOLD_COL);
         m.ring.material.color.copy(GOLD_COL);
+        m.line.material.color.copy(GOLD_COL);
         m.glow.material.map=goldGlowTex;m.ring.material.map=goldRingTex;
-        m.glow.scale.set(g,g,1);m.ring.scale.set(r,r,1);
+        m.glow.material.opacity=.85;m.ring.material.opacity=.95;m.line.material.opacity=1;
+        m.glow.scale.set(g,g,1);m.ring.scale.set(r,r,1);m.line.scale.set(r,r,1);
+        m.shade.scale.set(r*1.04,r*1.04,1);m.shade.material.opacity=.95;
         m.dot.material.color.copy(GOLD_COL);
         m.dot.scale.setScalar(1.15);
       }else if(dim){
         m.glow.material.color.copy(DIM_COL);
         m.ring.material.color.copy(DIM_COL);
+        m.line.material.color.copy(DIM_COL);
         m.glow.material.map=glowTex;m.ring.material.map=ringTex;
-        m.glow.scale.set(0.22,0.22,1);m.ring.scale.set(0.34,0.34,1);
+        m.glow.scale.set(0.22,0.22,1);m.ring.scale.set(0.34,0.34,1);m.line.scale.set(0.34,0.34,1);
+        m.shade.scale.set(0.35,0.35,1);m.shade.material.opacity=.5;
         m.dot.material.color.copy(DIM_COL);
         m.dot.scale.setScalar(0.5);
       }else{
         m.glow.material.color.copy(MOON_COL);
         m.ring.material.color.copy(MOON_COL);
+        m.line.material.color.copy(MOON_COL);
         m.glow.material.map=glowTex;m.ring.material.map=ringTex;
         var g2=0.36*(1+0.22*pulse),r2=0.58*(1+0.28*pulse);
-        m.glow.scale.set(g2,g2,1);m.ring.scale.set(r2,r2,1);
+        m.glow.scale.set(g2,g2,1);m.ring.scale.set(r2,r2,1);m.line.scale.set(r2,r2,1);
+        m.shade.scale.set(r2*1.04,r2*1.04,1);m.shade.material.opacity=.92;
         m.dot.material.color.copy(MOON_COL);
         m.dot.scale.setScalar(0.85);
       }
@@ -447,6 +599,11 @@
   var running=true,perfAccum=0,perfCount=0,dprStep=DPR;
   var eSpin=0.3;
   var EARTH_SPIN=0.12;
+  /* 开场视角：先把初始自转落到 mainSpin 上（否则算出来的是"还没转"的中国位置），
+   * 再把相机方位对准中国·嫦娥奔月；theta/thetaG 一起赋值，避免开场先甩一下。 */
+  mainSpin.rotation.y=eSpin;
+  aimLatLon(HOME_LAT,HOME_LON);
+  theta=thetaG;phi=phiG;
   function animate(){
     if(!running)return;
     requestAnimationFrame(animate);
@@ -459,7 +616,8 @@
     }
     moonAngle+=dt*MOON_SPEED;
     moonOrbit.rotation.y=moonAngle;
-    stars.rotation.y+=dt*0.003;sky.rotation.y+=dt*0.001;
+    // 天球与星点同一转速：银河带与星星是同一片天，转速不同会互相错位
+    stars.rotation.y+=dt*0.0016;sky.rotation.y+=dt*0.0016;
     theta+=(thetaG-theta)*0.12;phi+=(phiG-phi)*0.12;radius+=(radiusG-radius)*0.1;
     camPos();
     refreshMarkers(t);
