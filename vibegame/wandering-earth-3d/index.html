@@ -3,77 +3,103 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>流浪地球 · 逃逸截断</title>
+  <title>流浪地球 · 引力弹弓</title>
   <link rel="icon" href="data:," />
   <link rel="stylesheet" href="./assets/style.css" />
 </head>
 <body>
   <canvas id="stage"></canvas>
 
+  <!-- ===== 顶部状态区：左=用时/小地图/音乐　中=后视镜　右=遥测面板 =====
+       三段互不重叠：后视镜固定在顶部中央，遥测面板从它下沿之下的 88px 起排，
+       这样 320px 宽的窄屏上也不会撞车。 -->
+
   <div id="clock">
     <span id="clock-num">0:00</span>
+    <span id="clock-label">逃逸用时</span>
   </div>
 
-  <div id="mirror-frame"><span id="mirror-label">后视镜 · 身后</span></div>
-
-  <div id="compass">
-    <svg id="cmp-svg" width="26" height="26" viewBox="0 0 26 26">
-      <circle cx="13" cy="13" r="11" fill="none" stroke="rgba(120,160,220,.22)" stroke-width="1"/>
-      <path id="cmp-arr" d="M13 3 L8 14 L13 11 L18 14 Z" fill="#5cc8ff"/>
-    </svg>
-    <span id="cmp-label">逃离太阳</span>
-  </div>
+  <div id="mirror-frame"><span id="mirror-label">后视镜 · 氦闪壳</span></div>
 
   <div id="telemetry">
-    <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">1.00 AU</span></div>
-    <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">29.8 km/s</span></div>
-    <div class="tm-row"><span class="tm-k">逃逸比</span><span id="tm-esc" class="tm-v">0.71</span></div>
+    <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">0 km/s</span></div>
+    <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">0.95 AU</span></div>
+    <div class="tm-row"><span class="tm-k">距氦闪壳</span><span id="tm-gap" class="tm-v">0.00 AU</span></div>
+    <div id="heat-wrap">
+      <span class="heat-k" id="heat-tag">发动机温度</span>
+      <div id="heat-track"><div id="heat-fill"></div></div>
+    </div>
   </div>
-
-  <div id="heat-wrap">
-    <span class="en-label" id="heat-tag">发动机温度</span>
-    <div id="heat-track"><div id="heat-fill"></div></div>
-  </div>
-
-  <div id="aim">
-    <span id="aim-name">木星</span>
-    <span id="aim-dist">3.40 AU</span>
-    <span id="aim-tag">可掠射加速</span>
-  </div>
-
-  <div id="warn"></div>
-  <div id="danger"></div>
-  <div id="flash"></div>
-
-  <div id="hint">拖动屏幕 · 把地球推离太阳</div>
-
-  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
 
   <canvas id="radar"></canvas>
 
+  <button id="mute" type="button" aria-label="关闭背景音乐">
+    <span class="mu-note">♪</span><span class="mu-slash"></span>
+  </button>
+
+  <!-- ===== 底部仪表区：上→下 = 消息槽 / 时机条 / 逃逸进度 ===== -->
+
+  <!-- 时机条：只在加速窗口内出现（过早 / 最佳 / 过晚 三段 + 扫过的判定针）。
+       文案全部由 updateHUD 填充，这里保持空文本，免得「示例文案」被当成真实输出 -->
+  <div id="flyby" class="hide">
+    <div class="fb-head">
+      <span id="fb-name"></span>
+      <span id="fb-tag"></span>
+    </div>
+    <div id="fb-track">
+      <div class="fb-zone fb-early" id="fb-early"><span>过早</span></div>
+      <div class="fb-zone fb-sweet" id="fb-sweet"><span>最佳加速时机</span></div>
+      <div class="fb-zone fb-late" id="fb-late"><span>过晚</span></div>
+      <div id="fb-needle"></div>
+    </div>
+    <div class="fb-foot">
+      <span>速度 <b id="fb-cur">0</b> / 门槛 <b id="fb-need">0</b> km/s</span>
+    </div>
+  </div>
+
+  <!-- 消息槽（时机条正上方，整屏只有这一条）：同一时刻只显示一条 ——
+       过热 / 耀斑脉冲 > 掠过评级 > 巡航倒计时。评级条由 showFlybyToast 填，
+       状态提示由 updateHUD 填；两者靠 updateHUD 的优先级互斥，绝不叠字。 -->
+  <div id="fb-toast">
+    <div class="ft-top"><b id="ft-name"></b><span id="ft-grade"></span></div>
+    <div id="ft-detail"></div>
+  </div>
+
+  <div id="warn"></div>
+
+  <!-- 全屏边缘光：红色=危险，绿色=绿色区间到了、该按了 -->
+  <div id="danger"></div>
+  <div id="flash"></div>
+
+  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
+
   <div id="brief">
     <div class="bf-inner">
+      <div class="bf-kicker">流浪地球 · 引力弹弓</div>
       <div class="bf-title">逃出太阳系</div>
-      <svg class="bf-svg" viewBox="0 0 200 140">
+      <svg class="bf-svg" viewBox="0 0 210 130">
         <defs>
           <radialGradient id="sunG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffec80"/><stop offset="60%" stop-color="#ff7a14"/><stop offset="100%" stop-color="#c43a00"/></radialGradient>
           <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5cc8ff"/></marker>
         </defs>
-        <circle cx="60" cy="70" r="10" fill="url(#sunG)"/>
-        <circle cx="60" cy="70" r="18" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".7"/>
-        <circle cx="60" cy="70" r="28" fill="none" stroke="#ff4a14" stroke-width="1" stroke-dasharray="3 3" opacity=".4"/>
-        <text x="60" y="100" text-anchor="middle" font-size="8" fill="#ff7a14">氦闪膨胀</text>
-        <circle cx="92" cy="70" r="4" fill="#5cc8ff" stroke="#fff" stroke-width=".5"/>
-        <text x="92" y="62" text-anchor="middle" font-size="7" fill="#5cc8ff">地球</text>
-        <line x1="96" y1="70" x2="170" y2="70" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="150" y="64" text-anchor="middle" font-size="8" fill="#5cc8ff">逃出冥王星</text>
-        <circle cx="140" cy="40" r="3" fill="#cc7a56" opacity=".7"/>
-        <circle cx="160" cy="105" r="5" fill="#dbc29e" opacity=".7"/>
-        <text x="140" y="33" text-anchor="middle" font-size="6" fill="#888">躲行星</text>
+        <circle cx="24" cy="104" r="9" fill="url(#sunG)"/>
+        <circle cx="24" cy="104" r="15" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".75"/>
+        <text x="24" y="128" text-anchor="middle" font-size="7.5" fill="#ff7a14">氦闪膨胀</text>
+        <path d="M30 100 C 90 92, 150 70, 190 30" fill="none" stroke="#5cc8ff" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>
+        <circle cx="146" cy="52" r="9" fill="#dbc29e" opacity=".85"/>
+        <text x="146" y="38" text-anchor="middle" font-size="7.5" fill="#dbc29e">行星</text>
+        <circle cx="88" cy="88" r="5" fill="#5cc8ff" stroke="#fff" stroke-width=".6"/>
+        <text x="88" y="79" text-anchor="middle" font-size="7.5" fill="#5cc8ff">地球</text>
+        <path d="M170 42 l 20 -14" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="206" y="19" text-anchor="end" font-size="7.5" fill="#5cc8ff">逃出太阳系</text>
       </svg>
-      <div class="bf-demo"><div class="bf-finger"></div></div>
-      <div class="bf-ops"><b>拖动</b>＝推力 · 烧满会过热锁定，松手降温</div>
-      <div class="bf-ops2">脉冲乘波 ×1.8 · 借行星引力弹弓加速</div>
+      <div class="bf-sub">太阳氦闪在身后膨胀，地球只剩一条固定航线。</div>
+      <div class="bf-ops2">
+        <span class="bf-moss">MOSS 已算定航线</span>
+        <span class="bf-you">你决定什么时候点火</span>
+      </div>
+      <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条 -->
+      <div id="tip"><b>按住屏幕任意位置</b>点火，指针滑进<b>绿色区间</b>再按 —— 在过早区间点过火，这次弹弓就作废了</div>
       <button id="bf-btn" class="bf-btn" type="button">出发</button>
     </div>
   </div>
@@ -81,9 +107,18 @@
   <div id="result">
     <div class="rs-inner">
       <div id="rs-title" class="rs-title"></div>
+      <div id="rs-time-box" class="rs-time">
+        <span id="rst-label" class="rst-label">逃逸用时</span>
+        <span id="rs-time-value" class="rst-value">0.0<i>s</i></span>
+        <span id="rs-best" class="rst-best">本站最快 0.0 s</span>
+      </div>
       <div id="rs-text" class="rs-text"></div>
       <div id="rs-stat" class="rs-stat"></div>
-      <button id="rs-btn" class="rs-btn" type="button">重新开始</button>
+      <div class="rs-actions">
+        <button id="rs-share" class="rs-btn ghost" type="button">分享战绩</button>
+        <button id="rs-btn" class="rs-btn" type="button">再来一次</button>
+      </div>
+      <div id="rs-hint" class="rs-hint"></div>
     </div>
   </div>
 
@@ -98,11 +133,9 @@
   </div>
 
   <script src="./assets/earth-data.js"></script>
-  <script src="./assets/mercury-data.js"></script>
-  <script src="./assets/venus-data.js"></script>
-  <script src="./assets/mars-data.js"></script>
   <script src="./assets/jupiter-data.js"></script>
   <script src="./assets/saturn-data.js"></script>
+  <script src="./assets/bgm-data.js"></script>
   <script src="./assets/three.min.js"></script>
   <script src="./assets/app.js"></script>
 </body>

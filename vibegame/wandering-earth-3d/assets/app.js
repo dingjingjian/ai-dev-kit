@@ -1,122 +1,563 @@
 /**
- * 流浪地球 · 逃逸截断 —— 主程序
+ * 流浪地球 · 引力弹弓 —— 主程序（固定航线版）
+ *
+ * 玩法（固定航线 / 时机弹弓）：
+ *   · 地球沿一条**固定航线**自动前进，玩家不能转向，只能决定「何时点火」。
+ *   · 每颗行星处有一次**加速窗口**：太早点火吃不到弹弓放大（白烧温度）、
+ *     最佳区间点火 = 引力弹弓 ×SLING、太晚速度不够 = 被行星捕获或拽入大气。
+ *   · 身后的氦闪膨胀壳持续追击，被吞没即失败。
  *
  * 结构：
- *   1. 物理核心 createGame（纯 JS，不依赖 THREE，无头自检可直接调用）
+ *   1. 航线 + 物理核心 createGame（纯 JS，不依赖 THREE，无头自检可直接调用）
  *   2. 渲染层（依赖 THREE + DOM，无 THREE 时跳过）
- *
- * 玩法：太阳氦闪壳从第 0 秒持续膨胀追击，玩家以第三人称实时拖动地球往外飞，
- *       管理发动机能量节奏、乘耀斑脉冲、躲八颗行星、借木星弹弓，90 秒内飞出 42 AU。
  */
 (function (global) {
   'use strict';
 
   // ============================================================
-  //  常量（数值真源，与 DESIGN.md 对齐）
+  //  1. 尺度与真实单位换算
   // ============================================================
-  var AU = 100;
+  var AU = 100;                 // 1 天文单位
+  var AU_KM = 149597871;        // 1 AU = 1.496e8 km（半径换算用）
+  var KM_PER_UNIT = AU_KM / AU; // 1 单位 = 1.496e6 km
+
+  // 天体半径 = 真实半径(km) × BODY_SCALE，**所有天体共用同一个倍率** →
+  // 屏幕上的大小关系与真实完全一致（是「比例正确」，不是各自手调）：
+  //   木星 69911 : 土星 58232 : 天王星 25362 : 海王星 24622 : 冥王星 1188 : 地球 6371
+  // 倍率以**地球的观感**为锚点定：800× 让地球 = 3.41 单位 —— 与手调时代的 3.4 一致
+  // （占屏 ~13%），主角不再是一颗小球。真值下地球只有 0.0043 单位，必须放大才看得见。
+  // 代价是掠过行星同比放大 2.67×（木星 37.4 单位），净空也同比放大以保持掠过分镜的相对关系。
+  var BODY_SCALE = 800;
+  function bodyR(km) { return km / KM_PER_UNIT * BODY_SCALE; }
+
+  // 引力强度：真实质量（地球 = 1）+ 真实半径 → 表面逃逸速度 v_esc = √(2GM/R)（km/s）。
+  // 引力弹弓能利用的增益上限**就是** v_esc，所以「加速窗口该多长、最佳区间该多宽」
+  // 由它派生（见 §3 的 deriveTiming）—— 质量大的行星引力影响范围大，窗口与绿色区间都更宽。
+  var G_SI = 6.6743e-11;        // m³·kg⁻¹·s⁻²
+  var EARTH_KG = 5.9722e24;     // 地球质量
+  function bodyVesc(rKm, mEarth) {
+    return Math.sqrt(2 * G_SI * mEarth * EARTH_KG / (rKm * 1000)) / 1000;
+  }
+
+  // 太阳是**唯一不参与 BODY_SCALE 的天体**：同比放大它会是 bodyR(696340) ≈ 372 单位，
+  // 而航线起点只有 95 单位、氦闪壳从 30 单位起 —— 地球会出生在太阳内部、壳也在太阳内部。
+  // 想让太阳同比，共用倍率得压到 ≤43×（太阳 20 单位，才在壳的 30 单位以内），
+  // 那时地球只剩 0.18 单位（≈6 px）、木星 2.0 单位，主角和「行星由小变大」的分镜一起消失。
+  // 故太阳单独取 10（约为真值的 21×）。
   var SUN_R = 10;
-  var EARTH_R = 3.4;
-  var G_SUN = 11000;
-  var V_CIRC = Math.sqrt(G_SUN / AU);          // ≈ 10.49
-  var ESCAPE_R = 4200;                          // 胜利距离门槛（42 AU，冥王星外）
+  var EARTH_R = bodyR(6371);    // 地球半径：与五颗行星同一倍率（3.41 单位 = 手调时代的 3.4）
 
-  var THRUST_ACC = 7.0;
-  var SUBSTEP = 0.0045;
-  var MAX_SUB = 900;
-  var SAFE_TIME = 0.5;                         // 开局保护：前 0.5 游戏秒不判行星碰撞（按时间计，不能按帧数，否则保护窗口随帧率变化）
-
-  var INTRO_TIME = 2.8;                        // 开场过场时长（秒）：俯视太阳系 → 聚焦地球
-  var BASE_GROW = 4.0;                         // 壳基础生长率（单位/秒）
-  var PULSE_TIMES = [10, 20, 35, 55, 75];      // 耀斑脉冲触发时刻（5 次）
-  var PULSE_GAIN = 4;                          // 脉冲期生长率倍数
-  var PULSE_DUR = 1.0;                         // 脉冲持续（秒）
-  var PULSE_WARN = 0.3;                        // 脉冲前预警时长（秒）
-
-  var HEAT_MAX = 100;                // 过热条满值
-  var HEAT_RATE = 30;                // 满推每秒升温（~3.3 秒烧到过热锁定）
-  var COOL_RATE = 12;                // 停机每秒降温（从满到归零需 ~8.3 秒）
-  var PULSE_THRUST_BOOST = 1.8;      // 脉冲时推力效率加成
-
-  var PLANETS = [
-    { key: 'mercury', name: '水星', rad: 2.0, orbitR: 0.39 * AU, gm: 3, capR: 18, spin: 0.35, tex: 'MERCURY_TEXTURE_URI', color: 0xb5ada0 },
-    { key: 'venus', name: '金星', rad: 3.2, orbitR: 0.72 * AU, gm: 8, capR: 26, spin: 0.20, tex: 'VENUS_TEXTURE_URI', color: 0xebd99f },
-    { key: 'mars', name: '火星', rad: 2.4, orbitR: 1.52 * AU, gm: 5, capR: 22, spin: 0.30, tex: 'MARS_TEXTURE_URI', color: 0xcc7a56 },
-    { key: 'jupiter', name: '木星', rad: 9.0, orbitR: 5.20 * AU, gm: 500, capR: 45, spin: 0.55, tex: 'JUPITER_TEXTURE_URI', color: 0xdbc29e },
-    { key: 'saturn', name: '土星', rad: 7.6, orbitR: 9.54 * AU, gm: 380, capR: 40, spin: 0.45, tex: 'SATURN_TEXTURE_URI', color: 0xe0d4a8, ring: true },
-    { key: 'uranus', name: '天王星', rad: 5.0, orbitR: 19.2 * AU, gm: 100, capR: 35, spin: 0.38, procColor: 0x4fd4e0 },
-    { key: 'neptune', name: '海王星', rad: 4.8, orbitR: 30.1 * AU, gm: 90, capR: 33, spin: 0.32, procColor: 0x3a5fd8 },
-    { key: 'pluto', name: '冥王星', rad: 1.8, orbitR: 39.5 * AU, gm: 2, capR: 15, spin: 0.24, procColor: 0x8a7a6a }
-  ];
-  // 行星初始相位。曾用离线数值求解（逐颗在 ±180° 内扫描、取参考路线逃逸用时最短者），
-  // 但实测收益只有 0.3%（弹弓在当前 gm/推力比下贡献极小，见 DESIGN §9），
-  // 而求解出的火星相位会让参考路线在 t≈3.8s 擦过火星、对帧率极度敏感 —— 收益不值这个风险，故保留原相位。
-  var START_ANGLES = [0.6, 2.4, 4.6, 1.3, 3.8, 5.2, 2.0, 4.0];
-
-  // 真实单位换算
-  var AU_KM = 1.495978707e8;
-  var REAL_SEC_PER_GAME_SEC = 5.26e5;
-  var KM_PER_UNIT = AU_KM / AU;
-  var YEARS_PER_GAME_SEC = REAL_SEC_PER_GAME_SEC / 3.15576e7;
-  var KMS_PER_UNIT = KM_PER_UNIT / REAL_SEC_PER_GAME_SEC;
-
+  // 速度显示换算：**巡航速 = 1 AU 处太阳逃逸速度（42.1 km/s）**。
+  // 这是本作唯一保留的真实锚点：游戏里读到的 km/s 都是真实量级，
+  // 而单位/距离做了游戏化压缩（见 DESIGN §8）。
+  var SUN_ESCAPE_KMS_1AU = 42.1;
+  var KMS_REF_SPEED = 100;                                  // 换算基准（单位/秒）
+  var KMS_PER_UNIT = SUN_ESCAPE_KMS_1AU / KMS_REF_SPEED;    // 1 单位/秒 ≈ 0.421 km/s
   var TAU = Math.PI * 2;
+
   function len3(v) { return Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]); }
 
-  // ---- 相机常量（纯数值，渲染层与无头自检共用）----
-  var CAM_BACK = 55;          // 基础跟拍距离
-  var CAM_UP = 28;            // 相机相对地球的抬升
-  var CAM_GAP_EASE = 60;      // 距壳该范围内开始拉远
-  var CAM_PANIC_MAX = 1.6;    // 拉远上限倍率
-  var CAM_FOV = 60;           // 垂直视场角（度），与 PerspectiveCamera 共用
-  var CAM_LOOK_AHEAD = 0.7;   // 注视点前移到地球前方该比例处 → 地球落在画面中心偏下，前方留出视野
-  // 星点的点精灵尺寸（CSS 像素）。这是「整张贴图被铺到多少个像素上」的画布尺寸，
-  // 不是视觉直径 —— 视觉直径由贴图亮核决定。但两者有硬耦合，见下。
-  //   点精灵把整张贴图线性映射到 N×N 像素：第 i 个像素中心采样到的 UV 横坐标是 (i+0.5)/N，
-  //   即 UV 只能落在 [0.5/N, 1-0.5/N] 内。N=3.5 时该区间是 [0.14, 0.86]，
-  //   离贴图中心最近的一个像素在归一化半径 0.14 处 —— 那里必然是纯白亮核，
-  //   而更外侧的像素直接落到已透明区（半径 >0.5）。于是每个星点都被画成一个实心白方块，
-  //   贴图上的渐变曲线根本没有被采样到。这就是「满屏白色方格子」的成因。
-  //   要让衰减曲线被完整采样（即采到径向形状），至少要 N ≈ 8；取 9 兼顾锐利与柔光。
+  // ============================================================
+  //  2. 航线（唯一真源：参数曲线 → 采样 → 弧长表）
+  // ============================================================
+  // 参数 u ∈ [0,1]：
+  //   r(u) = R0 · (R1/R0)^u                    —— 对数螺旋，半径从 0.95 AU 涨到 43 AU
+  //   φ(u) = Φ0 + TURNS·2π·u^WIND              —— 方位角
+  //   y(u) = Y_AMP · sin(Y_FREQ·2π·u + PHASE)  —— 垂直起伏（3D 过山车感）
+  //
+  // **TURNS 必须小**：手机竖屏的水平视场只有约 ±16°，航行方向每转 1° 就把「前方」甩 1°。
+  // 早期版本用 TURNS=0.92 / WIND=0.42 让内圈猛绕（137°），结果行星全从画面侧面冒出来，
+  // 完全框不住；改成近乎径向的缓螺旋后，行星才在正前方由小变大。
+  // 代价是「地球→第一颗行星」的弧长只能由真实轨道间距给出，所以火星（1.52 AU，仅 52 单位）
+  // 太近、窗口还没亮就已经到判定点 —— 只能从掠过的行星名单里去掉，改由木星开局。
+  var ROUTE_R0 = 95;
+  var ROUTE_R1 = 4300;
+  var ROUTE_TURNS = 0.25;       // 全程绕日圈数（小 → 近似径向；必须 < 1，否则航线自交）
+  var ROUTE_WIND = 1.0;         // 方位角幂次（1 = 匀速缠绕，起手不会出现无限大的转向率）
+  var ROUTE_Y_AMP = 25;         // 垂直起伏振幅
+  var ROUTE_Y_FREQ = 0.9;       // 垂直起伏周期数
+  var ROUTE_Y_PHASE = -Math.PI / 2;  // 起手是平的（y'(0)=0），避免开局就在陡爬升
+  var ROUTE_SAMPLES = 3600;     // 采样段数
+
+  function routePos(u, out) {
+    var r = ROUTE_R0 * Math.pow(ROUTE_R1 / ROUTE_R0, u);
+    var ph = ROUTE_TURNS * TAU * Math.pow(u, ROUTE_WIND);
+    out[0] = Math.cos(ph) * r;
+    out[1] = ROUTE_Y_AMP * Math.sin(ROUTE_Y_FREQ * TAU * u + ROUTE_Y_PHASE);
+    out[2] = Math.sin(ph) * r;
+    return out;
+  }
+
+  // 航线采样 + 弧长表。返回 { pts, cum, n, len }
+  function buildRoute() {
+    var n = ROUTE_SAMPLES;
+    var pts = new Float64Array((n + 1) * 3);
+    var cum = new Float64Array(n + 1);
+    var tmp = [0, 0, 0];
+    for (var i = 0; i <= n; i++) {
+      routePos(i / n, tmp);
+      pts[i * 3] = tmp[0]; pts[i * 3 + 1] = tmp[1]; pts[i * 3 + 2] = tmp[2];
+      if (i === 0) { cum[0] = 0; continue; }
+      var dx = tmp[0] - pts[(i - 1) * 3];
+      var dy = tmp[1] - pts[(i - 1) * 3 + 1];
+      var dz = tmp[2] - pts[(i - 1) * 3 + 2];
+      cum[i] = cum[i - 1] + Math.sqrt(dx * dx + dy * dy + dz * dz);
+    }
+    return { pts: pts, cum: cum, n: n, len: cum[n] };
+  }
+
+  function routeIndex(route, s) {
+    var lo = 0, hi = route.n;
+    while (hi - lo > 1) {
+      var mid = (lo + hi) >> 1;
+      if (route.cum[mid] <= s) lo = mid; else hi = mid;
+    }
+    return lo;
+  }
+
+  // 沿航线取弧长 s 处的点与单位切向（纯函数，渲染层与无头自检共用）
+  function routeSample(route, s, outPos, outTan) {
+    if (!(s > 0)) s = 0;
+    if (s > route.len) s = route.len;
+    var i = routeIndex(route, s);
+    if (i >= route.n) i = route.n - 1;
+    var seg = route.cum[i + 1] - route.cum[i];
+    var f = seg > 1e-9 ? (s - route.cum[i]) / seg : 0;
+    var p = route.pts;
+    var x0 = p[i * 3], y0 = p[i * 3 + 1], z0 = p[i * 3 + 2];
+    var x1 = p[(i + 1) * 3], y1 = p[(i + 1) * 3 + 1], z1 = p[(i + 1) * 3 + 2];
+    var dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+    var l = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    if (outPos) { outPos[0] = x0 + dx * f; outPos[1] = y0 + dy * f; outPos[2] = z0 + dz * f; }
+    if (outTan) { outTan[0] = dx / l; outTan[1] = dy / l; outTan[2] = dz / l; }
+    return route.cum[i] + seg * f;
+  }
+
+  // ============================================================
+  //  3. 行星（航线掠过点 + 场上其他行星）
+  // ============================================================
+  // rKm    = 真实半径（km）→ rad 由 bodyR 派生，**唯一入口**，不允许手调单颗尺寸。
+  // mEarth = 真实质量（地球 = 1）→ vEsc 由 bodyVesc 派生，**时机窗口与最佳区间由它决定**。
+  // clear  = 「航线到行星表面」的净空，rad + clear 就是掠过的垂直距离 →
+  //          clear 越小，行星在屏幕上越大越压迫。clear 是分镜参数，不参与半径换算。
+  //          本轮随 BODY_SCALE 300→800 **同倍率放大（×2.667）**：画面上「行星半径 : 掠距」
+  //          的比例不变，所以掠过行星的构图与放大前一致，只有地球回到了原来的观感。
+  //          例外一：冥王星等比后掠距 19.3 几乎等于相机抬升 CAM_UP=20，相机会贴着它的中心过去，
+  //          故单独压到 14.4，让航线明显从它下方掠过（实测相机离它中心 5.0 单位）。
+  //          例外二：土星光环必须**整个留在掠距之内**（RING_OUT × 半径 < 掠距 − 地球半径），
+  //          否则地球会从环的盘面投影里穿过去（截图可见）。所以光环内缩到 1.12~1.55 倍半径，
+  //          而不是把掠距推到环外 —— 后者会把土星推到画面外（判定点近缘离轴 35.6° > 30° 半视场）。
+  // vNeed  = 判定点速度门槛；低于它 → 被捕获（再低到 ×CRASH_RATIO 以下 → 撞毁）
+  // vSling = 该行星的「弹弓速度」：最佳区间内速度按比例向它逼近（差距越大拉得越猛）
+  function flyby(o) { o.rad = bodyR(o.rKm); o.vEsc = bodyVesc(o.rKm, o.mEarth); return o; }
+  var FLYBYS = [
+    flyby({ key: 'jupiter', name: '木星', rKm: 69911, mEarth: 317.8, orbitR: 5.20 * AU, clear: 29.3, vNeed: 98, vSling: 156, tex: 'JUPITER_TEXTURE_URI', color: 0xdbc29e }),
+    flyby({ key: 'saturn', name: '土星', rKm: 58232, mEarth: 95.2, orbitR: 9.54 * AU, clear: 26.7, vNeed: 130, vSling: 168, tex: 'SATURN_TEXTURE_URI', color: 0xe0d4a8, ring: true }),
+    flyby({ key: 'uranus', name: '天王星', rKm: 25362, mEarth: 14.54, orbitR: 19.20 * AU, clear: 24, vNeed: 138, vSling: 172, procColor: 0x4fd4e0 }),
+    flyby({ key: 'neptune', name: '海王星', rKm: 24622, mEarth: 17.15, orbitR: 30.10 * AU, clear: 22.7, vNeed: 138, vSling: 172, procColor: 0x3a5fd8 }),
+    flyby({ key: 'pluto', name: '冥王星', rKm: 1188, mEarth: 0.00218, orbitR: 39.50 * AU, clear: 14.4, vNeed: 132, vSling: 164, procColor: 0x8a7a6a })
+  ];
+
+  // ---- 不参与判定的「场上其他行星」：水星 / 金星 / 火星 ----
+  // 它们照样按真实半径（同一 BODY_SCALE）与**真实轨道半径**摆位，只是没有判定点、
+  // 没有加速窗口、不检测碰撞 —— 存在的意义是「太阳系是完整的」，不是能借力。
+  // 摆位分两类：
+  //   · 'route'  —— 轨道半径在航线起点外侧（火星 1.52 AU）：和掠过行星一样沿航线局部上抬
+  //                 h = 半径 + SCENERY_LIFT 并正对航线（距日仍反解到真实轨道半径），
+  //                 于是地球会在开局不久从它旁边过去 —— 看得见，但吃不到弹弓。
+  //   · 'behind' —— 轨道半径在航线起点**内侧**（水星 0.39 / 金星 0.72 AU，航线根本不到那儿）：
+  //                 摆在地球起点同一方位角、黄道面上 → 它永远在地球身后。
+  //                 正前方看不到（物理上也不该看到），靠后视镜 + 小地图读出来。
+  var SCENERY_LIFT = 40;        // 与 clear 同倍率放大（15 × 2.667），保证「从它旁边过」的构图不变
+  function scenery(o) { o.rad = bodyR(o.rKm); return o; }
+  var SCENERY = [
+    scenery({ key: 'mercury', name: '水星', rKm: 2440, mEarth: 0.0553, orbitR: 0.387 * AU, color: 0x9a8f86, place: 'behind' }),
+    scenery({ key: 'venus', name: '金星', rKm: 6052, mEarth: 0.815, orbitR: 0.723 * AU, color: 0xe8c88a, place: 'behind' }),
+    scenery({ key: 'mars', name: '火星', rKm: 3390, mEarth: 0.107, orbitR: 1.524 * AU, color: 0xc1440e, place: 'route' })
+  ];
+
+  // ---- 质量 → 时机窗口（两遍：先扫出全体的 v_esc 范围，再归一化）----
+  // q = 0（冥王星，v_esc 1.2 km/s，几乎弹不动）→ 窗口 2.5 s、最佳区间只占窗口 28%
+  // q = 1（木星，v_esc 60 km/s，引力最强）    → 窗口 2.8 s、最佳区间占窗口 44%
+  // 温度预算（满箱 ≈1.43 s）必须同时满足「< 每颗窗口」与「> 每颗最佳区间」→ 有逐行星断言。
+  var WIN_MIN = 2.5, WIN_MAX = 2.8;                            // 窗口时长（秒）随引力强度
+  var SWEET_LO_NARROW = 0.62, SWEET_LO_WIDE = 0.46, SWEET_HI = 0.90;
+  var SLING_SWEET_PRODUCT = 2.06;   // 吃满最佳区间时的弹弓逼近量 = 1−e^−2.06 ≈ 87%（与旧版等价）
+  var RATING_SWEET_FRAC = 0.48;     // 「完美弹弓」阈值 = 吃满该行星最佳区间的 48%（旧版 0.55/1.14 s）
+  function deriveTiming(list) {
+    var lo = Infinity, hi = -Infinity, i, o;
+    for (i = 0; i < list.length; i++) {
+      o = list[i];
+      if (o.vEsc < lo) lo = o.vEsc;
+      if (o.vEsc > hi) hi = o.vEsc;
+    }
+    var span = Math.max(1e-9, hi - lo);
+    for (i = 0; i < list.length; i++) {
+      o = list[i];
+      o.gravQ = (o.vEsc - lo) / span;                    // 0 = 引力最弱，1 = 引力最强
+      o.winTime = WIN_MIN + (WIN_MAX - WIN_MIN) * o.gravQ;
+      o.sweet0 = SWEET_LO_NARROW - (SWEET_LO_NARROW - SWEET_LO_WIDE) * o.gravQ;
+      o.sweet1 = SWEET_HI;
+      o.sweetTime = (o.sweet1 - o.sweet0) * o.winTime;
+      // 弹弓逼近速率按区间宽度**反向补偿** → 「吃满」的收益与区间宽窄无关：
+      // 窄区间只是更难按准（冰巨星、冥王星），不会让吃满的人变慢 → 通关时间与壳曲线不用重标。
+      o.slingK = SLING_SWEET_PRODUCT / o.sweetTime;
+      o.ratingSweet = o.sweetTime * RATING_SWEET_FRAC;
+    }
+  }
+  deriveTiming(FLYBYS);
+
+  // 航线在参数 u 处的局部「上」方向：ŷ 去掉沿切向的分量（航线有垂直起伏，不能直接用世界 ŷ）
+  function routeUp(u, out) {
+    var p0 = [0, 0, 0], p1 = [0, 0, 0], p2 = [0, 0, 0];
+    var e = 1e-4;
+    routePos(u, p0);
+    routePos(Math.min(1, u + e), p1);
+    routePos(Math.max(0, u - e), p2);
+    var tx = p1[0] - p2[0], ty = p1[1] - p2[1], tz = p1[2] - p2[2];
+    var tl = Math.sqrt(tx * tx + ty * ty + tz * tz) || 1;
+    tx /= tl; ty /= tl; tz /= tl;
+    var dot = ty;
+    var ux = -tx * dot, uy = 1 - ty * dot, uz = -tz * dot;
+    var ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+    out[0] = ux / ul; out[1] = uy / ul; out[2] = uz / ul;
+    return out;
+  }
+
+  // 由航线反推天体摆位（掠过行星与「场上的其他行星」共用同一套机制）：
+  //   1. 二分反解参数 u，使「航线点沿局部上抬升 h」后的天体距日**恰好 = 真实轨道半径**
+  //      （航线的 xz 半径不等于 orbitR，还有垂直抬升与起伏，故必须反解而非直接换算）；
+  //   2. 再把 u 吸附到航线采样点，天体锚在该点正上方 → 掠过/经过的水平偏移严格为 0。
+  // 轨道半径比航线起点还小的天体（水星/金星）反解无解 → 返回 null，由调用方另摆。
+  function routeStation(route, orbitR, h) {
+    var tmpP = [0, 0, 0], tmpU = [0, 0, 0], tmpT = [0, 0, 0];
+    routePos(0, tmpP);
+    routeUp(0, tmpU);
+    var reach0 = len3([tmpP[0] + tmpU[0] * h, tmpP[1] + tmpU[1] * h, tmpP[2] + tmpU[2] * h]);
+    if (orbitR <= reach0) return null;
+    var lo = 0, hi = 1, k, mid;
+    for (k = 0; k < 48; k++) {
+      mid = (lo + hi) * 0.5;
+      routePos(mid, tmpP);
+      routeUp(mid, tmpU);
+      if (len3([tmpP[0] + tmpU[0] * h, tmpP[1] + tmpU[1] * h, tmpP[2] + tmpU[2] * h]) < orbitR) lo = mid; else hi = mid;
+    }
+    var idx = Math.round((lo + hi) * 0.5 * route.n);
+    idx = Math.max(1, Math.min(route.n - 1, idx));
+    var s = route.cum[idx];
+    var px = route.pts[idx * 3], py = route.pts[idx * 3 + 1], pz = route.pts[idx * 3 + 2];
+    // 注意：必须取**该采样点所在段**的切向（routeSample(s)），不能用 routeSample(s+1) ——
+    // 航线在 u 上均匀采样、在空间上不均匀（内圈每段仅 ~0.4 单位），s+1 会跳到下一段，
+    // 「上」方向随之偏斜，天体就不再正对掠过点。
+    routeSample(route, s, null, tmpT);
+    var dot = tmpT[1];
+    var ux = -tmpT[0] * dot, uy = 1 - tmpT[1] * dot, uz = -tmpT[2] * dot;
+    var ul = Math.sqrt(ux * ux + uy * uy + uz * uz) || 1;
+    ux /= ul; uy /= ul; uz /= ul;
+    return { idx: idx, u: idx / route.n, s: s, pos: [px + ux * h, py + uy * h, pz + uz * h] };
+  }
+
+  // 天体到航线的真实最近距离（航线会拐，可能比 h 略近一点）+ 最近点弧长
+  function nearestRoute(route, pos, idx, half) {
+    var lo = Math.max(0, idx - half), hi = Math.min(route.n, idx + half);
+    var best = 1e18, bestS = route.cum[Math.max(0, Math.min(route.n, idx))];
+    for (var j = lo; j <= hi; j++) {
+      var ax = route.pts[j * 3] - pos[0], ay = route.pts[j * 3 + 1] - pos[1], az = route.pts[j * 3 + 2] - pos[2];
+      var dd = Math.sqrt(ax * ax + ay * ay + az * az);
+      if (dd < best) { best = dd; bestS = route.cum[j]; }
+    }
+    return { dist: best, s: bestS };
+  }
+
+  function buildFlybys(route) {
+    var out = [];
+    for (var i = 0; i < FLYBYS.length; i++) {
+      var d = FLYBYS[i];
+      var h = d.rad + d.clear;
+      var stn = routeStation(route, d.orbitR, h);
+      var nr = nearestRoute(route, stn.pos, stn.idx, 260);
+      out.push({ def: d, u: stn.u, s: stn.s, h: h, pos: stn.pos, passDist: nr.dist, passS: nr.s });
+    }
+    return out;
+  }
+
+  // 场上的其他行星（水星/金星/火星）：只摆位、不参与判定
+  function buildScenery(route) {
+    var out = [];
+    for (var i = 0; i < SCENERY.length; i++) {
+      var d = SCENERY[i];
+      var stn = d.place === 'route' ? routeStation(route, d.orbitR, d.rad + SCENERY_LIFT) : null;
+      var pos, idx = 0, s = 0, h = 0;
+      if (stn) { pos = stn.pos; idx = stn.idx; s = stn.s; h = d.rad + SCENERY_LIFT; }
+      // 'behind'：航线起点内侧的行星摆在地球起点的同一方位角（航线 φ(0)=0）的黄道面上
+      else pos = [d.orbitR, 0, 0];
+      var nr = nearestRoute(route, pos, idx, stn ? 260 : 600);
+      out.push({ def: d, pos: pos, s: s, h: h, passDist: nr.dist, passS: nr.s });
+    }
+    return out;
+  }
+
+  // ============================================================
+  //  4. 速度 / 时机窗口 / 过热 常量
+  // ============================================================
+  var START_SPEED = 88;         // 开局速度
+  var THRUST_ACC = 9.0;         // 满推加速度
+  var DRAG_K = 0.036;           // 阻力 ∝ 速度（1/s），时间常数 ~28 s
+  var SUBSTEP_TIME = 0.005;     // 固定子步（与帧率无关）
+  var MAX_SUBSTEP = 400;
+
+  var HEAT_MAX = 100;
+  var HEAT_RATE = 70;           // 点火升温（满箱 ≈ 1.43 s 连续点火 → 窗口内死按会烧穿）
+  var COOL_RATE = 26;           // 停机降温
+  var PULSE_THRUST_BOOST = 1.6; // 耀斑脉冲窗口内的额外推力加成（**不叠加弹弓**：绿色区间由弹弓比例项接管，见 substep）
+
+  // 加速窗口时长 / 最佳区间位置 / 弹弓逼近速率 / 评级阈值**都是逐行星的**，由质量派生
+  // （见 §3 的 deriveTiming），这里只留与行星无关的部分。
+  var LATE_EFF = 0.2;           // 过晚区间点火的残效
+  var CRASH_RATIO = 0.72;       // 判定点速度 < vNeed×该比例 → 撞毁，否则 → 被捕获
+
+  // ============================================================
+  //  5. 氦闪膨胀壳
+  // ============================================================
+  // 壳半径是**时间的解析函数**（不逐帧积分）：便于标定、便于断言、不受帧率影响。
+  //   shellR(t) = SHELL_START + SHELL_A·t + SHELL_B·t²   （线性 + 二次加速 = 越追越快）
+  // 系数由「理想打法到达各行星的时间 + 余量」数值标定，见 DESIGN §8.4。
+  var SHELL_START = 30;
+  var SHELL_A = 48.22;
+  var SHELL_B = 1.6282;
+  // 耀斑脉冲：只加成**推力**，不再让壳额外膨胀 —— 壳曲线保持解析可断言。
+  // 两次（12 / 26 s），都落在行星之间的巡航段：那里不是「过早」区，
+  // 点火不会作废弹弓，所以脉冲期是白拿 ×1.6 的正规窗口。
+  // 原来还有第 3 次 @40 s，实测不可达：单局最长 38.5 s（绿色吃 75% 压线逃出），
+  // 更慢的打法会先被行星捕获（≤72%）或被壳吞掉（73–74%，37.5–38.3 s），永远走不到 40 s。
+  var PULSE_TIMES = [12, 26];
+  var PULSE_DUR = 1.0;
+  var PULSE_WARN = 2.0;         // 预警提前量：足够看到提示并决定按不按（旧值 0.5 s 只够眨一下眼）
+
+  // 氦闪壳半径（纯函数，渲染层与无头自检共用）
+  function shellRadius(t) {
+    return SHELL_START + SHELL_A * t + SHELL_B * t * t;
+  }
+
+  var INTRO_TIME = 2.6;         // 开场过场时长（秒）
+
+  // ============================================================
+  //  6. 相机常量（渲染层与无头自检共用）
+  // ============================================================
+  var CAM_BACK = 46;            // 基础跟拍距离
+  var CAM_UP = 20;              // 相机抬升
+  var CAM_AHEAD = 0.62;         // 注视点沿航线前移比例（占 camBack）
+  var CAM_GAP_EASE = 55;        // 距壳该范围内开始拉远
+  var CAM_PANIC_MAX = 1.55;     // 拉远上限
+  var CAM_FOV = 60;             // 垂直视场角（度）
+  var CAM_PAN_MAX = 0.55;       // 掠过行星时注视方向偏向行星的最大比例
+  var CAM_PAN_LEAD = 3.2;       // 接近段：距判定点该秒数内开始偏
+  var CAM_PAN_HOLD = 0.30;      // 掠过段：判定点之后仍保持偏移的秒数（必须很短）
+  var CAM_PAN_TILT_MAX = 9;     // 掠过时注视方向被行星拉走的夹角上限（度）——见 chasePose 里的说明
   var STAR_SIZE = 9;
 
-  // 后视镜：从地球前上方回望，看到地球背面与身后追来的氦闪壳
-  var MIRROR_BACK = 26;       // 机位在地球运动方向前方多远
-  var MIRROR_UP = 6;          // 机位抬高
-  var MIRROR_LOOK = 200;      // 注视点落在地球后方多远
-  var MIRROR_FOV = 68;        // 后视镜视场角（比主视角略广）
+  var PLANET_GLOW_MAX = 0.30;   // 行星光晕最大不透明度（贴近时会被收掉，见渲染层）
+  // 土星光环：环带用**真实比例**（D 环内缘 1.11 R → A 环外缘 2.27 R），环面摆在**土星赤道面**上
+  // （法线 +Y）并叠加真实轴倾角 26.73°。
+  // 为什么角度是关键：RingGeometry 默认躺在 XY 平面（法线 +Z），不旋转的话航线恰好从环带内
+  // 穿过环面 —— 实测环带内最小垂距只有 0.15 单位（地球半径 3.41）→ 地球真的从环体里穿过去。
+  // 摆到赤道面后同一测法的最小垂距是 30.3 单位 → 永不穿环。自检用同一个法线验算。
+  var RING_IN = 1.11, RING_OUT = 2.27;                            // 环带（行星半径倍数，真实值）
+  var SAT_TILT = 26.73 * Math.PI / 180;                           // 土星轴倾角（真实值）
+  var RING_NORMAL = [0, Math.cos(SAT_TILT), Math.sin(SAT_TILT)];   // 环面法线（环面过行星中心）
+  var MIRROR_BACK = 26;
+  var MIRROR_UP = 6;
+  var MIRROR_LOOK = 200;
+  var MIRROR_FOV = 68;
 
-  // 跟拍距离（纯函数，无 THREE 依赖，供渲染层与无头自检共用）
-  // 设计意图：地球在屏幕上的大小基本恒定；壳逼近时最多拉远 CAM_PANIC_MAX 倍制造压迫感。
-  // 反例（历史 bug）：直接用无界膨胀的 shellR 线性驱动 → 终局 camBack 逼近 1000，地球缩成一个点。
+  // 跟拍距离（纯函数）：只随「地球到壳的间隙」变化，绝不被无界膨胀的壳半径直接驱动
   function followDist(rSun, shellR) {
     var gap = rSun - shellR;
     var d = CAM_BACK;
     if (gap < CAM_GAP_EASE) {
       d *= 1 + (CAM_GAP_EASE - Math.max(0, gap)) / CAM_GAP_EASE * (CAM_PANIC_MAX - 1);
     }
-    return Math.min(d, Math.max(14, rSun - SUN_R));   // 且不越过太阳表面
+    return Math.min(d, Math.max(18, rSun - SUN_R));
   }
 
-  // 跟拍方向（纯函数）：地球**运动方向**的单位向量（XZ 平面），相机锚在它正后方看地球向前冲。
-  // 速度退化（近零）时回退到径向（远离太阳），避免方向抖动。
-  function followDir(vel, pos) {
-    var v = Math.sqrt(vel[0] * vel[0] + vel[2] * vel[2]);
-    if (v > 1e-3) return [vel[0] / v, vel[2] / v];
-    var r = Math.sqrt(pos[0] * pos[0] + pos[2] * pos[2]) || 1;
-    return [pos[0] / r, pos[2] / r];
+  // 掠过的注视偏移（纯函数）：把「当前该不该看哪颗行星、看多重」算出来。
+  //   out[0] = 行星下标（-1 表示不偏），out[1] = 权重 0..CAM_PAN_MAX
+  // 关键点：窗口是**单侧**的。接近段有 CAM_PAN_LEAD 那么长（让行星早早点进画面），
+  // 掠过段只有 CAM_PAN_HOLD（0.3 s）。若用 |s_i − s| 的对称窗口，判定点之后好几秒里
+  // 视线还被拴在**已经在身后**的行星上，接着又被拉回航线 → 就是「刚穿过行星镜头猛地一沉」。
+  function panAim(flybys, s, v, out) {
+    var bestW = 0, bestI = -1, inv = 1 / Math.max(1e-3, v);
+    for (var i = 0; i < flybys.length; i++) {
+      var ttg = (flybys[i].s - s) * inv;         // > 0 = 还在前方
+      var w = ttg >= 0 ? 1 - ttg / CAM_PAN_LEAD : 1 + ttg / CAM_PAN_HOLD;
+      if (w > bestW) { bestW = w; bestI = i; }
+    }
+    out[0] = bestI;
+    out[1] = Math.max(0, Math.min(1, bestW)) * CAM_PAN_MAX;
+    return out;
   }
 
-  // ---- 行星发动机常量（纯数值，渲染层与无头自检共用）----
-  var ENGINE_COUNT = 48;        // 发动机光柱数量（密集分布模拟万台）
-  var ENGINE_SHELL = 1.08;      // 安装球半径（EARTH_R 的倍数，需 > 大气 1.06）
-  var ENGINE_AXIS = [0, 0, -1]; // 喷流方向：一律平行朝后（局部 -Z），净推力才指向 +Z
+  // 跟拍姿态（纯函数，渲染层与无头自检共用）
+  //   cam = {s, v, pos, tan, rSun, shellR, zoom}
+  // 注意是**方向空间**插值：先把「航线注视方向」与「指向行星的方向」按权重合成再归一化，
+  // 最后按原注视距离投射出去。若直接把注视点插值到行星位置，行星落到相机后方时
+  // 注视点会跑到相机背后，lookAt 方向翻折 → 镜头乱甩。
+  function chasePose(route, flybys, cam, outPos, outLook) {
+    var ep = cam.pos, tn = cam.tan;
+    var camBack = followDist(cam.rSun, cam.shellR) * cam.zoom;
+    var ahead = camBack * CAM_AHEAD;
+    outPos[0] = ep[0] - tn[0] * camBack;
+    outPos[1] = ep[1] - tn[1] * camBack + CAM_UP * cam.zoom;
+    outPos[2] = ep[2] - tn[2] * camBack;
+    var lookS = cam.s + ahead;
+    if (lookS >= route.len) {
+      // 越过航线终点：让注视点沿末端切向继续外推。否则 routeSample 会把它夹回终点，
+      // 而终点就是地球本体 —— 最后一瞬镜头会变成「盯着地球自己」，注视距离再塌掉。
+      routeSample(route, route.len, _camEnd, _camTan);
+      var over = lookS - route.len;
+      _camBase[0] = _camEnd[0] + _camTan[0] * over;
+      _camBase[1] = _camEnd[1] + _camTan[1] * over;
+      _camBase[2] = _camEnd[2] + _camTan[2] * over;
+    } else {
+      routeSample(route, lookS, _camBase, null);
+    }
+    var dx = _camBase[0] - outPos[0], dy = _camBase[1] - outPos[1], dz = _camBase[2] - outPos[2];
+    var dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+    dx /= dl; dy /= dl; dz /= dl;
+    panAim(flybys, cam.s, cam.v, _camAim);
+    var w = _camAim[1];
+    if (w > 0 && _camAim[0] >= 0) {
+      var fp = flybys[_camAim[0]].pos;
+      var px = fp[0] - outPos[0], py = fp[1] - outPos[1], pz = fp[2] - outPos[2];
+      var pl = Math.sqrt(px * px + py * py + pz * pz) || 1;
+      // **抬升上限**：行星挂在航线几十单位之上（半径等比放大后更远），全额偏移会把注视
+      // 方向抬高几十度，地球直接被顶出画面（实测离轴 42° > 30° 半视场）。故把「注视方向
+      // 被行星拉走的夹角」限制在 CAM_PAN_TILT_MAX 以内：掠过时行星占画面上半、地球留在下半。
+      // 注意只夹「拉走多少角」，不夹注意力权重 —— 行星该早进画面还是早进。
+      var cosA = dx * (px / pl) + dy * (py / pl) + dz * (pz / pl);
+      var angDeg = Math.acos(Math.max(-1, Math.min(1, cosA))) * 180 / Math.PI;
+      var wMax = angDeg > CAM_PAN_TILT_MAX ? CAM_PAN_TILT_MAX / angDeg : 1;
+      if (w > wMax) w = wMax;
+      dx = dx * (1 - w) + (px / pl) * w;
+      dy = dy * (1 - w) + (py / pl) * w;
+      dz = dz * (1 - w) + (pz / pl) * w;
+      var nl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+      dx /= nl; dy /= nl; dz /= nl;
+    }
+    outLook[0] = outPos[0] + dx * dl;
+    outLook[1] = outPos[1] + dy * dl;
+    outLook[2] = outPos[2] + dz * dl;
+    return outLook;
+  }
+  var _camBase = [0, 0, 0], _camAim = [0, 0], _camEnd = [0, 0, 0], _camTan = [0, 0, 0];
 
-  // 行星发动机布局（纯函数，无 THREE 依赖，供渲染层与无头自检共用）
-  // 位置：-Z 半球球面（黄金角螺旋，近赤道铺到极点）× EARTH_R × ENGINE_SHELL
-  // 朝向：全部平行对齐 ENGINE_AXIS —— 48 台推力同向叠加，净推力指向 +Z
-  // 反例（历史 bug）：位置正确但朝向取「球面法线」——赤道附近几乎横向喷射，实测与 -Z 夹角 0°–87°，
-  //   仅 7/48 朝后、23/48 侧向，合成方向只剩 0.53，一半推力互相抵消（推不动地球），视觉也成了「刺球」。
+  // 时机窗口相位（纯函数）：tToGo = 距判定点还有多少秒，winTime = **该行星**的窗口时长。
+  // 窗口时长逐行星不同（质量越大引力影响范围越大 → 越早亮灯），所以必须显式传入。
+  //   返回 < 0 → 尚未进入窗口；0..1 → 窗口内；> 1 → 已过判定点
+  function flybyPhase(tToGo, winTime) {
+    if (tToGo > winTime) return -1;
+    if (tToGo < 0) return 2;
+    return 1 - tToGo / winTime;
+  }
+  // 相位 → 区间。sweet0 / sweet1 同样逐行星（由质量派生）：引力越强，绿色区间越宽。
+  function phaseZone(phase, sweet0, sweet1) {
+    if (phase < 0) return 'appr';
+    if (phase > 1) return 'done';
+    if (phase < sweet0) return 'early';
+    if (phase < sweet1) return 'sweet';
+    return 'late';
+  }
+  // 常规推力效率（与 pulseActive 相乘）。最佳区间不走这里：它由「弹弓比例项」接管。
+  function zoneEff(zone) {
+    if (zone === 'late') return LATE_EFF;
+    return 1;
+  }
+
+  // 掠过评级（纯函数）：把「三个区间各点了多久」翻译成等级 + 一句可执行的提示。
+  // 玩家最需要知道的不是「过没过」，而是「刚才那次点火到底错在哪」——
+  // 是按早了（白烧温度、吃不到弹弓）、按晚了（来不及）、还是根本没按。
+  // ratingSweet = **该行星**的「吃满」阈值（= 它绿色区间时长 × RATING_SWEET_FRAC）：
+  // 木星区间宽、阈值高，冥王星区间窄、阈值低 —— 但语义都是「把绿色区间吃满了」。
+  // tip 会接在「绿色区间 X s / 完美线 Y s」后面显示，所以除首句外不再重复「绿色区间」四个字。
+  function gradeFlyby(r, ok, ratingSweet) {
+    var R = ratingSweet;
+    // 「速度没到门槛但推过了」不算当场判死：地球照样掠过去了，欠账由氦闪壳在后面追讨。
+    // 这条要排在 !ok 之前 —— 它确实没通过门槛，但要说清楚「还活着，只是慢了」。
+    if (r.result === 'slow') {
+      return {
+        key: 'early', label: '速度没拉起来',
+        tip: r.lostSling
+          ? '过早区间点过火，这颗的弹弓作废 —— 地球照常往前飞，但速度上不去，氦闪壳正在追上来'
+          : '这颗推过了，但前面欠的速度还没还上 —— 地球照常往前飞，氦闪壳正在追上来'
+      };
+    }
+    if (!ok) return { key: 'fail', label: '被捕获', tip: '判定点速度不够：绿色区间必须吃满，弹弓才拉得起来' };
+    // 过早区间点过火 → 整次掠过失去弹弓机会，只能普通加速：评级最高封顶「差一口气」，绝不评完美弹弓
+    if (r.lostSling) {
+      if (r.sweet === 0 && r.early === 0 && r.late > 0) return { key: 'late', label: '按晚了', tip: '过晚区间点火几乎不推进，判定点速度自然不够' };
+      if (r.sweet === 0 && r.early === 0 && r.late === 0) return { key: 'none', label: '没点火', tip: '一次都没按，速度被阻力一路吃掉' };
+      if (r.sweet === 0 && r.early > 0) return { key: 'early', label: '过早白烧', tip: '全程都在过早区间点火：弹弓已作废，温度也烧光了' };
+      return { key: 'good', label: '差一口气', tip: '在过早区间点过火，这次弹弓已作废，只剩普通推力 —— 下次等指针进绿色区间再按' };
+    }
+    if (r.sweet >= R) {
+      return { key: 'perfect', label: '完美弹弓', tip: '吃满，弹弓把速度拉到了该行星的弹弓速度' };
+    }
+    if (r.sweet >= R * 0.45) {
+      return { key: 'good', label: '差一口气', tip: '只吃到一半，弹弓没拉满 —— 下次让指针在绿色区间多停一会儿' };
+    }
+    if (r.sweet > 0) {
+      return { key: 'early', label: '按早了', tip: '过早区间只有普通推力，白烧了温度 —— 等指针进绿色区间再按' };
+    }
+    if (r.late > 0) {
+      return { key: 'late', label: '按晚了', tip: '过晚区间点火几乎不推进，判定点速度自然不够' };
+    }
+    if (r.early > 0) {
+      return { key: 'early', label: '过早白烧', tip: '全程都在过早区间点火：那里吃不到弹弓，温度也烧光了' };
+    }
+    return { key: 'none', label: '没点火', tip: '一次都没按，速度被阻力一路吃掉' };
+  }
+  function pulseActive(t) {
+    for (var i = 0; i < PULSE_TIMES.length; i++) {
+      var pt = PULSE_TIMES[i];
+      if (t >= pt && t < pt + PULSE_DUR) return true;
+    }
+    return false;
+  }
+  // 距下一次脉冲开始还有几秒（没有下一次 → Infinity）。脉冲生效期内返回的是「到再下一次」，
+  // 所以调用方要先用 pulseActive 判断是否正处于脉冲中。
+  function pulseIn(t) {
+    var best = Infinity;
+    for (var i = 0; i < PULSE_TIMES.length; i++) {
+      var d = PULSE_TIMES[i] - t;
+      if (d > 0 && d < best) best = d;
+    }
+    return best;
+  }
+  // 脉冲提示（纯函数，渲染层与自检共用）：
+  //   · 预警期（距脉冲 ≤ PULSE_WARN）报倒计时，让玩家有时间决定按不按；
+  //   · 生效期报「现在能不能按」。
+  // **必须按区间分叉**：在「过早」区按下去会作废本次弹弓（lostSling），
+  // 若这时还挂一条「推力 ×1.6」，等于把玩家钓去毁掉整次掠过 —— 那是提示在害人。
+  function pulseTip(t, zone) {
+    var early = (zone === 'early');
+    if (pulseActive(t)) {
+      if (early) return '⚠ 耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 过早别按（会作废弹弓）';
+      if (zone === 'appr' || zone === 'done') return '⚠ 耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 现在按住';
+      return '';   // 绿色区间由弹弓接管（加成不生效）、过晚已来不及：交给既有提示，不抢屏
+    }
+    var left = pulseIn(t);
+    if (!(left <= PULSE_WARN)) return '';
+    // 窗口期（过早/最佳/过晚）不刷预警：那几秒屏幕归时机条与边缘光，任何别的文案都是干扰。
+    // 预警有 2 s，窗口只吃掉其中一段，剩下的时间足够看到；
+    // 而「过早区别按」这条关键警告在生效期还会再出现一次，不会漏。
+    if (zone !== 'appr' && zone !== 'done') return '';
+    return '⚠ 耀斑脉冲 ' + left.toFixed(1) + ' s 后 · 推力 ×' + PULSE_THRUST_BOOST;
+  }
+
+  // ---- 行星发动机（纯函数，渲染层与无头自检共用）----
+  var ENGINE_COUNT = 48;
+  var ENGINE_SHELL = 1.08;
+  var ENGINE_AXIS = [0, 0, -1];
   function engineLayout() {
     var out = [];
     var golden = Math.PI * (3 - Math.sqrt(5));
@@ -134,276 +575,305 @@
     return out;
   }
 
-  // 屏幕拖动 → 世界推力方向（纯函数，无 THREE 依赖，供渲染层与无头自检共用）
-  // 屏幕的「上下左右」映射到世界 XZ 平面的一组**正交基**：
-  //   上方 = 相机前向的水平投影（即地球当前运动方向），右方 = 前向绕 Y 轴转 90°。
-  // 这样拖动方向与推力方向 1:1、各向同性，斜拖 45° 就是世界 45°。
-  // 反例（历史 bug：拖动不跟手）：先按相机基算方向再把 y 归零——相机有俯角，up 的 XZ 投影只剩
-  //   sinθ(≈0.45) 而 right 仍是 1，垂直轴灵敏度被压掉一半以上，斜拖 45° 实际偏到 65.6°。
-  function screenDragToWorld(dx, dy, fwdX, fwdZ) {
-    var fl = Math.sqrt(fwdX * fwdX + fwdZ * fwdZ);
-    if (fl < 1e-4) return null;            // 相机几乎垂直俯视，无有效映射
-    var fx = fwdX / fl, fz = fwdZ / fl;    // 屏幕上方 → 世界
-    // 屏幕位移 (dx 向右、dy 向下) → 世界 = 右*dx + 前*(-dy)，其中右 = (-fz, fx)
-    var wx = -fz * dx - fx * dy;
-    var wz = fx * dx - fz * dy;
-    var l = Math.sqrt(wx * wx + wz * wz);
-    if (l < 1e-6) return null;
-    return [wx / l, 0, wz / l];
-  }
-
   // ============================================================
-  //  物理核心（纯 JS，无 THREE 依赖）
+  //  7. 物理核心（纯 JS，无 THREE 依赖）
   // ============================================================
-  function createGame() {
+  function createGame(route) {
     var g = {};
+    route = route || buildRoute();
+    var flybys = buildFlybys(route);
+    var scenery = buildScenery(route);      // 只摆位、不参与判定（水星/金星/火星）
+    var nF = flybys.length;
+
     var st = g.state = {
       status: 'flying',
       reason: '', culprit: '',
       t: 0,
-      pos: [AU, 0, 0],
-      vel: [0, 0, V_CIRC],
-      spin: 0,
-      thrustDir: [0, 0, 0], thrustMag: 0,
-      rSun: AU, rSunAU: 1, speedKms: V_CIRC * KMS_PER_UNIT,
-      shellR: SUN_R, shellV: BASE_GROW,
-      escapeRatio: 0,
-      warn: '',
-      planets: [],
-      planetCheck: false,    // 开局保护：t > SAFE_TIME 后启用行星碰撞判定
-      pulseWarn: 0,
-      heat: 0,               // 过热条：推力时上升，停机时回落
-      overheated: false,     // 过热锁定：烧到满值置位，必须冷却归零才解锁
-      thrustEff: 1
+      s: 0,                    // 沿航线弧长
+      v: START_SPEED,          // 沿航线速度
+      acc: 0,                  // 固定子步累加器（保证帧率无关）
+      pos: [0, 0, 0],
+      tan: [0, 0, 0],
+      rSun: 0, rSunAU: 0, speedKms: 0,
+      shellR: SHELL_START, shellV: SHELL_A, shellAU: SHELL_START / AU,
+      gap: 0,
+      heat: 0, overheated: false, overheatLeft: 0, thrustEff: 1, burning: false,
+      pullTo: 0, slinging: false,   // 弹弓：本子步向 pullTo 逼近（0 = 未触发）
+      slingK: 0,               // 当前行星的弹弓逼近速率（窄区间行星的 K 更大 → 吃满收益一致）
+      pulseHot: false, pulseIn: -1,   // 脉冲生效中 / 距下一次脉冲还有几秒
+      target: 0,               // 当前目标行星索引（-1 = 全部通过）
+      tToGo: 0, phase: -1, zone: 'appr',
+      vNeed: 0, safe: true,
+      warn: '', warnKind: '',   // warnKind：'' 常规 / 'pulse' 耀斑脉冲（渲染层据此换样式）
+      progress: 0,
+      results: [],             // 每颗行星的掠过评级
+      score: { perfect: 0, pass: 0, slow: 0 }   // slow = 弹弓作废、速度没到门槛但硬掠过去了（欠账留给氦闪壳）
     };
+    for (var i = 0; i < nF; i++) st.results.push({ zone: '', sweet: 0, early: 0, late: 0, result: '', lostSling: false });
 
-    var pAng = START_ANGLES.slice();
-    var pW = [];
-    var tmpP = [0, 0, 0], tmpV = [0, 0, 0];
-    for (var i = 0; i < PLANETS.length; i++) {
-      pW.push(Math.sqrt(G_SUN / Math.pow(PLANETS[i].orbitR, 3)));
-      st.planets.push({ pos: [0, 0, 0], vel: [0, 0, 0], angle: pAng[i] });
+    var tmpP = [0, 0, 0], tmpT = [0, 0, 0];
+
+    function syncFromS() {
+      routeSample(route, st.s, st.pos, st.tan);
+      st.rSun = len3(st.pos);
+      st.rSunAU = st.rSun / AU;
+      st.shellR = shellRadius(st.t);
+      st.shellV = SHELL_A + 2 * SHELL_B * st.t;
+      st.shellAU = st.shellR / AU;
+      st.gap = st.rSun - st.shellR;
+      st.progress = Math.min(1, st.s / route.len);
     }
 
-    function planetPos(i, out) {
-      var d = PLANETS[i];
-      out[0] = Math.cos(pAng[i]) * d.orbitR; out[1] = 0; out[2] = Math.sin(pAng[i]) * d.orbitR;
-      return out;
-    }
-    function planetVel(i, out) {
-      var d = PLANETS[i], w = pW[i];
-      out[0] = -Math.sin(pAng[i]) * d.orbitR * w; out[1] = 0; out[2] = Math.cos(pAng[i]) * d.orbitR * w;
-      return out;
-    }
-    function syncPlanets() {
-      for (var i = 0; i < PLANETS.length; i++) {
-        st.planets[i].angle = pAng[i];
-        planetPos(i, st.planets[i].pos);
-        planetVel(i, st.planets[i].vel);
+    // 目标行星：航线前方第一颗未通过的行星
+    function pickTarget() {
+      for (var i = 0; i < nF; i++) {
+        if (flybys[i].s > st.s) return i;
       }
-    }
-
-    // 是否处于耀斑脉冲窗口：脉冲触发后 PULSE_DUR 秒内（唯一判据，生长率与推力加成共用）
-    function pulseActive(t) {
-      for (var i = 0; i < PULSE_TIMES.length; i++) {
-        var pt = PULSE_TIMES[i];
-        if (t >= pt && t < pt + PULSE_DUR) return true;
-      }
-      return false;
-    }
-
-    // 氦闪膨胀生长率
-    function growRate(t) {
-      var r = pulseActive(t) ? BASE_GROW * PULSE_GAIN : BASE_GROW;
-      if (t > 20) r += (t - 20) * (t - 20) * 0.01;   // 终局大爆发：随时间二次加速
-      return r;
-    }
-
-    // 脉冲预警（脉冲前 PULSE_WARN 秒内返回 1）
-    function pulseWarnLevel(t) {
-      for (var i = 0; i < PULSE_TIMES.length; i++) {
-        var pt = PULSE_TIMES[i];
-        if (t > pt - PULSE_WARN && t < pt) return 1;
-      }
-      return 0;
+      return -1;
     }
 
     function fail(status, reason, culprit) {
       st.status = status; st.reason = reason; st.culprit = culprit || '';
-      st.thrustMag = 0;
-    }
-
-    function check() {
-      var p = st.pos, v = st.vel;
-      var rSun = len3(p);
-      st.rSun = rSun; st.rSunAU = rSun / AU;
-
-      if (rSun < SUN_R + EARTH_R) { fail('crashed', '地球坠入太阳', '太阳'); return; }
-      if (rSun < st.shellR) { fail('burned', '被氦闪烈焰吞没', '太阳'); return; }
-
-      st.warn = '';
-      if (st.planetCheck) {
-        for (var i = 0; i < PLANETS.length; i++) {
-          var d = PLANETS[i];
-          var pp = planetPos(i, tmpP);
-          var dx = p[0] - pp[0], dy = p[1] - pp[1], dz = p[2] - pp[2];
-          var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-          if (dist < d.rad + EARTH_R) { fail('crashed', '撞上' + d.name, d.name); return; }
-          if (dist < d.capR) {
-            var pv = planetVel(i, tmpV);
-            var vx = v[0] - pv[0], vy = v[1] - pv[1], vz = v[2] - pv[2];
-            var vrel = Math.sqrt(vx * vx + vy * vy + vz * vz);
-            var vesc = Math.sqrt(2 * d.gm / dist);
-            if (vrel < vesc) { fail('caught', '被' + d.name + '引力捕获', d.name); return; }
-            st.warn = '进入' + d.name + '引力范围 · 相对速度 ' + (vrel * KMS_PER_UNIT).toFixed(1) +
-              ' / 逃逸阈值 ' + (vesc * KMS_PER_UNIT).toFixed(1) + ' km/s';
-          }
-        }
-      }
-
-      var sp = len3(v);
-      st.escapeRatio = sp / Math.sqrt(2 * G_SUN / Math.max(1, rSun));
-      // 胜利：达到逃逸能量（逃逸比 ≥ 1）且飞出距离门槛
-      if (st.escapeRatio >= 1 && rSun > ESCAPE_R) {
-        st.status = 'escaped';
-        st.reason = '逃出太阳系，奔向比邻星';
-      }
+      st.burning = false; st.thrustEff = 0;
     }
 
     function substep(h, tNow) {
-      for (var i = 0; i < PLANETS.length; i++) pAng[i] += pW[i] * h;
+      // 速度：阻力 ∝ v；推力分两种形态 ——
+      //   · 弹弓期（st.pullTo > 0）：a = st.slingK·(pullTo − v)，向该行星的弹弓速度**按比例逼近**。
+      //     比例项意味着「落后越多拉得越猛」，所以前面吃得少不会一路崩到底（可追回）；
+      //     slingK 是该行星自己的（区间越窄 K 越大），保证「吃满绿色区间」的收益与区间宽度无关。
+      //   · 其余时刻：a = THRUST_ACC × 区间效率（巡航/过早 1×，过晚 0.2×，过热 0），
+      //     脉冲窗口再乘 PULSE_THRUST_BOOST（乘波）。
+      var acc = -DRAG_K * st.v;
+      if (st.pullTo > 0) acc += st.slingK * (st.pullTo - st.v);
+      else if (st.burning && st.thrustEff > 0) acc += THRUST_ACC * st.thrustEff;
+      st.v = Math.max(1e-3, st.v + acc * h);
+      st.s += st.v * h;
+      st.shellR = shellRadius(tNow);
 
-      var p = st.pos, v = st.vel;
-      var ax = 0, ay = 0, az = 0;
-      var r2 = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
-      var r = Math.sqrt(r2) || 1e-6;
-      var k = G_SUN / (r2 * r);
-      ax -= p[0] * k; ay -= p[1] * k; az -= p[2] * k;
-
-      for (i = 0; i < PLANETS.length; i++) {
-        var pp = planetPos(i, tmpP);
-        var dx = pp[0] - p[0], dy = pp[1] - p[1], dz = pp[2] - p[2];
-        var d2 = dx * dx + dy * dy + dz * dz;
-        var d = Math.sqrt(d2) || 1e-6;
-        if (d < 1e-4) continue;
-        var f = PLANETS[i].gm / (d2 * d);
-        ax += dx * f; ay += dy * f; az += dz * f;
+      if (st.s >= route.len) { st.s = route.len; st.status = 'escaped'; st.reason = '冲出太阳系，奔向比邻星'; return; }
+      if (st.shellR >= st.rSun) {
+        // 这局若吃过「弹弓作废」的亏，就把因果写进失败原因 —— 玩家才知道是被自己的过早烧没的
+        var starved = false, kk;
+        for (kk = 0; kk < nF; kk++) if (st.results[kk].result === 'slow') { starved = true; break; }
+        fail('burned', starved ? '速度没拉起来，地球被氦闪壳追上' : '地球被氦闪壳吞没', '太阳');
+        return;
       }
-
-      if (st.thrustMag > 0 && st.thrustEff > 0) {
-        var ta = THRUST_ACC * st.thrustMag * st.thrustEff;
-        ax += st.thrustDir[0] * ta;
-        ay += st.thrustDir[1] * ta;
-        az += st.thrustDir[2] * ta;
-      }
-
-      v[0] += ax * h; v[1] += ay * h; v[2] += az * h;
-      p[0] += v[0] * h; p[1] += v[1] * h; p[2] += v[2] * h;
-      st.spin += h * 0.35;
-
-      // 壳膨胀积分（用子步精确时间，脉冲期内积分不失真）
-      st.shellV = growRate(tNow);
-      st.shellR += st.shellV * h;
-
-      check();
     }
 
-    g.setThrust = function (dir, mag) {
-      if (st.status !== 'flying') { st.thrustMag = 0; return; }
-      if (!dir || mag <= 0) { st.thrustMag = 0; return; }
-      var l = len3(dir) || 1;
-      st.thrustDir[0] = dir[0] / l; st.thrustDir[1] = dir[1] / l; st.thrustDir[2] = dir[2] / l;
-      st.thrustMag = Math.max(0, Math.min(1, mag));
+    // 行星判定：过了判定点就结算速度。
+    // **两种失败模式按原因分开**（这是设计意图，不是同一件事的两个名字）：
+    //   · 过晚 / 没按 → 弹弓没作废，只是速度根本没拉起来 → 这颗行星当场抓住你（caught / crashed）
+    //   · 过早过多 → 弹弓已被烧作废 → 地球照常掠过，只是速度上不去 → 交给身后的氦闪壳结账（延迟失败）
+    // 旧版把「过早」也判成当场被捕获：两种原因同一个死法，且第一颗行星就是终点 —— 代价过高，
+    // 也丢了「速度不够 → 被太阳追上」这条更有说服力的因果。
+    function judge() {
+      if (st.target < 0) return;
+      var f = flybys[st.target];
+      if (st.s < f.s) return;
+      var need = f.def.vNeed, r = st.results[st.target];
+      if (st.v < need) {
+        // 真·撞毁：速度低到连大气层都擦不过去（三档判定的最低一档，仍然只在窗口里认）
+        if (st.v < need * CRASH_RATIO) {
+          r.result = 'crashed';
+          fail('crashed', '速度不够，坠入' + f.def.name + '大气层', f.def.name);
+          return;
+        }
+        // 「这一关有没有真的推过」= 过早区间烧过、或绿色区间吃到过一点。
+        // 都没碰过（只在过晚区间点、或完全没按）= 错过这个窗口 → 行星当场抓住你。
+        // 推过却仍然不够快 = 速度欠账，不在行星这里结 —— 放它过去，交给身后的氦闪壳。
+        if (r.early <= 0 && r.sweet <= 0) {
+          r.result = 'caught';
+          fail('caught', '速度不够，被' + f.def.name + '引力捕获', f.def.name);
+          return;
+        }
+        r.result = 'slow';
+        st.score.slow++;
+        st.target = pickTarget();
+        return;
+      }
+      r.result = (!r.lostSling && r.sweet >= f.def.ratingSweet) ? 'perfect' : 'pass';
+      if (r.result === 'perfect') st.score.perfect++; else st.score.pass++;
+      st.target = pickTarget();
+    }
+
+    g.setBurning = function (on) {
+      if (st.status !== 'flying') { st.burning = false; return; }
+      st.burning = !!on;
     };
 
     g.step = function (dtReal) {
-      if (st.status !== 'flying') { st.thrustMag = 0; return; }
-      var dt = dtReal;
-      // 过热管理：推力时升温、松手时自然冷却。
-      // 未烧满时可以随意断续使用；一旦烧满触发过热锁定，**必须松手**才能降温，且要冷却归零才解锁。
-      // （若锁定期按着也能降温，"一直拖"就几乎没有代价，节奏管理形同虚设。）
-      if (st.overheated) {
-        if (st.thrustMag === 0) st.heat = Math.max(0, st.heat - COOL_RATE * dt);   // 按着不降温
-        if (st.heat <= 0) st.overheated = false;                                   // 归零解锁
-      } else if (st.thrustMag > 0) {
-        st.heat = Math.min(HEAT_MAX, st.heat + HEAT_RATE * st.thrustMag * dt);
-        if (st.heat >= HEAT_MAX) st.overheated = true;                             // 烧满锁定
-      } else {
-        st.heat = Math.max(0, st.heat - COOL_RATE * dt);
-      }
-      // 推力效率：过热锁定期间推力无效（0）；非锁定恒为 1（不再随余量衰减）；脉冲窗口内乘波加成
-      var eff = st.overheated ? 0 : 1;
-      if (eff > 0 && pulseActive(st.t)) eff *= PULSE_THRUST_BOOST;
-      st.thrustEff = eff;
-      var n = Math.max(1, Math.min(Math.ceil(dt / SUBSTEP), MAX_SUB));
-      var h = dt / n;
+      if (st.status !== 'flying') { st.burning = false; return; }
+      var dt = Math.min(0.25, Math.max(0, dtReal));
+      st.acc += dt;
+      var n = 0;
       var tNow = st.t;
-      for (var i = 0; i < n; i++) {
-        tNow += h;
-        substep(h, tNow);
+      var tg = st.target;
+      while (st.acc >= SUBSTEP_TIME && n < MAX_SUBSTEP) {
+        // ---- 过热管理（先于子步更新，区间按本子步起点判定）----
+        if (st.overheated) {
+          if (!st.burning) st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
+          if (st.heat <= 0) st.overheated = false;
+        } else if (st.burning) {
+          st.heat = Math.min(HEAT_MAX, st.heat + HEAT_RATE * SUBSTEP_TIME);
+          if (st.heat >= HEAT_MAX) st.overheated = true;
+        } else {
+          st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
+        }
+        // ---- 时机窗口（窗口时长与最佳区间都是**该行星自己的**，由质量派生）----
+        tg = st.target;
+        if (tg >= 0) {
+          var fd = flybys[tg].def;
+          var tToGo = (flybys[tg].s - st.s) / Math.max(1e-3, st.v);
+          st.tToGo = tToGo;
+          st.phase = flybyPhase(tToGo, fd.winTime);
+          st.zone = phaseZone(st.phase, fd.sweet0, fd.sweet1);
+          st.vNeed = fd.vNeed;
+        } else {
+          st.tToGo = 1e9; st.phase = 2; st.zone = 'done'; st.vNeed = 0;
+        }
+        var eff = st.overheated ? 0 : zoneEff(st.zone);
+        if (eff > 0 && pulseActive(tNow)) eff *= PULSE_THRUST_BOOST;
+        st.thrustEff = eff;
+        // 最佳区间点火 → 切到弹弓形态
+        // 但若本次掠过曾在「过早」区间点过火（lostSling），弹弓机会已作废，绿色区间也只给普通推力
+        st.slinging = !!(st.burning && !st.overheated && st.zone === 'sweet' && tg >= 0 && !st.results[tg].lostSling);
+        st.pullTo = st.slinging ? flybys[tg].def.vSling : 0;
+        st.slingK = st.slinging ? flybys[tg].def.slingK : 0;
+        // 分区累计点火时长：掠过后用来告诉玩家「刚才到底点得怎么样」
+        if (tg >= 0 && st.burning && !st.overheated) {
+          if (st.zone === 'sweet') st.results[tg].sweet += SUBSTEP_TIME;
+          else if (st.zone === 'early') { st.results[tg].early += SUBSTEP_TIME; st.results[tg].lostSling = true; }
+          else if (st.zone === 'late') st.results[tg].late += SUBSTEP_TIME;
+        }
+        st.safe = !(tg >= 0 && st.vNeed > 0 && st.v < st.vNeed);
+
+        // ---- 积分 ----
+        tNow += SUBSTEP_TIME;
+        substep(SUBSTEP_TIME, tNow);
+        st.acc -= SUBSTEP_TIME;
+        n++;
+        if (st.status !== 'flying') break;
+        judge();
         if (st.status !== 'flying') break;
       }
       st.t = tNow;
-      if (!st.planetCheck && st.t > SAFE_TIME) st.planetCheck = true;   // 开局保护按时间解锁
-      var sp = len3(st.vel);
-      st.speedKms = sp * KMS_PER_UNIT;
-      st.pulseWarn = pulseWarnLevel(st.t);
-      syncPlanets();
-      // 不设时限：st.t 仅作计时显示，唯一的死线是追在身后的氦闪壳
-    };
-
-    g.debugSet = function (pos, vel) {
-      st.pos[0] = pos[0]; st.pos[1] = pos[1]; st.pos[2] = pos[2];
-      st.vel[0] = vel[0]; st.vel[1] = vel[1]; st.vel[2] = vel[2];
-      st.planetCheck = true;   // 直接摆位后立即启用行星判定
-    };
-
-    // 调参/自检钩子：写入行星初始相位（长度与 PLANETS 对齐）。START_ANGLES 由数值求解得到，见 DESIGN。
-    g.setPlanetAngles = function (arr) {
-      for (var i = 0; i < PLANETS.length; i++) if (i < arr.length) START_ANGLES[i] = arr[i];
-      for (i = 0; i < PLANETS.length; i++) pAng[i] = START_ANGLES[i];
-      syncPlanets();
+      syncFromS();
+      st.speedKms = st.v * KMS_PER_UNIT;
+      st.pulseHot = pulseActive(st.t);
+      st.pulseIn = pulseIn(st.t);
+      // 提示文案：优先级 —— 过热 > 耀斑脉冲 > 过晚。
+      // 不报速度缺口：过早区间里速度必然低于门槛（弹弓还没开始拉），那是正常状态
+      // 而不是危险（基线打法实测 453 帧在过早区间误报、只有 51 帧落在绿色区间）。
+      // 真正的危险由时机条红边与「过晚」文案负责。
+      // 也**不报窗口开启倒计时**：巡航段提前告诉玩家「还有几秒亮窗口」等于把窗口送到嘴边，
+      // 张力交给「行星越长越大 + 时机条滑入 + 绿色边缘光 + 进绿色区间的音效」去交代。
+      st.warn = '';
+      st.warnKind = '';
+      st.overheatLeft = 0;
+      var pulseTxt = pulseTip(st.t, st.zone);
+      if (st.target >= 0) {
+        var fdw = flybys[st.target].def;
+        var toSweet = st.tToGo - (1 - fdw.sweet0) * fdw.winTime;  // 解锁截止 = 绿色区间开始
+        if (st.overheated) {
+          st.overheatLeft = st.heat / COOL_RATE;                  // 归零解锁还差几秒
+          st.warn = st.overheatLeft > toSweet
+            ? '过热锁定 · 这站来不及解锁'
+            : '过热锁定 · 冷却 ' + st.overheatLeft.toFixed(1) + ' s';
+        } else if (pulseTxt) {
+          st.warn = pulseTxt; st.warnKind = 'pulse';
+        } else if (st.zone === 'late') {
+          st.warn = '过晚 · 已来不及';
+        }
+      } else if (pulseTxt) {
+        st.warn = pulseTxt; st.warnKind = 'pulse';
+      }
     };
 
     g.reset = function () {
       st.status = 'flying'; st.reason = ''; st.culprit = '';
-      st.t = 0; st.pos[0] = AU; st.pos[1] = 0; st.pos[2] = 0;
-      st.vel[0] = 0; st.vel[1] = 0; st.vel[2] = V_CIRC;
-      st.spin = 0; st.thrustMag = 0;
-      st.rSun = AU; st.rSunAU = 1; st.speedKms = V_CIRC * KMS_PER_UNIT;
-      st.shellR = SUN_R; st.shellV = BASE_GROW; st.escapeRatio = 0;
-      st.warn = ''; st.planetCheck = false; st.pulseWarn = 0;
-      st.heat = 0; st.overheated = false; st.thrustEff = 1;
-      for (var i = 0; i < PLANETS.length; i++) pAng[i] = START_ANGLES[i];
-      syncPlanets();
+      st.t = 0; st.s = 0; st.v = START_SPEED; st.acc = 0;
+      st.shellR = SHELL_START; st.shellV = SHELL_A;
+      st.heat = 0; st.overheated = false; st.overheatLeft = 0; st.thrustEff = 1; st.burning = false;
+      st.pullTo = 0; st.slinging = false; st.slingK = 0;
+      st.pulseHot = false; st.pulseIn = -1; st.target = 0; st.tToGo = 0; st.phase = -1; st.zone = 'appr';
+      st.vNeed = flybys[0].def.vNeed; st.safe = false; st.warn = ''; st.warnKind = '';
+      st.progress = 0;
+      for (var i = 0; i < nF; i++) {
+        st.results[i].zone = ''; st.results[i].sweet = 0; st.results[i].early = 0; st.results[i].late = 0; st.results[i].result = ''; st.results[i].lostSling = false;
+      }
+      st.score.perfect = 0; st.score.pass = 0; st.score.slow = 0;
+      syncFromS();
     };
 
-    syncPlanets();
-    st.speedKms = V_CIRC * KMS_PER_UNIT;
+    // 自检/调参钩子：直接摆到某个弧长与速度
+    g.debugSet = function (s, v) {
+      st.s = s; st.v = v; st.acc = 0;
+      st.target = pickTarget();
+      syncFromS();
+      if (st.target >= 0) st.vNeed = flybys[st.target].def.vNeed;
+    };
+
+    syncFromS();
+    st.vNeed = flybys[0].def.vNeed;
+    st.target = 0;
+    st.speedKms = st.v * KMS_PER_UNIT;
+    g.route = route;
+    g.flybys = flybys;
+    g.scenery = scenery;
     return g;
   }
 
-  // 导出物理核心（无头自检用）
+  // ============================================================
+  //  8. 导出（无头自检用）
+  // ============================================================
   global.M3D = global.M3D || {};
   global.M3D.createGame = createGame;
+  global.M3D.buildRoute = buildRoute;
+  global.M3D.buildFlybys = buildFlybys;
+  global.M3D.buildScenery = buildScenery;
+  global.M3D.routeSample = routeSample;
+  global.M3D.routePos = routePos;
   global.M3D.followDist = followDist;
-  global.M3D.followDir = followDir;
-  global.M3D.screenDragToWorld = screenDragToWorld;
+  global.M3D.panAim = panAim;
+  global.M3D.chasePose = chasePose;
+  global.M3D.flybyPhase = flybyPhase;
+  global.M3D.phaseZone = phaseZone;
+  global.M3D.zoneEff = zoneEff;
+  global.M3D.gradeFlyby = gradeFlyby;
+  global.M3D.pulseActive = pulseActive;
+  global.M3D.pulseIn = pulseIn;
+  global.M3D.pulseTip = pulseTip;
+  global.M3D.shellRadius = shellRadius;
   global.M3D.engineLayout = engineLayout;
-  global.M3D.WORLD = { AU: AU, SUN_R: SUN_R, EARTH_R: EARTH_R, G_SUN: G_SUN, V_CIRC: V_CIRC, planets: PLANETS };
+  global.M3D.WORLD = {
+    AU: AU, SUN_R: SUN_R, EARTH_R: EARTH_R,
+    AU_KM: AU_KM, KM_PER_UNIT: KM_PER_UNIT, BODY_SCALE: BODY_SCALE,
+    flybys: FLYBYS, scenery: SCENERY, sceneryLift: SCENERY_LIFT, routeLen: buildRoute().len,
+    route: buildRoute()
+  };
   global.M3D.CONST = {
-    THRUST_ACC: THRUST_ACC, BASE_GROW: BASE_GROW,
-    PULSE_TIMES: PULSE_TIMES, PULSE_GAIN: PULSE_GAIN, PULSE_DUR: PULSE_DUR,
+    START_SPEED: START_SPEED, THRUST_ACC: THRUST_ACC, DRAG_K: DRAG_K,
     HEAT_MAX: HEAT_MAX, HEAT_RATE: HEAT_RATE, COOL_RATE: COOL_RATE,
+    WIN_MIN: WIN_MIN, WIN_MAX: WIN_MAX, SWEET_HI: SWEET_HI,
+    SWEET_LO_NARROW: SWEET_LO_NARROW, SWEET_LO_WIDE: SWEET_LO_WIDE,
+    SLING_SWEET_PRODUCT: SLING_SWEET_PRODUCT, RATING_SWEET_FRAC: RATING_SWEET_FRAC,
+    LATE_EFF: LATE_EFF, CRASH_RATIO: CRASH_RATIO,
+    SHELL_START: SHELL_START, SHELL_A: SHELL_A, SHELL_B: SHELL_B,
+    PULSE_TIMES: PULSE_TIMES, PULSE_DUR: PULSE_DUR, PULSE_WARN: PULSE_WARN,
     PULSE_THRUST_BOOST: PULSE_THRUST_BOOST,
-    ESCAPE_R: ESCAPE_R, KMS_PER_UNIT: KMS_PER_UNIT, YEARS_PER_GAME_SEC: YEARS_PER_GAME_SEC,
-    CAM_BACK: CAM_BACK, CAM_UP: CAM_UP, CAM_GAP_EASE: CAM_GAP_EASE, CAM_PANIC_MAX: CAM_PANIC_MAX,
-    CAM_FOV: CAM_FOV, CAM_LOOK_AHEAD: CAM_LOOK_AHEAD, STAR_SIZE: STAR_SIZE,
-    ENGINE_COUNT: ENGINE_COUNT, ENGINE_SHELL: ENGINE_SHELL, ENGINE_AXIS: ENGINE_AXIS.slice()
+    KMS_PER_UNIT: KMS_PER_UNIT, SUN_ESCAPE_KMS_1AU: SUN_ESCAPE_KMS_1AU,
+    CAM_BACK: CAM_BACK, CAM_UP: CAM_UP, CAM_AHEAD: CAM_AHEAD,
+    CAM_GAP_EASE: CAM_GAP_EASE, CAM_PANIC_MAX: CAM_PANIC_MAX, CAM_FOV: CAM_FOV,
+    CAM_PAN_MAX: CAM_PAN_MAX, CAM_PAN_LEAD: CAM_PAN_LEAD, CAM_PAN_HOLD: CAM_PAN_HOLD, STAR_SIZE: STAR_SIZE,
+    CAM_PAN_TILT_MAX: CAM_PAN_TILT_MAX,
+    RING_IN: RING_IN, RING_OUT: RING_OUT, SAT_TILT: SAT_TILT, RING_NORMAL: RING_NORMAL.slice(),
+    ENGINE_COUNT: ENGINE_COUNT, ENGINE_SHELL: ENGINE_SHELL, ENGINE_AXIS: ENGINE_AXIS.slice(),
+    INTRO_TIME: INTRO_TIME
   };
 
   // ============================================================
-  //  渲染层（依赖 THREE + DOM；无 THREE 时跳过，物理核心仍可用）
+  //  9. 渲染层（依赖 THREE + DOM；无 THREE 时跳过）
   // ============================================================
   if (typeof THREE === 'undefined' || typeof document === 'undefined') return;
 
@@ -424,32 +894,24 @@
   renderer.toneMappingExposure = 1.1;
 
   var scene = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(CAM_FOV, W / H, 0.5, 8000);
+  var camera = new THREE.PerspectiveCamera(CAM_FOV, W / H, 0.5, 60000);
 
-  // ---- 星空：天球底色与银河带改用「顶点色」画（无贴图），星点用 Points 点精灵 ----
-  // 两轮失败的反例都出在天球贴图上，根因是同一个：相机在半径 4000 的天球内部，屏幕只截取约 60° 视场，
-  //   贴图每纹素被放大到数屏幕像素 —— ① 第一版把星点画进贴图，1px 星点变成 ~4px 模糊方块；
-  //   ② 星点改点精灵后底色与银河雾仍留在贴图上，底色渐变的 8bit 色阶被拉成等距横条，
-  //      银河雾（半透明圆斑依次 source-over 叠加）的合成量化台阶被放大成斜向网格，合起来就是「白色方格子」。
-  //   提高分辨率只能把格子等比缩小，根除不了。
-  // 顶点色是 GPU 在三角形内线性插值的连续量，与纹素、与 canvas 的 8bit 合成精度都无关，放大多少倍都平滑；
-  //   代价是球体要够密才撑得住渐变与斜带（96×64 ≈ 6.3k 顶点，静态开销可忽略）。
-  // 颜色一律按「线性空间」给：材质输出要过 ACES tone mapping，暗部有死区 ——
-  //   线性 <0.003 基本被压成纯黑，所以底色取值比直觉要高一个量级。
+  // ---- 星空：天球用顶点色（无贴图），星点用 Points 点精灵 ----
+  // 相机在天球内部，屏幕只截取约 60° 视场，任何「画在贴图上」的天球内容
+  // 都会被放大量化台阶 → 满屏白色方格子（详见 DESIGN §10）。顶点色是连续插值，放大多少倍都平滑。
   (function () {
-    var SKY_R = 4000;
+    var SKY_R = 16000;
     var geo = new THREE.SphereGeometry(SKY_R, 96, 64);
     var pos = geo.attributes.position, n = pos.count;
     var col = new Float32Array(n * 3);
-    var DARK = [0.0022, 0.0032, 0.0070];    // 黄道极方向：接近纯黑
-    var LIGHT = [0.0032, 0.0048, 0.0115];   // 黄道面方向：略亮
-    var GLOW = [0.0100, 0.0130, 0.0245];    // 银河带叠加
-    var GBX = -Math.sin(0.35), GBY = Math.cos(0.35), GSIG = 0.30;   // 银河带：绕 Z 轴倾斜 20° 的大圆
+    var DARK = [0.0022, 0.0032, 0.0070];
+    var LIGHT = [0.0032, 0.0048, 0.0115];
+    var GLOW = [0.0100, 0.0130, 0.0245];
+    var GBX = -Math.sin(0.35), GBY = Math.cos(0.35), GSIG = 0.30;
     for (var i = 0; i < n; i++) {
       var vx = pos.getX(i) / SKY_R, vy = pos.getY(i) / SKY_R, vz = pos.getZ(i) / SKY_R;
       var k = Math.pow(1 - Math.abs(vy), 0.7);
       var d = vx * GBX + vy * GBY;
-      // 沿带方向的低频絮状起伏，避免带子像一条均匀色块；三元正弦相乘 → 偏向稀疏云絮
       var f = Math.sin(vx * 4.1 + 1.3) * Math.sin(vz * 3.7 - 0.6) * Math.sin(vy * 5.9 + 2.4);
       var band = Math.exp(-(d * d) / (2 * GSIG * GSIG)) * (0.6 + 0.4 * f);
       for (var ch = 0; ch < 3; ch++) {
@@ -460,10 +922,7 @@
     scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, depthWrite: false })));
   })();
 
-  (function () {
-    // 星点贴图：很小的亮核 + 快速衰减到全透明。
-    // 半径归一化到 0.5（即内切圆），衰减曲线的前半段是「亮核」，后半段是柔光。
-    // 这条曲线只有在 STAR_SIZE 足够大（见上方注释）时才会被采样到；否则每个点退化成实心白方块。
+  var glowTex = (function () {
     var s = 32, c = document.createElement('canvas'); c.width = c.height = s;
     var x = c.getContext('2d');
     var g = x.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
@@ -473,11 +932,15 @@
     g.addColorStop(0.55, 'rgba(255,255,255,0.04)');
     g.addColorStop(1, 'rgba(255,255,255,0)');
     x.fillStyle = g; x.fillRect(0, 0, s, s);
-    var tex = new THREE.CanvasTexture(c);
-    tex.generateMipmaps = false;
-    tex.minFilter = THREE.LinearFilter; tex.magFilter = THREE.LinearFilter;
-    tex.needsUpdate = true;
-    var n = 3200, R = 3800;
+    var t = new THREE.CanvasTexture(c);
+    t.generateMipmaps = false;
+    t.minFilter = THREE.LinearFilter; t.magFilter = THREE.LinearFilter;
+    return t;
+  })();
+
+  (function () {
+    // 星点：很小的亮核 + 快速衰减。size 小于 ~8px 时点精灵只采到贴图中心那点纯白 → 实心白方块
+    var n = 3200, R = 15200;
     var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
     for (var i = 0; i < n; i++) {
       var u = Math.random() * 2 - 1, th = Math.random() * TAU, rr = Math.sqrt(Math.max(0, 1 - u * u));
@@ -489,8 +952,7 @@
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     var mat = new THREE.PointsMaterial({
-      size: STAR_SIZE * DPR,        // sizeAttenuation=false → size 即绘制缓冲像素（× DPR 换算成固定 CSS 像素）
-      sizeAttenuation: false, map: tex, vertexColors: true,
+      size: STAR_SIZE * DPR, sizeAttenuation: false, map: glowTex, vertexColors: true,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
     });
     scene.add(new THREE.Points(geo, mat));
@@ -498,9 +960,9 @@
 
   // ---- 光照 ----
   scene.add(new THREE.AmbientLight(0x223044, 0.6));
-  var sunLight = new THREE.PointLight(0xfff2d0, 2.5, 0, 1.2); sunLight.position.set(0, 0, 0); scene.add(sunLight);
+  var sunLight = new THREE.PointLight(0xfff2d0, 2.5, 0, 1.2);
+  sunLight.position.set(0, 0, 0); scene.add(sunLight);
 
-  // ---- 工具：base64 data URI → THREE.Texture ----
   function dataTex(uri) {
     if (typeof uri !== 'string') return null;
     var img = new Image();
@@ -510,7 +972,11 @@
     img.src = uri;
     return tex;
   }
-  function plainTex(col) { var c = document.createElement('canvas'); c.width = c.height = 4; c.getContext('2d').fillStyle = col; c.getContext('2d').fillRect(0, 0, 4, 4); return new THREE.CanvasTexture(c); }
+  function plainTex(col) {
+    var c = document.createElement('canvas'); c.width = c.height = 4;
+    var x = c.getContext('2d'); x.fillStyle = col; x.fillRect(0, 0, 4, 4);
+    return new THREE.CanvasTexture(c);
+  }
   function procPlanetTex(base) {
     var c = document.createElement('canvas'); c.width = 512; c.height = 256;
     var x = c.getContext('2d');
@@ -528,27 +994,38 @@
     var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
   }
 
-  // ---- 太阳 ----
+  // ---- 太阳（同时也是氦闪膨胀壳的贴图）----
+  // 壳是把同一个 sunGroup 整体放大 shellR / SUN_R 倍（开局就是 3×，终局 40×+），
+  // 所以这张贴图会被"吹"得很大：颗粒画得太小太密，放大后就不再是"沸腾表面"，
+  // 而是满屏高频噪点（后视镜里尤其明显）。改用大而软的斑块，放大后仍读得出层次。
   function sunTex() {
-    var c = document.createElement('canvas'); c.width = c.height = 512; var x = c.getContext('2d');
+    var c = document.createElement('canvas'); c.width = c.height = 512;
+    var x = c.getContext('2d');
     x.fillStyle = '#ff7a14'; x.fillRect(0, 0, 512, 512);
-    for (var i = 0; i < 5200; i++) { x.fillStyle = 'rgba(255,' + (170 + Math.random() * 80 | 0) + ',' + (30 + Math.random() * 90 | 0) + ',' + (Math.random() * .45) + ')'; x.beginPath(); x.arc(Math.random() * 512, Math.random() * 512, 1.5 + Math.random() * 7, 0, 6.283); x.fill(); }
+    for (var i = 0; i < 260; i++) {
+      var px = Math.random() * 512, py = Math.random() * 512, r = 16 + Math.random() * 52;
+      var g = x.createRadialGradient(px, py, 0, px, py, r);
+      var bright = 190 + Math.random() * 65 | 0;
+      g.addColorStop(0, 'rgba(255,' + bright + ',' + (60 + Math.random() * 90 | 0) + ',' + (0.30 + Math.random() * 0.34).toFixed(2) + ')');
+      g.addColorStop(1, 'rgba(255,' + bright + ',60,0)');
+      x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
+    }
+    for (var j = 0; j < 900; j++) {   // 一点点细颗粒，别太密
+      x.fillStyle = 'rgba(255,' + (200 + Math.random() * 55 | 0) + ',' + (90 + Math.random() * 80 | 0) + ',0.16)';
+      x.beginPath(); x.arc(Math.random() * 512, Math.random() * 512, 3 + Math.random() * 9, 0, 6.283); x.fill();
+    }
     return new THREE.CanvasTexture(c);
   }
   var sunGroup = new THREE.Group(); scene.add(sunGroup);
-  var sunCore = new THREE.Mesh(new THREE.SphereGeometry(SUN_R, 48, 48), new THREE.MeshBasicMaterial({ map: sunTex() }));
-  sunGroup.add(sunCore);
-  var sunGlow = new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.25, 36, 28), new THREE.MeshBasicMaterial({ color: 0xff7a14, side: THREE.BackSide, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false }));
-  sunGroup.add(sunGlow);
-  var sunHalo = new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.8, 32, 24), new THREE.MeshBasicMaterial({ color: 0xff4a14, side: THREE.BackSide, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false }));
-  sunGroup.add(sunHalo);
+  sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(SUN_R, 48, 48), new THREE.MeshBasicMaterial({ map: sunTex() })));
+  sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.25, 36, 28), new THREE.MeshBasicMaterial({ color: 0xff7a14, side: THREE.BackSide, transparent: true, opacity: .4, blending: THREE.AdditiveBlending, depthWrite: false })));
+  sunGroup.add(new THREE.Mesh(new THREE.SphereGeometry(SUN_R * 1.8, 32, 24), new THREE.MeshBasicMaterial({ color: 0xff4a14, side: THREE.BackSide, transparent: true, opacity: .18, blending: THREE.AdditiveBlending, depthWrite: false })));
 
   // ---- 地球（冰封场景：真实贴图 + 冷色 tint + 半透明冰壳叠加）----
   function iceOverlayTex() {
     var c = document.createElement('canvas'); c.width = 1024; c.height = 512;
     var x = c.getContext('2d');
-    x.fillStyle = 'rgba(255,255,255,0)'; x.fillRect(0, 0, 1024, 512);
-    for (var i = 0; i < 55; i++) {                          // 冰原斑块
+    for (var i = 0; i < 55; i++) {
       var px = Math.random() * 1024, py = Math.random() * 512, r = 40 + Math.random() * 120;
       var g = x.createRadialGradient(px, py, 0, px, py, r);
       g.addColorStop(0, 'rgba(225,238,250,0.55)');
@@ -556,9 +1033,9 @@
       g.addColorStop(1, 'rgba(190,215,238,0)');
       x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, 6.283); x.fill();
     }
-    x.fillStyle = 'rgba(245,250,255,0.65)';                 // 极冠加厚
+    x.fillStyle = 'rgba(245,250,255,0.65)';
     x.fillRect(0, 0, 1024, 58); x.fillRect(0, 454, 1024, 58);
-    x.strokeStyle = 'rgba(18,38,66,0.35)'; x.lineWidth = 1.2; // 冰裂缝
+    x.strokeStyle = 'rgba(18,38,66,0.35)'; x.lineWidth = 1.2;
     for (var j = 0; j < 40; j++) {
       x.beginPath(); var sx = Math.random() * 1024, sy = 64 + Math.random() * 384;
       x.moveTo(sx, sy);
@@ -569,69 +1046,133 @@
   }
   var earthGroup = new THREE.Group(); scene.add(earthGroup);
   var earthMat = new THREE.MeshStandardMaterial({ map: dataTex(global.EARTH_TEXTURE_URI) || plainTex('#3a5a7a'), color: 0x8aa8c8, roughness: .8, metalness: .06 });
-  var earthMesh = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 48, 32), earthMat); earthGroup.add(earthMesh);
-  var iceShellMat = new THREE.MeshStandardMaterial({ map: iceOverlayTex(), transparent: true, opacity: .75, roughness: .9, metalness: .02, depthWrite: false });
-  var iceShell = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.004, 48, 32), iceShellMat); earthGroup.add(iceShell);
-  var cloudMat = new THREE.MeshStandardMaterial({ color: 0xdde8f5, transparent: true, opacity: .2, roughness: 1, depthWrite: false }); // 冰封地球少云
-  var clouds = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.012, 48, 32), cloudMat); earthGroup.add(clouds);
-  var atmo = new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32), new THREE.MeshBasicMaterial({ color: 0x4a86c8, side: THREE.BackSide, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false }));
-  earthGroup.add(atmo);
-  // 推力尾焰
-  var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.35, EARTH_R * 1.8, 12), new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 48, 32), earthMat));
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.004, 48, 32),
+    new THREE.MeshStandardMaterial({ map: iceOverlayTex(), transparent: true, opacity: .75, roughness: .9, metalness: .02, depthWrite: false })));
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.012, 48, 32),
+    new THREE.MeshStandardMaterial({ color: 0xdde8f5, transparent: true, opacity: .2, roughness: 1, depthWrite: false })));
+  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32),
+    new THREE.MeshBasicMaterial({ color: 0x4a86c8, side: THREE.BackSide, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false })));
+
+  var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.35, EARTH_R * 1.8, 12),
+    new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   thrustFlame.visible = false; earthGroup.add(thrustFlame);
+
   var _flameAxis = new THREE.Vector3(0, 1, 0), _flameDir = new THREE.Vector3();
   var _zAxis = new THREE.Vector3(0, 0, 1), _negZAxis = new THREE.Vector3(0, 0, -1);
   var _targetQuat = new THREE.Quaternion();
 
-  // ---- 行星发动机光柱（布局见 engineLayout()；earthGroup 转向时随之整体转向）----
+  // ---- 行星发动机 ----
   var engineGroup = new THREE.Group(); earthGroup.add(engineGroup);
   var engines = [];
   var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.05, EARTH_R * 0.45, 6);
-  var engineMatTpl = { color: 0x5cc8ff, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false };
-  var engineQuat = new THREE.Quaternion().setFromUnitVectors(_flameAxis, _negZAxis);  // 喷流平行朝后
+  var engineQuat = new THREE.Quaternion().setFromUnitVectors(_flameAxis, _negZAxis);
   var engineSlots = engineLayout();
   for (var ei = 0; ei < engineSlots.length; ei++) {
-    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial(engineMatTpl));
+    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
     cone.position.set(engineSlots[ei].pos[0], engineSlots[ei].pos[1], engineSlots[ei].pos[2]);
     cone.quaternion.copy(engineQuat);
     engineGroup.add(cone);
     engines.push(cone);
   }
 
-  // ---- 八行星 + 轨道线 + 发光标记 ----
-  var glowTex = (function () { var c = document.createElement('canvas'); c.width = c.height = 64; var x = c.getContext('2d'); var g = x.createRadialGradient(32, 32, 0, 32, 32, 32); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.5)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); })();
-  var planetMeshes = [];
-  for (var pi = 0; pi < PLANETS.length; pi++) {
-    (function (def) {
-      var pcol = def.procColor != null ? def.procColor : def.color;
-      var orbit = new THREE.Mesh(new THREE.RingGeometry(def.orbitR - 1, def.orbitR + 1, 128), new THREE.MeshBasicMaterial({ color: pcol, side: THREE.DoubleSide, transparent: true, opacity: .12, depthWrite: false }));
-      orbit.rotation.x = Math.PI / 2; scene.add(orbit);
-      var tex = def.procColor != null ? procPlanetTex(def.procColor) : (dataTex(global[def.tex]) || plainTex('#888'));
-      var mat = new THREE.MeshStandardMaterial({ map: tex, roughness: .85 });
-      var mesh = new THREE.Mesh(new THREE.SphereGeometry(def.rad, 40, 28), mat); scene.add(mesh);
-      var glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: pcol, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false }));
-      glow.scale.set(Math.max(def.rad * 3, 10), Math.max(def.rad * 3, 10), 1); scene.add(glow);
-      var ring = null;
-      if (def.ring) {
-        ring = new THREE.Mesh(new THREE.RingGeometry(def.rad * 1.4, def.rad * 2.2, 72), new THREE.MeshBasicMaterial({ color: 0xd4c89c, side: THREE.DoubleSide, transparent: true, opacity: .55, depthWrite: false }));
-        ring.rotation.x = Math.PI / 2; scene.add(ring);
-      }
-      planetMeshes.push({ def: def, mesh: mesh, ring: ring, glow: glow });
-    })(PLANETS[pi]);
-  }
-
   // ---- 物理 ----
   var game = createGame();
   var st = game.state;
+  var route = game.route, flybys = game.flybys, scenery = game.scenery;
 
-  // ---- 音效（程序化 WebAudio，首次触摸解锁）----
+  // ---- 航线可视化：一串发光点沿航线铺开（「固定线路」要一眼可读）----
+  (function () {
+    var step = 14, n = Math.floor(route.len / step);
+    var pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    var p = [0, 0, 0];
+    for (var i = 0; i < n; i++) {
+      routeSample(route, (i + 0.5) * step, p, null);
+      pos[i * 3] = p[0]; pos[i * 3 + 1] = p[1]; pos[i * 3 + 2] = p[2];
+      col[i * 3] = 0.16; col[i * 3 + 1] = 0.42; col[i * 3 + 2] = 0.62;
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+      size: 5 * DPR, sizeAttenuation: false, map: glowTex, vertexColors: true,
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+    })));
+  })();
+
+  // ---- 行星 + 判定环 ----
+  // 球体 + 柔光两个网格的构造抽出来共用（掠过行星与「场上其他行星」用同一套外观规则）：
+  // 光晕是**世界尺寸固定**的加色 sprite（不随距离缩小），所以贴脸掠过时必须收掉，
+  // 否则 40+ 单位的白色加色面片会糊满整屏（木星会糊成一片橙白，纹理全看不见）。
+  // 光晕下限按**近场尺度（地球半径）**取，不用绝对单位：真实比例下冥王星半径只有
+  // 0.24 单位，一个 10 单位的光晕是它自身的 42 倍 —— 等于用假面片冒充一颗大行星。
+  function makePlanetBody(rad, tex, colorHex) {
+    var mesh = new THREE.Mesh(new THREE.SphereGeometry(rad, 40, 28),
+      new THREE.MeshStandardMaterial({ map: tex, roughness: .85 }));
+    var glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: colorHex, transparent: true, opacity: PLANET_GLOW_MAX, blending: THREE.AdditiveBlending, depthWrite: false }));
+    var glowR = Math.max(rad * 2.2, EARTH_R * 0.8);
+    glow.scale.set(glowR, glowR, 1);
+    return { mesh: mesh, glow: glow };
+  }
+  var planetMeshes = [], gateMeshes = [];
+  for (var pi = 0; pi < flybys.length; pi++) {
+    (function (fb) {
+      var def = fb.def;
+      var pcol = def.procColor != null ? def.procColor : def.color;
+      var tex = def.procColor != null ? procPlanetTex(def.procColor) : (dataTex(global[def.tex]) || plainTex('#888'));
+      var body = makePlanetBody(def.rad, tex, pcol);
+      var mesh = body.mesh, glow = body.glow;
+      mesh.position.set(fb.pos[0], fb.pos[1], fb.pos[2]);
+      scene.add(mesh);
+      glow.position.set(fb.pos[0], fb.pos[1], fb.pos[2]);
+      scene.add(glow);
+      var ring = null;
+      if (def.ring) {
+        ring = new THREE.Mesh(new THREE.RingGeometry(def.rad * RING_IN, def.rad * RING_OUT, 72),
+          new THREE.MeshBasicMaterial({ color: 0xd4c89c, side: THREE.DoubleSide, transparent: true, opacity: .55, depthWrite: false }));
+        ring.position.set(fb.pos[0], fb.pos[1], fb.pos[2]);
+        // 环面朝向 = 土星赤道面：RingGeometry 默认法线 +Z，先放平（法线 +Y），再叠真实轴倾角 26.73°。
+        // 这一步同时是「地球不穿环」的几何保证（见 RING_IN/RING_OUT 处的说明与自检断言）。
+        ring.rotation.x = -Math.PI / 2 + SAT_TILT;
+        scene.add(ring);
+      }
+      // 判定环：垂直于航线、正好套在地球必经之处 —— 玩家一眼知道「要在这里通过」
+      var gate = new THREE.Mesh(new THREE.TorusGeometry(EARTH_R * 2.6, EARTH_R * 0.16, 8, 40),
+        new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+      var gp = [0, 0, 0], gt = [0, 0, 0];
+      routeSample(route, fb.s, gp, gt);
+      gate.position.set(gp[0], gp[1], gp[2]);
+      gate.quaternion.setFromUnitVectors(_zAxis, new THREE.Vector3(gt[0], gt[1], gt[2]).normalize());
+      scene.add(gate);
+      planetMeshes.push({ mesh: mesh, ring: ring, glow: glow, rad: def.rad });
+      gateMeshes.push(gate);
+    })(flybys[pi]);
+  }
+
+  // ---- 场上其他行星（水星 / 金星 / 火星）----
+  // 没有判定环、没有时机窗口、不参与判定：它们只是**在各自轨道上存在着**。
+  // 半径与距日都按真实数据（同一 BODY_SCALE / AU 换算），所以真实比例下它们很小
+  // （水星 0.49 / 金星 1.21 / 火星 0.68 单位）——近处靠球体、远处靠柔光与小地图识别。
+  for (var sci = 0; sci < scenery.length; sci++) {
+    (function (sc) {
+      var d = sc.def;
+      var body = makePlanetBody(d.rad, procPlanetTex(d.color), d.color);
+      body.mesh.position.set(sc.pos[0], sc.pos[1], sc.pos[2]);
+      body.glow.position.set(sc.pos[0], sc.pos[1], sc.pos[2]);
+      scene.add(body.mesh);
+      scene.add(body.glow);
+      planetMeshes.push({ mesh: body.mesh, ring: null, glow: body.glow, rad: d.rad });
+    })(scenery[sci]);
+  }
+
+  // ---- 音频（WebAudio；移动端必须首次触摸才解锁）----
   var AC = window.AudioContext || window.webkitAudioContext;
   var actx = null, rumbleGain = null;
   function initAudio() {
     if (!AC || actx) return;
     try { actx = new AC(); } catch (e) { return; }
     if (actx.state === 'suspended' && actx.resume) actx.resume();
-    // 点火隆隆声：循环白噪声 + 低通滤波，音量随推力
+    bgmBus = actx.createGain(); bgmBus.gain.value = 1; bgmBus.connect(actx.destination);
     var len = (actx.sampleRate * 2) | 0;
     var buf = actx.createBuffer(1, len, actx.sampleRate);
     var d = buf.getChannelData(0);
@@ -641,7 +1182,103 @@
     rumbleGain = actx.createGain(); rumbleGain.gain.value = 0;
     src.connect(lp); lp.connect(rumbleGain); rumbleGain.connect(actx.destination);
     src.start();
+    bgmLoad();
   }
+
+  // ---- 背景音乐：assets/bgm-data.js 里内联的整曲 base64 ----
+  // 为什么不放 .mp3 文件、也不用 <audio src>：小工具容器上传白名单不收音频扩展名，
+  // 且 file:// 直接打开时 fetch 会被跨域拦。改成「base64 藏进 .js → atob → decodeAudioData
+  // → Web Audio 播放」，全程不产生任何 URL，与贴图的 *_data.js 内联是同一套思路。
+  // 循环不是 src.loop=true（接缝会有咔哒声），而是手动排期：每遍提前 XFADE 秒起下一遍、
+  // 交叠处一条淡出对一条淡入，接缝听不出来。
+  var bgmBus = null, bgmBuf = null, bgmLoaded = false;
+  var BGM_XFADE = 3, BGM_TICK_MS = 500, BGM_GAIN = 0.42;
+  var bgmOn = true, bgmTimer = null, bgmNextAt = 0, bgmFirstPass = true, bgmPasses = [];
+  var elMute = document.getElementById('mute');
+  try { bgmOn = localStorage.getItem('we3d_bgm') !== '0'; } catch (e) { bgmOn = true; }
+
+  function bgmLoad() {
+    if (!actx || bgmLoaded) return;
+    var b64 = window.WE_BGM_B64;
+    if (typeof b64 !== 'string' || !b64) return;   // 没带音频文件时静默降级（音效仍可用）
+    bgmLoaded = true;
+    try {
+      var bin = atob(b64), n = bin.length, arr = new Uint8Array(n);
+      for (var i = 0; i < n; i++) arr[i] = bin.charCodeAt(i);
+      actx.decodeAudioData(arr.buffer, function (buf) {
+        bgmBuf = buf;
+        if (bgmOn) bgmStart();
+      }, function () { bgmLoaded = false; });
+    } catch (e) { bgmLoaded = false; }
+  }
+
+  // 排期器：把「下一遍」提前排在当前遍的尾/头交叠处
+  function bgmTick() {
+    if (!actx || !bgmBuf || !bgmOn) return;
+    var D = bgmBuf.duration;
+    var X = Math.min(BGM_XFADE, D * 0.2);
+    var L = D - X;
+    var now = actx.currentTime;
+    if (bgmNextAt < now + 0.05) bgmNextAt = now + 0.08;
+    while (bgmNextAt < now + 1.2) {
+      var at = bgmNextAt;
+      var src = actx.createBufferSource(), g = actx.createGain();
+      src.buffer = bgmBuf; src.connect(g); g.connect(bgmBus);
+      var fin = bgmFirstPass ? Math.min(X, 1.0) : X;   // 首遍快速淡入，别让玩家干等
+      bgmFirstPass = false;
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(BGM_GAIN, at + fin);
+      g.gain.setValueAtTime(BGM_GAIN, at + L);
+      g.gain.linearRampToValueAtTime(0.0001, at + D);
+      src.start(at); src.stop(at + D + 0.05);
+      bgmPasses.push({ src: src, endsAt: at + D });
+      bgmNextAt = at + L;
+    }
+    for (var i = bgmPasses.length - 1; i >= 0; i--) {
+      if (bgmPasses[i].endsAt < now - 0.5) {
+        try { bgmPasses[i].src.disconnect(); } catch (e) { }
+        bgmPasses.splice(i, 1);
+      }
+    }
+  }
+  function bgmStart() {
+    if (!actx || !bgmBuf || !bgmOn || bgmTimer) return;
+    bgmFirstPass = true;
+    bgmNextAt = actx.currentTime + 0.08;
+    bgmTick();
+    bgmTimer = setInterval(bgmTick, BGM_TICK_MS);
+  }
+  function bgmStop() {
+    if (bgmTimer) { clearInterval(bgmTimer); bgmTimer = null; }
+    var ps = bgmPasses; bgmPasses = [];
+    for (var i = 0; i < ps.length; i++) {
+      try { ps[i].src.stop(); } catch (e) { }
+      try { ps[i].src.disconnect(); } catch (e) { }
+    }
+    bgmNextAt = 0;
+  }
+  function bgmSet(on) {
+    bgmOn = !!on;
+    try { localStorage.setItem('we3d_bgm', bgmOn ? '1' : '0'); } catch (e) { }
+    if (bgmOn) bgmStart(); else bgmStop();
+    if (elMute) {
+      elMute.classList.toggle('off', !bgmOn);
+      elMute.setAttribute('aria-label', bgmOn ? '关闭背景音乐' : '开启背景音乐');
+    }
+  }
+  if (elMute) {
+    elMute.classList.toggle('off', !bgmOn);
+    elMute.addEventListener('click', function (e) {
+      e.stopPropagation();
+      initAudio();
+      bgmSet(!bgmOn);
+    });
+  }
+  // 切到后台就挂起整个音频上下文（BGM 与音效一起静音），回来再续上
+  document.addEventListener('visibilitychange', function () {
+    if (!actx) return;
+    try { document.hidden ? actx.suspend() : actx.resume(); } catch (e) { }
+  });
   function sfxOsc(type, f0, f1, dur, vol) {
     if (!actx || actx.state !== 'running') return;
     var t0 = actx.currentTime;
@@ -654,59 +1291,42 @@
     o.connect(g); g.connect(actx.destination);
     o.start(t0); o.stop(t0 + dur + 0.02);
   }
-  function sfxBoom() { sfxOsc('sawtooth', 90, 28, 0.9, 0.5); sfxOsc('sine', 55, 20, 1.2, 0.6); }  // 耀斑/氦闪爆音
-  function sfxOverheat() { sfxOsc('square', 360, 110, 0.4, 0.2); }                                  // 过热锁定告警
-  function sfxReady() { sfxOsc('sine', 660, 990, 0.25, 0.14); }                                     // 冷却归零可再次点火
-  function sfxWin()  { sfxOsc('sine', 523, 784, 0.5, 0.25); setTimeout(function () { sfxOsc('sine', 659, 1046, 0.8, 0.25); }, 220); }
+  function sfxBoom() { sfxOsc('sawtooth', 90, 28, 0.9, 0.45); sfxOsc('sine', 55, 20, 1.2, 0.55); }
+  function sfxSling() { sfxOsc('sawtooth', 240, 900, 0.55, 0.3); sfxOsc('sine', 420, 1320, 0.5, 0.2); }
+  function sfxMiss() { sfxOsc('square', 300, 120, 0.35, 0.18); }
+  function sfxOverheat() { sfxOsc('square', 360, 110, 0.4, 0.2); }
+  function sfxReady() { sfxOsc('sine', 660, 990, 0.25, 0.14); }
+  function sfxWin() { sfxOsc('sine', 523, 784, 0.5, 0.25); setTimeout(function () { sfxOsc('sine', 659, 1046, 0.8, 0.25); }, 220); }
   function sfxLose() { sfxOsc('sine', 220, 60, 1.1, 0.35); }
 
-  // ---- 输入：触屏拖动 = 推力方向 + 强度 ----
-  var AIM_DEAD = 12, AIM_FULL = 0.25;
-  var pointer = null, pinchDist = 0, userZoom = 1;
-  var shortSide = Math.min(W, H);
-
-  function screenToWorldDir(dx, dy) {
-    // 取相机前向，交给纯函数映射到世界 XZ 平面（各向同性，见 screenDragToWorld）
-    var fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
-    return screenDragToWorld(dx, dy, fwd.x, fwd.z);
-  }
-
-  function updateThrustFromPointer() {
-    if (!pointer) { game.setThrust(null, 0); return; }
-    var dx = pointer.cx - pointer.sx, dy = pointer.cy - pointer.sy;
-    var dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < AIM_DEAD) { game.setThrust(null, 0); return; }
-    var dir = screenToWorldDir(dx, dy);
-    if (!dir) { game.setThrust(null, 0); return; }
-    var mag = Math.min(1, (dist - AIM_DEAD) / (shortSide * AIM_FULL - AIM_DEAD));
-    game.setThrust(dir, mag);
-  }
+  // ---- 输入：按住屏幕 = 点火（唯一操作）----
+  // 整块画布就是按钮：没有可点的落点、没有死角，单手随便按哪儿都算。
+  // 松手监听挂在 window 上（不是画布），否则手指滑出画布/被系统手势打断时会一直烧着。
+  var pointer = null, pointers = {}, pinchDist = 0, userZoom = 1;
+  function canControl() { return st.status === 'flying' && introT >= INTRO_TIME && briefClosed; }
 
   canvas.addEventListener('pointerdown', function (e) {
-    initAudio(); // 用户手势内解锁音频
-    if (st.status !== 'flying' || introT < INTRO_TIME) return;
-    if (e.isPrimary === false) return; // 双指第二指交给 pinch
-    pointer = { sx: e.clientX, sy: e.clientY, cx: e.clientX, cy: e.clientY, id: e.pointerId };
-    hideHint();
+    initAudio();
+    if (!canControl()) return;
+    if (e.isPrimary === false) return;
+    pointer = e.pointerId;
+    game.setBurning(true);
+    hideTip();
   });
-  canvas.addEventListener('pointermove', function (e) {
-    if (pointer && e.pointerId === pointer.id) { pointer.cx = e.clientX; pointer.cy = e.clientY; updateThrustFromPointer(); }
-  });
-  function endPointer(e) { if (pointer && e.pointerId === pointer.id) { pointer = null; game.setThrust(null, 0); } }
-  canvas.addEventListener('pointerup', endPointer);
-  canvas.addEventListener('pointercancel', endPointer);
+  function endPointer(e) {
+    if (pointer === null) return;
+    if (e && e.pointerId !== undefined && e.pointerId !== pointer) return;
+    pointer = null;
+    game.setBurning(false);
+  }
+  window.addEventListener('pointerup', endPointer);
+  window.addEventListener('pointercancel', endPointer);
 
-  // 双指捏合缩放
-  var pointers = {};
+  // 双指捏合：相机距离微调
   canvas.addEventListener('pointerdown', function (e) { pointers[e.pointerId] = { x: e.clientX, y: e.clientY }; });
-  canvas.addEventListener('pointerup', function (e) {
-    delete pointers[e.pointerId];
-    if (Object.keys(pointers).length < 2) pinchDist = 0; // 防残留导致下次捏合跳变
-  });
-  canvas.addEventListener('pointercancel', function (e) {
-    delete pointers[e.pointerId];
-    if (Object.keys(pointers).length < 2) pinchDist = 0;
-  });
+  function dropPointer(e) { delete pointers[e.pointerId]; if (Object.keys(pointers).length < 2) pinchDist = 0; }
+  canvas.addEventListener('pointerup', dropPointer);
+  canvas.addEventListener('pointercancel', dropPointer);
   canvas.addEventListener('pointermove', function (e) {
     if (!pointers[e.pointerId]) return;
     pointers[e.pointerId] = { x: e.clientX, y: e.clientY };
@@ -714,40 +1334,36 @@
     if (ids.length === 2) {
       var a = pointers[ids[0]], b = pointers[ids[1]];
       var d = Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y));
-      if (pinchDist > 0) userZoom = Math.max(0.5, Math.min(2.2, userZoom * (d / pinchDist)));
+      if (pinchDist > 0) userZoom = Math.max(0.6, Math.min(1.9, userZoom * (d / pinchDist)));
       pinchDist = d;
     }
   });
 
-  // ---- 相机：第三人称跟拍 ----
-  var camPos = new THREE.Vector3(0, 380, 0.01), camLook = new THREE.Vector3(0, 0, 0);
+  // ---- 相机：跟拍航线 + 掠过行星时注视方向偏向行星 ----
+  var camPos = new THREE.Vector3(0, 900, 0.01), camLook = new THREE.Vector3(0, 0, 0);
   var introT = 0;
+  var _cam = { s: 0, v: 1, pos: null, tan: null, rSun: 0, shellR: 0, zoom: 1 };
+  function camState() {
+    _cam.s = st.s; _cam.v = st.v; _cam.pos = st.pos; _cam.tan = st.tan;
+    _cam.rSun = st.rSun; _cam.shellR = st.shellR; _cam.zoom = userZoom;
+    return _cam;
+  }
+
+  var _tp = [0, 0, 0], _tl = [0, 0, 0];
   function updateCamera(dt) {
-    var ep = st.pos;
-    var dir = followDir(st.vel, ep);        // 跟拍方向 = 地球运动方向（XZ 平面单位向量）
-    // 自动跟拍距离由纯函数给出（有界），用户捏合缩放作为独立相对倍率叠加
-    var camBack = followDist(st.rSun, st.shellR) * userZoom;
-    // 相机锚在地球运动方向的正后方，看地球向前冲（同时露出背面发动机与尾焰）
-    var tx = ep[0] - dir[0] * camBack;
-    var ty = ep[1] + CAM_UP * userZoom;
-    var tz = ep[2] - dir[1] * camBack;
-    // 注视点前移到地球前方（沿运动方向）→ 地球不居中，落在画面中心偏下，前方留出视野
-    var ahead = camBack * CAM_LOOK_AHEAD;
-    var lx = ep[0] + dir[0] * ahead;
-    var lz = ep[2] + dir[1] * ahead;
-    var k = 1 - Math.exp(-dt * 4);
-    camPos.x += (tx - camPos.x) * k; camPos.y += (ty - camPos.y) * k; camPos.z += (tz - camPos.z) * k;
-    camLook.x += (lx - camLook.x) * k; camLook.y += (ep[1] - camLook.y) * k; camLook.z += (lz - camLook.z) * k;
+    chasePose(route, flybys, camState(), _tp, _tl);
+    var k = 1 - Math.exp(-dt * 4.5);
+    camPos.x += (_tp[0] - camPos.x) * k; camPos.y += (_tp[1] - camPos.y) * k; camPos.z += (_tp[2] - camPos.z) * k;
+    camLook.x += (_tl[0] - camLook.x) * k; camLook.y += (_tl[1] - camLook.y) * k; camLook.z += (_tl[2] - camLook.z) * k;
     camera.position.copy(camPos); camera.lookAt(camLook);
   }
 
-  // ---- 后视镜：单 renderer + scissor 画在同一块 canvas 的顶部矩形里（不额外开 WebGL context）----
-  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 132 / 68, 0.5, 8000);
+  // ---- 后视镜：单 renderer + scissor 画在同一块 canvas 的顶部矩形里 ----
+  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 132 / 68, 0.5, 60000);
   var elMirrorFrame = document.getElementById('mirror-frame');
   var mirrorOn = false;
   var mirrorRect = { x: 0, y: 0, w: 0, h: 0, ok: false };
 
-  // 矩形位置直接读 DOM（CSS 负责安全区），JS 不重复实现一套安全区计算
   function layoutMirror() {
     if (!elMirrorFrame) return;
     var r = elMirrorFrame.getBoundingClientRect();
@@ -755,123 +1371,408 @@
     mirrorRect.ok = r.width > 4 && r.height > 4;
     if (mirrorRect.ok) { mirrorCam.aspect = r.width / r.height; mirrorCam.updateProjectionMatrix(); }
   }
-
   function updateMirrorCamera() {
-    var ep = st.pos;
-    var dir = followDir(st.vel, ep);
-    mirrorCam.position.set(ep[0] + dir[0] * MIRROR_BACK, ep[1] + MIRROR_UP, ep[2] + dir[1] * MIRROR_BACK);
-    mirrorCam.lookAt(ep[0] - dir[0] * MIRROR_LOOK, ep[1], ep[2] - dir[1] * MIRROR_LOOK);
+    var ep = st.pos, tn = st.tan;
+    mirrorCam.position.set(ep[0] + tn[0] * MIRROR_BACK, ep[1] + MIRROR_UP, ep[2] + tn[2] * MIRROR_BACK);
+    mirrorCam.lookAt(ep[0] - tn[0] * MIRROR_LOOK, ep[1], ep[2] - tn[2] * MIRROR_LOOK);
   }
 
   // ---- HUD ----
-  var elClock = document.getElementById('clock-num');
-  var elDist = document.getElementById('tm-dist'), elSpeed = document.getElementById('tm-speed'), elEsc = document.getElementById('tm-esc');
-  var elWarn = document.getElementById('warn'), elDanger = document.getElementById('danger'), elHint = document.getElementById('hint');
+  var elClockWrap = document.getElementById('clock'), elClock = document.getElementById('clock-num');
+  var elSpeed = document.getElementById('tm-speed'), elDist = document.getElementById('tm-dist'), elGap = document.getElementById('tm-gap');
+  var elWarn = document.getElementById('warn'), elDanger = document.getElementById('danger'), elTip = document.getElementById('tip');
   var elBrief = document.getElementById('brief'), elBfBtn = document.getElementById('bf-btn'), briefClosed = false;
-  var elCompass = document.getElementById('compass'), elCmpSvg = document.getElementById('cmp-svg');
   var elProg = document.getElementById('progress'), elProgFill = document.getElementById('prog-fill'), elProgLabel = document.getElementById('prog-label');
+  var elTelemetry = document.getElementById('telemetry');
   var elHeatWrap = document.getElementById('heat-wrap'), elHeatFill = document.getElementById('heat-fill'), elHeatTag = document.getElementById('heat-tag');
-  var elAim = document.getElementById('aim'), elAimName = document.getElementById('aim-name'),
-    elAimDist = document.getElementById('aim-dist'), elAimTag = document.getElementById('aim-tag');
+  var elFlyby = document.getElementById('flyby'), elFbName = document.getElementById('fb-name'),
+    elFbNeedle = document.getElementById('fb-needle'), elFbTag = document.getElementById('fb-tag'),
+    elFbCur = document.getElementById('fb-cur'), elFbNeed = document.getElementById('fb-need'),
+    elFbEarly = document.getElementById('fb-early'), elFbSweet = document.getElementById('fb-sweet'),
+    elFbLate = document.getElementById('fb-late');
+  var elToast = document.getElementById('fb-toast'), elFtName = document.getElementById('ft-name'),
+    elFtGrade = document.getElementById('ft-grade'), elFtDetail = document.getElementById('ft-detail');
   var elRadar = document.getElementById('radar'), radarCtx = elRadar.getContext('2d');
   elRadar.width = 104; elRadar.height = 104;
-  var elResult = document.getElementById('result'), elRsTitle = document.getElementById('rs-title'), elRsText = document.getElementById('rs-text'), elRsStat = document.getElementById('rs-stat'), elRsBtn = document.getElementById('rs-btn'), elFlash = document.getElementById('flash');
+  var elResult = document.getElementById('result'), elRsTitle = document.getElementById('rs-title'),
+    elRsText = document.getElementById('rs-text'), elRsStat = document.getElementById('rs-stat'),
+    elRsBtn = document.getElementById('rs-btn'), elFlash = document.getElementById('flash');
+  var elRsTimeBox = document.getElementById('rs-time-box'), elRsLabel = document.getElementById('rst-label'),
+    elRsTime = document.getElementById('rs-time-value'), elRsBest = document.getElementById('rs-best'),
+    elRsShare = document.getElementById('rs-share'), elRsHint = document.getElementById('rs-hint');
 
-  function hideHint() { if (elHint) elHint.classList.add('hide'); }
+  function hideTip() { if (elTip) elTip.classList.add('hide'); }
+
+  var prevFlybyState = '';
+
+  // ---- 掠过评级提示 ----
+  // 时机条只负责「该按了」，这条负责事后告诉玩家「刚才那次到底点得怎么样」：
+  // 等级 + 绿色区间实际点了多少秒（对照完美线）+ 一句可执行的改进提示。
+  // 与状态提示（#warn）共用时机条上方那个槽位，由 updateHUD 保证同一时刻只出一条。
+  var toastTimer = null;
+  function showFlybyToast(idx) {
+    if (!elToast || idx < 0 || idx >= flybys.length) return;
+    // 被捕获 / 撞毁那次由结算页解释得更清楚，不再叠一条评级
+    if (st.status !== 'flying') return;
+    var f = flybys[idx], r = st.results[idx];
+    var ok = r.result === 'perfect' || r.result === 'pass';
+    var g = gradeFlyby(r, ok, f.def.ratingSweet);
+    elFtName.textContent = f.def.name;
+    elFtGrade.textContent = g.label;
+    elFtDetail.textContent =
+      '绿色区间 ' + r.sweet.toFixed(2) + ' s / 完美线 ' + f.def.ratingSweet.toFixed(2) + ' s\n' + g.tip;
+    elToast.className = g.key;
+    void elToast.offsetWidth;
+    elToast.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    // 3.2 s：最短的一腿（木星→土星 3.65 s）也要留出「下一个窗口倒计时」的露头时间
+    toastTimer = setTimeout(function () { if (elToast) elToast.classList.remove('show'); }, 3200);
+    // 提示音也按等级区分：吃满 = 明亮的双音，差一点 = 单音，失败 = 低沉方波
+    if (g.key === 'perfect') sfxOsc('sine', 720, 1180, 0.3, 0.15);
+    else if (g.key === 'good') sfxOsc('sine', 560, 780, 0.26, 0.12);
+    else sfxMiss();
+  }
+
+  // 判定是 physics 核心做的，渲染层只轮询「已出结果的数量」——
+  // 这样「被捕获/撞毁」那次（target 不再前进）也能被捕捉到并给出反馈。
+  var judgedCount = 0;
+  function pollJudged() {
+    var n = 0, i;
+    for (i = 0; i < flybys.length; i++) if (st.results[i].result) n++;
+    if (n < judgedCount) { judgedCount = n; return; }
+    for (; judgedCount < n; judgedCount++) {
+      var k = 0, idx = -1;
+      for (var j = 0; j < flybys.length; j++) {
+        if (st.results[j].result) { if (k === judgedCount) { idx = j; break; } k++; }
+      }
+      if (idx >= 0) showFlybyToast(idx);
+    }
+  }
 
   function updateHUD() {
-    // 计时（正计时，不设时限）
     var sec = Math.max(0, st.t);
     elClock.textContent = Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + Math.floor(sec % 60);
-    elDist.textContent = st.rSunAU.toFixed(2) + ' AU';
     elSpeed.textContent = st.speedKms.toFixed(1) + ' km/s';
-    elEsc.textContent = st.escapeRatio.toFixed(2);
-    elEsc.className = 'tm-v' + (st.escapeRatio >= 1 ? ' good' : '');
-    var prog = Math.min(1, st.rSun / ESCAPE_R);
-    elProgFill.style.width = (prog * 100).toFixed(0) + '%';
-    elProgLabel.textContent = '逃逸进度 ' + (prog * 100).toFixed(0) + '%';
-    // 过热条：满值 = 过热锁定（必须冷却归零才能再用）
+    elDist.textContent = st.rSunAU.toFixed(2) + ' AU';
+    elGap.textContent = (st.gap / AU).toFixed(2) + ' AU';
+    elGap.className = 'tm-v' + (st.gap < 12 ? ' bad' : (st.gap < 28 ? ' warn' : ''));
+
+    elProgFill.style.width = (st.progress * 100).toFixed(0) + '%';
+    elProgLabel.textContent = '逃逸进度 ' + (st.progress * 100).toFixed(0) + '%';
+
     var heatPct = st.heat / HEAT_MAX;
     elHeatFill.style.width = (heatPct * 100).toFixed(0) + '%';
     elHeatWrap.classList.toggle('hot', heatPct > 0.7 && !st.overheated);
     elHeatWrap.classList.toggle('locked', st.overheated);
     elHeatTag.textContent = st.overheated ? '过热锁定 · 松手冷却' : '发动机温度';
-    if (st.pulseWarn > 0) { elWarn.textContent = '⚠ 耀斑脉冲 · 乘波加速全推！'; elWarn.classList.add('show'); }
-    else if (st.warn) { elWarn.textContent = st.warn; elWarn.classList.add('show'); }
-    else elWarn.classList.remove('show');
-    // 危险红边：脉冲预警 或 接近壳
-    var danger = st.pulseWarn > 0 || (st.rSun - st.shellR < 30);
-    elDanger.classList.toggle('active', danger && st.status === 'flying');
-  }
 
-  // 弹弓引导：把「下一颗要穿越轨道的行星」投影到屏幕上，并直读能否安全掠射。
-  // 判定用当前相对速度对比「在影响球边缘不被捕获所需速度」√(2gm/capR)。
-  var _aimV = new THREE.Vector3();
-  function updateAim() {
-    if (!elAim) return;
-    if (!briefClosed || st.status !== 'flying') { elAim.classList.add('hide'); return; }
-    var idx = -1;
-    for (var i = 0; i < PLANETS.length; i++) { if (PLANETS[i].orbitR > st.rSun) { idx = i; break; } }
-    if (idx < 0) { elAim.classList.add('hide'); return; }
-    var def = PLANETS[idx], pp = st.planets[idx];
-    _aimV.set(pp.pos[0], pp.pos[1], pp.pos[2]).project(camera);
-    if (_aimV.z > 1) { elAim.classList.add('hide'); return; }   // 目标在相机身后
-    elAim.style.left = ((_aimV.x * 0.5 + 0.5) * W).toFixed(0) + 'px';
-    elAim.style.top = ((-_aimV.y * 0.5 + 0.5) * H).toFixed(0) + 'px';
-    var dx = pp.pos[0] - st.pos[0], dy = pp.pos[1] - st.pos[1], dz = pp.pos[2] - st.pos[2];
-    var wx = st.vel[0] - pp.vel[0], wy = st.vel[1] - pp.vel[1], wz = st.vel[2] - pp.vel[2];
-    var vrel = Math.sqrt(wx * wx + wy * wy + wz * wz);
-    var need = Math.sqrt(2 * def.gm / def.capR);   // 掠射影响球而不被捕获的最低相对速度
-    var safe = vrel > need * 1.15;
-    elAimName.textContent = def.name;
-    elAimDist.textContent = (Math.sqrt(dx * dx + dy * dy + dz * dz) / AU).toFixed(2) + ' AU';
-    elAimTag.textContent = safe ? '可掠射加速' : '相对速度偏低';
-    elAim.classList.toggle('risk', !safe);
-    elAim.classList.remove('hide');
+    // ---- 加速时机条（核心 HUD）----
+    // 时机条只在窗口内出现：head 报「哪颗行星 + 现在踩在哪一段」，
+    // foot 报「速度 / 门槛」。速度用 km/s —— 与右上遥测同一个单位，
+    // 不然屏幕会同时出现两套速度读数（98 单位 vs 41.3 km/s）谁也读不懂。
+    var showBar = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase >= 0;
+    if (showBar) {
+      var def = flybys[st.target].def;
+      elFlyby.classList.remove('hide');
+      elFbName.textContent = def.name;
+      // 时机条的三个区间**逐行星**：引力越强（质量越大）绿色区间越宽、窗口越长。
+      // 宽度只由 def.sweet0/sweet1 驱动，CSS 里那套百分比只是初始值。
+      elFbEarly.style.flexBasis = (def.sweet0 * 100).toFixed(1) + '%';
+      elFbSweet.style.flexBasis = ((def.sweet1 - def.sweet0) * 100).toFixed(1) + '%';
+      elFbLate.style.flexBasis = ((1 - def.sweet1) * 100).toFixed(1) + '%';
+      elFbNeedle.style.left = (Math.min(1, Math.max(0, st.phase)) * 100).toFixed(1) + '%';
+      elFbCur.textContent = (st.v * KMS_PER_UNIT).toFixed(1);
+      elFbNeed.textContent = (st.vNeed * KMS_PER_UNIT).toFixed(1);
+      elFbCur.className = 'fb-v' + (st.safe ? ' good' : ' bad');
+      // 三态 = 红绿灯：绿 = 命中区；琥珀（.risk）= 过早（弹弓会作废）；红（.late）= 过晚。
+      // 「过早」不看速度也算危险 —— 在那里点过火，这次弹弓就没了。
+      elFlyby.classList.toggle('sweet', st.zone === 'sweet');
+      elFlyby.classList.toggle('risk', st.zone === 'early');
+      elFlyby.classList.toggle('late', st.zone === 'late');
+      if (st.zone === 'sweet') elFbTag.textContent = '最佳时机 · 引力弹弓';
+      else if (st.zone === 'late') elFbTag.textContent = '过晚 · 已来不及';
+      else if (st.zone === 'early') elFbTag.textContent = '过早 · 按了就作废弹弓';
+      else elFbTag.textContent = '';
+    } else {
+      elFlyby.classList.add('hide');
+    }
+
+    // ---- 消息槽（时机条正上方）：整屏唯一一条状态提示 ----
+    // 优先级：过热 / 耀斑脉冲 > 掠过评级 > 巡航倒计时。
+    // 「过晚 · 已来不及」在时机条自己的 tag 上已经写着，这里不再重复刷一条；
+    // 巡航倒计时也要给评级条让位（两者同一位置，同时出现就是叠字）。
+    var urgent = !!st.overheated || st.warnKind === 'pulse';
+    if (urgent) {                       // 紧急提示抢屏：评级条让位
+      if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+      if (elToast) elToast.classList.remove('show');
+    }
+    var laneBusy = !!(elToast && elToast.classList.contains('show'));
+    var showWarn = st.status === 'flying' && briefClosed && !!st.warn &&
+      (urgent || (!showBar && !laneBusy));
+    if (showWarn) { elWarn.textContent = st.warn; elWarn.classList.add('show'); }
+    else elWarn.classList.remove('show');
+    elWarn.classList.toggle('pulse', st.warnKind === 'pulse');
+    elWarn.classList.toggle('hot', !!st.overheated);
+
+    // ---- 全屏边缘光：红色 = 危险，绿色 = 最佳区间到了、该按了 ----
+    // 没有按钮可点之后，「该按了」只能靠屏幕本身喊出来：绿色呼吸比红边优先级更高，
+    // 因为此刻玩家需要的是「现在按」而不是「正在变危险」。
+    var ready = st.status === 'flying' && st.zone === 'sweet' && !st.burning && !st.overheated;
+    // 红边只在脉冲**生效**的那 1 s 内亮：预警期有 2 s，全程血红会把红边变成噪声
+    var danger = st.pulseHot || st.gap < 18 || (st.zone === 'late' && !st.safe);
+    elDanger.classList.toggle('ready', ready);
+    elDanger.classList.toggle('active', !ready && danger && st.status === 'flying');
   }
 
   function drawRadar() {
-    var rw = 104, cx = 52, cy = 52, scl = 48 / ESCAPE_R;
+    var rw = 104, cx = 52, cy = 52;
+    var scl = 48 / (ROUTE_R1 * 1.05);
     radarCtx.clearRect(0, 0, rw, rw);
     radarCtx.fillStyle = 'rgba(12,18,34,.65)'; radarCtx.fillRect(0, 0, rw, rw);
     radarCtx.strokeStyle = 'rgba(120,160,220,.12)'; radarCtx.lineWidth = 1; radarCtx.strokeRect(0.5, 0.5, rw - 1, rw - 1);
+    // 航线
+    radarCtx.strokeStyle = 'rgba(92,200,255,.28)'; radarCtx.lineWidth = 1;
+    radarCtx.beginPath();
+    var p = [0, 0, 0];
+    for (var k = 0; k <= 60; k++) {
+      routeSample(route, route.len * k / 60, p, null);
+      var X = cx + p[0] * scl, Y = cy + p[2] * scl;
+      if (k === 0) radarCtx.moveTo(X, Y); else radarCtx.lineTo(X, Y);
+    }
+    radarCtx.stroke();
     radarCtx.fillStyle = '#ff7a14'; radarCtx.beginPath(); radarCtx.arc(cx, cy, 3, 0, 6.283); radarCtx.fill();
     radarCtx.strokeStyle = 'rgba(255,74,20,.5)'; radarCtx.beginPath(); radarCtx.arc(cx, cy, st.shellR * scl, 0, 6.283); radarCtx.stroke();
-    for (var ri = 0; ri < PLANETS.length; ri++) {
-      var pp = st.planets[ri], pc = PLANETS[ri].procColor != null ? PLANETS[ri].procColor : PLANETS[ri].color;
+    for (var ri = 0; ri < flybys.length; ri++) {
+      var fb = flybys[ri], pc = fb.def.procColor != null ? fb.def.procColor : fb.def.color;
       radarCtx.fillStyle = 'rgb(' + ((pc >> 16) & 255) + ',' + ((pc >> 8) & 255) + ',' + (pc & 255) + ')';
-      radarCtx.beginPath(); radarCtx.arc(cx + pp.pos[0] * scl, cy + pp.pos[2] * scl, 2, 0, 6.283); radarCtx.fill();
+      radarCtx.beginPath(); radarCtx.arc(cx + fb.pos[0] * scl, cy + fb.pos[2] * scl, 2, 0, 6.283); radarCtx.fill();
+    }
+    // 场上的其他行星：更小更暗的点。水星/金星在地球内侧 —— 小地图上永远看得见，
+    // 也解释了为什么正前方看不到它们（它们是真的在身后）。
+    for (var si = 0; si < scenery.length; si++) {
+      var scm = scenery[si], cm = scm.def.color;
+      radarCtx.fillStyle = 'rgba(' + ((cm >> 16) & 255) + ',' + ((cm >> 8) & 255) + ',' + (cm & 255) + ',.62)';
+      radarCtx.beginPath(); radarCtx.arc(cx + scm.pos[0] * scl, cy + scm.pos[2] * scl, 1.5, 0, 6.283); radarCtx.fill();
     }
     var ex = cx + st.pos[0] * scl, ey = cy + st.pos[2] * scl;
     radarCtx.fillStyle = '#5cc8ff'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 2.5, 0, 6.283); radarCtx.fill();
     radarCtx.strokeStyle = 'rgba(92,200,255,.4)'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 5, 0, 6.283); radarCtx.stroke();
   }
 
+  // ---- 结算：主角是「逃逸用时」，其余都是注脚 ----
+  // 目标就是比谁快，所以用时给最大的字号，其余（完美弹弓数/末速/距日）压缩成一行注脚；
+  // 本站最快记在 localStorage，只有「成功逃出」的成绩才作数（失败的时间没有可比性）。
+  var bestTime = null;
+  try {
+    var _bt = parseFloat(localStorage.getItem('we3d_best'));
+    if (isFinite(_bt) && _bt > 0) bestTime = _bt;
+  } catch (e) { bestTime = null; }
+
   var resultShownAt = 0;
   function showResult() {
     var win = st.status === 'escaped';
-    elRsTitle.textContent = win ? '逃出太阳系' : '任务失败';
+    elRsTitle.textContent = win ? '冲出太阳系' : '任务终止';
     elRsTitle.className = 'rs-title ' + (win ? 'win' : 'lose');
-    elRsText.textContent = st.reason;
-    elRsStat.innerHTML = '距日 ' + st.rSunAU.toFixed(2) + ' AU · 速度 ' + st.speedKms.toFixed(1) + ' km/s · 用时 ' + st.t.toFixed(1) + ' s';
+    // 没逃出去就不是「逃逸用时」——标签跟着胜负换，和分享卡片保持同一套说法
+    if (elRsLabel) elRsLabel.textContent = win ? '逃逸用时' : '坚持到';
+    elRsTime.innerHTML = st.t.toFixed(1) + '<i>s</i>';
+    elRsTimeBox.classList.toggle('bad', !win);
+
+    var isNew = win && (bestTime === null || st.t < bestTime);
+    if (isNew) {
+      bestTime = st.t;
+      try { localStorage.setItem('we3d_best', String(bestTime)); } catch (e) { }
+    }
+    if (bestTime !== null) {
+      elRsBest.textContent = (isNew ? '★ 新纪录 ' : '本站最快 ') + bestTime.toFixed(1) + ' s';
+      elRsBest.classList.toggle('new', isNew);
+    } else {
+      elRsBest.textContent = '还没有逃出去过，先拿下第一份成绩';
+      elRsBest.classList.remove('new');
+    }
+
+    // 失败原因（被谁捕获 / 撞毁 / 被壳吞没）留给 body；成功时标题已经说了「冲出太阳系」，
+    // 再复述一遍那句 reason 是纯重复，这里换成一句收尾。
+    elRsText.textContent = win ? '地球已脱离太阳系引力范围，接下来交给时间。' : st.reason;
+    var passed = st.score.perfect + st.score.pass + st.score.slow;
+    var passLine = st.score.slow
+      ? '掠过 <b>' + passed + '</b>　其中 <b>' + st.score.slow + '</b> 颗速度没拉起来'
+      : '顺利掠过 <b>' + passed + '</b>';
+    elRsStat.innerHTML =
+      '完美弹弓 <b>' + st.score.perfect + ' / ' + flybys.length + '</b>　' + passLine +
+      '<br>末速 <b>' + st.speedKms.toFixed(0) + ' km/s</b>　距日 <b>' + st.rSunAU.toFixed(1) + ' AU</b>';
+    if (elRsHint) elRsHint.textContent = '';
+    // 结算页盖住整个 HUD：评级条先撤掉，免得在面板背后透出一条
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    if (elToast) elToast.classList.remove('show');
+    elWarn.classList.remove('show');
     elResult.classList.add('show');
     resultShownAt = performance.now();
     if (win) sfxWin(); else sfxLose();
   }
 
+  // ---- 分享战绩：走小工具容器的 JSBridge，唤起 App 的笔记发布页 ----
+  //   容器里网页不能直接发笔记，只能 XHS.postNote({title, content, pageType, mediaInfo})，
+  //   且 mediaInfo 必填（图片/视频/实况至少一种）。配图走 Canvas 现画，不碰网络请求 API
+  //   （容器把 fetch/XHR 列为不可用行为，扫描清单会 grep 标识符）。
+  //   能力检测而非 UA 判断：拿不到 postNote 就退化成「复制战绩文案」，桌面也能用。
+  var XHS = (window.xhs && window.xhs.miniTool) || null;
+  var CAN_SHARE = !!(XHS && typeof XHS.postNote === 'function');
+  if (CAN_SHARE && elRsShare) elRsShare.textContent = '分享到小红书';
+
+  function shareTitle() {
+    // postNote 的 title 上限 20 字
+    return ('引力弹弓 · ' + st.t.toFixed(1) + ' 秒').slice(0, 20);
+  }
+  function shareContent() {
+    var win = st.status === 'escaped';
+    var head = win
+      ? '我把地球开出了太阳系：' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
+      : '差一口气：' + st.t.toFixed(1) + ' 秒时' + st.reason + '。';
+    var best = (bestTime !== null && bestTime <= st.t) ? '本站最快 ' + bestTime.toFixed(1) + ' 秒。' : '';
+    return head + best + '\n全程只决定「什么时候点火」——看谁先把地球开出去。\n' +
+      '\n#小红书vibecoding大赛 #vibegame #小红书小工具 #流浪地球';
+  }
+
+  // 战绩图：纯 Canvas 现画（不引用任何外部图片，避免画布被污染）
+  var gradeColor = { perfect: '#ffd24a', good: '#7fd0a8', early: '#ffb84d', late: '#ff4d5e', none: '#ff4d5e', fail: '#ff4d5e' };
+  function drawShareCard() {
+    var CW = 900, CH = 1200, i;
+    var cv = document.createElement('canvas');
+    cv.width = CW; cv.height = CH;
+    var g = cv.getContext('2d');
+    if (!g) return null;
+    var FONT = '"PingFang SC","Microsoft YaHei",-apple-system,sans-serif';
+
+    var bg = g.createLinearGradient(0, 0, 0, CH);
+    bg.addColorStop(0, '#04060d'); bg.addColorStop(0.5, '#0a1122'); bg.addColorStop(1, '#04060d');
+    g.fillStyle = bg; g.fillRect(0, 0, CW, CH);
+
+    // 星点
+    for (i = 0; i < 300; i++) {
+      g.globalAlpha = 0.18 + Math.random() * 0.6;
+      g.fillStyle = '#cfe4ff';
+      g.beginPath(); g.arc(Math.random() * CW, Math.random() * CH, Math.random() * 1.7 + 0.3, 0, 6.283); g.fill();
+    }
+    g.globalAlpha = 1;
+
+    // 左下角氦闪
+    var sg = g.createRadialGradient(90, CH - 90, 6, 90, CH - 90, 320);
+    sg.addColorStop(0, 'rgba(255,236,128,.95)');
+    sg.addColorStop(0.3, 'rgba(255,122,20,.5)');
+    sg.addColorStop(1, 'rgba(196,58,0,0)');
+    g.fillStyle = sg; g.beginPath(); g.arc(90, CH - 90, 320, 0, 6.283); g.fill();
+
+    var win = st.status === 'escaped';
+    g.textAlign = 'center';
+
+    g.fillStyle = '#8da2c0'; g.font = '30px ' + FONT;
+    g.fillText('流浪地球 · 引力弹弓', CW / 2, 130);
+
+    g.fillStyle = '#8da2c0'; g.font = '28px ' + FONT;
+    g.fillText(win ? '逃逸用时' : '坚持到', CW / 2, 300);
+
+    g.fillStyle = win ? '#ffd24a' : '#c9d6e8';
+    g.font = '800 168px ' + FONT;
+    g.fillText(st.t.toFixed(1), CW / 2 - 24, 452);
+    g.fillStyle = '#8da2c0'; g.font = '600 52px ' + FONT;
+    g.fillText('秒', CW / 2 + 150, 452);
+
+    g.fillStyle = win ? '#7fd0a8' : '#ff4d5e';
+    g.font = '800 46px ' + FONT;
+    g.fillText(win ? '冲出太阳系' : '被留在了太阳系', CW / 2, 540);
+
+    if (bestTime !== null) {
+      g.fillStyle = '#8da2c0'; g.font = '26px ' + FONT;
+      g.fillText('本站最快 ' + bestTime.toFixed(1) + ' 秒 · 完美弹弓 ' + st.score.perfect + ' / ' + flybys.length, CW / 2, 600);
+    }
+
+    // 五颗行星的评级色标
+    var n = flybys.length, gap = 132, x0 = CW / 2 - (n - 1) * gap / 2;
+    for (i = 0; i < n; i++) {
+      var r = st.results[i];
+      var ok = r.result === 'perfect' || r.result === 'pass';
+      var col = r.result ? (gradeColor[gradeFlyby(r, ok).key] || '#8da2c0') : '#3a4a63';
+      g.fillStyle = col; g.globalAlpha = r.result ? 1 : 0.4;
+      g.beginPath(); g.arc(x0 + i * gap, 730, 22, 0, 6.283); g.fill();
+      g.globalAlpha = 1;
+      g.fillStyle = '#8da2c0'; g.font = '22px ' + FONT;
+      g.fillText(flybys[i].def.name.slice(-1), x0 + i * gap, 786);
+    }
+
+    g.fillStyle = '#eaf1fb'; g.font = '700 36px ' + FONT;
+    g.fillText('只决定「什么时候点火」', CW / 2, 920);
+    g.fillStyle = '#8da2c0'; g.font = '30px ' + FONT;
+    g.fillText('看谁先把地球开出太阳系', CW / 2, 976);
+
+    g.fillStyle = '#5cc8ff'; g.font = '24px ' + FONT;
+    g.fillText('#小红书vibecoding大赛  #vibegame', CW / 2, 1108);
+    g.fillStyle = '#4a5a74'; g.font = '22px ' + FONT;
+    g.fillText('小红书小工具 · 搜「流浪地球 引力弹弓」', CW / 2, 1152);
+
+    var url = cv.toDataURL('image/webp', 0.92);
+    if (url.indexOf('data:image/webp') !== 0) url = cv.toDataURL('image/jpeg', 0.92);
+    return url;
+  }
+
+  // 拿不到容器 bridge 时的退路：**不「复制」，改为「把文案选中 + 引导长按复制」**。
+  // 剪贴板类 API 全都在小工具容器的**禁用能力扫描清单**里，写了会被 verify-minitool.mjs
+  // 直接判不合规（连标识符都不许出现），所以走「选中文本」这条同源做法
+  // （同 vibeknow/china-rail-atlas 的 copyPrompt）。
+  function selectShareText(text) {
+    if (!elRsHint) return;
+    elRsHint.textContent = text;
+    try {
+      var range = document.createRange();
+      range.selectNodeContents(elRsHint);
+      var sel = window.getSelection();
+      if (sel) { sel.removeAllRanges(); sel.addRange(range); }
+    } catch (e) { /* 选中失败也不影响阅读与手动长按 */ }
+  }
+
+  function doShare() {
+    if (!elRsShare || elRsShare.disabled) return;
+    if (!CAN_SHARE) {
+      selectShareText(shareTitle() + '\n' + shareContent());
+      elRsShare.textContent = '已选中 · 长按复制';
+      return;
+    }
+    elRsShare.disabled = true;
+    var payload = { title: shareTitle(), content: shareContent().slice(0, 1000), pageType: 'photo_publish' };
+    new Promise(function (resolve) { resolve(drawShareCard()); }).then(function (dataURL) {
+      var step = (typeof XHS.writeTempFile === 'function') ? XHS.writeTempFile({ data: dataURL }) : null;
+      return Promise.resolve(step).then(function (res) {
+        payload.mediaInfo = { image_resources: [{ url: (res && res.filePath) || dataURL }] };
+        return XHS.postNote(payload);
+      });
+    }).then(function () {
+      if (elRsHint) elRsHint.textContent = '已唤起发布页 · 在那边补完正文就能发';
+    }).catch(function (err) {
+      if (elRsHint) elRsHint.textContent = '唤起发布页失败：' + ((err && err.errMsg) || '未知原因');
+    }).then(function () { elRsShare.disabled = false; });
+  }
+  if (elRsShare) elRsShare.addEventListener('click', function (e) { e.stopPropagation(); doShare(); });
+
   function restart() {
     elResult.classList.remove('show');
     game.reset();
-    pointer = null; userZoom = 1; pinchDist = 0;
-    prevT = 0; prevOverheated = false; introT = 0;
-    camPos.set(0, 380, 0.01); camLook.set(0, 0, 0);
-    if (elHint) elHint.classList.remove('hide');
-    briefClosed = false; elBrief.classList.remove('show');
+    pointer = null; userZoom = 1; pinchDist = 0; pointers = {};
+    prevT = 0; prevOverheated = false; prevFlybyState = '';
+    judgedCount = 0;
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    if (elToast) elToast.className = '';
+    elWarn.classList.remove('show');
+    elWarn.classList.remove('pulse', 'hot');
+    if (elTip) elTip.classList.remove('hide');
+    if (elRsHint) elRsHint.textContent = '';
+    if (elRsShare) elRsShare.textContent = CAN_SHARE ? '分享到小红书' : '分享战绩';
+    introT = 0; briefClosed = false;
+    camPos.set(0, 900, 0.01); camLook.set(0, 0, 0);
+    elBrief.classList.remove('show');
   }
 
   elRsBtn.addEventListener('click', restart);
   elBfBtn.addEventListener('click', function () { briefClosed = true; elBrief.classList.remove('show'); });
-  // 结算页出现 1 秒后，点面板任意处也可重开（防误触）
   elResult.addEventListener('click', function (e) {
     if (e.target === elRsBtn) return;
     if (performance.now() - resultShownAt > 1000) restart();
@@ -884,126 +1785,123 @@
   function flashScreen() {
     if (!elFlash) return;
     elFlash.classList.remove('on');
-    void elFlash.offsetWidth; // 强制重排以重启动画
+    void elFlash.offsetWidth;
     elFlash.classList.add('on');
   }
+
   function frame(now) {
     var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    // 开场过场：俯视太阳系 → 聚焦地球（物理冻结）
     if (introT < INTRO_TIME) {
       introT += dt;
       var s = Math.min(1, introT / INTRO_TIME);
-      var e = s * s * (3 - 2 * s); // smoothstep
-      // 终点与 updateCamera 的跟拍位姿严格对齐（机位 = 地球 - 运动方向*CAM_BACK，注视点 = 地球前方），
-      // 避免过场结束时镜头甩一下
-      camPos.set(AU * e, 380 * (1 - e) + CAM_UP * e, 0.01 * (1 - e) - CAM_BACK * e);
-      camLook.set(AU * e, 0, CAM_BACK * CAM_LOOK_AHEAD * e);
+      var e = s * s * (3 - 2 * s);
+      chasePose(route, flybys, camState(), _tp, _tl);
+      camPos.set(0 * (1 - e) + _tp[0] * e, 900 * (1 - e) + _tp[1] * e, 0.01 * (1 - e) + _tp[2] * e);
+      camLook.set(0 * (1 - e) + _tl[0] * e, 0 * (1 - e) + _tl[1] * e, 0 * (1 - e) + _tl[2] * e);
       camera.position.copy(camPos); camera.lookAt(camLook);
     } else if (briefClosed && st.status === 'flying') {
       game.step(dt);
-      // 耀斑脉冲触发边沿：白闪 + 爆音
-      for (var pi2 = 0; pi2 < PULSE_TIMES.length; pi2++) {
-        if (prevT < PULSE_TIMES[pi2] && st.t >= PULSE_TIMES[pi2]) { flashScreen(); sfxBoom(); }
+      for (var pj = 0; pj < PULSE_TIMES.length; pj++) {
+        if (prevT < PULSE_TIMES[pj] && st.t >= PULSE_TIMES[pj]) { flashScreen(); sfxBoom(); }
       }
-      // 过热锁定 / 冷却归零解锁的边沿音
       if (st.overheated !== prevOverheated) {
         prevOverheated = st.overheated;
         if (st.overheated) sfxOverheat(); else sfxReady();
       }
+      // 进入最佳区间 → 弹弓音（掠过评级的提示音在 showFlybyToast 里按等级给）
+      if (st.zone === 'sweet' && prevFlybyState !== 'sweet') sfxSling();
+      prevFlybyState = st.zone;
       prevT = st.t;
     }
     if (introT >= INTRO_TIME && !briefClosed) elBrief.classList.add('show');
-    // 点火隆隆声音量跟随推力
     if (rumbleGain && actx && actx.state === 'running') {
-      rumbleGain.gain.setTargetAtTime(st.thrustMag * 0.22, actx.currentTime, 0.06);
+      rumbleGain.gain.setTargetAtTime((st.burning ? 1 : 0) * 0.25, actx.currentTime, 0.06);
     }
 
-    // 更新天体位置
+    // 地球位姿：位置沿航线，朝向 = 航线切向（发动机喷流朝后）
     earthGroup.position.set(st.pos[0], st.pos[1], st.pos[2]);
-    // 地球整体（含发动机）平滑转向前进方向；有推力时混入推力方向加快响应
-    var sp = len3(st.vel) || 1;
-    var vx = st.vel[0] / sp, vz = st.vel[2] / sp;
-    if (st.thrustMag > 0) {
-      vx = vx * 0.6 + st.thrustDir[0] * st.thrustMag * 0.4;
-      vz = vz * 0.6 + st.thrustDir[2] * st.thrustMag * 0.4;
-    }
-    _flameDir.set(vx, 0, vz);
+    _flameDir.set(st.tan[0], st.tan[1], st.tan[2]);
     if (_flameDir.lengthSq() > 1e-6) {
       _flameDir.normalize();
       _targetQuat.setFromUnitVectors(_zAxis, _flameDir);
-      earthGroup.quaternion.slerp(_targetQuat, 1 - Math.exp(-dt * 6));
+      earthGroup.quaternion.slerp(_targetQuat, 1 - Math.exp(-dt * 8));
     }
-    var engOp = 0.4 + st.thrustMag * 0.6;
+    var engOp = st.burning ? 1.0 : 0.35;
     for (var egi = 0; egi < engines.length; egi++) engines[egi].material.opacity = engOp;
-    // 尾焰（局部坐标：earthGroup 已旋转，尾焰固定在局部 -Z 后方）
-    if (st.thrustMag > 0) {
+    if (st.burning) {
       thrustFlame.visible = true;
       thrustFlame.position.set(0, 0, -EARTH_R * 1.0);
       thrustFlame.quaternion.setFromUnitVectors(_flameAxis, _negZAxis);
-      thrustFlame.scale.y = 0.6 + st.thrustMag * 1.2;
+      var boost = st.slinging ? 2.4 : 1.0;
+      thrustFlame.scale.set(boost, boost * (0.7 + Math.min(1, st.thrustEff / 8) * 1.6), boost);
     } else thrustFlame.visible = false;
 
     // 太阳壳膨胀
-    var scale = st.shellR / SUN_R;
-    sunGroup.scale.setScalar(scale);
+    sunGroup.scale.setScalar(Math.max(1, st.shellR / SUN_R));
 
-    // 行星
-    for (var i = 0; i < planetMeshes.length; i++) {
-      var pm = planetMeshes[i], pp = st.planets[i];
-      pm.mesh.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
-      pm.mesh.rotation.y = pp.angle * 3;
-      if (pm.ring) pm.ring.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
-      if (pm.glow) pm.glow.position.set(pp.pos[0], pp.pos[1], pp.pos[2]);
+    // 行星光晕随距离收放：远看是一圈柔光（帮玩家提前发现行星），
+    // 贴近到 ~2 倍半径以内就完全收掉——加色 sprite 不会因为离得近而变小，
+    // 不收的话掠过瞬间整屏会被它糊白。
+    for (var pgi = 0; pgi < planetMeshes.length; pgi++) {
+      var pg = planetMeshes[pgi], pm = pg.mesh, pr = pg.rad;
+      var pdx = camPos.x - pm.position.x, pdy = camPos.y - pm.position.y, pdz = camPos.z - pm.position.z;
+      var pdist = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+      var fade = (pdist - pr * 1.9) / (pr * 4.5);
+      fade = fade < 0 ? 0 : (fade > 1 ? 1 : fade);
+      pg.glow.material.opacity = PLANET_GLOW_MAX * fade;
+      if (pg.ring) pg.ring.material.opacity = 0.55 * (0.55 + 0.45 * fade);
+    }
+
+    // 判定环配色：接近→蓝，最佳区间→绿，过晚/速度不足→红
+    for (var gi = 0; gi < gateMeshes.length; gi++) {
+      var gm = gateMeshes[gi];
+      if (gi === st.target && st.phase >= 0) {
+        if (st.zone === 'sweet') { gm.material.color.setHex(0x7fd0a8); gm.material.opacity = 0.95; }
+        else if (st.zone === 'late' || !st.safe) { gm.material.color.setHex(0xff4d5e); gm.material.opacity = 0.9; }
+        else { gm.material.color.setHex(0x5cc8ff); gm.material.opacity = 0.7; }
+      } else if (gi < st.target) { gm.material.color.setHex(0x2a4a68); gm.material.opacity = 0.18; }
+      else { gm.material.color.setHex(0x5cc8ff); gm.material.opacity = 0.4; }
     }
 
     if (introT >= INTRO_TIME) updateCamera(dt);
 
-    // 顶部罗盘：箭头指向逃离太阳方向
     if (briefClosed && st.status === 'flying') {
       mirrorOn = true;
-      elCompass.classList.remove('hide');
       elProg.classList.remove('hide');
       elHeatWrap.classList.remove('hide');
       elRadar.classList.remove('hide');
+      elTelemetry.classList.remove('hide');
+      elClockWrap.classList.remove('hide');
+      if (elMute) elMute.classList.remove('hide');
       if (elMirrorFrame) elMirrorFrame.classList.remove('hide');
-      camera.updateMatrixWorld();
-      var m = camera.matrixWorld.elements;
-      var dx = st.pos[0], dz = st.pos[2], dr = Math.sqrt(dx * dx + dz * dz);
-      if (dr > 1) {
-        dx /= dr; dz /= dr;
-        var sx = dx * m[0] + dz * m[2];
-        var sy = dx * m[4] + dz * m[6];
-        elCmpSvg.style.transform = 'rotate(' + (Math.atan2(sx, sy) * 180 / Math.PI).toFixed(1) + 'deg)';
-        if (st.thrustMag > 0) {
-          elCompass.classList.toggle('good', st.thrustDir[0] * dx + st.thrustDir[2] * dz > 0.7);
-        } else elCompass.classList.remove('good');
-      }
     } else {
       mirrorOn = false;
-      elCompass.classList.add('hide'); elProg.classList.add('hide');
-      elHeatWrap.classList.add('hide'); elRadar.classList.add('hide');
+      elProg.classList.add('hide'); elHeatWrap.classList.add('hide');
+      elRadar.classList.add('hide'); elFlyby.classList.add('hide');
+      elTelemetry.classList.add('hide'); elClockWrap.classList.add('hide');
+      if (elMute) elMute.classList.add('hide');
       if (elMirrorFrame) elMirrorFrame.classList.add('hide');
+      // 简报 / 结算盖上来时，局内的消息条与评级条一起撤掉（否则会从半透明面板后面透出来）
+      elWarn.classList.remove('show');
+      if (elToast) elToast.classList.remove('show');
     }
 
     updateHUD();
     drawRadar();
+    pollJudged();
 
     if (st.status !== 'flying' && !elResult.classList.contains('show')) showResult();
-
     if (!loaderHidden) { document.getElementById('loader').classList.add('hide'); loaderHidden = true; }
 
-    // 主视角
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, W, H);
     renderer.render(scene, camera);
-    updateAim();   // 放在 render 之后：project() 依赖本帧刚更新的相机矩阵
 
-    // 后视镜：只重绘顶部那块矩形（scissor 限制清屏范围，避免整屏重画两遍）
     if (mirrorOn && mirrorRect.ok) {
       updateMirrorCamera();
-      var my = H - (mirrorRect.y + mirrorRect.h);   // WebGL 视口原点在左下角
+      var my = H - (mirrorRect.y + mirrorRect.h);
       renderer.setScissorTest(true);
       renderer.setViewport(mirrorRect.x, my, mirrorRect.w, mirrorRect.h);
       renderer.setScissor(mirrorRect.x, my, mirrorRect.w, mirrorRect.h);
@@ -1017,9 +1915,8 @@
   layoutMirror();
   requestAnimationFrame(frame);
 
-  // 窗口缩放
   addEventListener('resize', function () {
-    W = innerWidth; H = innerHeight; shortSide = Math.min(W, H);
+    W = innerWidth; H = innerHeight;
     renderer.setSize(W, H, false);
     camera.aspect = W / H; camera.updateProjectionMatrix();
     layoutMirror();

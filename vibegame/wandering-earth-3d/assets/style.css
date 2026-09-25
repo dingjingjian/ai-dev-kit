@@ -8,6 +8,7 @@
   --warn:#ffb84d;
   --danger:#ff4d5e;
   --ok:#7fd0a8;
+  --gold:#ffd24a;
   /* 顶部/底部安全区：优先取小工具容器注入的变量，其次 env()，都没有则 0（对齐 vibegame/ai-calculator 写法）。
      每个元素的 top/bottom 都先给一条纯像素基线声明，Chrome 61 丢弃下面那条 calc 后自动回落，无需额外兼容分支。 */
   --sat:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
@@ -26,16 +27,44 @@ html,body{
   position:fixed;top:0;left:0;width:100%;height:100%;display:block;
 }
 
-/* 计时（左上）：正计时，不设时限，唯一死线是身后的氦闪壳 */
+/* 计时（左上）：正计时，唯一的死线是身后的氦闪壳。它就是成绩本身（逃逸用时），
+   所以带一个小标签把它和「逃逸进度」区分开 —— 一行数字孤零零挂着会被读成装饰。 */
 #clock{
   position:fixed;left:16px;top:14px;
   top:calc(14px + var(--sat));
-  display:flex;align-items:baseline;
+  display:flex;flex-direction:column;align-items:flex-start;
   font-variant-numeric:tabular-nums;
   z-index:10;pointer-events:none;
   text-shadow:0 2px 12px rgba(0,0,0,.6);
+  transition:opacity .3s;
 }
-#clock-num{font-size:34px;font-weight:700;line-height:1;color:var(--txt);letter-spacing:-.5px}
+#clock.hide{opacity:0}
+#clock-num{font-size:32px;font-weight:700;line-height:1;color:var(--txt);letter-spacing:-.5px}
+#clock-label{font-size:10px;letter-spacing:2px;color:var(--mut);margin-top:3px}
+
+/* 背景音乐开关（小地图右侧，与它同一行的上沿对齐）：♪ 音符上加一道斜杠表示已关闭 */
+#mute{
+  position:fixed;left:128px;top:88px;
+  top:calc(88px + var(--sat));
+  width:34px;height:30px;border-radius:9px;cursor:pointer;
+  background:var(--panel);border:1px solid var(--line);
+  color:var(--acc);font-size:15px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  z-index:12;padding:0;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  -webkit-tap-highlight-color:transparent;
+}
+#mute:active{opacity:.7}
+#mute .mu-note{position:relative;top:-1px}
+#mute .mu-slash{
+  position:absolute;width:20px;height:1.5px;border-radius:1px;
+  background:var(--danger);transform:rotate(-38deg);
+  opacity:0;transition:opacity .15s;
+}
+#mute.off{color:var(--mut);opacity:.6}
+#mute.off .mu-slash{opacity:1}
+/* 简报 / 结算盖上来时整块顶栏退场（.hide 必须排在 .off 之后，否则「已静音」的 0.6 会盖过 0） */
+#mute.hide{opacity:0}
 
 /* 后视镜（顶部居中）：帧只是装饰，3D 画面由主 renderer 用 scissor 画在同一块 canvas 的这块矩形里 */
 #mirror-frame{
@@ -48,52 +77,39 @@ html,body{
   z-index:12;pointer-events:none;transition:opacity .3s;
 }
 #mirror-frame.hide{opacity:0}
+/* 标签直接压在 WebGL 画面上，掠到亮行星时纯文字会糊掉 —— 垫一层由下往上加深的暗底 */
 #mirror-label{
-  position:absolute;left:0;right:0;bottom:3px;text-align:center;
+  position:absolute;left:0;right:0;bottom:0;text-align:center;padding:7px 0 3px;
   font-size:9px;letter-spacing:.5px;color:#9fd8ff;text-shadow:0 1px 4px rgba(0,0,0,.9);
+  background:linear-gradient(180deg,rgba(5,8,16,0),rgba(5,8,16,.78));
 }
 
-/* 顶部方向罗盘（后视镜下方） */
-#compass{
-  position:fixed;left:50%;top:90px;
-  top:calc(90px + var(--sat));
-  transform:translateX(-50%);
-  display:flex;align-items:center;gap:7px;
-  background:var(--panel);border:1px solid var(--line);border-radius:20px;
-  padding:5px 14px 5px 8px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  z-index:12;pointer-events:none;transition:opacity .3s;
-}
-#compass.hide{opacity:0}
-#cmp-svg{transition:transform .12s linear}
-#cmp-label{font-size:12px;font-weight:600;color:var(--acc);white-space:nowrap}
-#compass.good #cmp-label{color:var(--ok)}
-#compass.good #cmp-arr{fill:var(--ok)}
-
-/* 遥测（右上） */
+/* 遥测面板（右上，从后视镜下沿之下起排 → 窄屏也不会撞上居中镜框）：
+   速度 / 距日 / 距氦闪壳 + 发动机温度，一整块而不是四个浮块 */
 #telemetry{
-  position:fixed;right:14px;top:14px;
-  top:calc(14px + var(--sat));
+  position:fixed;right:14px;top:88px;
+  top:calc(88px + var(--sat));
+  width:132px;
   display:flex;flex-direction:column;gap:4px;
-  z-index:10;pointer-events:none;
+  background:var(--panel);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  z-index:10;pointer-events:none;transition:opacity .3s;
 }
-.tm-row{
-  display:flex;align-items:baseline;justify-content:flex-end;gap:6px;
-  background:var(--panel);border:1px solid var(--line);border-radius:8px;
-  padding:4px 9px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-}
-.tm-k{font-size:10px;color:var(--mut);letter-spacing:.5px}
-.tm-v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--txt)}
+#telemetry.hide{opacity:0}
+.tm-row{display:flex;align-items:baseline;justify-content:space-between;gap:6px}
+.tm-k{font-size:10px;color:var(--mut);letter-spacing:.3px;white-space:nowrap}
+.tm-v{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--txt);white-space:nowrap}
 .tm-v.good{color:var(--ok)}
+.tm-v.warn{color:var(--warn)}
 .tm-v.bad{color:var(--danger)}
 
-/* 过热条（右上遥测下方）：空 → 热，满值即过热锁定 */
+/* 过热条（遥测面板末行）：满值即过热锁定，必须松手冷却到 0 才解锁 */
 #heat-wrap{
-  position:fixed;right:14px;top:98px;
-  top:calc(98px + var(--sat));
-  width:130px;z-index:10;pointer-events:none;transition:opacity .3s;
+  margin-top:5px;padding-top:7px;border-top:1px solid var(--line);
+  pointer-events:none;transition:opacity .3s;
 }
 #heat-wrap.hide{opacity:0}
-.en-label{font-size:10px;color:var(--mut);display:block;margin-bottom:3px;text-align:right}
+.heat-k{font-size:10px;color:var(--mut);display:block;margin-bottom:4px}
 #heat-track{height:6px;border-radius:3px;background:rgba(120,160,220,.15);overflow:hidden}
 #heat-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5cc8ff,#7fd0a8,#ffb84d);transition:width .1s}
 #heat-wrap.hot #heat-fill{background:linear-gradient(90deg,#7fd0a8,#ffb84d,#ff4d5e)}
@@ -101,50 +117,117 @@ html,body{
 #heat-wrap.locked #heat-fill{background:linear-gradient(90deg,#ff4d5e,#ff8a4d);animation:heatLock .5s ease-in-out infinite}
 @keyframes heatLock{0%,100%{opacity:1}50%{opacity:.5}}
 
-/* 小地图（左下角） */
+/* ===== 加速时机条（本作核心 HUD）：屏幕中下部整条 ===== */
+#flyby{
+  position:fixed;left:14px;right:14px;bottom:80px;
+  bottom:calc(80px + var(--sab));
+  z-index:13;pointer-events:none;transition:opacity .2s,bottom .2s;
+  background:linear-gradient(180deg,rgba(10,16,30,.82),rgba(8,12,24,.88));
+  border:1px solid var(--line);border-radius:14px;
+  padding:9px 12px 10px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 6px 22px rgba(0,0,0,.45);
+}
+#flyby.hide{opacity:0}
+/* 三态 = 红绿灯：绿=命中区、琥珀=过早（弹弓有风险，且正在白烧温度）、红=过晚（已来不及）。
+   .risk 是「当前区间会毁掉这次弹弓」的语义类名，只在过早区挂上 */
+#flyby.sweet{border-color:var(--ok);box-shadow:0 0 22px rgba(127,208,168,.38)}
+#flyby.risk{border-color:var(--warn);box-shadow:0 0 22px rgba(255,184,77,.3)}
+#flyby.late{border-color:var(--danger);box-shadow:0 0 22px rgba(255,77,94,.3)}
+.fb-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:7px}
+#fb-name{font-size:15px;font-weight:800;color:var(--txt);letter-spacing:.5px}
+#fb-tag{font-size:11px;color:var(--mut)}
+#flyby.sweet #fb-tag{color:var(--ok);font-weight:700}
+#flyby.risk #fb-tag{color:var(--warn);font-weight:700}
+#flyby.late #fb-tag{color:var(--danger);font-weight:700}
+
+#fb-track{
+  position:relative;height:22px;border-radius:6px;overflow:hidden;
+  background:rgba(120,160,220,.12);
+  display:flex;
+}
+.fb-zone{
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;
+}
+.fb-early{flex:0 0 46%;background:rgba(120,140,170,.16);color:#93a6c0}
+.fb-sweet{flex:0 0 44%;background:linear-gradient(90deg,rgba(127,208,168,.42),rgba(127,208,168,.70));color:#0f2a1e}
+.fb-sweet span{font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.fb-late{flex:1 1 auto;background:rgba(255,77,94,.24);color:#ffb3bb}
+/* 指针所在的那一段跟着亮起来：一眼看出「我现在踩在哪一格」 */
+#flyby.risk .fb-early{background:rgba(255,184,77,.32);color:#ffe0ab}
+#flyby.late .fb-late{background:rgba(255,77,94,.48);color:#ffd6da}
+#flyby.sweet .fb-sweet{animation:sweetPulse .45s ease-in-out infinite}
+@keyframes sweetPulse{0%,100%{filter:brightness(1)}50%{filter:brightness(1.5)}}
+/* 判定针：从 0%（进窗口）扫到 100%（判定点） */
+#fb-needle{
+  position:absolute;top:-2px;bottom:-2px;left:0;width:3px;margin-left:-1.5px;
+  background:#fff;border-radius:2px;box-shadow:0 0 8px rgba(255,255,255,.9);
+}
+#flyby.sweet #fb-needle{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+#flyby.late #fb-needle,#flyby.risk #fb-needle{background:var(--danger);box-shadow:0 0 10px var(--danger)}
+.fb-foot{margin-top:7px;font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.fb-foot b{font-weight:700}
+.fb-v{font-weight:700}
+.fb-v.good{color:var(--ok)}
+.fb-v.bad{color:var(--danger)}
+
+/* 小地图（左上，计时下方；与右侧遥测面板同一水平带） */
 #radar{
-  position:fixed;left:12px;bottom:96px;
-  bottom:calc(96px + var(--sab));
+  position:fixed;left:16px;top:88px;
+  top:calc(88px + var(--sat));
   width:104px;height:104px;z-index:11;pointer-events:none;transition:opacity .3s;
 }
 #radar.hide{opacity:0}
 
-/* 弹弓引导：投影到「下一颗要掠射的行星」的屏幕位置上 */
-#aim{
-  position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);
-  z-index:11;pointer-events:none;transition:opacity .2s;
-  display:flex;align-items:center;gap:5px;white-space:nowrap;
-  background:rgba(12,18,34,.74);border:1px solid var(--acc);border-radius:12px;
-  padding:3px 9px;font-size:10px;
-  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-}
-#aim.hide{opacity:0}
-#aim-name{font-weight:700;color:var(--acc)}
-#aim-dist{color:var(--mut);font-variant-numeric:tabular-nums}
-#aim-tag{color:var(--ok)}
-#aim.risk{border-color:var(--danger)}
-#aim.risk #aim-tag{color:var(--danger)}
-#aim.risk #aim-name{color:var(--danger)}
-
-/* 影响球预警 */
+/* ===== 消息槽（时机条正上方，整屏唯一一条状态提示）=====
+   从屏幕中上（top:208）搬到时机条上方之后，「还剩几秒亮窗口 / 过热还差几秒」
+   就和玩家的操作区在一起，不必抬头找。三态用颜色分开：
+   常规倒计时 = 蓝（这是信息，不是警告）；耀斑脉冲 = 琥珀呼吸；过热 = 红。
+   180 = 时机条（bottom 80 + 高 92）之上的 8px 间隙，两块绝不贴边。 */
 #warn{
-  position:fixed;left:50%;top:126px;
-  top:calc(126px + var(--sat));
+  position:fixed;left:50%;bottom:180px;
+  bottom:calc(180px + var(--sab));
   transform:translateX(-50%);
-  font-size:12px;color:var(--warn);
-  background:var(--panel);border:1px solid var(--warn);border-radius:14px;
-  padding:6px 14px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  z-index:11;opacity:0;transition:opacity .25s;pointer-events:none;white-space:nowrap;
+  max-width:calc(100vw - 28px);text-align:center;line-height:1.5;
+  font-size:12px;color:#cfe4ff;
+  background:rgba(10,16,30,.86);border:1px solid rgba(92,200,255,.38);border-left:3px solid var(--acc);
+  border-radius:10px;padding:8px 14px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 6px 22px rgba(0,0,0,.45);
+  z-index:14;opacity:0;transition:opacity .25s;pointer-events:none;
 }
 #warn.show{opacity:1}
+/* 耀斑脉冲：琥珀底 + 加粗 + 呼吸辉光，与「蓝色倒计时」一眼分开 */
+#warn.pulse{
+  color:#fff3d6;font-weight:700;letter-spacing:.3px;
+  background:rgba(62,34,6,.9);border-color:var(--warn);border-left-color:var(--warn);
+  animation:warnPulse .55s ease-in-out infinite;
+}
+/* 过热锁定：红色，和时机条的「过晚」同色系 */
+#warn.hot{
+  color:#ffe0e4;font-weight:700;
+  background:rgba(52,10,16,.9);border-color:var(--danger);border-left-color:var(--danger);
+}
+@keyframes warnPulse{
+  0%,100%{box-shadow:0 0 0 rgba(255,184,77,0)}
+  50%{box-shadow:0 0 18px rgba(255,184,77,.8)}
+}
 
-/* 危险红边脉冲 */
+/* 全屏边缘光：红色=危险，绿色=最佳区间到了、该按了 */
 #danger{
   position:fixed;top:0;left:0;width:100%;height:100%;
   box-shadow:inset 0 0 0 0 var(--danger);
   z-index:9;pointer-events:none;transition:box-shadow .15s;
 }
 #danger.active{box-shadow:inset 0 0 80px 12px rgba(255,77,94,.55)}
+/* 该按了：整屏绿色呼吸。没有点火按钮之后，这是唯一能"用屏幕喊玩家"的手段 ——
+   余光扫到就知道要按，不必盯着时机条看 */
+#danger.ready{animation:dangerReady .6s ease-in-out infinite}
+@keyframes dangerReady{
+  0%,100%{box-shadow:inset 0 0 46px 6px rgba(127,208,168,.28)}
+  50%{box-shadow:inset 0 0 92px 15px rgba(127,208,168,.62)}
+}
 
 /* 耀斑脉冲白闪 */
 #flash{
@@ -157,8 +240,8 @@ html,body{
 
 /* 逃逸进度条 */
 #progress{
-  position:fixed;left:16px;right:16px;bottom:58px;
-  bottom:calc(58px + var(--sab));
+  position:fixed;left:16px;right:16px;bottom:20px;
+  bottom:calc(20px + var(--sab));
   z-index:10;pointer-events:none;transition:opacity .3s;
 }
 #progress.hide{opacity:0}
@@ -166,17 +249,45 @@ html,body{
 #prog-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5cc8ff,#7fd0a8);transition:width .15s}
 #prog-label{display:block;text-align:center;font-size:11px;color:var(--mut);margin-top:5px}
 
-/* 开场提示 */
-#hint{
-  position:fixed;left:50%;bottom:28px;
-  bottom:calc(28px + var(--sab));
-  transform:translateX(-50%);
-  font-size:13px;color:var(--mut);
-  background:var(--panel);border:1px solid var(--line);border-radius:18px;
-  padding:8px 16px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  z-index:10;opacity:1;transition:opacity .5s;pointer-events:none;white-space:nowrap;
+/* 点火提示（开场简报内，首次点火后隐去）
+   没有点火按钮之后，「怎么点火」只在开场交代一次：整块屏幕就是按钮。
+   原先它常驻在屏幕最下方，和进度条、时机条挤成三条满宽横条 —— 搬进简报后
+   局内底部只剩「消息槽 + 时机条 + 进度」三行，且互不贴边。 */
+#tip{
+  margin-top:13px;text-align:center;
+  font-size:12px;line-height:1.65;color:#bcd2ec;
+  background:rgba(92,200,255,.07);border:1px solid rgba(92,200,255,.22);
+  border-radius:10px;padding:9px 12px;
+  transition:opacity .4s;
 }
-#hint.hide{opacity:0}
+#tip b{color:var(--ok);font-weight:700}
+#tip.hide{opacity:0}
+
+/* ===== 掠过评级提示（与消息槽同位：时机条正上方）===== */
+#fb-toast{
+  position:fixed;left:50%;bottom:180px;
+  bottom:calc(180px + var(--sab));
+  transform:translateX(-50%) translateY(8px);
+  min-width:236px;max-width:calc(100vw - 28px);
+  background:rgba(8,13,24,.94);border:1px solid var(--line);border-left:3px solid var(--acc);
+  border-radius:10px;padding:9px 13px;z-index:15;pointer-events:none;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 8px 26px rgba(0,0,0,.5);
+  opacity:0;transition:opacity .22s,transform .22s;
+}
+#fb-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.ft-top{display:flex;align-items:baseline;gap:8px;margin-bottom:3px}
+#ft-name{font-size:13px;font-weight:800;color:var(--txt)}
+#ft-grade{font-size:12px;font-weight:700}
+#ft-detail{font-size:11px;color:var(--mut);line-height:1.5;white-space:pre-line}
+#fb-toast.perfect{border-left-color:var(--gold)}
+#fb-toast.perfect #ft-grade{color:var(--gold)}
+#fb-toast.good{border-left-color:var(--ok)}
+#fb-toast.good #ft-grade{color:var(--ok)}
+#fb-toast.early{border-left-color:var(--warn)}
+#fb-toast.early #ft-grade{color:var(--warn)}
+#fb-toast.late,#fb-toast.none,#fb-toast.fail{border-left-color:var(--danger)}
+#fb-toast.late #ft-grade,#fb-toast.none #ft-grade,#fb-toast.fail #ft-grade{color:var(--danger)}
 
 /* 开场任务简报 */
 #brief{
@@ -184,25 +295,29 @@ html,body{
   display:flex;align-items:center;justify-content:center;
   background:rgba(5,6,13,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   z-index:25;opacity:0;pointer-events:none;transition:opacity .4s;
+  overflow-y:auto;
 }
 #brief.show{opacity:1;pointer-events:auto}
+/* 面板要压得住背后的 3D 场景（掠到木星时整屏是亮橙色，半透明面板会让文字糊掉） */
 .bf-inner{
   width:calc(100vw - 32px);max-width:360px;
-  background:var(--panel);border:1px solid var(--line);border-radius:18px;
-  padding:26px 22px;
+  background:rgba(9,13,24,.95);border:1px solid var(--line);border-radius:18px;
+  padding:20px 20px 22px;margin:auto;
 }
-.bf-title{font-size:22px;font-weight:800;color:var(--acc);margin-bottom:12px;text-align:center}
-.bf-svg{width:100%;max-width:220px;display:block;margin:0 auto 14px}
-.bf-demo{width:130px;height:74px;margin:0 auto 14px;border:1.5px solid var(--line);border-radius:10px;position:relative;overflow:hidden;background:rgba(0,0,0,.3)}
-.bf-finger{position:absolute;width:18px;height:18px;border-radius:50%;background:rgba(92,200,255,.85);box-shadow:0 0 8px rgba(92,200,255,.6);left:30px;top:20px;animation:bfDrag 1.8s ease-in-out infinite}
-@keyframes bfDrag{0%,10%{left:30px;top:20px;opacity:0}20%{opacity:1}80%{left:90px;top:50px;opacity:1}90%,100%{left:90px;top:50px;opacity:0}}
-.bf-ops{font-size:13px;color:var(--mut);text-align:center;margin-bottom:14px;line-height:1.6}
-.bf-ops b{color:var(--acc);font-weight:600}
-.bf-ops2{font-size:12px;color:var(--warn);text-align:center;margin-bottom:14px;line-height:1.6}
+.bf-kicker{font-size:11px;letter-spacing:3px;color:var(--mut);text-align:center;margin-bottom:5px}
+.bf-title{font-size:23px;font-weight:800;color:var(--acc);margin-bottom:10px;text-align:center}
+.bf-svg{width:100%;max-width:224px;display:block;margin:0 auto 12px}
+.bf-sub{font-size:12px;color:var(--mut);line-height:1.7;text-align:center;margin-bottom:13px}
+/* 简报只留一句「MOSS 已算定航线 / 你决定什么时候点火」：规则与操作交给局内 HUD 教 */
+.bf-ops2{display:flex;flex-direction:column;gap:3px;align-items:center;text-align:center;line-height:1.5}
+.bf-moss{font-size:12px;color:var(--mut);letter-spacing:.6px}
+.bf-moss::before{content:'▍';color:var(--acc);opacity:.85;margin-right:5px}
+.bf-you{font-size:15px;font-weight:700;color:var(--txt)}
 .bf-btn{
-  width:100%;margin-top:14px;font-size:15px;font-weight:600;color:#fff;
+  width:100%;margin-top:13px;font-size:15px;font-weight:600;color:#fff;
   background:linear-gradient(135deg,#1a6fc4,#5cc8ff);
   border:none;border-radius:12px;padding:13px 0;cursor:pointer;
+  font-family:inherit;-webkit-tap-highlight-color:transparent;
 }
 .bf-btn:active{opacity:.85}
 
@@ -216,20 +331,53 @@ html,body{
 #result.show{opacity:1;pointer-events:auto}
 .rs-inner{
   width:calc(100vw - 32px);max-width:360px;
-  background:var(--panel);border:1px solid var(--line);border-radius:18px;
-  padding:28px 24px;text-align:center;
+  background:rgba(9,13,24,.95);border:1px solid var(--line);border-radius:18px;
+  padding:26px 22px;text-align:center;
 }
-.rs-title{font-size:24px;font-weight:800;margin-bottom:10px}
+.rs-title{font-size:22px;font-weight:800;margin-bottom:12px}
 .rs-title.win{color:var(--ok)}
 .rs-title.lose{color:var(--danger)}
-.rs-text{font-size:14px;color:var(--mut);line-height:1.6;margin-bottom:18px}
-.rs-stat{font-size:12px;color:var(--acc);font-variant-numeric:tabular-nums;margin-bottom:20px;line-height:1.8}
+/* 用时成绩：结算页的主角，「谁更快逃出去」就比这一行 */
+.rs-time{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  margin-bottom:14px;padding:12px 0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+.rst-label{font-size:11px;color:var(--mut);letter-spacing:2px}
+.rst-value{
+  font-size:46px;font-weight:800;line-height:1.05;letter-spacing:-1px;
+  font-variant-numeric:tabular-nums;color:var(--gold);
+  text-shadow:0 0 22px rgba(255,210,74,.35);
+}
+.rs-time.bad .rst-value{color:var(--mut);text-shadow:none}
+.rst-value i{font-size:20px;font-style:normal;font-weight:600;margin-left:3px;color:var(--mut)}
+.rst-best{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.rst-best.new{color:var(--gold);font-weight:700}
+.rs-text{font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:10px}
+/* 注脚统计：两行「名目 + 数值」，名目灰、数值亮 —— 一眼扫完，不用读整句 */
+.rs-stat{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;margin-bottom:16px;line-height:1.95}
+.rs-stat b{color:var(--txt);font-weight:700}
+.rs-actions{display:flex;gap:10px}
 .rs-btn{
-  width:100%;font-size:15px;font-weight:600;color:#fff;
+  flex:1;font-size:15px;font-weight:600;color:#fff;
   background:linear-gradient(135deg,#1a6fc4,#5cc8ff);
   border:none;border-radius:12px;padding:13px 0;cursor:pointer;
+  font-family:inherit;-webkit-tap-highlight-color:transparent;
 }
 .rs-btn:active{opacity:.85}
+.rs-btn.ghost{
+  background:transparent;color:var(--acc);
+  border:1px solid rgba(92,200,255,.55);
+}
+.rs-btn.ghost:active{background:rgba(92,200,255,.14)}
+.rs-btn.hide{display:none}
+/* 拿不到容器 bridge 时，这里会被填进整段战绩文案并自动选中 —— 所以要能换行、能被长按选中 */
+.rs-hint{
+  font-size:11px;color:var(--mut);margin-top:10px;line-height:1.55;min-height:14px;
+  white-space:pre-line;text-align:left;word-break:break-word;
+  -webkit-user-select:text;user-select:text;
+}
+.rs-hint b{color:var(--gold)}
 
 /* 加载 */
 #loader{
