@@ -63,15 +63,118 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     missing.length ? '缺失: ' + missing.join(',') : wanted.length + ' 个 id 全部命中');
 
   // 被 JS 操作的关键样式状态必须有对应 CSS 规则，否则切了类名却没有任何视觉变化
-  const need = ['#clock-num', '#mirror-frame', '#heat-wrap', '#heat-fill', '#heat-track',
+  const need = ['#clock-num', '#clock-ms', '#mirror-frame',
+    '#cockpit', '#cockpit-msg', '#dash', '#dash-side',
+    '#dg-heat', '#dg-speed', '#dg-pw', '.dg-track', '.dg-arc', '.dg-needle', '.dg-tick', '.dg-ref', '.dg-v',
+    '.lamp', '#lamps', '#dash-read', '.dr-v',
     '#flyby', '#fb-needle', '#fb-track', '.fb-early', '.fb-sweet', '.fb-late'];
   const noRule = need.filter((sel) => css.indexOf(sel) < 0);
-  check(noRule.length === 0, '加速时机条等新 HUD 的样式规则齐全',
+  check(noRule.length === 0, '加速时机条 / 汽车式仪表盘等新 HUD 的样式规则齐全',
     noRule.length ? '缺规则: ' + noRule.join(',') : need.length + ' 条选择器全部命中');
   const stateCls = ['hot', 'locked', 'hide', 'show', 'sweet', 'late', 'risk', 'good', 'bad', 'off',
-    'ready', 'active', 'perfect', 'fail', 'early', 'none', 'pulse'];
+    'ready', 'active', 'perfect', 'fail', 'early', 'none', 'pulse', 'on', 'warn',
+    'idle', 'weak', 'boost'];
   const missCls = stateCls.filter((c) => css.indexOf('.' + c) < 0);
   check(missCls.length === 0, 'HUD 状态类在 CSS 中有定义', missCls.length ? '缺: ' + missCls.join(',') : stateCls.join(' '));
+
+  // ---- 仪表盘契约（汽车驾驶舱式）：**温度柱 + 速度/功率两个指针盘** + 门槛/额定刻度 + 警报灯 ----
+  // 旧版是一整块文字遥测（速度 / 距日 / 距壳 + 一条温度条）。现在按「要不要跟刻度比对」分工：
+  // 温度 = 柱（单调余量，填充高度即答案）、速度 = 盘（跟门槛刻度比）、功率 = 盘（跟额定线比）。
+  const dashRule = (css.match(/#dash\{[^}]*\}/) || [''])[0];
+  const muteRule = (css.match(/#mute\{[^}]*\}/) || [''])[0];
+  check(muteRule.indexOf('right:') > 0 && muteRule.indexOf('left:') < 0,
+    '声音开关挂在右上角（不再是左上小地图右侧）');
+  // 顶部预留：小红书容器自带一排顶部按钮，HUD 顶部各元素必须再叠一条 --top-gap
+  check(/--top-gap:\s*50px/.test(css), '顶部预留常量 --top-gap 已定义（对齐 moon-myths 安全区写法）');
+  const topGapUsers = ['#clock{', '#mute{', '#mirror-frame{', '#radar{', '#progress{'];
+  const noGap = topGapUsers.filter((sel) => {
+    const r = (css.match(new RegExp(sel.replace('{', '\\{[^}]*\\}'))) || [''])[0];
+    return r.indexOf('var(--top-gap)') < 0;
+  });
+  check(noGap.length === 0, '顶部各元素都叠了 --top-gap（元素不会钻进宿主顶栏）',
+    noGap.length ? '未叠: ' + noGap.join(' ') : topGapUsers.join(' '));
+  check(/id="clock-ms"/.test(html) && /elClockMs/.test(appSrc) && /% 1\) \* 1000/.test(appSrc),
+    '计时带毫秒（#clock-ms 单独一段，由 JS 逐帧写 m:ss 之外的 3 位毫秒）');
+  // 指针用 SVG 的 rotate 属性变换，不是 CSS transform（后者在 Chrome 61 的 SVG 上要 transform-box 才转对）
+  check(/setAttribute\('transform',\s*'rotate\('/.test(appSrc) && !/transform-origin/.test(css),
+    '表盘指针用 SVG rotate 属性驱动（Chrome 61 的 SVG 不支持 CSS transform-origin）');
+  check(/GAUGE_VMAX/.test(appSrc) && /ARC_LEN/.test(appSrc) && /PWR_VMAX/.test(appSrc),
+    '速度表 / 功率表各有明确满量程与弧长常量（满弹弓峰值 67.1 km/s 不得顶到上限）');
+  check(htmlIds.has('lamp-hot') && htmlIds.has('lamp-sling') && htmlIds.has('lamp-flare') && htmlIds.has('lamp-shell'),
+    '四盏警报灯齐全（过热 / 弹弓 / 耀斑 / 氦闪）');
+
+  // ---- 驾驶舱布局契约：操作区（仪表行 / 时机条 / 消息槽）全部贴在屏幕底部 ----
+  // 一次点火窗口只有 2.5–2.8 s，而「判定针踩在哪一段 / 还剩多少温度 / 速度够不够门槛 /
+  // 发动机这一刻出了多大力」必须读完才能决定按不按 —— 上下来回看就是失误。
+  // 所以这些一律进 `#cockpit`；顶部只留与驾驶无关、想起来才抬头看一眼的东西：
+  // 用时 / 逃逸进度 / 小地图 / 后视镜 / 声音开关。
+  const cockRule = (css.match(/#cockpit\{[^}]*\}/) || [''])[0];
+  check(/position:fixed/.test(cockRule) && /bottom:/.test(cockRule) && /var\(--sab\)/.test(cockRule),
+    '驾驶舱 #cockpit 固定挂在屏幕底部、并叠了底部安全区（手势条不会压住它）',
+    cockRule.replace(/\s+/g, ' ').slice(0, 88));
+  check(cockRule.indexOf('top:') < 0 && cockRule.indexOf('var(--top-gap)') < 0,
+    '驾驶舱不再挂顶部（旧版仪表盘占的就是 --top-gap 那条线）');
+  check(dashRule.indexOf('position:fixed') < 0 && dashRule.indexOf('top:') < 0
+    && dashRule.indexOf('var(--top-gap)') < 0,
+    '仪表行改成驾驶舱内的平铺一行（不再是右上那块浮动的竖排面板）',
+    dashRule.replace(/\s+/g, ' ').slice(0, 88));
+  check(htmlIds.has('dg-pw') && htmlIds.has('dg-pw-arc') && htmlIds.has('dg-pw-needle')
+    && htmlIds.has('dg-pw-ref') && htmlIds.has('tm-pw'),
+    '第三个表盘 = 发动机输出功率（功率表 DOM：盘 + 值弧 + 指针 + 额定刻度 + 读数）');
+  check(/PWR_VMAX\s*=\s*160/.test(appSrc) && /elPwGauge\.classList\.toggle\('boost'/.test(appSrc)
+    && /elPwArc/.test(appSrc) && /elPwVal/.test(appSrc),
+    '功率表满量程 160%（额定 100% + 脉冲乘波 160%）且真的接进了 updateHUD');
+  // 功率读数 = 区间效率 × 脉冲乘波，停机/过热锁定由渲染层读成 0：
+  // 四档 20 / 100 / 160 / 0 —— 满量程取 160% 正好装下最高的一档（乘波会越过额定线）。
+  const pwSafe = M3D.zoneEff('early') === 1 && M3D.zoneEff('sweet') === 1
+    && Math.abs(M3D.zoneEff('late') - 0.2) < 1e-9
+    && Math.abs(1 * C.PULSE_THRUST_BOOST - 1.6) < 1e-9;
+  check(pwSafe, '功率表四档读数：过晚残效 20% / 额定 100% / 脉冲乘波 160%（停机与过热锁定 = 0）',
+    'late ' + M3D.zoneEff('late') + ' × 乘波 ' + C.PULSE_THRUST_BOOST);
+  check(/var power = \(st\.burning && !st\.overheated\) \? st\.thrustEff : 0/.test(appSrc),
+    '功率在「没按住 / 过热锁定」时归零（同时也是手指有没有按住的反馈）');
+  // 2026-09-26 重构：功率是**起转斜坡**（按住 0.5 s 到满额），红态只给「过晚残效」——
+  // 若按「功率 < 50%」判，每次按住的起转前 0.25 s 都会闪一次红，那是正常起转不是白烧。
+  check(/PWR_UP\s*=\s*200/.test(appSrc) && /PWR_DOWN\s*=\s*200/.test(appSrc)
+    && /elPwGauge\.classList\.toggle\('weak', st\.zone === 'late'/.test(appSrc),
+    '功率是起转斜坡（PWR_UP = 200/s）；过晚残效的红态按区间判，不按功率大小判');
+  check(/TEMP_RATE\s*=\s*75/.test(appSrc)
+    && /st\.heat = Math\.min\(TEMP_MAX, st\.heat \+ TEMP_RATE \* st\.thrustEff/.test(appSrc),
+    '温度 = ∫ 功率（温升速率 ∝ 功率档位，不是恒定速率）');
+  // ---- 仪表行顺序：功率 → 温度 → 速度 ----
+  // 顺序 = 驾驶时的手上顺序：先看**功率**（这一下按出去多大力）、再看**温度**（离满箱还有多远）、
+  // 最后看**速度**（够不够门槛刻度）。改顺序只动 DOM，JS 全按 id 取，所以这里用 DOM 次序锁死。
+  const rowHtml = (html.match(/<div id="dash-row">[\s\S]*?<div id="dash-side">/) || [''])[0];
+  const idxOrder = ['id="dg-pw"', 'id="dg-heat"', 'id="dg-speed"'].map((s) => rowHtml.indexOf(s));
+  check(idxOrder.every((v) => v >= 0) && idxOrder[0] < idxOrder[1] && idxOrder[1] < idxOrder[2],
+    '仪表行顺序 = 功率 → 温度 → 速度', rowHtml.replace(/\s+/g, ' ').slice(0, 64) + '…');
+  // ---- 三格都是指针表盘（温度一度试过柱状图，已回退，不留残留）----
+  check(htmlIds.has('dg-heat') && htmlIds.has('dg-heat-needle') && htmlIds.has('dg-heat-arc') && htmlIds.has('tm-heat'),
+    '温度用指针表盘（盘 + 值弧 + 指针 + 读数）');
+  check(/gaugeSet\(elHeatNeedle, elHeatArc, heatPct\)/.test(appSrc)
+    && html.indexOf('tb-heat-fill') < 0 && appSrc.indexOf('elHeatBar') < 0 && css.indexOf('.tb-fill') < 0,
+    '温度由 gaugeSet 驱动；柱状图那套（tb-box / tb-fill / elHeatBar）已彻底移除');
+  // ---- 两个历史 bug 的回归契约（2026-09-26 实测踩到）----
+  // ① 功率指针刻度：st.thrustEff 是**小数**（1.0 = 额定），要 ×100 折成百分数再除满量程 160%。
+  //    直接除满量程的话 1/160 = 0.006 → 指针全程只转 1°，看着像「不动的指针」。
+  check(/power \* 100 \/ PWR_VMAX/.test(appSrc) && !/gaugeSet\(elPwNeedle, elPwArc, power \/ PWR_VMAX\)/.test(appSrc),
+    '功率指针刻度：小数 → 百分数 → 满量程（100% 落在额定线 62.5% 弧位、乘波 160% 顶满 +135°）');
+  // ② 值弧进度必须写 **inline style**：`.dg-arc{stroke-dashoffset:179.1}` 是 CSS 声明，
+  //    而 CSS 声明永远压过同名的 SVG 表现属性 —— 写成属性那三条值弧一辈子停在 179.1（全空），
+  //    表盘上就只剩指针在动（实测 computed 恒为 179.1px，属性却在变）。
+  check(/arcEl\.style\.strokeDashoffset/.test(appSrc) && !/arcEl\.setAttribute/.test(appSrc)
+    && /\.dg-arc\{[^}]*stroke-dashoffset:179\.1/.test(css),
+    '值弧进度走 inline style（CSS 里那条 179.1 只是首帧基线，压不掉 JS 写的进度）');
+  check(!/position:fixed/.test(dashRule) && /display:flex/.test(dashRule)
+    && /align-items:center/.test(dashRule),
+    '仪表行是横向平铺（温度柱 + 两张表盘并排 + 右端灯组 / 读数），不是竖着堆');
+  // 旧的一维温度条（#heat-wrap / #heat-fill / #heat-track）整体退场且**不复用旧 id**：
+  // 现在的温度柱是仪表行里与两张表盘同格的一根柱（.tb / .tb-fill），不是那块横条。
+  check(css.indexOf('#heat-wrap') < 0 && css.indexOf('#heat-fill') < 0 && css.indexOf('#heat-track') < 0
+    && html.indexOf('id="heat-fill"') < 0 && appSrc.indexOf('elHeatFill') < 0,
+    '旧的横条温度条已彻底移除（温度改为仪表行里的柱状图，旧 id 不复用）');
+  check(css.indexOf('#telemetry') < 0 && appSrc.indexOf('elTelemetry') < 0,
+    '旧的文字遥测面板 #telemetry 已移除（改为 #dash 仪表盘）');
 
   // 底部提示已改挂到右侧点火按钮上：底部那条 #hint 必须彻底消失（含样式残留）
   check(html.indexOf('id="hint"') < 0 && css.indexOf('#hint') < 0 && appSrc.indexOf('elHint') < 0,
@@ -81,29 +184,44 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '右下角点火按钮已移除（改为按住屏幕任意位置点火）');
   check(htmlIds.has('tip'), '保留一次性点火提示（「怎么点火」只交代一次）');
 
-  // ---- HUD 布局契约：底部三层（消息槽 / 时机条 / 进度）必须各就各位、互不贴边 ----
-  // 旧版 #warn 是 top:208 悬浮在场景中间的，读起来像一条没主的浮标；现在它与评级条同槽，
-  // 挂在时机条上方（bottom），且必须允许换行 —— 旧版 nowrap + 长文案会把两侧裁掉。
+  // ---- HUD 布局契约：消息槽 / 时机条 / 仪表行三层同属驾驶舱，自上而下排开、互不贴边 ----
+  // 旧版 #warn 先是 top:208 悬浮画面中间（读起来像一条没主的浮标），后来改成写死
+  // bottom:180px 去和时机条对齐 —— 时机条一换行（窄屏 tag 变长）就会叠字。
+  // 现在两条提示都塞进 `#cockpit-msg` 这个**零高度**槽位，贴着时机条上沿向上生长：
+  // 位置由排版算，不写死像素，长文案只盖 3D 画面、绝不顶走下面的条。
   const warnRule = (css.match(/#warn\{[^}]*\}/) || [''])[0];
-  check(!!warnRule && warnRule.indexOf('bottom:') > 0 && warnRule.indexOf('top:') < 0,
-    '#warn 挂在底部消息槽（不再 top: 悬浮于画面中间）', warnRule.replace(/\s+/g, ' ').slice(0, 96));
-  check(!!warnRule && warnRule.indexOf('nowrap') < 0,
-    '#warn 允许换行（旧版 white-space:nowrap 会把长文案两头裁掉）');
-  // 消息槽与时机条必须在同一列上下排开：槽底 = 时机条顶（80 + 条高）之上留缝
   const toastRule = (css.match(/#fb-toast\{[^}]*\}/) || [''])[0];
   const barRule = (css.match(/#flyby\{[^}]*\}/) || [''])[0];
-  const botPx = (s) => { const m = /bottom:(\d+)px/.exec(s); return m ? +m[1] : -1; };
-  check(botPx(warnRule) > 0 && botPx(warnRule) === botPx(toastRule) && botPx(warnRule) - botPx(barRule) > 60,
-    '消息槽（#warn / #fb-toast 同位）在时机条上方留出间隙，两块不贴边',
-    '#warn ' + botPx(warnRule) + ' / #fb-toast ' + botPx(toastRule) + ' / #flyby ' + botPx(barRule));
-  // 点火提示搬进开场简报：局内底部不再有常驻横条（否则和时机条、进度条挤成三条满宽）
+  const msgRule = (css.match(/#cockpit-msg\{[^}]*\}/) || [''])[0];
+  check(!!warnRule && warnRule.indexOf('position:fixed') < 0 && warnRule.indexOf('top:') < 0,
+    '#warn 不再写死位置（旧版 top:208 悬浮画面中间 / 后靠 bottom:180px 硬对时机条）',
+    warnRule.replace(/\s+/g, ' ').slice(0, 88));
+  check(!!warnRule && warnRule.indexOf('nowrap') < 0,
+    '#warn 允许换行（旧版 white-space:nowrap 会把长文案两头裁掉）');
+  check(/position:relative/.test(msgRule) && /height:0/.test(msgRule),
+    '消息槽 #cockpit-msg 是零高度槽位（提示向上生长，不推走下面的时机条与仪表行）');
+  check(html.indexOf('id="cockpit-msg"') < html.indexOf('id="warn"')
+    && html.indexOf('id="cockpit-msg"') < html.indexOf('id="fb-toast"')
+    && html.indexOf('id="warn"') < html.indexOf('id="flyby"')
+    && html.indexOf('id="fb-toast"') < html.indexOf('id="flyby"'),
+    '#warn 与评级条同槽：都在 #cockpit-msg 里、且排在时机条之前（= 显示在它上方）');
+  check(!!toastRule && toastRule.indexOf('position:fixed') < 0 && /transform:translateY/.test(toastRule),
+    '评级条与 #warn 一样交给槽位定位，入场只靠 translateY（不再各自写死 bottom）');
+  check(/position:relative/.test(barRule) && /margin-bottom/.test(barRule),
+    '时机条是驾驶舱里的普通一行：与仪表行之间靠 margin 留缝（不写死像素）');
+  // 点火提示搬进开场简报：局内底部不再有常驻横条（否则和时机条、仪表行挤成三条满宽）
   const tipRule = (css.match(/#tip\{[^}]*\}/) || [''])[0];
   check(!!tipRule && tipRule.indexOf('position:fixed') < 0 &&
     html.indexOf('id="tip"') > html.indexOf('id="brief"'),
-    '点火提示在开场简报内（局内底部只剩消息槽 / 时机条 / 进度）');
-  // 速度读数只有一套单位：时机条 foot 与右上遥测都是 km/s（旧版 foot 是内部单位 98 / 156）
+    '点火提示在开场简报内（局内底部只剩消息槽 / 时机条 / 仪表行）');
+  // 逃逸进度：与驾驶无关，从底部满宽横条搬进左上列（计时与雷达之间），不再占操作区
+  const progRule = (css.match(/#progress\{[^}]*\}/) || [''])[0];
+  check(/var\(--top-gap\)/.test(progRule) && progRule.indexOf('bottom:') < 0,
+    '逃逸进度搬到左上列（计时 → 进度 → 小地图），底部整条让给驾驶舱',
+    progRule.replace(/\s+/g, ' ').slice(0, 88));
+  // 速度读数只有一套单位：时机条 foot 与表盘都是 km/s（旧版 foot 是内部单位 98 / 156）
   check(/门槛[\s\S]{0,60}km\/s/.test(html) && /KMS_PER_UNIT\)\.toFixed\(1\)/.test(appSrc),
-    '时机条 foot 的速度 / 门槛用 km/s（与遥测同一套单位）');
+    '时机条 foot 的速度 / 门槛用 km/s（与表盘同一套单位）');
   check(/canvas\.addEventListener\('pointerdown',\s*function[\s\S]{0,220}game\.setBurning\(true\)/.test(appSrc) &&
     /window\.addEventListener\('pointerup', endPointer\)/.test(appSrc) &&
     /window\.addEventListener\('pointercancel', endPointer\)/.test(appSrc),
@@ -139,10 +257,32 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '结算页有独立的「用时 / 最快纪录」区块');
   check(/localStorage\.setItem\('we3d_best'/.test(appSrc) && /localStorage\.getItem\('we3d_best'/.test(appSrc),
     '本站最快成绩持久化（只有成功逃出才记账）');
-  check(/CAN_SHARE/.test(appSrc) && /postNote/.test(appSrc) && /image_resources/.test(appSrc) && /pageType: 'photo_publish'/.test(appSrc),
-    '分享走容器 JSBridge（postNote + image_resources），能力检测而非 UA');
+  // 分享首选 §3.9 interactionOpenApi（文档里唯一标注「分享」的能力）：图文评论草稿 + 同步存相册
+  check(/interactionOpenApi/.test(appSrc) && /action: 'post_comment'/.test(appSrc) && /media_bean/.test(appSrc)
+    && /media_type: 'image'/.test(appSrc) && /cover_image_url/.test(appSrc) && /saveToAlbum: true/.test(appSrc),
+    '分享首选 §3.9 interactionOpenApi（post_comment + media_bean + saveToAlbum）');
+  // §3.9 的媒体**只收本地文件句柄**（data: URI / 网络地址明确不可用）→ 只能喂 writeTempFile 的 filePath
+  check(/cover_image_url: filePath/.test(appSrc) && !/cover_image_url: (cardData|dataURL)/.test(appSrc),
+    '评论区媒体只喂本地句柄（data: URI 绝不进 media_bean）');
+  // 评论区能力客户端 9.49+：按 §3.6 从 buildVersion 取版本（末三位是编译序号，先取整），同步值缺失才异步取
+  check(/COMMENT_MIN_CLIENT = 9490/.test(appSrc) && /miniToolEnv/.test(appSrc) && /buildVersion/.test(appSrc)
+    && /getLaunchOptions/.test(appSrc) && /Math\.floor\(raw \/ 1000\)/.test(appSrc),
+    '评论区能力按 §3.6 判客户端版本（9.49 = 9490），同步取不到才异步 getLaunchOptions');
+  // §3.9 要求「用户点击等主动操作触发」→ 卡片与临时文件在结算页就备好，点击时直接带着句柄发起
+  check(/function prepareShareCard\(\)/.test(appSrc) && /prepareShareCard\(\);\s*\n\s*if \(win\) sfxWin/.test(appSrc)
+    && /hasApi\(b, 'writeTempFile'\)/.test(appSrc),
+    '战绩卡与本地句柄在结算页备好（点击手势栈里不再夹异步步骤）');
+  // 低版本 / 落盘失败回退 §3.3 postNote（唤起笔记发布页）
+  check(/postNote/.test(appSrc) && /image_resources/.test(appSrc) && /pageType: 'photo_publish'/.test(appSrc)
+    && /noteOptions/.test(appSrc),
+    '拿不到评论区能力时回退 §3.3 postNote（image_resources + photo_publish）');
+  // 能力检测在调用时做（§3.1：调用前用 window.xhs && window.xhs.miniTool 判空），不缓存加载那一刻的 window
+  check(appSrc.indexOf('CAN_SHARE') < 0 && /function shareBridge\(\)/.test(appSrc)
+    && /typeof b\[name\] === 'function'/.test(appSrc) && /function shareMode\(\)/.test(appSrc)
+    && /分享到评论区/.test(appSrc),
+    '能力检测在调用时做（每次点击重查 window.xhs.miniTool），按钮文案随可用能力定');
   check(/writeTempFile/.test(appSrc) && /toDataURL\('image\/webp'/.test(appSrc) && /createRange/.test(appSrc),
-    '配图用 Canvas 现画（不碰被禁的网络请求 API），拿不到 bridge 时退化为「选中文案 + 引导长按复制」');
+    '配图用 Canvas 现画（不碰被禁的网络请求 API），拿不到端能力时退化为「选中文案 + 引导长按复制」');
   // 容器把剪贴板类 API 列进禁用能力扫描清单：写了 verify-minitool.mjs 会直接判不合规
   check(!/execCommand/.test(appSrc) && !/clipboard\.writeText/.test(appSrc),
     '不出现容器禁用能力（execCommand / clipboard.writeText）');
@@ -206,11 +346,33 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   const residue = dead.filter((d) => appSrc.indexOf(d) >= 0 || html.indexOf(d) >= 0);
   check(residue.length === 0, '已删除的旧元素/旧机制无残留引用', residue.length ? '残留: ' + residue.join(',') : '干净');
 
-  // 简报只留一句 MOSS 口吻的话，规则与操作交给局内 HUD 教
-  check(/MOSS 已算定航线/.test(html) && /你决定什么时候点火/.test(html),
-    '简报是「MOSS 已算定航线 / 你决定什么时候点火」');
+  // 简报：一句 MOSS 口吻的情报 + 一句「谁做决定」的对照，规则与操作交给局内 HUD 教
+  check(/MOSS：航线已解算/.test(html) && /你：决定点火时刻/.test(html),
+    '简报保留「MOSS：航线已解算 / 你：决定点火时刻」的对照');
+  // 引导拆成编号操作卡：一条长句拆成「动作 → 时机 → 代价」三张卡，两秒扫完
+  const stepCards = html.match(/class="bf-step(?: bad)?"/g) || [];
+  check(stepCards.length === 3 && /class="bf-step bad"/.test(html),
+    '开场引导是三步操作卡（第三条为代价，单独标红）', stepCards.length + ' 张卡');
+  check(/绿色区间/.test(html) && /本次弹弓作废/.test(html) && /class="bf-goal"/.test(html),
+    '操作卡把「绿色区间」「弹弓作废」与唯一目标都写清楚了');
   check(html.indexOf('地球沿固定航线自动前进') < 0 && html.indexOf('烧满会过热锁定') < 0,
     '旧的路线描述与操作说明已从简报删除');
+
+  /* ---- 简报篇幅契约：面板必须一屏放下，「点火启航」不许靠滚动才能看见 ----
+     320×568 的可排高度只有 498px。曾经踩过的坑：三条指令各带一行灰色「为什么」→
+     三张两行卡片把面板顶到 620px，再配一张 210×130 的示意图，「点火启航」直接被推出屏幕。
+     篇幅是唯一真源，所以这里逐条锁住「让它变长的三个动作」：加说明行、加高示意图、加字数。 */
+  const briefBlock = html.slice(html.indexOf('<div id="brief">'), html.indexOf('<div id="result">'));
+  check(briefBlock.length > 0 && !/<div class="bf-step[\s\S]{0,200}?<i>/.test(briefBlock),
+    '三条指令各占一行（不再给每条挂一行灰色「为什么」——那是 620px 那版的元凶）');
+  const svgBox = briefBlock.match(/class="bf-svg" viewBox="0 0 (\d+) (\d+)"/);
+  check(!!svgBox && Number(svgBox[2]) <= 90,
+    '航线示意图是扁版（viewBox 高 ≤ 90，高度不能再长回去）', svgBox ? svgBox[1] + '×' + svgBox[2] : '未找到');
+  // 可见正文（去标签、去注释、去 svg 与空白）字数上限 —— 115 是当前实测值，留 10 字余量
+  const briefText = briefBlock
+    .replace(/<!--[\s\S]*?-->/g, '').replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/<[^>]+>/g, '')
+    .replace(/\s+/g, '');
+  check(briefText.length <= 125, '简报正文字数 ≤ 125（加一段话就会顶出屏幕）', briefText.length + ' 字');
 
   // 星空回归契约：天球一旦回到「贴图」实现，相机在球内只会截取 ~60° 视场，
   // 每纹素被放大数倍，底色渐变与银河雾的 8bit 量化台阶会被放大成「白色方格子」。
@@ -234,17 +396,39 @@ console.log('\n=== 常量互锁 ===');
     vEsc.toFixed(2) + ' km/s');
   check(C.STAR_SIZE >= 8 && C.STAR_SIZE <= 16,
     '星点尺寸 ≥8px（点精灵把整张贴图铺到 N 像素上，N 太小时像素中心只能采到贴图中心那点纯白 → 实心白方块）', C.STAR_SIZE + ' px');
-  // 最佳区间与窗口**逐行星**（由质量派生）→ 温度互锁必须逐颗验，不能只看一组全局值
-  const HEAT_FULL = C.HEAT_MAX / C.HEAT_RATE;
+  // 最佳区间与窗口**逐行星**（由质量派生）→ 温升互锁必须逐颗验，不能只看一组全局值。
+  // 2026-09-26 重构后温度不再按恒定速率涨，而是**按当前功率档位**涨（温度 = ∫ 功率）：
+  // 冷机按住时功率要先爬 0.5 s 到满额（起转三角），所以烧穿时刻比旧版晚一点点。
+  const T_SPOOL = C.PWR_MAX / C.PWR_UP;                        // 起转时长（0 → 满功率）
+  const T_FULL_COLD = T_SPOOL / 2 + C.TEMP_MAX / C.TEMP_RATE;   // 冷机按住 → 烧穿
+  const T_FULL_HOT = C.TEMP_MAX / C.TEMP_RATE;                  // 已在满功率 → 烧穿
+  const heatAt = (sec) => {
+    const ramp = Math.min(sec, T_SPOOL);
+    let h = C.TEMP_RATE * ramp * ramp / (2 * T_SPOOL);          // 起转段：功率线性爬升
+    if (sec > T_SPOOL) h += C.TEMP_RATE * (sec - T_SPOOL);
+    return h;
+  };
   const badRange = W.flybys.filter((f) => !(f.sweet0 > 0 && f.sweet0 < f.sweet1 && f.sweet1 <= 1));
   check(badRange.length === 0, '每颗行星的最佳区间比例都合法（0 < sweet0 < sweet1 ≤ 1）',
     W.flybys.map((f) => f.name + ' ' + f.sweet0.toFixed(2) + '→' + f.sweet1.toFixed(2)).join(' · '));
-  check(W.flybys.every((f) => HEAT_FULL < f.winTime),
-    '温度满箱时间 < 每颗行星的窗口时长（窗口内死按必烧穿 → 过早白烧是有代价的）',
-    HEAT_FULL.toFixed(2) + 's < ' + Math.min(...W.flybys.map((f) => f.winTime)).toFixed(2) + 's（最短窗口）');
-  check(W.flybys.every((f) => HEAT_FULL > f.sweetTime),
-    '温度满箱时间 > 每颗行星的最佳区间时长（规规矩矩只烧绿色区间不会过热）',
-    HEAT_FULL.toFixed(2) + 's > ' + Math.max(...W.flybys.map((f) => f.sweetTime)).toFixed(2) + 's（最长区间）');
+  check(W.flybys.every((f) => T_FULL_COLD < f.winTime),
+    '冷机在窗口起点一路按住 → 必然在该行星窗口内烧穿（功率要从 0 起转，比旧版慢 0.15 s）',
+    T_FULL_COLD.toFixed(2) + 's < ' + Math.min(...W.flybys.map((f) => f.winTime)).toFixed(2) + 's（最短窗口）');
+  check(W.flybys.every((f) => T_FULL_HOT < f.winTime),
+    '满功率恒温烧穿 < 每颗窗口时长（功率表顶到额定线时更烫）',
+    T_FULL_HOT.toFixed(2) + 's < ' + Math.min(...W.flybys.map((f) => f.winTime)).toFixed(2) + 's（最短窗口）');
+  check(W.flybys.every((f) => heatAt(f.sweetTime) < C.TEMP_MAX),
+    '冷机起只按住绿色区间（最长的区间）→ 温度不到满箱（规规矩矩按绿色区间不会过热）',
+    heatAt(Math.max(...W.flybys.map((f) => f.sweetTime))).toFixed(1) + ' < ' + C.TEMP_MAX);
+  check(heatAt(C.PULSE_DUR) * C.PULSE_THRUST_BOOST < C.TEMP_MAX,
+    '冷机起按满整段脉冲（1 s，乘波 ×1.6）不会烧穿 → 提示里的「全功率推进」是安全的',
+    (heatAt(C.PULSE_DUR) * C.PULSE_THRUST_BOOST).toFixed(1) + ' < ' + C.TEMP_MAX);
+  check(C.TEMP_MAX / (C.TEMP_RATE * C.PULSE_THRUST_BOOST) < C.PULSE_DUR,
+    '已在满功率时进入脉冲（预警期就按住）→ 脉冲没结束就烧穿（所以预警只说倒计时、绝不说「按住」）',
+    (C.TEMP_MAX / (C.TEMP_RATE * C.PULSE_THRUST_BOOST)).toFixed(2) + 's < ' + C.PULSE_DUR + 's');
+  check(C.TEMP_MAX / C.COOL_RATE > 3 && C.PWR_MAX / C.PWR_DOWN < 1,
+    '熄火比散热快得多（功率 0.5 s 归零、温度要 3.85 s 归零 → 过热才是真代价）',
+    '功率 ' + (C.PWR_MAX / C.PWR_DOWN).toFixed(2) + 's vs 温度 ' + (C.TEMP_MAX / C.COOL_RATE).toFixed(2) + 's');
   check(C.CRASH_RATIO > 0 && C.CRASH_RATIO < 1, '撞毁阈值比例合法', String(C.CRASH_RATIO));
   check(W.flybys.length === 5, '航线掠过 5 颗行星（木星→土星→天王星→海王星→冥王星）', W.flybys.map((f) => f.name).join('→'));
   // 火星（1.52 AU）距起点只有 52 单位：窗口还没亮就已经到判定点，只能从名单里去掉
@@ -670,31 +854,119 @@ console.log('\n=== 弹弓（过早 / 最佳 / 过晚）===');
     '只在过晚区间点火 → 当场被捕获（「过晚才会被捕捉」）', lateOnly.st.status + '@' + lateOnly.st.t.toFixed(1) + 's');
 })();
 
-console.log('\n=== 过热 ===');
+console.log('\n=== 功率 → 温度 → 过热锁定 ===');
 (function () {
   const g = M3D.createGame(route), st = g.state;
-  check(st.heat === 0 && st.overheated === false, '开局温度 0、未锁定', 'heat=' + st.heat);
+  check(st.pwr === 0 && st.heat === 0 && st.overheated === false,
+    '开局功率 0、温度 0、未锁定', 'pwr=' + st.pwr + ' heat=' + st.heat);
+
+  // 功率是一条**起转斜坡**（旧版是区间派生的瞬时跳变 0/20/100/160%）
   g.setBurning(true);
-  for (let i = 0; i < 4000 && !st.overheated; i++) g.step(0.02);
-  const theory = C.HEAT_MAX / C.HEAT_RATE;
-  check(st.overheated === true, '持续点火会烧到过热锁定', 't=' + st.t.toFixed(2) + 's');
-  check(Math.abs(st.t - theory) < 0.15, '过热耗时与常量一致', '实测 ' + st.t.toFixed(2) + 's / 理论 ' + theory.toFixed(2) + 's');
-  check(st.thrustEff === 0, '锁定期间推力效率为 0（按着也推不动）', 'eff=' + st.thrustEff);
-  const h0 = st.heat;
-  g.step(0.5);
-  check(st.heat >= h0 - 1e-9, '锁定期间按着不降温（必须松手）', h0.toFixed(1) + ' → ' + st.heat.toFixed(1));
-  g.setBurning(false);
-  g.step(0.5);
-  check(st.heat < h0, '松手后才开始降温', h0.toFixed(1) + ' → ' + st.heat.toFixed(1));
-  // 降温要 ~1.4 s，但地球会在那之前先飞到木星判定点结束本局、或被氦闪壳追上 ——
+  g.step(0.25);                                     // 注意 g.step 的 dt 上限是 0.25 s，要分次走
+  check(near(st.pwr, C.PWR_MAX / 2, 3), '按住 0.25 s → 功率约半（起转中）', 'pwr=' + st.pwr.toFixed(1));
+  const pMid = st.thrustEff;
+  g.step(0.25); g.step(0.25);
+  check(st.pwr === C.PWR_MAX, '按住 0.5 s 后功率到满额（PWR_MAX / PWR_UP）', 'pwr=' + st.pwr.toFixed(1));
+  check(pMid < st.thrustEff, '推力随功率一起长（巡航段区间效率 1）',
+    pMid.toFixed(2) + ' → ' + st.thrustEff.toFixed(2));
+
+  // 冷机持续点火 → 烧穿时刻 = 起转三角 + 满功率段（不再是旧的 TEMP_MAX / TEMP_RATE）
+  const g2 = M3D.createGame(route), st2 = g2.state;
+  g2.setBurning(true);
+  for (let i = 0; i < 4000 && !st2.overheated; i++) g2.step(0.02);
+  const theory = C.PWR_MAX / C.PWR_UP / 2 + C.TEMP_MAX / C.TEMP_RATE;
+  check(st2.overheated === true, '持续点火会烧到过热锁定', 't=' + st2.t.toFixed(2) + 's');
+  check(Math.abs(st2.t - theory) < 0.1, '烧穿耗时 = 起转三角 + 满功率段（温度 = ∫ 功率）',
+    '实测 ' + st2.t.toFixed(2) + 's / 理论 ' + theory.toFixed(2) + 's');
+  check(st2.thrustEff === 0, '锁定期间推力效率为 0（按着也推不动）', 'eff=' + st2.thrustEff);
+
+  // ★ 强制降温（2026-09-26 改设定）：手指一直按着不松，温度照样按 COOL_RATE 降 ——
+  //   点击既不会提高功率 / 速度，也不会打断降温进度。旧规则是「按着不降温，必须松手」。
+  const h0 = st2.heat, step0 = st2.t;
+  g2.step(0.25); g2.step(0.25);                      // 两次走满 0.5 s（dt 上限 0.25 s）；burning 一直是 true
+  const cooled = h0 - st2.heat, elapsed = st2.t - step0;
+  check(cooled > 1e-9, '降温是强制的：锁定期间一直按着，温度照样降',
+    h0.toFixed(1) + ' → ' + st2.heat.toFixed(1));
+  check(Math.abs(cooled / elapsed - C.COOL_RATE) < 0.6, '降温速率与按不按无关（= COOL_RATE）',
+    (cooled / elapsed).toFixed(1) + ' /s vs ' + C.COOL_RATE);
+  check(st2.pwr <= 1e-9 && st2.thrustEff === 0, '降温阶段点击不会提高功率与速度（功率仍 0、推力仍 0）',
+    'pwr=' + st2.pwr.toFixed(1) + ' eff=' + st2.thrustEff.toFixed(2));
+
+  // 降温要 ~3.85 s，但地球会在那之前先飞到木星判定点结束本局、或被氦闪壳追上 ——
   // 把地球挪到航线中段再摁到低速原地冷却（debugSet 不动温度），
   // 否则测到的是「被判负」而不是「解锁」。
-  g.debugSet(route.len * 0.55, 40);
-  let unlockedEarly = false, guard = 0;
-  while (st.overheated && guard < 4000) { g.step(0.02); guard++; if (!st.overheated && st.heat > 1e-9) unlockedEarly = true; }
-  check(st.status === 'flying' && st.overheated === false && !unlockedEarly,
-    '冷却归零才解锁（不会中途解锁）', 'status=' + st.status + ' heat=' + st.heat.toFixed(3));
-  check(st.thrustEff === 1, '解锁后推力效率恢复 1', 'eff=' + st.thrustEff);
+  g2.debugSet(route.len * 0.55, 40);
+  let preUnlockOk = true, monotonic = true, lastLockedHeat = null, guard = 0;
+  while (st2.overheated && guard < 4000) {
+    const hPrev = st2.heat;
+    g2.step(0.02); guard++;
+    if (st2.overheated) {
+      lastLockedHeat = st2.heat;
+      if (st2.pwr > 1e-9 || st2.thrustEff !== 0) preUnlockOk = false;
+      if (st2.heat > hPrev + 1e-9) monotonic = false;
+    }
+  }
+  check(st2.status === 'flying' && st2.overheated === false,
+    '强制降温走完即解锁（本局仍在进行）', 'status=' + st2.status);
+  check(monotonic && lastLockedHeat !== null && lastLockedHeat < 0.2,
+    '降温单调、且只在温度归零那一刻解锁（不会中途解锁）',
+    '解锁前最后一帧 heat=' + (lastLockedHeat === null ? '-' : lastLockedHeat.toFixed(3)));
+  check(preUnlockOk, '整个降温阶段点击都不提高功率与速度（功率与推力全程 0）');
+  // 解锁那一刻手指还在屏幕上 → 立刻重新起转，不必「松手再按」
+  const pAfter = st2.pwr;
+  g2.step(0.1);
+  check(st2.pwr > pAfter && st2.thrustEff > 0, '解锁后手指还在屏幕上 → 立即重新起转（不必松手再按）',
+    'pwr=' + st2.pwr.toFixed(1) + ' eff=' + st2.thrustEff.toFixed(2));
+  g2.step(0.25); g2.step(0.25);
+  check(st2.pwr === C.PWR_MAX && near(st2.thrustEff, M3D.zoneEff(st2.zone), 1e-9),
+    '起转回满额后推力效率随区间恢复',
+    'pwr=' + st2.pwr.toFixed(0) + ' eff=' + st2.thrustEff.toFixed(2) + ' zone=' + st2.zone);
+})();
+
+console.log('\n=== 温度由功率决定（本次重构的耦合点）===');
+(function () {
+  // 温度 = ∫ 功率：同一区间、同一时刻，温升速率必须与功率档位成正比。
+  // 测法：把功率直接摆到某个值，只走**一个子步**（5 ms）—— 期间功率只涨 1，可忽略。
+  const H = 1 / 200;
+  const endS = route.len - 100;              // 航线末段：已无目标行星（区间效率 1）
+  function heatRate(s, pwr, t) {
+    const g = M3D.createGame(route), st = g.state;
+    g.debugSet(s, 150);
+    st.pwr = pwr; st.heat = 0;
+    if (t !== undefined) st.t = t;
+    g.setBurning(true);
+    g.step(H);
+    return st;
+  }
+  const r100 = heatRate(endS, 100).heat / H;
+  check(near(r100, C.TEMP_RATE, C.TEMP_RATE * 0.03),
+    '满功率 → 温升速率 = TEMP_RATE', r100.toFixed(1) + ' /s');
+  const r50 = heatRate(endS, 50).heat / H;
+  check(near(r50, C.TEMP_RATE / 2, C.TEMP_RATE * 0.03),
+    '功率 50% → 温升减半（温度 = ∫ 功率，不是恒定速率）', r50.toFixed(1) + ' /s');
+  const r20 = heatRate(endS, 20).heat / H;
+  check(near(r20, C.TEMP_RATE * 0.2, C.TEMP_RATE * 0.03),
+    '功率 20% → 温升只有 1/5', r20.toFixed(1) + ' /s');
+
+  // 区间效率也进这条链：过晚残效 20% 连温度都只涨 1/5，过早区则照样满速烧（那才是「白烧」）
+  const fd = fbs[0];
+  const late = heatRate(fd.s - 20, 100), early = heatRate(fd.s - 270, 100), sweet = heatRate(fd.s - 150, 100);
+  check(late.zone === 'late' && near(late.heat / H, C.TEMP_RATE * C.LATE_EFF, C.TEMP_RATE * 0.02),
+    '过晚区间：推力残效 20% → 温升也只有 20%（旧版在过晚区照样按满速烧温度）',
+    (late.heat / H).toFixed(1) + ' /s（zone=' + late.zone + '）');
+  check(early.zone === 'early' && near(early.heat / H, C.TEMP_RATE, C.TEMP_RATE * 0.03),
+    '过早区间：推力与温升都是满额（真·白烧 —— 弹弓会在那里作废）',
+    (early.heat / H).toFixed(1) + ' /s（zone=' + early.zone + '）');
+  check(sweet.zone === 'sweet' && sweet.slinging === true,
+    '绿色区间：弹弓比例项接管推力（功率档位只决定温升）',
+    'zone=' + sweet.zone + ' slinging=' + sweet.slinging);
+
+  // 脉冲乘波 ×1.6：推力与温升一起涨（功率表推过额定线 → 过热风险也一起过线）
+  const hot = heatRate(endS, 100);
+  const pulse = heatRate(endS, 100, C.PULSE_TIMES[1] + 0.1);
+  check(pulse.pulseHot && near(pulse.heat / H, C.TEMP_RATE * C.PULSE_THRUST_BOOST, C.TEMP_RATE * 0.05),
+    '脉冲乘波：推力 ×1.6 的同时温升也 ×1.6',
+    (pulse.heat / H).toFixed(1) + ' /s vs 额定 ' + (hot.heat / H).toFixed(1) + ' /s');
 })();
 
 console.log('\n=== 提示文案（消息槽）===');
@@ -720,7 +992,7 @@ console.log('\n=== 提示文案（消息槽）===');
   function overheatedAt(s, v) {
     const gg = M3D.createGame(route), ss = gg.state;
     gg.debugSet(s, v); gg.setBurning(false); gg.step(1 / 60);
-    ss.heat = C.HEAT_MAX; ss.overheated = true; gg.step(1 / 60);
+    ss.heat = C.TEMP_MAX; ss.overheated = true; gg.step(1 / 60);
     const d = fbs[ss.target].def;
     return { st: ss, toSweet: ss.tToGo - (1 - d.sweet0) * d.winTime };
   }
@@ -729,13 +1001,13 @@ console.log('\n=== 提示文案（消息槽）===');
   check(afterJupiter.st.overheatLeft > 0
     && Math.abs(afterJupiter.st.overheatLeft - afterJupiter.st.heat / C.COOL_RATE) < 1e-9,
     '过热时给出「归零解锁还差几秒」= 热量 / 冷却率', afterJupiter.st.overheatLeft.toFixed(2) + ' s');
-  check(afterJupiter.st.overheatLeft > afterJupiter.toSweet && /来不及解锁/.test(afterJupiter.st.warn),
-    '冷却赶不上绿色区间 → 明说「这站来不及解锁」',
+  check(afterJupiter.st.overheatLeft > afterJupiter.toSweet && /无法解锁/.test(afterJupiter.st.warn),
+    '冷却赶不上绿色区间 → 明说「本站窗口前无法解锁」',
     '距绿色区间 ' + afterJupiter.toSweet.toFixed(2) + ' s < 解锁 ' + afterJupiter.st.overheatLeft.toFixed(2) + ' s');
   // 天王星→海王星腿 7.6 s > 解锁 3.85 s → 只报倒计时
   const afterUranus = overheatedAt(fbs[2].s + 20, 160);
-  check(afterUranus.st.overheatLeft < afterUranus.toSweet && /冷却 [0-9.]+ s$/.test(afterUranus.st.warn),
-    '冷却赶得上时只报解锁倒计时',
+  check(afterUranus.st.overheatLeft < afterUranus.toSweet && /强制冷却 [0-9.]+ s$/.test(afterUranus.st.warn),
+    '冷却赶得上时报「强制冷却 X s」（点也白点，所以文案直说冷却被强制）',
     '距绿色区间 ' + afterUranus.toSweet.toFixed(2) + ' s > 解锁 ' + afterUranus.st.overheatLeft.toFixed(2) + ' s');
 
   // 全流程逐帧核对：窗口内不再刷提示、过晚文案正确、巡航段一条都不报（旧版在这里数「还有几秒亮窗口」）
@@ -747,11 +1019,11 @@ console.log('\n=== 提示文案（消息槽）===');
     if (st2.overheated) continue;
     if (st2.warnKind === 'pulse') { pulseFrames++; continue; }
     if (st2.zone === 'early' || st2.zone === 'sweet') { if (st2.warn) inWindow++; }
-    else if (st2.zone === 'late') { if (st2.warn === '过晚 · 已来不及') lateOk++; else lateBad++; }
+    else if (st2.zone === 'late') { if (st2.warn === '窗口关闭 · 已错过') lateOk++; else lateBad++; }
     else if (st2.warn) cruiseBad++;        // appr / done（巡航段）不该有任何提示
   }
   check(inWindow === 0, '窗口内（过早/最佳）不再刷任何提示（时机条与边缘光已负责）', inWindow + ' 帧有提示');
-  check(lateBad === 0 && lateOk > 0, '过晚区间提示「过晚 · 已来不及」', lateOk + ' 帧 / 异常 ' + lateBad);
+  check(lateBad === 0 && lateOk > 0, '过晚区间提示「窗口关闭 · 已错过」', lateOk + ' 帧 / 异常 ' + lateBad);
   check(cruiseBad === 0, '巡航段消息槽保持空', cruiseBad + ' 帧有提示');
   check(pulseFrames > 0, '耀斑脉冲提示仍在（预警 / 生效两条都走这条路）', pulseFrames + ' 帧');
 
@@ -778,10 +1050,10 @@ console.log('\n=== 耀斑脉冲（两次 + 预警 / 提示）===');
   // 提示必须按区间分叉：过早区按下去会作废弹弓（lostSling），
   // 这时还挂一条「×1.6」等于把玩家钓去毁掉整次掠过 —— 那是提示在害人。
   const hotT = C.PULSE_TIMES[0] + 0.2;
-  check(M3D.pulseActive(hotT) && /现在按住/.test(M3D.pulseTip(hotT, 'appr')),
-    '脉冲生效 + 巡航区 → 「现在按住」（这里按住是白拿 ×1.6）', M3D.pulseTip(hotT, 'appr'));
-  check(/别按/.test(M3D.pulseTip(hotT, 'early')),
-    '脉冲生效 + 过早区 → 警告「别按（会作废弹弓）」', M3D.pulseTip(hotT, 'early'));
+  check(M3D.pulseActive(hotT) && /全功率推进/.test(M3D.pulseTip(hotT, 'appr')),
+    '脉冲生效 + 巡航区 → 「全功率推进」（这里按住是白拿 ×1.6）', M3D.pulseTip(hotT, 'appr'));
+  check(/窗口外禁止点火/.test(M3D.pulseTip(hotT, 'early')),
+    '脉冲生效 + 过早区 → 警告「窗口外禁止点火」', M3D.pulseTip(hotT, 'early'));
   check(M3D.pulseTip(hotT, 'sweet') === '' && M3D.pulseTip(hotT, 'late') === '',
     '脉冲生效 + 绿色/过晚 → 不抢屏（弹弓接管 / 已来不及）');
   const warnT = C.PULSE_TIMES[1] - C.PULSE_WARN + 0.01;
@@ -805,7 +1077,7 @@ console.log('\n=== 耀斑脉冲（两次 + 预警 / 提示）===');
     if (st.pulseHot) {
       hotFrames++;
       if (st.warnKind !== 'pulse' && !st.overheated) badKind++;
-      if (/现在按住/.test(st.warn) && st.zone !== 'appr' && st.zone !== 'done') unsafe++;
+      if (/全功率推进/.test(st.warn) && st.zone !== 'appr' && st.zone !== 'done') unsafe++;
     } else if (st.pulseIn > 0 && st.pulseIn <= C.PULSE_WARN) warnFrames++;
   }
   check(fired.length === 2 && fired[0] === C.PULSE_TIMES[0] && fired[1] === C.PULSE_TIMES[1],
@@ -814,7 +1086,7 @@ console.log('\n=== 耀斑脉冲（两次 + 预警 / 提示）===');
     '生效期 1 s 逐帧成立，且预警确实在巡航期出现过',
     '预警 ' + warnFrames + ' 帧 · 生效 ' + hotFrames + ' 帧');
   check(badKind === 0 && unsafe === 0,
-    '脉冲提示都走 warnKind=pulse，且「现在按住」只在安全区出现', '异常 ' + badKind + ' / ' + unsafe);
+    '脉冲提示都走 warnKind=pulse，且「全功率推进」只在安全区出现', '异常 ' + badKind + ' / ' + unsafe);
 })();
 
 console.log('\n=== 行星判定 ===');
@@ -1047,12 +1319,14 @@ let T_IDEAL = 0;
 (function () {
   const never = play((g, st) => g.setBurning(false), 1 / 60);
   check(never.st.status !== 'escaped', '完全不点火逃不出', 'status=' + never.st.status + ' t=' + never.st.t.toFixed(1) + 's');
-  const always = play((g, st) => g.setBurning(true), 1 / 60);
-  check(always.st.status !== 'escaped' && always.st.overheated, '一直按着逃不出（烧满后按着不降温 → 永久锁定）',
-    'status=' + always.st.status + ' heat=' + always.st.heat.toFixed(0));
+  let alwaysOver = false;
+  const always = play((g, st) => { g.setBurning(true); if (st.overheated) alwaysOver = true; }, 1 / 60);
+  check(always.st.status !== 'escaped' && alwaysOver,
+    '一直按着逃不出（1.58 s 烧满 → 强制停机 3.85 s，整个木星窗口都在冷却，点击也推不动）',
+    'status=' + always.st.status + ' t=' + always.st.t.toFixed(1) + 's');
   const mash = play((g, st) => g.setBurning(st.phase >= 0 && st.phase <= 1), 1 / 60);
   check(mash.st.status !== 'escaped',
-    '窗口内全程死按也逃不出（过早白烧掉温度额度，最佳区间反而烧不满）',
+    '窗口内全程死按也逃不出（过早区先把弹弓烧废，温度又按功率烧穿 → 最佳区间反而吃不满）',
     'status=' + mash.st.status + ' t=' + mash.st.t.toFixed(1) + 's');
 })();
 

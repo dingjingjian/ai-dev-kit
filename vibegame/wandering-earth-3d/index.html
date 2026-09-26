@@ -10,97 +10,176 @@
 <body>
   <canvas id="stage"></canvas>
 
-  <!-- ===== 顶部状态区：左=用时/小地图/音乐　中=后视镜　右=遥测面板 =====
-       三段互不重叠：后视镜固定在顶部中央，遥测面板从它下沿之下的 88px 起排，
-       这样 320px 宽的窄屏上也不会撞车。 -->
+  <!-- ===== 顶部：只放「与驾驶无关、想起来才抬头看一眼」的信息 =====
+       用时 / 逃逸进度 / 小地图 / 后视镜 / 声音开关 —— 驾驶舱在屏幕底部（见 `#cockpit`）。
+       理由：点火窗口只有 2.5–2.8 秒，玩家的视线不能在上半屏（表盘）与下半屏（时机条）
+       之间来回跑；所以**凡是点火时要用到的，一律沉到同一条水平带上**。
+       顶部元素一律先叠一条 `--top-gap` 常量（小工具容器自带一排顶部按钮），再叠 `--sat`；
+       左列（用时 / 进度 / 小地图）宽度统一 104px，右上是声音键，中间留给后视镜。 -->
 
   <div id="clock">
-    <span id="clock-num">0:00</span>
+    <span id="clock-time"><span id="clock-num">0:00</span><i id="clock-ms">.000</i></span>
     <span id="clock-label">逃逸用时</span>
   </div>
 
-  <div id="mirror-frame"><span id="mirror-label">后视镜 · 氦闪壳</span></div>
-
-  <div id="telemetry">
-    <div class="tm-row"><span class="tm-k">速度</span><span id="tm-speed" class="tm-v">0 km/s</span></div>
-    <div class="tm-row"><span class="tm-k">距日</span><span id="tm-dist" class="tm-v">0.95 AU</span></div>
-    <div class="tm-row"><span class="tm-k">距氦闪壳</span><span id="tm-gap" class="tm-v">0.00 AU</span></div>
-    <div id="heat-wrap">
-      <span class="heat-k" id="heat-tag">发动机温度</span>
-      <div id="heat-track"><div id="heat-fill"></div></div>
-    </div>
-  </div>
+  <!-- 逃逸进度：任务总进度，与「驾驶」无关 —— 跟着用时挂在左上，需要时抬头看一眼。
+       宽度与上方计时、下方小地图对齐成一列（104px），不占屏幕中间的画面。 -->
+  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
 
   <canvas id="radar"></canvas>
+
+  <div id="mirror-frame"><span id="mirror-label">后视镜 · 氦闪壳</span></div>
 
   <button id="mute" type="button" aria-label="关闭背景音乐">
     <span class="mu-note">♪</span><span class="mu-slash"></span>
   </button>
 
-  <!-- ===== 底部仪表区：上→下 = 消息槽 / 时机条 / 逃逸进度 ===== -->
+  <!-- ===== 底部驾驶舱 `#cockpit`：本作唯一的操作区（自下而上 = 仪表行 → 时机条 → 消息槽）=====
+       一次点火窗口只有 2.5–2.8 秒，而判定针、温度余量、速度、发动机功率要同时读 ——
+       三者必须在**同一条水平带上**：所以仪表行与时机条都贴在屏幕底部，消息槽向上生长。
+       时机条与仪表行都是常驻盒子（`.hide` 只改透明度、不塌陷），窗口开合不引起任何跳动。 -->
 
-  <!-- 时机条：只在加速窗口内出现（过早 / 最佳 / 过晚 三段 + 扫过的判定针）。
-       文案全部由 updateHUD 填充，这里保持空文本，免得「示例文案」被当成真实输出 -->
-  <div id="flyby" class="hide">
-    <div class="fb-head">
-      <span id="fb-name"></span>
-      <span id="fb-tag"></span>
+  <div id="cockpit">
+
+    <!-- 消息槽（整屏唯一一条状态提示，零高度槽位）：同一时刻只显示一条 ——
+         过热 / 耀斑脉冲 > 掠过评级 > 巡航倒计时。评级条由 showFlybyToast 填，
+         状态提示由 updateHUD 填；两者靠 updateHUD 的优先级互斥，绝不叠字。
+         槽位自身高度为 0，两条提示都绝对定位、由底边向上生长 ——
+         长文案只会盖住 3D 画面，永远不会把下面的时机条与仪表行顶走。 -->
+    <div id="cockpit-msg">
+      <div id="fb-toast">
+        <div class="ft-top"><b id="ft-name"></b><span id="ft-grade"></span></div>
+        <div id="ft-detail"></div>
+      </div>
+      <div id="warn"></div>
     </div>
-    <div id="fb-track">
-      <div class="fb-zone fb-early" id="fb-early"><span>过早</span></div>
-      <div class="fb-zone fb-sweet" id="fb-sweet"><span>最佳加速时机</span></div>
-      <div class="fb-zone fb-late" id="fb-late"><span>过晚</span></div>
-      <div id="fb-needle"></div>
+
+    <!-- 时机条：只在加速窗口内出现（过早 / 最佳 / 过晚 三段 + 扫过的判定针）。
+         头条 = 行星名 + 当前区间 tag + （右端）速度 / 门槛；文案全部由 updateHUD 填充，
+         这里保持空文本，免得「示例文案」被当成真实输出 -->
+    <div id="flyby" class="hide">
+      <div class="fb-head">
+        <span id="fb-name"></span>
+        <span id="fb-tag"></span>
+        <span class="fb-foot">速度 <b id="fb-cur">0</b> / 门槛 <b id="fb-need">0</b> km/s</span>
+      </div>
+      <div id="fb-track">
+        <div class="fb-zone fb-early" id="fb-early"><span>过早</span></div>
+        <div class="fb-zone fb-sweet" id="fb-sweet"><span>引力窗口</span></div>
+        <div class="fb-zone fb-late" id="fb-late"><span>过晚</span></div>
+        <div id="fb-needle"></div>
+      </div>
     </div>
-    <div class="fb-foot">
-      <span>速度 <b id="fb-cur">0</b> / 门槛 <b id="fb-need">0</b> km/s</span>
+
+    <!-- 仪表行（底部平铺）：**功率 / 温度 / 速度** 三个表盘 + 右端「四盏警报灯 + 距日 / 距壳」。
+         顺序 = 驾驶时的手上顺序：先看**功率**（这一下按出去多大力：起转斜坡，0.5 s 爬到额定线）、
+         再看**温度**（按了这么久离满箱还有多远）、最后看**速度**（够不够门槛刻度）。
+         表盘弧 = r38 的 270° 弧（正下方留 90° 缺口当数字位），指针绕 (50,50) 旋转 ±135°；
+         满量程各不同：功率 160%（额定 100% 处一道细刻度，脉冲乘波会推过额定线 ——
+         这就是「乘波」看得见的样子）、温度 100%、速度 80 km/s（带当前行星的门槛刻度）。
+         **温度 = ∫ 功率**：功率指针越高，温度指针爬得越快（过晚残效 20% 几乎不爬）。 -->
+    <div id="dash">
+      <div id="dash-row">
+        <div class="dg" id="dg-pw">
+          <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
+            <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <path class="dg-arc" id="dg-pw-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <line class="dg-tick dg-ref" id="dg-pw-ref" x1="50" y1="15" x2="50" y2="27"/>
+            <line class="dg-needle" id="dg-pw-needle" x1="50" y1="50" x2="50" y2="15"/>
+            <circle class="dg-hub" cx="50" cy="50" r="4"/>
+          </svg>
+          <span class="dg-v" id="tm-pw">0</span>
+          <span class="dg-u">%</span>
+          <span class="dg-cap">功率</span>
+        </div>
+        <div class="dg" id="dg-heat">
+          <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
+            <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <path class="dg-arc" id="dg-heat-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <line class="dg-needle" id="dg-heat-needle" x1="50" y1="50" x2="50" y2="15"/>
+            <circle class="dg-hub" cx="50" cy="50" r="4"/>
+          </svg>
+          <span class="dg-v" id="tm-heat">0</span>
+          <span class="dg-u">%</span>
+          <span class="dg-cap">温度</span>
+        </div>
+        <div class="dg" id="dg-speed">
+          <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
+            <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <path class="dg-arc" id="dg-speed-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
+            <line class="dg-tick" id="dg-tick" x1="50" y1="15" x2="50" y2="27"/>
+            <line class="dg-needle" id="dg-speed-needle" x1="50" y1="50" x2="50" y2="15"/>
+            <circle class="dg-hub" cx="50" cy="50" r="4"/>
+          </svg>
+          <span class="dg-v" id="tm-speed">0.0</span>
+          <span class="dg-u">km/s</span>
+          <span class="dg-cap">速度</span>
+        </div>
+      </div>
+      <div id="dash-side">
+        <div id="lamps">
+          <span class="lamp" id="lamp-hot"><i></i>过热</span>
+          <span class="lamp" id="lamp-sling"><i></i>弹弓</span>
+          <span class="lamp" id="lamp-flare"><i></i>耀斑</span>
+          <span class="lamp" id="lamp-shell"><i></i>氦闪</span>
+        </div>
+        <div id="dash-read">
+          <span class="dr"><em>距日</em><b id="tm-dist" class="dr-v">0.95 AU</b></span>
+          <span class="dr"><em>距壳</em><b id="tm-gap" class="dr-v">0.00 AU</b></span>
+        </div>
+      </div>
     </div>
+
   </div>
-
-  <!-- 消息槽（时机条正上方，整屏只有这一条）：同一时刻只显示一条 ——
-       过热 / 耀斑脉冲 > 掠过评级 > 巡航倒计时。评级条由 showFlybyToast 填，
-       状态提示由 updateHUD 填；两者靠 updateHUD 的优先级互斥，绝不叠字。 -->
-  <div id="fb-toast">
-    <div class="ft-top"><b id="ft-name"></b><span id="ft-grade"></span></div>
-    <div id="ft-detail"></div>
-  </div>
-
-  <div id="warn"></div>
 
   <!-- 全屏边缘光：红色=危险，绿色=绿色区间到了、该按了 -->
   <div id="danger"></div>
   <div id="flash"></div>
 
-  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
-
   <div id="brief">
     <div class="bf-inner">
       <div class="bf-kicker">流浪地球 · 引力弹弓</div>
       <div class="bf-title">逃出太阳系</div>
-      <svg class="bf-svg" viewBox="0 0 210 130">
+      <!-- 航线示意：**扁而宽**（viewBox 210×84，不是 210×130）——
+          高度省掉 1/3，宽度全留给字号：标签从 7.5 提到 9~9.5，缩到 200px 宽也读得清。
+          原版在 216px 宽下标签只有 5px 出头，等于一排灰点。 -->
+      <svg class="bf-svg" viewBox="0 0 210 84">
         <defs>
           <radialGradient id="sunG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffec80"/><stop offset="60%" stop-color="#ff7a14"/><stop offset="100%" stop-color="#c43a00"/></radialGradient>
           <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5cc8ff"/></marker>
         </defs>
-        <circle cx="24" cy="104" r="9" fill="url(#sunG)"/>
-        <circle cx="24" cy="104" r="15" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".75"/>
-        <text x="24" y="128" text-anchor="middle" font-size="7.5" fill="#ff7a14">氦闪膨胀</text>
-        <path d="M30 100 C 90 92, 150 70, 190 30" fill="none" stroke="#5cc8ff" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>
-        <circle cx="146" cy="52" r="9" fill="#dbc29e" opacity=".85"/>
-        <text x="146" y="38" text-anchor="middle" font-size="7.5" fill="#dbc29e">行星</text>
-        <circle cx="88" cy="88" r="5" fill="#5cc8ff" stroke="#fff" stroke-width=".6"/>
-        <text x="88" y="79" text-anchor="middle" font-size="7.5" fill="#5cc8ff">地球</text>
-        <path d="M170 42 l 20 -14" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="206" y="19" text-anchor="end" font-size="7.5" fill="#5cc8ff">逃出太阳系</text>
+        <circle cx="20" cy="58" r="9" fill="url(#sunG)"/>
+        <circle cx="20" cy="58" r="15" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".75"/>
+        <text x="20" y="82" text-anchor="middle" font-size="8" fill="#ff7a14">氦闪壳</text>
+        <path d="M34 56 C 88 52, 130 48, 168 30" fill="none" stroke="#5cc8ff" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>
+        <circle cx="58" cy="55" r="5" fill="#5cc8ff" stroke="#fff" stroke-width=".6"/>
+        <text x="58" y="43" text-anchor="middle" font-size="9" fill="#5cc8ff">地球</text>
+        <circle cx="120" cy="35" r="8.5" fill="#dbc29e" opacity=".85"/>
+        <text x="120" y="21" text-anchor="middle" font-size="9" fill="#dbc29e">行星</text>
+        <path d="M166 32 l 10 -8" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
+        <text x="206" y="12" text-anchor="end" font-size="9.5" fill="#5cc8ff">逃出太阳系</text>
       </svg>
-      <div class="bf-sub">太阳氦闪在身后膨胀，地球只剩一条固定航线。</div>
-      <div class="bf-ops2">
-        <span class="bf-moss">MOSS 已算定航线</span>
-        <span class="bf-you">你决定什么时候点火</span>
+      <!-- 世界观一句话：与示意图同构（左=身后追击的氦闪壳，右=唯一航向），读图即读文 -->
+      <div class="bf-sub">身后是氦闪膨胀壳，前方只有一条航线。</div>
+      <!-- MOSS 终端：情报与权限的对照 —— MOSS 算好一切，留给人的决定只剩「什么时候点火」 -->
+      <div class="bf-term">
+        <span class="bf-moss">MOSS：航线已解算 · 五次点火窗口</span>
+        <span class="bf-you">你：决定点火时刻</span>
       </div>
-      <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条 -->
-      <div id="tip"><b>按住屏幕任意位置</b>点火，指针滑进<b>绿色区间</b>再按 —— 在过早区间点过火，这次弹弓就作废了</div>
-      <button id="bf-btn" class="bf-btn" type="button">出发</button>
+      <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条。
+           三条**单行**指令，一条一义 —— 开局只有一次读规则的机会，
+           动作（按住 / 等判定针）与代价（作废）必须分行、分色；
+           左侧竖线把 1→2 串成「照着做」的流程，在红卡前淡出 —— 那是「别做」的分支。
+           第一版每条各带一行灰色「为什么」，三张两行卡片把面板顶到 620px，
+           320×568 上必须滚动才能看到「点火启航」；那行「为什么」交给局内
+           HUD（温度表盘 / 过热灯 / 消息槽）在玩家真正需要时再讲。 -->
+      <div id="tip" class="bf-steps">
+        <div class="bf-step"><span class="bs-n">1</span><span class="bs-t"><b>按住屏幕</b> ＝ 点火，松手即停机</span></div>
+        <div class="bf-step"><span class="bs-n">2</span><span class="bs-t">等判定针滑进<b>绿色区间</b>再按住</span></div>
+        <div class="bf-step bad"><span class="bs-n">!</span><span class="bs-t">窗口外点火 → <b>本次弹弓作废</b></span></div>
+      </div>
+      <div class="bf-goal">唯一目标：用<b>最短的时间</b>逃出太阳系</div>
+      <button id="bf-btn" class="bf-btn" type="button">点火启航</button>
     </div>
   </div>
 
@@ -124,7 +203,7 @@
 
   <div id="loader">
     <div class="loader-spin"></div>
-    <p>正在加载三维场景…</p>
+    <p>正在加载轨道数据…</p>
   </div>
 
   <div id="fallback">

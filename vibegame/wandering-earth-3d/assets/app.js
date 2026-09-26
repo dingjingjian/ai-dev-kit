@@ -306,10 +306,21 @@
   var SUBSTEP_TIME = 0.005;     // 固定子步（与帧率无关）
   var MAX_SUBSTEP = 400;
 
-  var HEAT_MAX = 100;
-  var HEAT_RATE = 70;           // 点火升温（满箱 ≈ 1.43 s 连续点火 → 窗口内死按会烧穿）
-  var COOL_RATE = 26;           // 停机降温
-  var PULSE_THRUST_BOOST = 1.6; // 耀斑脉冲窗口内的额外推力加成（**不叠加弹弓**：绿色区间由弹弓比例项接管，见 substep）
+  // ---- 发动机：功率 → 温度 → 过热锁定（2026-09-26 重构）----
+  // 旧版是两条互不相干的量：**温度**（唯一资源，按住恒定 +70/s、满则锁死）与
+  // **功率**（从区间派生的瞬时读数 0/20/100/160%）。后果是「在过早区死按」与
+  // 「在巡航段死按」烧穿温度的速度一模一样 —— 功率表再怎么动都不影响温度。
+  // 现在串成一条因果链（旧「温度箱」变成**功率**，另起一个新**温度**箱）：
+  //   功率（按住起转、松手回落）→ 温度按**当前功率档位**涨 → 满 = 过热锁定（与旧版一致）
+  // 于是「功率越大越烫」成为可读的物理关系：过晚残效 20% 几乎不烫、
+  // 脉冲乘波 160% 烫得最快，而**功率表指针的高度就是此刻的发热强度**。
+  var PWR_MAX = 100;            // 功率满额
+  var PWR_UP = 200;             // 起转：按住 0.5 s 到满功率（发动机响应时间）
+  var PWR_DOWN = 200;           // 熄火：松手 0.5 s 功率归零（比散热快得多）
+  var TEMP_MAX = 100;           // 温度满箱 → 过热锁定
+  var TEMP_RATE = 75;           // 满功率时的温升速率（满功率恒温 ≈ 1.33 s 满箱）
+  var COOL_RATE = 26;           // 降温速率：停机时降温；过热锁定后**强制降温**（按不按都一样，归零解锁 ≈ 3.85 s）
+  var PULSE_THRUST_BOOST = 1.6; // 耀斑脉冲的额外推力加成（同时计入**功率档位** → 温升也 ×1.6；**不叠加弹弓**）
 
   // 加速窗口时长 / 最佳区间位置 / 弹弓逼近速率 / 评级阈值**都是逐行星的**，由质量派生
   // （见 §3 的 deriveTiming），这里只留与行星无关的部分。
@@ -485,36 +496,36 @@
     // 这条要排在 !ok 之前 —— 它确实没通过门槛，但要说清楚「还活着，只是慢了」。
     if (r.result === 'slow') {
       return {
-        key: 'early', label: '速度没拉起来',
+        key: 'early', label: '轨道速度不足',
         tip: r.lostSling
-          ? '过早区间点过火，这颗的弹弓作废 —— 地球照常往前飞，但速度上不去，氦闪壳正在追上来'
-          : '这颗推过了，但前面欠的速度还没还上 —— 地球照常往前飞，氦闪壳正在追上来'
+          ? '弹弓增益已作废。轨道速度欠账，氦闪前壳正在逼近。'
+          : '轨道速度欠账未弥补。氦闪前壳正在逼近。'
       };
     }
-    if (!ok) return { key: 'fail', label: '被捕获', tip: '判定点速度不够：绿色区间必须吃满，弹弓才拉得起来' };
-    // 过早区间点过火 → 整次掠过失去弹弓机会，只能普通加速：评级最高封顶「差一口气」，绝不评完美弹弓
+    if (!ok) return { key: 'fail', label: '引力捕获', tip: '通过判定点速度低于逃逸门槛。引力窗口内必须吃满推力。' };
+    // 过早区间点过火 → 整次掠过失去弹弓机会，只能普通加速：评级最高封顶「弹弓增益损失」，绝不评完美弹弓
     if (r.lostSling) {
-      if (r.sweet === 0 && r.early === 0 && r.late > 0) return { key: 'late', label: '按晚了', tip: '过晚区间点火几乎不推进，判定点速度自然不够' };
-      if (r.sweet === 0 && r.early === 0 && r.late === 0) return { key: 'none', label: '没点火', tip: '一次都没按，速度被阻力一路吃掉' };
-      if (r.sweet === 0 && r.early > 0) return { key: 'early', label: '过早白烧', tip: '全程都在过早区间点火：弹弓已作废，温度也烧光了' };
-      return { key: 'good', label: '差一口气', tip: '在过早区间点过火，这次弹弓已作废，只剩普通推力 —— 下次等指针进绿色区间再按' };
+      if (r.sweet === 0 && r.early === 0 && r.late > 0) return { key: 'late', label: '点火延迟', tip: '窗口已关闭，残余推力不产生轨道增量。' };
+      if (r.sweet === 0 && r.early === 0 && r.late === 0) return { key: 'none', label: '发动机未点火', tip: '全程未点火。轨道速度被星际阻力耗散。' };
+      if (r.sweet === 0 && r.early > 0) return { key: 'early', label: '无效点火', tip: '全程窗口外点火。弹弓增益作废，发动机温升超限。' };
+      return { key: 'good', label: '弹弓增益损失', tip: '过早点火，本次弹弓增益作废。绿色窗口开启前禁止点火。' };
     }
     if (r.sweet >= R) {
-      return { key: 'perfect', label: '完美弹弓', tip: '吃满，弹弓把速度拉到了该行星的弹弓速度' };
+      return { key: 'perfect', label: '完美弹弓', tip: '引力弹弓增益已拉满，轨道速度达标。' };
     }
     if (r.sweet >= R * 0.45) {
-      return { key: 'good', label: '差一口气', tip: '只吃到一半，弹弓没拉满 —— 下次让指针在绿色区间多停一会儿' };
+      return { key: 'good', label: '弹弓增益未满', tip: '弹弓增益未满。绿色窗口内保持推力更久。' };
     }
     if (r.sweet > 0) {
-      return { key: 'early', label: '按早了', tip: '过早区间只有普通推力，白烧了温度 —— 等指针进绿色区间再按' };
+      return { key: 'early', label: '提前点火', tip: '窗口外点火不增益，发动机温升无效。' };
     }
     if (r.late > 0) {
-      return { key: 'late', label: '按晚了', tip: '过晚区间点火几乎不推进，判定点速度自然不够' };
+      return { key: 'late', label: '点火延迟', tip: '窗口已关闭，残余推力不产生轨道增量。' };
     }
     if (r.early > 0) {
-      return { key: 'early', label: '过早白烧', tip: '全程都在过早区间点火：那里吃不到弹弓，温度也烧光了' };
+      return { key: 'early', label: '无效点火', tip: '全程窗口外点火。弹弓增益作废，发动机温升超限。' };
     }
-    return { key: 'none', label: '没点火', tip: '一次都没按，速度被阻力一路吃掉' };
+    return { key: 'none', label: '发动机未点火', tip: '全程未点火。轨道速度被星际阻力耗散。' };
   }
   function pulseActive(t) {
     for (var i = 0; i < PULSE_TIMES.length; i++) {
@@ -541,8 +552,8 @@
   function pulseTip(t, zone) {
     var early = (zone === 'early');
     if (pulseActive(t)) {
-      if (early) return '⚠ 耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 过早别按（会作废弹弓）';
-      if (zone === 'appr' || zone === 'done') return '⚠ 耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 现在按住';
+      if (early) return '⚠ 太阳耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 窗口外禁止点火';
+      if (zone === 'appr' || zone === 'done') return '⚠ 太阳耀斑脉冲 ×' + PULSE_THRUST_BOOST + ' · 全功率推进';
       return '';   // 绿色区间由弹弓接管（加成不生效）、过晚已来不及：交给既有提示，不抢屏
     }
     var left = pulseIn(t);
@@ -551,7 +562,7 @@
     // 预警有 2 s，窗口只吃掉其中一段，剩下的时间足够看到；
     // 而「过早区别按」这条关键警告在生效期还会再出现一次，不会漏。
     if (zone !== 'appr' && zone !== 'done') return '';
-    return '⚠ 耀斑脉冲 ' + left.toFixed(1) + ' s 后 · 推力 ×' + PULSE_THRUST_BOOST;
+    return '⚠ 太阳耀斑脉冲 ' + left.toFixed(1) + ' s 后 · 推力 ×' + PULSE_THRUST_BOOST;
   }
 
   // ---- 行星发动机（纯函数，渲染层与无头自检共用）----
@@ -597,7 +608,8 @@
       rSun: 0, rSunAU: 0, speedKms: 0,
       shellR: SHELL_START, shellV: SHELL_A, shellAU: SHELL_START / AU,
       gap: 0,
-      heat: 0, overheated: false, overheatLeft: 0, thrustEff: 1, burning: false,
+      pwr: 0,                  // 发动机功率（按住起转、松手回落；过热锁定即熄火）
+      heat: 0, overheated: false, overheatLeft: 0, thrustEff: 0, burning: false,
       pullTo: 0, slinging: false,   // 弹弓：本子步向 pullTo 逼近（0 = 未触发）
       slingK: 0,               // 当前行星的弹弓逼近速率（窄区间行星的 K 更大 → 吃满收益一致）
       pulseHot: false, pulseIn: -1,   // 脉冲生效中 / 距下一次脉冲还有几秒
@@ -642,8 +654,9 @@
       //   · 弹弓期（st.pullTo > 0）：a = st.slingK·(pullTo − v)，向该行星的弹弓速度**按比例逼近**。
       //     比例项意味着「落后越多拉得越猛」，所以前面吃得少不会一路崩到底（可追回）；
       //     slingK 是该行星自己的（区间越窄 K 越大），保证「吃满绿色区间」的收益与区间宽度无关。
-      //   · 其余时刻：a = THRUST_ACC × 区间效率（巡航/过早 1×，过晚 0.2×，过热 0），
-      //     脉冲窗口再乘 PULSE_THRUST_BOOST（乘波）。
+      //   · 其余时刻：a = THRUST_ACC × **功率档位**（= 功率 × 区间效率 × 乘波，见上面的积分循环），
+      //     也就是「油门踩多深」：巡航/过早 1×、过晚残效 0.2×、脉冲乘波 1.6×，过热熄火 0。
+      //     同一档位也决定温升速率 —— 推力与发热共用同一个系数（温度 = ∫ 功率）。
       var acc = -DRAG_K * st.v;
       if (st.pullTo > 0) acc += st.slingK * (st.pullTo - st.v);
       else if (st.burning && st.thrustEff > 0) acc += THRUST_ACC * st.thrustEff;
@@ -651,12 +664,12 @@
       st.s += st.v * h;
       st.shellR = shellRadius(tNow);
 
-      if (st.s >= route.len) { st.s = route.len; st.status = 'escaped'; st.reason = '冲出太阳系，奔向比邻星'; return; }
+      if (st.s >= route.len) { st.s = route.len; st.status = 'escaped'; st.reason = '逃逸成功，航向比邻星'; return; }
       if (st.shellR >= st.rSun) {
         // 这局若吃过「弹弓作废」的亏，就把因果写进失败原因 —— 玩家才知道是被自己的过早烧没的
         var starved = false, kk;
         for (kk = 0; kk < nF; kk++) if (st.results[kk].result === 'slow') { starved = true; break; }
-        fail('burned', starved ? '速度没拉起来，地球被氦闪壳追上' : '地球被氦闪壳吞没', '太阳');
+        fail('burned', starved ? '轨道速度不足，地球被氦闪前壳追上' : '地球被氦闪前壳吞没', '太阳');
         return;
       }
     }
@@ -676,7 +689,7 @@
         // 真·撞毁：速度低到连大气层都擦不过去（三档判定的最低一档，仍然只在窗口里认）
         if (st.v < need * CRASH_RATIO) {
           r.result = 'crashed';
-          fail('crashed', '速度不够，坠入' + f.def.name + '大气层', f.def.name);
+          fail('crashed', '轨道速度不足，坠入' + f.def.name + '大气层', f.def.name);
           return;
         }
         // 「这一关有没有真的推过」= 过早区间烧过、或绿色区间吃到过一点。
@@ -684,7 +697,7 @@
         // 推过却仍然不够快 = 速度欠账，不在行星这里结 —— 放它过去，交给身后的氦闪壳。
         if (r.early <= 0 && r.sweet <= 0) {
           r.result = 'caught';
-          fail('caught', '速度不够，被' + f.def.name + '引力捕获', f.def.name);
+          fail('caught', '轨道速度不足，被' + f.def.name + '引力捕获', f.def.name);
           return;
         }
         r.result = 'slow';
@@ -710,16 +723,6 @@
       var tNow = st.t;
       var tg = st.target;
       while (st.acc >= SUBSTEP_TIME && n < MAX_SUBSTEP) {
-        // ---- 过热管理（先于子步更新，区间按本子步起点判定）----
-        if (st.overheated) {
-          if (!st.burning) st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
-          if (st.heat <= 0) st.overheated = false;
-        } else if (st.burning) {
-          st.heat = Math.min(HEAT_MAX, st.heat + HEAT_RATE * SUBSTEP_TIME);
-          if (st.heat >= HEAT_MAX) st.overheated = true;
-        } else {
-          st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
-        }
         // ---- 时机窗口（窗口时长与最佳区间都是**该行星自己的**，由质量派生）----
         tg = st.target;
         if (tg >= 0) {
@@ -732,9 +735,32 @@
         } else {
           st.tToGo = 1e9; st.phase = 2; st.zone = 'done'; st.vNeed = 0;
         }
-        var eff = st.overheated ? 0 : zoneEff(st.zone);
+        // ---- 功率（发动机油门）：按住起转、松手回落；过热锁定即熄火 ----
+        // 旧版这一步就是「温度」本身（按住恒定 +70/s）—— 现在它只是**功率**，
+        // 温度要按功率档位再积一次（见下），所以「功率越大越烫」是被算出来的，不是文案。
+        if (st.burning && !st.overheated) st.pwr = Math.min(PWR_MAX, st.pwr + PWR_UP * SUBSTEP_TIME);
+        else st.pwr = Math.max(0, st.pwr - PWR_DOWN * SUBSTEP_TIME);
+        // ---- 功率档位（发动机这一刻的有效输出）= 功率 × 区间效率 × 脉冲乘波 ----
+        // 它同时是**推力系数**（普通推力项）与**温升系数** —— 这就是本次重构的耦合点：
+        // 过晚残效 20% 几乎不烫、脉冲乘波 160% 烫得最快、起转未满时推力与发热一起爬升。
+        // 绿色区间的速度增益由弹弓比例项接管、与功率档位无关（弹弓是引力，不是发动机）。
+        var eff = (st.pwr / PWR_MAX) * zoneEff(st.zone);
         if (eff > 0 && pulseActive(tNow)) eff *= PULSE_THRUST_BOOST;
-        st.thrustEff = eff;
+        st.thrustEff = (st.burning && !st.overheated) ? eff : 0;
+        // ---- 温度：温升速率 ∝ 功率档位；停机降温 ----
+        // **过热锁定 = 强制降温阶段**：无论手指按不按，温度都按 COOL_RATE 降。按住既不会升温、
+        // 也不会重新起转（功率与推力全程 0），更不会打断降温进度 —— 点也白点，但也不受罚。
+        // （旧规则是「按着不降温，必须松手」。它把「没松手」本身当成惩罚，代价是逼玩家先抬指再按；
+        //   而惩罚其实由「强制停机这一段」就表达完了：过热 = 发动机停机 COOL_RATE 那段时长。）
+        if (st.overheated) {
+          st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
+          if (st.heat <= 0) st.overheated = false;
+        } else if (st.burning) {
+          st.heat = Math.min(TEMP_MAX, st.heat + TEMP_RATE * st.thrustEff * SUBSTEP_TIME);
+          if (st.heat >= TEMP_MAX) { st.overheated = true; st.thrustEff = 0; }
+        } else {
+          st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
+        }
         // 最佳区间点火 → 切到弹弓形态
         // 但若本次掠过曾在「过早」区间点过火（lostSling），弹弓机会已作废，绿色区间也只给普通推力
         st.slinging = !!(st.burning && !st.overheated && st.zone === 'sweet' && tg >= 0 && !st.results[tg].lostSling);
@@ -776,14 +802,14 @@
         var fdw = flybys[st.target].def;
         var toSweet = st.tToGo - (1 - fdw.sweet0) * fdw.winTime;  // 解锁截止 = 绿色区间开始
         if (st.overheated) {
-          st.overheatLeft = st.heat / COOL_RATE;                  // 归零解锁还差几秒
+          st.overheatLeft = st.heat / COOL_RATE;                  // 归零解锁还差几秒（强制降温，按不按都一样）
           st.warn = st.overheatLeft > toSweet
-            ? '过热锁定 · 这站来不及解锁'
-            : '过热锁定 · 冷却 ' + st.overheatLeft.toFixed(1) + ' s';
+            ? '发动机过热锁定 · 本站窗口前无法解锁'
+            : '发动机过热 · 强制冷却 ' + st.overheatLeft.toFixed(1) + ' s';
         } else if (pulseTxt) {
           st.warn = pulseTxt; st.warnKind = 'pulse';
         } else if (st.zone === 'late') {
-          st.warn = '过晚 · 已来不及';
+          st.warn = '窗口关闭 · 已错过';
         }
       } else if (pulseTxt) {
         st.warn = pulseTxt; st.warnKind = 'pulse';
@@ -794,7 +820,7 @@
       st.status = 'flying'; st.reason = ''; st.culprit = '';
       st.t = 0; st.s = 0; st.v = START_SPEED; st.acc = 0;
       st.shellR = SHELL_START; st.shellV = SHELL_A;
-      st.heat = 0; st.overheated = false; st.overheatLeft = 0; st.thrustEff = 1; st.burning = false;
+      st.pwr = 0; st.heat = 0; st.overheated = false; st.overheatLeft = 0; st.thrustEff = 0; st.burning = false;
       st.pullTo = 0; st.slinging = false; st.slingK = 0;
       st.pulseHot = false; st.pulseIn = -1; st.target = 0; st.tToGo = 0; st.phase = -1; st.zone = 'appr';
       st.vNeed = flybys[0].def.vNeed; st.safe = false; st.warn = ''; st.warnKind = '';
@@ -854,7 +880,8 @@
   };
   global.M3D.CONST = {
     START_SPEED: START_SPEED, THRUST_ACC: THRUST_ACC, DRAG_K: DRAG_K,
-    HEAT_MAX: HEAT_MAX, HEAT_RATE: HEAT_RATE, COOL_RATE: COOL_RATE,
+    PWR_MAX: PWR_MAX, PWR_UP: PWR_UP, PWR_DOWN: PWR_DOWN,
+    TEMP_MAX: TEMP_MAX, TEMP_RATE: TEMP_RATE, COOL_RATE: COOL_RATE,
     WIN_MIN: WIN_MIN, WIN_MAX: WIN_MAX, SWEET_HI: SWEET_HI,
     SWEET_LO_NARROW: SWEET_LO_NARROW, SWEET_LO_WIDE: SWEET_LO_WIDE,
     SLING_SWEET_PRODUCT: SLING_SWEET_PRODUCT, RATING_SWEET_FRAC: RATING_SWEET_FRAC,
@@ -1359,7 +1386,7 @@
   }
 
   // ---- 后视镜：单 renderer + scissor 画在同一块 canvas 的顶部矩形里 ----
-  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 132 / 68, 0.5, 60000);
+  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 120 / 62, 0.5, 60000);
   var elMirrorFrame = document.getElementById('mirror-frame');
   var mirrorOn = false;
   var mirrorRect = { x: 0, y: 0, w: 0, h: 0, ok: false };
@@ -1378,13 +1405,26 @@
   }
 
   // ---- HUD ----
-  var elClockWrap = document.getElementById('clock'), elClock = document.getElementById('clock-num');
+  var elClockWrap = document.getElementById('clock'), elClock = document.getElementById('clock-num'),
+    elClockMs = document.getElementById('clock-ms');
   var elSpeed = document.getElementById('tm-speed'), elDist = document.getElementById('tm-dist'), elGap = document.getElementById('tm-gap');
   var elWarn = document.getElementById('warn'), elDanger = document.getElementById('danger'), elTip = document.getElementById('tip');
   var elBrief = document.getElementById('brief'), elBfBtn = document.getElementById('bf-btn'), briefClosed = false;
   var elProg = document.getElementById('progress'), elProgFill = document.getElementById('prog-fill'), elProgLabel = document.getElementById('prog-label');
-  var elTelemetry = document.getElementById('telemetry');
-  var elHeatWrap = document.getElementById('heat-wrap'), elHeatFill = document.getElementById('heat-fill'), elHeatTag = document.getElementById('heat-tag');
+  // 汽车式仪表盘（底部平铺）：功率 / 温度 / 速度三根指针 + 三段随值生长的弧
+  // （自左至右 = 驾驶时的手上顺序：多大力 → 烫不烫 → 够不够门槛），另加刻度与四盏警报灯。
+  // 指针用 SVG 的 rotate 属性变换（不是 CSS transform）—— 后者在 Chrome 61 的 SVG 上要
+  // transform-origin/transform-box 才转得对，前者是 SVG 1.1 就有的，所有内核一致。
+  var elDash = document.getElementById('dash');
+  var elHeatGauge = document.getElementById('dg-heat'), elHeatNeedle = document.getElementById('dg-heat-needle'),
+    elHeatArc = document.getElementById('dg-heat-arc'), elHeatVal = document.getElementById('tm-heat');
+  var elSpdGauge = document.getElementById('dg-speed'), elSpdNeedle = document.getElementById('dg-speed-needle'),
+    elSpdArc = document.getElementById('dg-speed-arc'), elSpdTick = document.getElementById('dg-tick');
+  var elPwGauge = document.getElementById('dg-pw'), elPwNeedle = document.getElementById('dg-pw-needle'),
+    elPwArc = document.getElementById('dg-pw-arc'), elPwRef = document.getElementById('dg-pw-ref'),
+    elPwVal = document.getElementById('tm-pw');
+  var elLampHot = document.getElementById('lamp-hot'), elLampSling = document.getElementById('lamp-sling'),
+    elLampFlare = document.getElementById('lamp-flare'), elLampShell = document.getElementById('lamp-shell');
   var elFlyby = document.getElementById('flyby'), elFbName = document.getElementById('fb-name'),
     elFbNeedle = document.getElementById('fb-needle'), elFbTag = document.getElementById('fb-tag'),
     elFbCur = document.getElementById('fb-cur'), elFbNeed = document.getElementById('fb-need'),
@@ -1400,6 +1440,27 @@
   var elRsTimeBox = document.getElementById('rs-time-box'), elRsLabel = document.getElementById('rst-label'),
     elRsTime = document.getElementById('rs-time-value'), elRsBest = document.getElementById('rs-best'),
     elRsShare = document.getElementById('rs-share'), elRsHint = document.getElementById('rs-hint');
+
+  // ---- 表盘刻度换算 ----
+  // 速度满量程 80 km/s：实测「满弹弓」全程峰值 67.1 km/s、开局 37.0 —— 指针常驻表盘 46%–84% 区间，
+  // 留得住顶部余量（真被顶满也只是指针贴死上限，数字读数仍然是真的）。
+  var GAUGE_VMAX = 80;
+  // 功率满量程 160%：额定推力 100% 落在弧长 62.5% 处（表盘上那道细刻度），
+  // 只有耀斑脉冲的乘波（×1.6）才推得过额定线 —— 「乘波」因此是看得见的。
+  var PWR_VMAX = 160;
+  var GAUGE_R0 = -135, GAUGE_SWEEP = 270;
+  var ARC_LEN = 179.1;                  // 值弧弧长 = 2π×38×270/360
+  function gaugeSet(needleEl, arcEl, p) {
+    if (p < 0) p = 0; else if (p > 1) p = 1;
+    var deg = (GAUGE_R0 + p * GAUGE_SWEEP).toFixed(1);
+    if (needleEl) needleEl.setAttribute('transform', 'rotate(' + deg + ',50,50)');
+    // 值弧走 **inline style** 而不是同名的表现属性：CSS 里那条 .dg-arc{stroke-dashoffset:179.1} 是声明，
+    // 而 CSS 声明**永远压过** SVG 表现属性 —— 写成属性的话值弧一辈子停在 179.1（全空），
+    // 表盘上就只剩指针在动（历史 bug，实测 computed 恒为 179.1px）。
+    if (arcEl) arcEl.style.strokeDashoffset = (ARC_LEN * (1 - p)).toFixed(2);
+  }
+  // 额定刻度是一次性常量：100% / 160% 的位置固定，不必每帧重算
+  if (elPwRef) gaugeSet(elPwRef, null, 100 / PWR_VMAX);
 
   function hideTip() { if (elTip) elTip.classList.add('hide'); }
 
@@ -1450,25 +1511,76 @@
   }
 
   function updateHUD() {
+    // 计时带毫秒：秒位保持大号、毫秒另起一段小字（#clock-ms）。
+    // 成绩本身仍按 0.1 s 记（结算与分享都读 st.t），毫秒只是仪表盘上的跟手读数。
     var sec = Math.max(0, st.t);
-    elClock.textContent = Math.floor(sec / 60) + ':' + (sec % 60 < 10 ? '0' : '') + Math.floor(sec % 60);
-    elSpeed.textContent = st.speedKms.toFixed(1) + ' km/s';
+    var mm = Math.floor(sec / 60), ss = Math.floor(sec % 60), ms = Math.floor((sec % 1) * 1000);
+    elClock.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss;
+    if (elClockMs) elClockMs.textContent = '.' + ('00' + ms).slice(-3);
+
+    // 温度（新温度箱，温升速率 ∝ 功率，见物理核心）：满量程即 TEMP_MAX
+    var heatPct = st.heat / TEMP_MAX;
+    gaugeSet(elHeatNeedle, elHeatArc, heatPct);
+    if (elHeatVal) elHeatVal.textContent = Math.round(heatPct * 100);
+    elHeatGauge.classList.toggle('hot', heatPct > 0.7 && !st.overheated);
+    elHeatGauge.classList.toggle('locked', st.overheated);
+
+    var spdPct = st.speedKms / GAUGE_VMAX;
+    gaugeSet(elSpdNeedle, elSpdArc, spdPct);
+    elSpeed.textContent = st.speedKms.toFixed(1);
+    // 指针踩进最佳区间时速度表整体转绿（时机轴同色）—— 表盘就在时机条下面，余光可及
+    elSpdGauge.classList.toggle('sweet', st.zone === 'sweet');
+    // 门槛刻度：当前行星的判定速度在表盘上的位置（速度够了转绿）。
+    // 它取代了旧遥测面板里那行「速度 X / 门槛 Y」中的对照关系 —— 指针与刻度一比对即知还差多远。
+    if (elSpdTick) {
+      var hasNeed = st.target >= 0 && st.vNeed > 0 && briefClosed;
+      elSpdTick.classList.toggle('hide', !hasNeed);
+      if (hasNeed) {
+        gaugeSet(elSpdTick, null, (st.vNeed * KMS_PER_UNIT) / GAUGE_VMAX);
+        elSpdTick.classList.toggle('safe', st.v >= st.vNeed);
+      }
+    }
+
+    // ---- 发动机功率（功率表）----
+    // 物理核心把「这一刻的有效输出」算在 st.thrustEff 里（功率 × 区间效率 × 脉冲乘波，
+    // 过热直接归零），这里只负责在没有推力可谈的时候（没按住 / 过热锁定）把它读成 0：
+    //   0% = 停机或过热锁定、20% = 过晚残效（白烧）、100% = 额定、160% = 耀斑脉冲乘波。
+    // 现在它是一条**起转斜坡**：按住 0.5 s 从 0 涨到额定线（旧版是区间派生的瞬时跳变），
+    // 所以指针的高度同时读出「按了多久」与「此刻的发热强度」—— 温度就是按它积出来的。
+    // 刻度换算：st.thrustEff 是**小数**（1.0 = 额定），先 ×100 折成百分数再除以满量程 160%。
+    // （历史 bug：直接 power / PWR_VMAX = 1/160 = 0.006 → 指针全程只转 1°，看着像死的。）
+    var power = (st.burning && !st.overheated) ? st.thrustEff : 0;
+    gaugeSet(elPwNeedle, elPwArc, power * 100 / PWR_VMAX);
+    if (elPwVal) elPwVal.textContent = Math.round(power * 100);
+    elPwGauge.classList.toggle('idle', power <= 0.001);
+    // 「过晚残效」这个红态只给 late 区间：它不能按「功率 < 50%」判，否则每次按住的起转前 0.25 s
+    // 都会闪一次红 —— 那是正常的发动机起转，不是「白烧」。
+    elPwGauge.classList.toggle('weak', st.zone === 'late' && power > 0.001);
+    elPwGauge.classList.toggle('boost', power > 1.001);
+
     elDist.textContent = st.rSunAU.toFixed(2) + ' AU';
     elGap.textContent = (st.gap / AU).toFixed(2) + ' AU';
-    elGap.className = 'tm-v' + (st.gap < 12 ? ' bad' : (st.gap < 28 ? ' warn' : ''));
+    elGap.className = 'dr-v' + (st.gap < 12 ? ' bad' : (st.gap < 28 ? ' warn' : ''));
+
+    // ---- 警报灯（驾驶舱指示灯）：红=已经出事、琥珀=即将发生、绿=弹弓正在生效 ----
+    // 与底部那条消息槽分工：灯负责「有没有事」，文案负责「该怎么做」。
+    elLampHot.classList.toggle('on', heatPct > 0.85 || st.overheated);
+    elLampHot.classList.toggle('warn', heatPct > 0.7 && heatPct <= 0.85 && !st.overheated);
+    elLampHot.classList.toggle('bad', !!st.overheated);
+    elLampFlare.classList.toggle('warn', !!st.pulseHot || st.warnKind === 'pulse');
+    elLampShell.classList.toggle('bad', st.gap < 12);
+    elLampShell.classList.toggle('warn', st.gap >= 12 && st.gap < 28);
+    // 弹弓灯：绿 = 弹弓正在生效（.on）；红 = 这次掠过的弹弓已经烧废（.bad，CSS 里排在 .on 之后所以红色优先）
+    var tgLamp = st.target;
+    elLampSling.classList.toggle('on', !!st.slinging);
+    elLampSling.classList.toggle('bad', !!(tgLamp >= 0 && st.results[tgLamp].lostSling));
 
     elProgFill.style.width = (st.progress * 100).toFixed(0) + '%';
     elProgLabel.textContent = '逃逸进度 ' + (st.progress * 100).toFixed(0) + '%';
 
-    var heatPct = st.heat / HEAT_MAX;
-    elHeatFill.style.width = (heatPct * 100).toFixed(0) + '%';
-    elHeatWrap.classList.toggle('hot', heatPct > 0.7 && !st.overheated);
-    elHeatWrap.classList.toggle('locked', st.overheated);
-    elHeatTag.textContent = st.overheated ? '过热锁定 · 松手冷却' : '发动机温度';
-
-    // ---- 加速时机条（核心 HUD）----
-    // 时机条只在窗口内出现：head 报「哪颗行星 + 现在踩在哪一段」，
-    // foot 报「速度 / 门槛」。速度用 km/s —— 与右上遥测同一个单位，
+    // ---- 加速时机条（核心 HUD，压在仪表行之上）----
+    // 时机条只在窗口内出现：head 报「哪颗行星 + 现在踩在哪一段 + 速度 / 门槛」。
+    // 速度用 km/s —— 与身边那三张表盘同一个单位，
     // 不然屏幕会同时出现两套速度读数（98 单位 vs 41.3 km/s）谁也读不懂。
     var showBar = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase >= 0;
     if (showBar) {
@@ -1489,9 +1601,9 @@
       elFlyby.classList.toggle('sweet', st.zone === 'sweet');
       elFlyby.classList.toggle('risk', st.zone === 'early');
       elFlyby.classList.toggle('late', st.zone === 'late');
-      if (st.zone === 'sweet') elFbTag.textContent = '最佳时机 · 引力弹弓';
-      else if (st.zone === 'late') elFbTag.textContent = '过晚 · 已来不及';
-      else if (st.zone === 'early') elFbTag.textContent = '过早 · 按了就作废弹弓';
+      if (st.zone === 'sweet') elFbTag.textContent = '引力窗口 · 全功率推进';
+      else if (st.zone === 'late') elFbTag.textContent = '窗口关闭';
+      else if (st.zone === 'early') elFbTag.textContent = '窗口外点火 · 增益作废';
       else elFbTag.textContent = '';
     } else {
       elFlyby.classList.add('hide');
@@ -1571,10 +1683,10 @@
   var resultShownAt = 0;
   function showResult() {
     var win = st.status === 'escaped';
-    elRsTitle.textContent = win ? '冲出太阳系' : '任务终止';
+    elRsTitle.textContent = win ? '冲出太阳系' : '逃逸失败';
     elRsTitle.className = 'rs-title ' + (win ? 'win' : 'lose');
     // 没逃出去就不是「逃逸用时」——标签跟着胜负换，和分享卡片保持同一套说法
-    if (elRsLabel) elRsLabel.textContent = win ? '逃逸用时' : '坚持到';
+    if (elRsLabel) elRsLabel.textContent = win ? '逃逸用时' : '航至';
     elRsTime.innerHTML = st.t.toFixed(1) + '<i>s</i>';
     elRsTimeBox.classList.toggle('bad', !win);
 
@@ -1587,17 +1699,17 @@
       elRsBest.textContent = (isNew ? '★ 新纪录 ' : '本站最快 ') + bestTime.toFixed(1) + ' s';
       elRsBest.classList.toggle('new', isNew);
     } else {
-      elRsBest.textContent = '还没有逃出去过，先拿下第一份成绩';
+      elRsBest.textContent = '尚无逃逸记录。完成首次逃逸。';
       elRsBest.classList.remove('new');
     }
 
     // 失败原因（被谁捕获 / 撞毁 / 被壳吞没）留给 body；成功时标题已经说了「冲出太阳系」，
     // 再复述一遍那句 reason 是纯重复，这里换成一句收尾。
-    elRsText.textContent = win ? '地球已脱离太阳系引力范围，接下来交给时间。' : st.reason;
+    elRsText.textContent = win ? '地球已脱离太阳系引力束缚。比邻星航程，约两千五百年。' : st.reason;
     var passed = st.score.perfect + st.score.pass + st.score.slow;
     var passLine = st.score.slow
-      ? '掠过 <b>' + passed + '</b>　其中 <b>' + st.score.slow + '</b> 颗速度没拉起来'
-      : '顺利掠过 <b>' + passed + '</b>';
+      ? '引力助推 <b>' + passed + '</b> 次　其中 <b>' + st.score.slow + '</b> 次速度不足'
+      : '引力助推 <b>' + passed + '</b> 次';
     elRsStat.innerHTML =
       '完美弹弓 <b>' + st.score.perfect + ' / ' + flybys.length + '</b>　' + passLine +
       '<br>末速 <b>' + st.speedKms.toFixed(0) + ' km/s</b>　距日 <b>' + st.rSunAU.toFixed(1) + ' AU</b>';
@@ -1608,17 +1720,77 @@
     elWarn.classList.remove('show');
     elResult.classList.add('show');
     resultShownAt = performance.now();
+    // 分享入口：按钮文案随当下可用能力定（§3.9 评论区 / §3.3 发笔记 / 无端能力），
+    // 战绩卡与本地句柄在面板亮出来时就备好 —— 点击时才能不带异步地发起（§3.9 要求用户主动触发）
+    refreshShareButton();
+    prepareShareCard();
     if (win) sfxWin(); else sfxLose();
   }
 
-  // ---- 分享战绩：走小工具容器的 JSBridge，唤起 App 的笔记发布页 ----
-  //   容器里网页不能直接发笔记，只能 XHS.postNote({title, content, pageType, mediaInfo})，
-  //   且 mediaInfo 必填（图片/视频/实况至少一种）。配图走 Canvas 现画，不碰网络请求 API
-  //   （容器把 fetch/XHR 列为不可用行为，扫描清单会 grep 标识符）。
-  //   能力检测而非 UA 判断：拿不到 postNote 就退化成「复制战绩文案」，桌面也能用。
-  var XHS = (window.xhs && window.xhs.miniTool) || null;
-  var CAN_SHARE = !!(XHS && typeof XHS.postNote === 'function');
-  if (CAN_SHARE && elRsShare) elRsShare.textContent = '分享到小红书';
+  // ---- 分享战绩：走小工具容器的 JSBridge ----
+  //   官方文档 §3.2 里唯一标注「分享」的能力是 §3.9 interactionOpenApi（唤起评论区、带图文评论
+  //   草稿、可同步存相册，客户端 9.49+）—— 首选；拿不到就回退 §3.3 postNote（唤起笔记发布页）。
+  //   两条路都必须带媒体（postNote 的 mediaInfo 必填），图仍是 Canvas 现画，不引用任何外部图片、
+  //   不碰被容器禁用的网络请求 API（扫描清单会 grep 标识符）。
+  //   §3.9 的两条硬约束决定了调用顺序：
+  //     ① 媒体**只收本地文件句柄**（data: URI / 网络地址 / 绝对路径都不可用）→ 必须先 writeTempFile；
+  //     ② 要求「用户点击等主动操作触发」，且容器会**先关闭本页**再拉起评论区 →
+  //        战绩卡与临时文件在结算页亮出来时就备好，点击时带着现成的 filePath 同步发起，
+  //        不把异步步骤夹进手势栈里（点得太快没备好时才补一次落盘）。
+  //   能力检测一律在调用时做（§3.1：调用前用 window.xhs && window.xhs.miniTool 判空），
+  //   不缓存脚本加载那一刻的 window 状态；全程不碰禁用能力（剪贴板 / 网络请求 / 长按菜单）。
+
+  var COMMENT_MIN_CLIENT = 9490;    // §3.9：评论区能力需客户端 9.49+（9462 即 9.46.2）
+  var clientVersion = 0;            // buildVersion / 1000；0 = 尚未取到
+
+  // §3.6：buildVersion 末尾三位是编译序号，比较前先取整；同步值缺失且 getLaunchOptions 在时才异步取
+  function readBuildVersion(launchOptions) {
+    var env = launchOptions && launchOptions.miniToolEnv;
+    return Number((env && env.buildVersion) || 0) || 0;
+  }
+  function probeClientVersion() {
+    var xhs = window.xhs, raw = readBuildVersion(xhs && xhs.launchOptions);
+    if (raw) { clientVersion = Math.floor(raw / 1000); return; }
+    // 同步值缺失才异步取（§3.6）；取不到就一直保持「未知」，交给方法存在性判断
+    var p = callBridge(xhs && xhs.miniTool, 'getLaunchOptions');
+    if (!p) return;
+    p.then(function (lo) {
+      var v = readBuildVersion(lo);
+      if (v) { clientVersion = Math.floor(v / 1000); refreshShareButton(); }
+    }, function () { });
+  }
+
+  function shareBridge() { return (window.xhs && window.xhs.miniTool) || null; }
+  function hasApi(b, name) { return !!(b && typeof b[name] === 'function'); }
+  // 统一发起：端能力在参数不合法时会**同步失败**（§3.1「在本地直接失败，不上行」），也可能返回非
+  // Promise —— 这里都兜住，返回 null 表示这次没发出去，异常不会冒进渲染循环 / 手势回调
+  function callBridge(b, api, options) {
+    if (!hasApi(b, api)) return null;
+    try {
+      var p = b[api](options);
+      return (p && typeof p.then === 'function') ? p : null;
+    } catch (e) { return null; }
+  }
+  // 首选路径的前置条件：方法都在（硬信号）+ 版本够。版本取不到时以方法存在为准 ——
+  // 低版本客户端本就不会注入这个方法（§3.6：两种方式都取不到版本号时按「不支持」处理）。
+  function commentMode(b) {
+    if (!hasApi(b, 'interactionOpenApi') || !hasApi(b, 'writeTempFile')) return false;
+    return clientVersion === 0 || clientVersion >= COMMENT_MIN_CLIENT;
+  }
+  function shareMode() {
+    var b = shareBridge();
+    if (commentMode(b)) return 'comment';      // §3.9 分享到评论区
+    if (hasApi(b, 'postNote')) return 'note';  // §3.3 发布笔记（低版本回退）
+    return '';                                 // 未注入端能力：只剩「选中文案」
+  }
+  function refreshShareButton() {
+    if (!elRsShare) return;
+    var mode = shareMode();
+    elRsShare.textContent = mode === 'comment' ? '分享到评论区'
+      : (mode === 'note' ? '分享到小红书' : '分享战绩');
+  }
+  probeClientVersion();
+  refreshShareButton();
 
   function shareTitle() {
     // postNote 的 title 上限 20 字
@@ -1627,11 +1799,19 @@
   function shareContent() {
     var win = st.status === 'escaped';
     var head = win
-      ? '我把地球开出了太阳系：' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
-      : '差一口气：' + st.t.toFixed(1) + ' 秒时' + st.reason + '。';
+      ? '氦闪前壳追上来之前，我把地球开出了太阳系：' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
+      : '第 ' + st.t.toFixed(1) + ' 秒：' + st.reason + '。';
     var best = (bestTime !== null && bestTime <= st.t) ? '本站最快 ' + bestTime.toFixed(1) + ' 秒。' : '';
-    return head + best + '\n全程只决定「什么时候点火」——看谁先把地球开出去。\n' +
+    return head + best + '\n全程只有一个动作：决定何时点燃行星发动机。看谁先把地球送出太阳系。\n' +
       '\n#小红书vibecoding大赛 #vibegame #小红书小工具 #流浪地球';
+  }
+  // 评论草稿（§3.9）：评论是短文本，只留成绩 + 挑战，不搬整篇笔记正文
+  function shareComment() {
+    var win = st.status === 'escaped';
+    var head = win
+      ? '我把地球开出太阳系只用了 ' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
+      : '这次第 ' + st.t.toFixed(1) + ' 秒就交代了（' + st.reason + '）。';
+    return head + '全程只有一个操作：决定何时点火 —— 看谁先把地球送出去。 #小红书vibecoding大赛 #vibegame';
   }
 
   // 战绩图：纯 Canvas 现画（不引用任何外部图片，避免画布被污染）
@@ -1670,7 +1850,7 @@
     g.fillText('流浪地球 · 引力弹弓', CW / 2, 130);
 
     g.fillStyle = '#8da2c0'; g.font = '28px ' + FONT;
-    g.fillText(win ? '逃逸用时' : '坚持到', CW / 2, 300);
+    g.fillText(win ? '逃逸用时' : '航至', CW / 2, 300);
 
     g.fillStyle = win ? '#ffd24a' : '#c9d6e8';
     g.font = '800 168px ' + FONT;
@@ -1680,7 +1860,7 @@
 
     g.fillStyle = win ? '#7fd0a8' : '#ff4d5e';
     g.font = '800 46px ' + FONT;
-    g.fillText(win ? '冲出太阳系' : '被留在了太阳系', CW / 2, 540);
+    g.fillText(win ? '逃逸成功' : '被氦闪前壳吞没', CW / 2, 540);
 
     if (bestTime !== null) {
       g.fillStyle = '#8da2c0'; g.font = '26px ' + FONT;
@@ -1701,9 +1881,9 @@
     }
 
     g.fillStyle = '#eaf1fb'; g.font = '700 36px ' + FONT;
-    g.fillText('只决定「什么时候点火」', CW / 2, 920);
+    g.fillText('只决定一件事：何时点火', CW / 2, 920);
     g.fillStyle = '#8da2c0'; g.font = '30px ' + FONT;
-    g.fillText('看谁先把地球开出太阳系', CW / 2, 976);
+    g.fillText('看谁先把地球送出太阳系', CW / 2, 976);
 
     g.fillStyle = '#5cc8ff'; g.font = '24px ' + FONT;
     g.fillText('#小红书vibecoding大赛  #vibegame', CW / 2, 1108);
@@ -1713,6 +1893,59 @@
     var url = cv.toDataURL('image/webp', 0.92);
     if (url.indexOf('data:image/webp') !== 0) url = cv.toDataURL('image/jpeg', 0.92);
     return url;
+  }
+
+  // 战绩图缓存：结算页亮出来时就画好、并落成临时文件（§3.9 的媒体只收本地句柄，必须提前换）
+  var cardKey = '', cardData = '', cardFile = '';
+  function runKey() { return st.status + '|' + st.t.toFixed(3); }
+  function clearShareCard() { cardKey = ''; cardData = ''; cardFile = ''; }
+  function prepareShareCard() {
+    clearShareCard();
+    if (!shareMode()) return;              // 没注入端能力（桌面 / 预览）就不画：退路用不上图
+    cardKey = runKey();
+    cardData = drawShareCard() || '';
+    var b = shareBridge(), key = cardKey;
+    if (!cardData || !hasApi(b, 'writeTempFile')) return;
+    var p = callBridge(b, 'writeTempFile', { data: cardData });
+    if (!p) return;
+    p.then(function (res) {
+      // 期间可能已经点了「再来一次」：不是同一局就丢弃这个句柄（临时文件本就要求即用即弃）
+      if (res && res.filePath && key === cardKey) cardFile = res.filePath;
+    }, function () { /* 落盘失败：postNote 仍可吃 data: URI；§3.9 这条路会回退成发笔记 */ });
+  }
+  function ensureShareCard() {
+    if (!cardData || cardKey !== runKey()) prepareShareCard();
+    return cardData;
+  }
+
+  function shareSnapshot() {
+    return JSON.stringify({
+      page: 'result', status: st.status, t: Number(st.t.toFixed(1)),
+      perfect: st.score.perfect, flyby: flybys.length,
+      best: bestTime === null ? null : Number(bestTime.toFixed(1))
+    });
+  }
+  // §3.9 分享到评论区：图文评论草稿 + 同步存相册（媒体必须是本地文件句柄）
+  function commentOptions(filePath) {
+    return {
+      payload: {
+        action: 'post_comment',
+        content: shareComment(),
+        media_bean: [{ media_type: 'image', cover_image_url: filePath }],
+        // 用户从评论区重新打开小工具时可据此恢复结算状态（上限 2KB）。文档未给「读回」入口，这里只写入
+        miniToolSnapshotInfo: shareSnapshot()
+      },
+      saveToAlbum: true
+    };
+  }
+  // §3.3 发布笔记：低版本回退；有本地句柄就交句柄，没有就把 data: URI 交出去（§3.3 两种都收）
+  function noteOptions(dataURL, filePath) {
+    return {
+      title: shareTitle(),
+      content: shareContent().slice(0, 1000),   // postNote 的 content 上限 1000
+      pageType: 'photo_publish',
+      mediaInfo: { image_resources: [{ url: filePath || dataURL }] }
+    };
   }
 
   // 拿不到容器 bridge 时的退路：**不「复制」，改为「把文案选中 + 引导长按复制」**。
@@ -1732,24 +1965,52 @@
 
   function doShare() {
     if (!elRsShare || elRsShare.disabled) return;
-    if (!CAN_SHARE) {
+    var mode = shareMode();
+    if (!mode) {
+      // 未注入端能力（桌面 / 预览）：退化为「选中文案 + 引导长按复制」
       selectShareText(shareTitle() + '\n' + shareContent());
       elRsShare.textContent = '已选中 · 长按复制';
       return;
     }
     elRsShare.disabled = true;
-    var payload = { title: shareTitle(), content: shareContent().slice(0, 1000), pageType: 'photo_publish' };
-    new Promise(function (resolve) { resolve(drawShareCard()); }).then(function (dataURL) {
-      var step = (typeof XHS.writeTempFile === 'function') ? XHS.writeTempFile({ data: dataURL }) : null;
-      return Promise.resolve(step).then(function (res) {
-        payload.mediaInfo = { image_resources: [{ url: (res && res.filePath) || dataURL }] };
-        return XHS.postNote(payload);
-      });
-    }).then(function () {
-      if (elRsHint) elRsHint.textContent = '已唤起发布页 · 在那边补完正文就能发';
-    }).catch(function (err) {
-      if (elRsHint) elRsHint.textContent = '唤起发布页失败：' + ((err && err.errMsg) || '未知原因');
-    }).then(function () { elRsShare.disabled = false; });
+    var b = shareBridge();
+    var dataURL = ensureShareCard();
+    var hint = function (t) { if (elRsHint) elRsHint.textContent = t; };
+    var release = function () { elRsShare.disabled = false; };
+    var why = function (err) { return (err && err.errMsg) || '未知原因'; };
+    if (!dataURL) { hint('战绩图生成失败 · 换台设备再试'); release(); return; }
+
+    function asNote() {   // §3.3：唤起 App 的笔记发布页
+      var p = callBridge(b, 'postNote', noteOptions(dataURL, cardFile));
+      if (!p) { hint('唤起发布页失败 · 稍后再试'); release(); return; }
+      p.then(function () {
+        hint('已唤起发布页 · 在那边补完正文就能发');
+      }, function (err) {
+        hint('唤起发布页失败：' + why(err));
+      }).then(release, release);
+    }
+    function asComment(filePath) {   // §3.9：带图文草稿打开评论区（容器随后会关闭本页）
+      var p = callBridge(b, 'interactionOpenApi', commentOptions(filePath));
+      if (!p) { hint('打开评论区失败 · 稍后再试'); release(); return; }
+      p.then(function (res) {
+        if (!res || res.routed === false) { hint('评论区没打开 · 稍后再试'); return; }
+        hint('已打开评论区，战绩和配图都带过去了' +
+          (res.savedToAlbum ? ' · 配图已存相册' : (res.albumFailReason ? ' · 配图存相册没成功' : '')));
+      }, function (err) {
+        hint('打开评论区失败：' + why(err));
+      }).then(release, release);
+    }
+
+    if (mode !== 'comment') { asNote(); return; }
+    // 句柄已在结算页备好 → 点击手势栈里直接发起（§3.9 要求用户点击等主动操作触发）
+    if (cardFile) { asComment(cardFile); return; }
+    // 点得太快、落盘还没回来：补一次 writeTempFile；仍拿不到句柄就回退发笔记
+    var retry = callBridge(b, 'writeTempFile', { data: dataURL });
+    if (!retry) { asNote(); return; }
+    retry.then(function (res) {
+      var fp = res && res.filePath;
+      if (fp) { cardFile = fp; asComment(fp); } else { asNote(); }
+    }, function () { asNote(); });
   }
   if (elRsShare) elRsShare.addEventListener('click', function (e) { e.stopPropagation(); doShare(); });
 
@@ -1765,7 +2026,8 @@
     elWarn.classList.remove('pulse', 'hot');
     if (elTip) elTip.classList.remove('hide');
     if (elRsHint) elRsHint.textContent = '';
-    if (elRsShare) elRsShare.textContent = CAN_SHARE ? '分享到小红书' : '分享战绩';
+    clearShareCard();
+    refreshShareButton();
     introT = 0; briefClosed = false;
     camPos.set(0, 900, 0.01); camLook.set(0, 0, 0);
     elBrief.classList.remove('show');
@@ -1870,17 +2132,16 @@
     if (briefClosed && st.status === 'flying') {
       mirrorOn = true;
       elProg.classList.remove('hide');
-      elHeatWrap.classList.remove('hide');
+      elDash.classList.remove('hide');
       elRadar.classList.remove('hide');
-      elTelemetry.classList.remove('hide');
       elClockWrap.classList.remove('hide');
       if (elMute) elMute.classList.remove('hide');
       if (elMirrorFrame) elMirrorFrame.classList.remove('hide');
     } else {
       mirrorOn = false;
-      elProg.classList.add('hide'); elHeatWrap.classList.add('hide');
+      elProg.classList.add('hide'); elDash.classList.add('hide');
       elRadar.classList.add('hide'); elFlyby.classList.add('hide');
-      elTelemetry.classList.add('hide'); elClockWrap.classList.add('hide');
+      elClockWrap.classList.add('hide');
       if (elMute) elMute.classList.add('hide');
       if (elMirrorFrame) elMirrorFrame.classList.add('hide');
       // 简报 / 结算盖上来时，局内的消息条与评级条一起撤掉（否则会从半透明面板后面透出来）
