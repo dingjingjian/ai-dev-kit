@@ -235,7 +235,7 @@
   load('./assets/moon.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;moonMat.map=t;moonMat.needsUpdate=true;});
 
   // ===== 相机 =====
-  function fitR(minD){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(minD,4.2*R/Math.tan(hFov/2));}
+  function fitR(minD){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(minD,2.4*R/Math.tan(hFov/2));}
   function seasonR(){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(56,(ORBIT+7)/Math.tan(hFov/2));}
   // 横竖两个方向都要容得下 extent（宽屏下竖向视野更窄，只按横向算会把轨道切掉）
   function fitBox(extent,minD){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);
