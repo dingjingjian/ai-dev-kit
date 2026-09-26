@@ -52,7 +52,7 @@
   .tabs button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 6px rgba(255,255,255,.25);transition:box-shadow .18s}
   .tabs button.on .dot{box-shadow:0 0 0 2px rgba(26,18,8,.3)}
 
-  .card{position:fixed;left:50%;bottom:calc(var(--sab) + 64px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
+  .card{position:fixed;left:50%;bottom:calc(var(--sab) + 80px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none}
   .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
   .card .close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;line-height:1}
   .card .civ{font-size:11px;color:var(--acc);letter-spacing:2px;font-family:var(--sans)}
@@ -61,6 +61,9 @@
   .card .tags{display:flex;flex-wrap:wrap;margin-top:12px}
   .card .tags span{font-size:11px;color:var(--acc);background:rgba(212,182,106,.1);border:1px solid rgba(212,182,106,.28);border-radius:6px;padding:3px 9px;margin:0 6px 6px 0}
   .card .loc{font-size:11px;color:var(--mut);margin-top:8px;font-variant-numeric:tabular-nums}
+  .card .share{margin-top:12px;width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#b8923c,#d4b66a);color:#1a1208;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;transition:transform .15s}
+  .card .share:active{transform:scale(.98)}
+  .card .share:disabled{opacity:.6;cursor:default}
 
   /* 配图位：有图走 cover 铺满，无图走程序化占位（夜空渐变 + 星点 + 月相圆盘 + 文件名） */
   .card .pic{position:relative;height:132px;margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:#080e20;
@@ -96,11 +99,19 @@
   .scrim.show{opacity:1;pointer-events:auto}
   .sheet button.act{flex:1;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer}
   .sheet button.act.gold{background:linear-gradient(135deg,#b8923c,#d4b66a);border:none;color:#1a1208}
+  /* "此刻"读数：北京时间 / 月相 / 直射点，全部按真实北京时间算（app.js 的 astroUpdate） */
+  .now{font-size:13px;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .now b{color:var(--acc);font-weight:600}
+  .now em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);line-height:1.85}
 
   .tip{position:fixed;left:50%;top:calc(var(--top-gap) + var(--sat) + 104px);transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap}
   .tip.show{opacity:1}
 
-  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11px;color:var(--moon);background:rgba(8,14,28,.6);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+  /* 标记名牌：圆点 + 描边取该大洲的颜色（与地球上的光点、底部筛选条三处同色），
+     选中的那块转暖金并加深底色，和其余牌子区分开 */
+  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11.5px;color:var(--moon);background:rgba(8,14,28,.72);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+  .tag i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(14,20,40,.9);box-shadow:0 2px 10px rgba(212,182,106,.28)}
 
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
   #loader.hide{opacity:0;pointer-events:none}
@@ -113,26 +124,20 @@
   #fallback h2{color:var(--acc);margin-bottom:10px}
   #fallback p{color:var(--mut);max-width:420px;line-height:1.6}
 
-  /* 中小屏：tab 收紧 + 提示点缩小，尽量一屏放下全部区域 */
+  /* 中小屏：底栏与姊妹项目 solar-system-3d 的 dock 保持一致 —— 仍是**单排胶囊**，
+     溢出时两端渐隐（.scrollable）+ 横向滚动 + scroll-snap 吸附，不再换行成两排
+     （换行会把底栏抬高、和卡片争地方，手感也和 solar-system-3d 不一致）。
+     注意 width 仍要写死（不能只给 max-width）：fixed + left:50% 的元素做 shrink-to-fit 时，
+     可用宽度只算到 "left 右边的空间"（=屏宽的一半），单排会被压成半屏宽、只露出两三个 tab。 */
   @media (max-width:640px){
-    .tabs{padding:5px}
-    .tabs button{font-size:11px;padding:6px 7px;margin:0}
-    .tabs button .dot{width:6px;height:6px;margin-right:4px}
+    .tabs{width:calc(100vw - 20px);max-width:calc(100vw - 20px);padding:5px}
+    .tabs button{font-size:13px;padding:7px 11px}
+    .tabs button .dot{width:7px;height:7px;margin-right:5px}
+    .tag{font-size:12.5px;padding:3px 9px}
     .brand{font-size:16px}
     .card .name{font-size:17px}
     .card .story{font-size:13px}
     .card .pic{height:112px}
-  }
-  /* 窄屏（≤400px）再收紧一档：提示点缩小，尽量让全部区域 tab 一屏放得下；
-     仍溢出时由 JS 在选中后 scrollIntoView 居中，保证每一项都点得到 */
-  @media (max-width:400px){
-    .tabs{padding:4px}
-    .tabs button{font-size:11px;padding:5px 5px;margin:0}
-    .tabs button .dot{width:6px;height:6px;margin-right:4px}
-  }
-  /* 极窄屏（≤340px）隐藏提示点，优先保证 8 个区域名完整可见 */
-  @media (max-width:340px){
-    .tabs button .dot{display:none}
   }
 </style>
 </head>
@@ -158,11 +163,14 @@
   <div class="story" id="cStory"></div>
   <div class="tags" id="cTags"></div>
   <div class="loc" id="cLoc"></div>
+  <button class="share" id="cShare">分享到小红书</button>
 </div>
 
 <div class="scrim" id="scrim"></div>
 <div class="sheet" id="sheet">
   <button class="close" id="sClose" aria-label="关闭">×</button>
+  <h3>此刻 · 北京时间</h3>
+  <div class="now" id="nowInfo">—</div>
   <h3>显示</h3>
   <div class="row"><label>自动旋转</label><div class="sw on" id="swSpin"><i></i></div></div>
   <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>

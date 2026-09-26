@@ -9,6 +9,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 const out = path.join(root, 'moon-myths.zip');
 
 const includes = ['index.html', 'assets'];
+const ALLOWED_EXT = new Set(['jpg','css','gif','svg','png','js','jpeg','json','html','woff2','webp','woff']);
 
 function collect(baseRel) {
   const abs = path.join(root, baseRel);
@@ -19,6 +20,8 @@ function collect(baseRel) {
       out2.push(...collect(path.join(baseRel, e.name).split(path.sep).join('/')));
     }
   } else {
+    const ext = baseRel.slice(baseRel.lastIndexOf('.') + 1).toLowerCase();
+    if (!ALLOWED_EXT.has(ext)) { console.warn('跳过不支持的文件类型:', baseRel); return out2; }
     out2.push({ abs, rel: baseRel });
   }
   return out2;

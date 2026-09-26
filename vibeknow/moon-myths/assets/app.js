@@ -2,9 +2,9 @@
   var cv=document.getElementById('stage');
   var gl=null;try{gl=cv.getContext('webgl2')||cv.getContext('webgl')}catch(e){}
   if(!gl||typeof THREE==='undefined'){document.getElementById('fallback').classList.add('show');document.getElementById('loader').classList.add('hide');return;}
-  /* 关掉 GL 的抖动（DITHER 默认是开的！）。GPU 把 float 结果写进 8bit 缓冲时会做有序抖动，
-   * 在近黑的夜空里就变成一层肉眼可见的斜纹/方格网——"星空背景是方格子"多半就是它。
-   * 关掉后靠贴图自身足够多的层次来避免色阶带。*/
+  /* 顺手关掉 GL 的抖动（DITHER 默认是开的）：GPU 把 float 结果写进 8bit 缓冲时会做有序抖动，
+   * 在近黑的夜空里会多出一层细斜纹。注意它**不是**"星空背景有白色网格"的根因
+   * （根因在 sky 贴图的逐纹素抖动，见 starfieldTex 末尾的说明），关掉只是顺带干净一点。*/
   try{gl.disable(gl.DITHER);}catch(e){}
 
   /* DPR 上限 2（原 1.5）：手机上 canvas 按 1.5 倍渲染再被系统放大，星点/光圈边缘会发糊发方；
@@ -76,28 +76,113 @@
      * 天球贴图在屏幕上是被放大的（默认取景约 2.6 倍），贴图里 1 纹素的噪点会被放大成
      * 2~3px 的方块颗粒，在近黑的暗部看着就是一格一格的"方格子"——这正是要避免的。
      * 色阶台阶改由上面的云团来打散（云团的边界是不规则形状，不会看成网格）。 */
-    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+    /* ===== 收尾：整幅模糊一次 —— 这是"星空背景有白色网格"的真正解药 =====
+     * Canvas2D 的渐变在 Chrome/Skia 里是**逐像素抖动**着色的：每个纹素带 ±2~5 的随机偏移，
+     * 用来打散 8bit 的色阶带。问题在天球上被放大了 2~5 倍（1 纹素 ≈ 2~5 屏幕像素），
+     * 于是这层抖动变成一片横竖对齐、一格一格的"白色网格"糊在银河和星云上 —— 就是用户报的那个现象。
+     * 三个曾经的误判，别改回去：
+     *   · 不是 GL 输出端的 DITHER（那是屏幕空间的有序抖动，关掉与否都还在贴图里）；
+     *   · 不是"贴图分辨率不够"（放大贴图只会把网格放大得更明显）；
+     *   · 更不能靠"往贴图里撒噪点"去中和（那正是网格的来源）。
+     * 唯一有效的办法是把逐纹素的抖动平均掉：blur(2.5px) 一次，抖动细胞只有 1 纹素，
+     * 3×3 的核就基本削平；而斑块、银河带本来就是软的，形状损失看不出来（对比测试过 orig / blur 两版贴图）。
+     * 左右各多画一份（±w）让跨贴图接缝处也有像素可采样 —— 否则接缝两侧会被模糊成透明的暗边，
+     * 球面上会看到一道竖缝（球面 u=0/u=1 是同一个经线，接缝必须自连续）。
+     * 开销：3 次 2048×1024 的高斯模糊约 100ms（桌面 CPU），是一次性的开场开销，藏在 #loader 的 600ms 里。
+     * 兼容：老 Safari（<16.4）不支持 ctx.filter，赋值会被忽略、drawImage 退化成原样拷贝，
+     *       行为与加这行之前完全一致，不会坏（故不需要能力检测分支）。 */
+    var c2=document.createElement('canvas');c2.width=w;c2.height=h;
+    var x2=c2.getContext('2d');
+    x2.filter='blur(2.5px)';
+    x2.drawImage(c,-w,0);x2.drawImage(c,0,0);x2.drawImage(c,w,0);
+    var t=new THREE.CanvasTexture(c2);t.encoding=THREE.sRGBEncoding;
+    /* 球两极的 UV 是被挤成一束的，各向异性过滤能明显减轻极点附近的糊与闪 */
+    t.anisotropy=renderer.capabilities.getMaxAnisotropy();
+    return t;
   }
   var sky=new THREE.Mesh(new THREE.SphereGeometry(3500,48,32),new THREE.MeshBasicMaterial({map:starfieldTex(),side:THREE.BackSide,depthWrite:false}));
   sky.rotation.z=GALAXY_TILT;scene.add(sky);
 
-  /* ===== 光照 =====
-   * 阳光跟随相机：方向光的方位始终与视线保持约 35° 夹角，
-   * 这样飞到任何一个大洲，朝向我们的这一面都是白天（不会再"前面总是黑的"），
-   * 同时保留一条晨昏线，昼夜交界仍在。
-   */
-  var ambient=new THREE.AmbientLight(0x2a3458,0.55);scene.add(ambient);
+  /* ===== 光照与月相：全部取真实北京时间 =====
+   * 直射点经度：12:00 UTC 太阳在 0° 经线上，之后每差一小时西移 15°；北京时间 = UTC+8，
+   *   于是 λ = 15°×(12 − UTC小时) = 15°×(20 − 北京小时)（北京 12:00 → 120°E，正合）。
+   * 直射点纬度（太阳赤纬）随季节走：δ = −23.44°×cos(2π(N+10)/365.24)，N = 一年中的第几天。
+   *   于是夏至前后北极是"日不落"、冬至前后是极夜，晨昏线的倾斜也跟着季节变。
+   * 太阳在世界系里是**固定**的（只随真实时间慢慢走），地球照旧自转 —— 这才是真的日地关系：
+   *   太阳不动、地球转，晨昏线扫过球面，谁在白天由自转决定（不再"跟着相机转"）。
+   * 月相：以 2000-01-06 18:14 UTC 的朔为历元，按朔望月 29.530588853 天取小数部分，
+   *   0 = 朔，0.25 = 上弦，0.5 = 望，0.75 = 下弦；照亮比 k = (1 − cos(2π·phase))/2。
+   * 月亮摆在：与太阳的角距（月龄角）E = phase×360°，方位 = 太阳方位 + E（顺行方向），
+   *   赤纬取 δ_月 = δ_日×cos E —— 朔时与太阳同侧（角距 0°）、望时正对（角距 180°），
+   *   三维里两者的夹角才恰好等于 E，被照亮的比例和真实月相严丝合缝。
+   *   （若把月亮钉死在 y=0 的黄道面上，朔／望的角距最多只能到 180°−|δ|，满月会差成凸月。）
+   * 月光也接进来：一盏随盈亏变亮的冷白补光，让夜半球不至于死黑 —— 正好是"月话"的调子。
+   * 已知取舍：地球自转仍是 0.12 rad/s（约 52 秒一天，为了看得见它转），所以某一地的昼夜
+   *   是被快进了的；真实的是"太阳此刻在哪、月亮此刻什么相、晨昏线怎么倾"。 */
+  var ambient=new THREE.AmbientLight(0x2a3458,0.5);scene.add(ambient);
   var sunLight=new THREE.DirectionalLight(0xfff2d8,1.75);scene.add(sunLight);
-  var fillLight=new THREE.DirectionalLight(0x6a7fb0,0.32);scene.add(fillLight);
-  var SUN_YAW=0.62,SUN_LIFT=0.2,SUN_DIST=40;
-  function updateSun(){
-    var p=camera.position,len=p.length()||1;
-    var ux=p.x/len,uy=p.y/len,uz=p.z/len;
-    var c=Math.cos(SUN_YAW),s=Math.sin(SUN_YAW);
-    var dx=ux*c-uz*s,dz=ux*s+uz*c;
-    var dy=Math.max(-0.5,Math.min(0.75,uy+SUN_LIFT));
-    sunLight.position.set(dx*SUN_DIST,dy*SUN_DIST,dz*SUN_DIST);
-    fillLight.position.set(-dx*SUN_DIST,(-dy+0.12)*SUN_DIST,-dz*SUN_DIST);
+  var fillLight=new THREE.DirectionalLight(0x6a7fb0,0.22);scene.add(fillLight);
+  var moonLight=new THREE.DirectionalLight(0xb9c8ea,0.25);scene.add(moonLight);
+  var SUN_DIST=40;
+  var SYNODIC=29.530588853,NEW_MOON_MS=Date.UTC(2000,0,6,18,14,0),OBLIQ=23.44;
+  var _sunV=new THREE.Vector3(),_moonV=new THREE.Vector3(),_axV=new THREE.Vector3();
+  var astro={sunLon:0,sunDec:0,phase:0,illum:0,moonDec:0,bjH:0,bjM:0,name:''};
+  /* 月相名：朔／望按"照亮比"判定（它们是瞬间，按月龄卡到 0.02 会说出"盈凸月 · 照亮 100%"），
+   * 上下弦与两弦之间的四相才按相位窗口分。 */
+  function phaseName(p){
+    var k=(1-Math.cos(p*2*Math.PI))/2;
+    if(k<0.02)return '朔 · 新月';
+    if(k>0.98)return '望 · 满月';
+    if(p<0.24)return '蛾眉月';
+    if(p<0.26)return '上弦月';
+    if(p<0.5)return '盈凸月';
+    if(p<0.74)return '亏凸月';
+    if(p<0.76)return '下弦月';
+    return '残月';
+  }
+  function astroUpdate(){
+    var d=new Date();
+    var utcH=d.getUTCHours()+d.getUTCMinutes()/60+d.getUTCSeconds()/3600;
+    var bj=(utcH+8)%24;
+    astro.bjH=Math.floor(bj);astro.bjM=d.getUTCMinutes();
+    /* 直射点：经度跟着真太阳时走，纬度跟着季节走 */
+    var lon=15*(12-utcH),dec=0;
+    if(lon>180)lon-=360;if(lon<=-180)lon+=360;
+    var n=Math.floor((Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())-Date.UTC(d.getUTCFullYear(),0,0))/86400000);
+    dec=-OBLIQ*Math.cos(2*Math.PI*(n+10)/365.24);
+    astro.sunLon=lon;astro.sunDec=dec;
+    _sunV.copy(ll2v(dec,lon,1)).normalize();
+    sunLight.position.copy(_sunV).multiplyScalar(SUN_DIST);
+    fillLight.position.copy(_sunV).multiplyScalar(-SUN_DIST);
+    /* 月相 → 月球方位与赤纬（赤纬带上后，被照亮的比例才等于真实月相） */
+    var p=((d.getTime()-NEW_MOON_MS)/86400000/SYNODIC)%1;if(p<0)p+=1;
+    astro.phase=p;astro.name=phaseName(p);
+    var k=(1-Math.cos(p*2*Math.PI))/2;astro.illum=k;
+    var E=p*2*Math.PI;
+    var sDec=Math.asin(Math.max(-1,Math.min(1,_sunV.y)));
+    var sAz=Math.atan2(-_sunV.z,_sunV.x);
+    var mDec=sDec*Math.cos(E),mAz=sAz+E;astro.moonDec=mDec;
+    /* moonOrbit 转 mAz：把月球送到「赤纬 0、方位 mAz」处并保持潮汐锁定；
+       再绕该方位在赤道面内的垂线抬起 mDec，得到带赤纬的方位 —— 刚体旋转不破坏锁定。 */
+    moonOrbit.rotation.y=mAz;
+    moonSys.setRotationFromAxisAngle(_axV.set(Math.sin(mAz),0,Math.cos(mAz)),mDec);
+    _moonV.set(Math.cos(mDec)*Math.cos(mAz),Math.sin(mDec),-Math.cos(mDec)*Math.sin(mAz));
+    moonLight.position.copy(_moonV).multiplyScalar(SUN_DIST);
+    moonLight.intensity=0.07+0.34*k;
+    /* 月晕随盈亏：朔月不该顶着一圈亮晕（那会看着像满月），望月才给足 */
+    moonGlow.material.opacity=0.25+0.75*k;
+  }
+  /* 抽屉里的"此刻"读数：北京时间、月相、直射点。每秒刷一次，内容没变就不碰 DOM。 */
+  var nowEl=document.getElementById('nowInfo'),nowStr='',nowAt=-1;
+  function pad2(n){return (n<10?'0':'')+n;}
+  function tickNowInfo(t){
+    if(!nowEl||t-nowAt<1)return;
+    nowAt=t;
+    var lon=astro.sunLon,dec=astro.sunDec;
+    var s='<b>'+pad2(astro.bjH)+':'+pad2(astro.bjM)+'</b> 北京时间'+
+          '<em>月相 '+astro.name+' · 照亮 '+Math.round(astro.illum*100)+'%</em>'+
+          '<em>阳光直射 '+Math.abs(lon).toFixed(1)+'°'+(lon>=0?'E':'W')+' · 赤纬 '+(dec>=0?'+':'')+dec.toFixed(1)+'°</em>';
+    if(s!==nowStr){nowStr=s;nowEl.innerHTML=s;}
   }
 
   /* ===== 工具纹理 ===== */
@@ -130,11 +215,12 @@
    *       黄道只倾 5.1°（不跟着赤道走），所以既不挂进 mainTilt、也不另加倾斜（5.1° 在这个尺度近似为平）。
    * 轨道半径 3.0：为与地球同框做了大幅压缩（真实 384400km ≈ 60.3 个地球半径，此处仅 1.875 个），
    *       属示意；正圆、偏心率 0.055 未体现，地心当焦点（真实是地月质心，但质心在地球内部，可忽略）。
-   * 公转周期：真实为地球自转的 27.32 倍（恒星月 27.32 天 vs 地球 1 天）。照抄则 24 分钟才绕一圈、
-   *       画面里几乎钉住不动，故取 8 倍（EARTH_SPIN 0.12 / 8 = 0.015，约 7 分钟一圈）：是刻意加速，
-   *       但保证"月球必须比地球自转慢"这个方向没错。要严格等比，把下面 /8 换成 /27.32。
+   * 公转：不再"自己按固定角速度绕"—— 方位与赤纬每帧由 astroUpdate() 按真实北京时间算出
+   *       （太阳方位 + 月龄角 E、赤纬取 δ_日×cos E），所以月亮在天上几乎不动，而它**什么相**
+   *       是真的：蛾眉、上弦、满月、残月都对得上今天。改回匀速绕圈只需在 animate 里
+   *       把 moonOrbit.rotation.y 换成 += dt×MOON_SPEED 并去掉 moonSys 的抬赤纬那行。
    */
-  var MOON_R=R*0.2727,MOON_ORBIT=3.0,MOON_SPEED=0.12/8;
+  var MOON_R=R*0.2727,MOON_ORBIT=3.0;
   var moonSys=new THREE.Group();scene.add(moonSys);
   var moonOrbit=new THREE.Group();moonSys.add(moonOrbit);
   var moonMat=new THREE.MeshStandardMaterial({map:plainTex('#c9c9c6'),roughness:.95,metalness:0});
@@ -154,42 +240,79 @@
     return new THREE.Line(g,new THREE.LineBasicMaterial({color:0x8fa4c0,transparent:true,opacity:.35}));
   })();
   moonSys.add(moonOrbitLine);
-  var moonAngle=Math.PI*0.35;
 
-  /* ===== 神话标记点 ===== */
+  /* ===== 神话标记点 =====
+   * 形制参考 rome-total-war-3d（"实心点 + 光晕 + 细环"三层），配色改成**按大洲取色**
+   * （REGIONS 里的色值，和底部筛选条的提示点同源）：东亚红、南亚橙、中东金、欧洲蓝、
+   * 非洲绿、美洲紫、大洋洲青 —— 14 个点一眼能分出属于哪片大陆。
+   * 一个标记 = 落在地表的一点月光，自下往上 4 层（全部 depthTest:false，靠 renderOrder 定层序）：
+   *   ① 描边 contourTex：一圈细细的暗线，紧紧贴在热核外沿（不是暗底盘！）。
+   *      存在的唯一理由是亮地表 —— 雪原、冰川、沙漠上浅色光点会被背景吃掉，得有暗线把点定住。
+   *   ② 光晕 haloTex：柔光罩，中心接近全色、向外平滑衰减，负责"发光"的观感，取大洲色。
+   *   ③ 热核 coreTex：实心小点，取大洲色（只向白提 18%，保持色相），这是"点"的本体。
+   *   ④ 细环：大洲色的一圈细线，平时压到 .5 只作"可点"的暗示；选中变暖金并加扩散脉冲。
+   * 尺寸（半径 = f×scale/2；R=1.6，默认取景下 1 世界单位 ≈ 106px）：
+   *   热核实心半径 .030（3px）、描边半径 .044（4.6px）、光晕亮到 .041、外沿淡到 .06；
+   *   整枚标记直径约 13px，选中时带 11px 半径的金环，合计约 22px。
+   * 旧版底盘 0.68（R 的 21%、屏幕上 40px+ 的暗圈 + 粗白环）是块糊在地表的灰圆盘，
+   * 跟星空、云层的笔触完全不在一个量级，故整体收到"一点光"的尺度。
+   * 三个踩过的坑，改这里时别再踩回去：
+   *   · 材质一律 toneMapped:false —— 否则纯白被 ACES 压到 ~0.8，在亮地表上反而比背景暗，
+   *     变成一颗灰点心（"亮地表上标记发灰"的真正原因）；
+   *   · 一律用 alpha 混合，不用叠加混合 —— 叠加在深色海面上好看，但落到雪地／沙漠上时，
+   *     所有中间透明度都会被加到 255 溢出，糊成一块边缘生硬的纯白盘子，14 个铺开非常刺眼；
+   *     alpha 混合是"向白色插值"，亮地表上只变一点点，过渡自然；
+   *   · 光晕别盖到描边上（.041 对 .044），也別做成"紧贴亮环的粗暗圈"，否则就是眼珠／舷窗。 */
   var markerGroup=new THREE.Group();mainSpin.add(markerGroup);
-  var glowTex=radialTex('rgba(232,236,245,.95)','rgba(180,200,240,.4)','rgba(160,180,220,0)');
-  var ringTex=radialTex('rgba(232,236,245,.7)','rgba(180,200,240,.22)','rgba(160,180,220,0)');
-  var goldGlowTex=radialTex('rgba(255,235,170,.98)','rgba(212,182,106,.5)','rgba(180,150,80,0)');
-  var goldRingTex=radialTex('rgba(255,225,150,.8)','rgba(212,182,106,.3)','rgba(180,150,80,0)');
-  /* 光圈样式：细环描边 + 压暗底盘。
-   * 原来每个标记只有两张"软白圆盘"，落在雪地、冰川、云这类亮地表上就跟背景糊成一片；
-   * 现在多加两层：一层压暗底盘（中心轻压、光圈半径处压得更重，等于给光圈描一圈暗中边），
-   * 一张细环把光圈的边界定住 —— 亮地表靠"暗底 + 亮环"的反差看清，
-   * 深色海面上依旧是一片干净的月光。 */
-  function thinRingTex(){
+  /* 径向贴图工具：stops 里 offset 是渐变半径的比例（.5 即贴图半宽处），颜色为 canvas 写法 */
+  function radialStops(stops){
     var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
-    var g=x.createRadialGradient(64,64,0,64,64,64);
-    g.addColorStop(0,'rgba(255,255,255,0)');g.addColorStop(.44,'rgba(255,255,255,0)');
-    g.addColorStop(.482,'rgba(255,255,255,.45)');g.addColorStop(.5,'rgba(255,255,255,1)');
-    g.addColorStop(.518,'rgba(255,255,255,.45)');g.addColorStop(.56,'rgba(255,255,255,0)');
-    g.addColorStop(1,'rgba(255,255,255,0)');
+    var g=x.createRadialGradient(64,64,0,64,64,64),i;
+    for(i=0;i<stops.length;i++)g.addColorStop(stops[i][0],stops[i][1]);
     x.fillStyle=g;x.fillRect(0,0,s,s);
     var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
   }
-  var ringLineTex=thinRingTex();
-  var shadeTex=(function(){
-    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
-    var g=x.createRadialGradient(64,64,0,64,64,64);
-    g.addColorStop(0,'rgba(3,6,15,.36)');g.addColorStop(.3,'rgba(3,6,15,.3)');
-    g.addColorStop(.45,'rgba(3,6,15,.54)');g.addColorStop(.62,'rgba(3,6,15,.5)');
-    g.addColorStop(.78,'rgba(3,6,15,.15)');g.addColorStop(1,'rgba(3,6,15,0)');
-    x.fillStyle=g;x.fillRect(0,0,s,s);
-    return new THREE.CanvasTexture(c);
-  })();
+  /* 光晕：中心接近全白，向外平滑衰减 —— 中心亮、边缘没有硬边 */
+  var haloTex=radialStops([
+    [0,'rgba(255,255,255,.96)'],[.16,'rgba(248,251,255,.78)'],[.34,'rgba(224,234,252,.4)'],
+    [.56,'rgba(198,215,246,.12)'],[.8,'rgba(180,200,240,.02)'],[1,'rgba(170,196,240,0)']
+  ]);
+  /* 热核：实心圆点 + 一圈抗锯齿软边（f .72 以内都是全白） */
+  var coreTex=radialStops([
+    [0,'rgba(255,255,255,1)'],[.7,'rgba(255,255,255,1)'],[.84,'rgba(255,255,255,.5)'],
+    [1,'rgba(255,255,255,0)']
+  ]);
+  /* 描边：只有一条窄窄的暗线，紧紧贴在热核外沿，内圈外圈都透明 */
+  var contourTex=radialStops([
+    [0,'rgba(4,8,18,0)'],[.46,'rgba(4,8,18,0)'],[.56,'rgba(4,8,18,.3)'],
+    [.68,'rgba(4,8,18,.44)'],[.8,'rgba(4,8,18,.2)'],[.92,'rgba(4,8,18,.04)'],[1,'rgba(4,8,18,0)']
+  ]);
+  /* 细环：亮圈落在 f=.70（贴图尺寸的 0.35 半径处），带宽 f=.64~.78 ≈ 屏幕上 2px 的一根线 */
+  var ringLineTex=radialStops([
+    [0,'rgba(255,255,255,0)'],[.6,'rgba(255,255,255,0)'],[.64,'rgba(255,255,255,.45)'],
+    [.7,'rgba(255,255,255,1)'],[.74,'rgba(255,255,255,.45)'],[.78,'rgba(255,255,255,0)'],[1,'rgba(255,255,255,0)']
+  ]);
+  /* 各层基准尺寸（scale = 精灵边长，世界单位；半径 = f×scale/2）：
+   *   热核 0.085 → 实心半径 .35×.085 = .030（屏幕上 3px）
+   *   描边 0.13  → 暗线半径 .34×.13  = .044（4.6px），线宽（f .56~.8）约 1.6px
+   *   光晕 0.24  → 亮到 .34×.12    = .041，外沿淡到 .06（6px）
+   *   细环 0.24  → 环半径 .35×.24   = .084（8.9px），整枚直径约 18px；选中放大到 0.3（约 22px）
+   * 这些数是按"屏幕上恒定尺寸"标定的（见 REF_DIST）。 */
+  var MK_HALO=0.24,MK_CORE=0.085,MK_CONTOUR=0.13,MK_RING=0.24,MK_RING_SEL=0.3;
+  /* 标记的光学尺寸按相机距离补偿，等于"屏幕上恒定大小"（地图钉的做法）：
+   * 精灵本身随世界缩放，手机小屏、宽屏、拉近拉远都会让同一枚标记差出一倍多，
+   * 补一个 1/距离 的补偿就稳定了 —— REF_DIST 是上面那套尺寸标定时的相机距离。 */
+  var REF_DIST=9.7;
   var MOON_COL=new THREE.Color('#e8ecf5');
   var GOLD_COL=new THREE.Color('#d4b66a');
   var DIM_COL=new THREE.Color('#5a6a8a');
+  var WHITE_COL=new THREE.Color('#ffffff');
+  /* 大洲色（与 myths.js 的 REGIONS.color、底部筛选条的提示点同源）：
+   * 光晕／热核／细环三者同色，热核只向白提 18% —— 提多了在沙漠、雪原上会褪成一颗白点，
+   * 色相就白给；保持接近原色的热核，落在亮地表上也还看得出是哪块大陆。 */
+  var REG_COL={};(function(){
+    for(var i=0;i<REGIONS.length;i++)REG_COL[REGIONS[i].id]=new THREE.Color(REGIONS[i].color||'#e8ecf5');
+  })();
   var markers=[];
   (function buildMarkers(){
     for(var i=0;i<MYTHS.length;i++){
@@ -197,30 +320,37 @@
       var grp=new THREE.Group();
       grp.position.copy(ll2v(m.lat,m.lon,R*1.012));
       grp.lookAt(0,0,0);grp.rotateX(Math.PI);
-      var dot=new THREE.Mesh(new THREE.SphereGeometry(0.05,14,14),new THREE.MeshBasicMaterial({color:MOON_COL.clone(),transparent:true,opacity:.95}));
-      var shade=new THREE.Sprite(new THREE.SpriteMaterial({map:shadeTex,transparent:true,depthWrite:false,depthTest:false,opacity:.92}));
-      shade.scale.set(0.68,0.68,1);
-      var glow=new THREE.Sprite(new THREE.SpriteMaterial({map:glowTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.6}));
-      glow.scale.set(0.42,0.42,1);
-      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.7}));
-      ring.scale.set(0.66,0.66,1);
-      var line=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,blending:THREE.AdditiveBlending,transparent:true,depthWrite:false,depthTest:false,color:MOON_COL.clone(),opacity:.9}));
-      line.scale.set(0.66,0.66,1);
+      var cReg=REG_COL[m.region]||MOON_COL;
+      var cHalo=cReg.clone(),cCore=cReg.clone().lerp(WHITE_COL,.18),cRing=cReg.clone();
+      var contour=new THREE.Sprite(new THREE.SpriteMaterial({map:contourTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,opacity:.85}));
+      contour.scale.set(MK_CONTOUR,MK_CONTOUR,1);
+      var halo=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cHalo.clone(),opacity:.5}));
+      halo.scale.set(MK_HALO,MK_HALO,1);
+      var core=new THREE.Sprite(new THREE.SpriteMaterial({map:coreTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cCore.clone(),opacity:1}));
+      core.scale.set(MK_CORE,MK_CORE,1);
+      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cRing.clone(),opacity:.42}));
+      ring.scale.set(MK_RING,MK_RING,1);
       var hit=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,depthTest:false}));
-      // depthTest 全关，靠 renderOrder 手动定层序：暗底盘 → 光晕 → 软晕 → 细环 → 中心点
-      shade.renderOrder=10;glow.renderOrder=11;ring.renderOrder=12;line.renderOrder=13;dot.renderOrder=14;
-      grp.add(shade);grp.add(glow);grp.add(ring);grp.add(line);grp.add(dot);grp.add(hit);
+      // depthTest 全关，靠 renderOrder 手动定层序：描边 → 光晕 → 细环 → 热核
+      contour.renderOrder=10;halo.renderOrder=11;ring.renderOrder=12;core.renderOrder=13;
+      grp.add(contour);grp.add(halo);grp.add(ring);grp.add(core);grp.add(hit);
       markerGroup.add(grp);
-      markers.push({myth:m,grp:grp,dot:dot,glow:glow,ring:ring,line:line,shade:shade,hit:hit,sel:false,dim:false,front:false});
+      markers.push({myth:m,grp:grp,contour:contour,halo:halo,core:core,ring:ring,hit:hit,
+        cHalo:cHalo,cCore:cCore,cRing:cRing,fade:1,sel:false,dim:false,front:false});
     }
   })();
+  /* 选中后的扩散脉冲：全场景共用一个环，跟着选中的标记走（省 14 个精灵） */
+  var ping=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:MOON_COL.clone(),opacity:0}));
+  ping.visible=false;ping.renderOrder=14;markerGroup.add(ping);
 
   /* ===== 星空点 =====
    * 星星用软圆点精灵（Points）画，不再依赖贴图里的 1px 方块：
    * 分 4 档大小 + 每颗独立亮度/色温 + 银道面聚集，最亮的一档带十字星芒。
    * 关掉 sizeAttenuation：星星尺寸只跟屏幕有关，拉近拉远不会被放大成方块；
-   * size 单位是设备像素，故乘 DPR（脚本开头已把 DPR 上限压到 1.5）。
-   */
+   * size 单位是设备像素，故乘 DPR（脚本开头已把 DPR 上限压到 2）。
+   * 注意 3~5px 的星点在屏幕上就是一枚小小的软方块 —— 这是点精灵的物理下限（Points 的图元永远是方的，
+   * 图形只能由贴图的 alpha 决定），放大看得到方角，正常视距下就是一颗星，不是 bug；
+   * 已对比过 32/16/8 三种贴图尺寸降到 4.5/6.6px 的效果，形状几乎一致，没必要为此换贴图。*/
   function gaussRand(){var u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(6.2832*v);}
   function starTex(spike){
     var s=64,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d'),i;
@@ -294,10 +424,15 @@
   var theta=0.6,phi=1.15,radius=fitR();
   var thetaG=theta,phiG=phi,radiusG=radius,userZoomed=false;
   var R_MIN=2.2,R_MAX=26;
+  /* 视线下压量（panG/pan，单位是 tan 角度，随卡片开合在 0 与 PAN_CARD 之间过渡）：
+   * 卡片会盖住画面下半部，而选中的标记正好被 aimLatLon 对到画面正中 —— 点选完就看不见了，
+   * 连同它那块名牌一起被卡片吃掉。把相机的注视点往下挪 pan×radius（等价于视线下压一个固定角度，
+   * 与屏幕尺寸、缩放级别都无关），整块地球连同标记就一起上移，正好落在卡片上方。
+   * 屏幕位移 ≈ tan(PAN_CARD)/tan(fov/2)×(H/2) ≈ 13% 屏高。 */
+  var PAN_CARD=0.14,panG=0,pan=0;
   function camPos(){var sp=Math.sin(phi);
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
-    camera.lookAt(0,0,0);
-    updateSun();
+    camera.lookAt(0,-pan*radius,0);
   }
   /* 开场视角（也是"重置视角"）正对的那个点：中国·嫦娥奔月 */
   var HOME_LAT=35,HOME_LON=105;
@@ -392,6 +527,8 @@
     if(d<-Math.PI)d+=Math.PI*2;
     return from+d;
   }
+  /* 选中：对到该点正面（aimLatLon），并让视线下压 panG=0.14 —— 地球连同标记一起上移，
+   * 标记与名牌就落在卡片上方而不是卡片背后（见 camPos 里 pan 的说明）。 */
   function selectMarker(i){
     selIdx=i;
     aimLatLon(markers[i].myth.lat,markers[i].myth.lon);
@@ -439,14 +576,116 @@
     document.getElementById('cTags').innerHTML=m.tags.map(function(t){return '<span>'+t+'</span>';}).join('');
     document.getElementById('cLoc').textContent='纬度 '+m.lat.toFixed(1)+'°  经度 '+m.lon.toFixed(1)+'°';
     cardEl.classList.add('show');
+    panG=PAN_CARD;          /* 卡片一开，视线下压，地球与标记整体上移让出卡片 */
   }
-  function hideCard(){cardEl.classList.remove('show');}
+  function hideCard(){cardEl.classList.remove('show');panG=0;}
   document.getElementById('cClose').addEventListener('click',clearSelection);
 
   function regionName(id){
     for(var i=0;i<REGIONS.length;i++)if(REGIONS[i].id===id)return REGIONS[i].name;
     return '';
   }
+
+  /* ===== 分享到小红书 =====
+   * 用 canvas 合成 1080×1440 分享卡片（夜空 + 月相 + 配图 + 文字），
+   * 经 writeTempFile 换 filePath 后调 postNote 唤起笔记发布页。
+   * 容器未注入端能力时（普通浏览器预览）降级提示。API 见
+   * https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s3-3 */
+  var cShareBtn=document.getElementById('cShare');
+  function drawShareCard(idx,m,onDone){
+    var sw=1080,sh=1440;
+    var c=document.createElement('canvas');c.width=sw;c.height=sh;
+    var x=c.getContext('2d');
+    var bg=x.createLinearGradient(0,0,0,sh);
+    bg.addColorStop(0,'#060b1a');bg.addColorStop(.5,'#0e1932');bg.addColorStop(1,'#070c1c');
+    x.fillStyle=bg;x.fillRect(0,0,sw,sh);
+    x.fillStyle='rgba(255,255,255,.85)';
+    for(var i=0;i<140;i++){
+      x.globalAlpha=Math.random()*0.6+0.2;
+      x.beginPath();x.arc(Math.random()*sw,Math.random()*sh*0.45,Math.random()*1.6+0.3,0,Math.PI*2);x.fill();
+    }
+    x.globalAlpha=1;
+    var mx=sw/2,my=200,mr=72;
+    var mg=x.createRadialGradient(mx,my,0,mx,my,mr*2.4);
+    mg.addColorStop(0,'rgba(232,236,245,.45)');mg.addColorStop(1,'rgba(232,236,245,0)');
+    x.fillStyle=mg;x.fillRect(mx-mr*2.4,my-mr*2.4,mr*4.8,mr*4.8);
+    var mgrad=x.createRadialGradient(mx-mr*0.3,my-mr*0.3,0,mx,my,mr);
+    mgrad.addColorStop(0,'#fdfbf4');mgrad.addColorStop(.6,'#e8ecf5');mgrad.addColorStop(1,'#8b98b4');
+    x.fillStyle=mgrad;x.beginPath();x.arc(mx,my,mr,0,Math.PI*2);x.fill();
+    var y=340;
+    function drawText(){
+      x.textAlign='center';
+      x.fillStyle='#e8ecf5';x.font='600 66px Georgia,"Songti SC","Noto Serif SC",serif';
+      x.fillText(m.name,sw/2,y);y+=70;
+      x.fillStyle='#d4b66a';x.font='28px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      x.fillText(m.civ+' · '+regionName(m.region),sw/2,y);y+=60;
+      x.textAlign='left';x.fillStyle='#eaf1fb';x.font='30px Georgia,"Songti SC","Noto Serif SC",serif';
+      var chars=m.story.split(''),line='',maxW=sw-120,lines=[];
+      for(var k=0;k<chars.length;k++){
+        var t=line+chars[k];
+        if(x.measureText(t).width>maxW){lines.push(line);line=chars[k];}else line=t;
+      }
+      if(line)lines.push(line);
+      var lh=46;
+      for(var li=0;li<lines.length&&y+lh<sh-220;li++){x.fillText(lines[li],60,y);y+=lh;}
+      y+=24;
+      x.font='24px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+      var tx=60;
+      for(var ti=0;ti<m.tags.length;ti++){
+        var tag=m.tags[ti],tw=x.measureText(tag).width+28;
+        if(tx+tw>sw-60){tx=60;y+=46;}
+        x.fillStyle='rgba(212,182,106,.14)';x.fillRect(tx,y-26,tw,38);
+        x.strokeStyle='rgba(212,182,106,.55)';x.lineWidth=1;x.strokeRect(tx,y-26,tw,38);
+        x.fillStyle='#d4b66a';x.fillText(tag,tx+14,y);tx+=tw+14;
+      }
+      y+=56;
+      x.fillStyle='#8da2c0';x.font='22px -apple-system,"PingFang SC",sans-serif';
+      x.fillText('纬度 '+m.lat.toFixed(1)+'°   经度 '+m.lon.toFixed(1)+'°',60,y);
+      x.textAlign='center';
+      x.fillStyle='#d4b66a';x.font='600 30px Georgia,serif';x.fillText('寰宇月话',sw/2,sh-58);
+      x.fillStyle='#8da2c0';x.font='18px -apple-system,sans-serif';x.fillText('GLOBAL MOON MYTHS',sw/2,sh-28);
+      onDone(c.toDataURL('image/jpeg',0.92));
+    }
+    if(m.img&&IMG_OK[idx]===true){
+      var im=new Image();
+      im.onload=function(){
+        var ph=360,py=y;
+        var s=Math.max(sw/im.width,ph/im.height),dw=im.width*s,dh=im.height*s;
+        x.drawImage(im,(sw-dw)/2,py+(ph-dh)/2,dw,dh);
+        y=py+ph+40;drawText();
+      };
+      im.onerror=function(){drawText();};
+      im.src=m.img;
+    }else drawText();
+  }
+  function shareToXhs(idx){
+    var m=MYTHS[idx];
+    var miniTool=window.xhs&&window.xhs.miniTool;
+    if(!miniTool){
+      drawShareCard(idx,m,function(){
+        alert('当前环境未注入小红书端能力，请在小红书 App 内打开本工具使用分享功能。');
+      });
+      return;
+    }
+    var orig=cShareBtn.textContent;
+    cShareBtn.textContent='生成中…';cShareBtn.disabled=true;
+    drawShareCard(idx,m,function(dataUrl){
+      var content='【'+m.civ+'·'+m.name+'】\n'+m.story+'\n\n';
+      content+='纬度 '+m.lat.toFixed(1)+'°  经度 '+m.lon.toFixed(1)+'°';
+      content+='\n—— 寰宇月话 · 全球月亮神话';
+      if(content.length>1000)content=content.slice(0,997)+'…';
+      var title=(m.name+' · '+m.civ).slice(0,20);
+      miniTool.writeTempFile({data:dataUrl}).then(function(r){
+        return miniTool.postNote({title:title,content:content,pageType:'photo_publish',mediaInfo:{image_resources:[{url:r.filePath}]}});
+      }).then(function(){
+        cShareBtn.textContent=orig;cShareBtn.disabled=false;
+      }).catch(function(err){
+        cShareBtn.textContent=orig;cShareBtn.disabled=false;
+        alert('分享失败：'+(err&&err.errMsg||'未知错误'));
+      });
+    });
+  }
+  cShareBtn.addEventListener('click',function(){if(selIdx>=0)shareToXhs(selIdx);});
 
   /* ===== 区域筛选 tabs ===== */
   var curRegion='all';
@@ -516,11 +755,16 @@
   document.getElementById('sClose').addEventListener('click',function(){openSheet(false);});
   scrim.addEventListener('click',function(){openSheet(false);});
 
-  /* ===== 标记点显隐与脉动 ===== */
+  /* ===== 标记点显隐、呼吸与脉冲 =====
+   * 呼吸只动"光晕的亮度与大小 + 热核大小"，描边的直径保持不动 ——
+   * 让描边跟着缩放，整枚标记会一胀一缩地发糊，看着像没对齐的抖动；收住反而干净。 */
   var _v=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
   function refreshMarkers(t){
+    /* 屏幕恒定大小：整组等比缩放（连 hit 球一起，点击热区在手机上也不会变小） */
+    var mkScale=Math.max(0.6,Math.min(2.2,radius/REF_DIST));
     for(var i=0;i<markers.length;i++){
       var m=markers[i];
+      m.grp.scale.setScalar(mkScale);
       var sel=(i===selIdx);
       var inReg=(curRegion==='all'||m.myth.region===curRegion);
       var dim=(!sel&&!inReg);
@@ -528,70 +772,130 @@
       _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
       m.grp.getWorldPosition(_n);
       _d.copy(camera.position).sub(_n).normalize();_n.normalize();
-      var front=(_v.z<1)&&(_n.dot(_d)>=0.18);
+      var facing=_n.dot(_d);
+      var front=(_v.z<1)&&(facing>=0.16);
       m.front=front;
-      m.glow.visible=front&&(sel||inReg);
-      m.ring.visible=front&&(sel||inReg);
-      m.line.visible=front&&(sel||inReg);
-      m.shade.visible=front&&(sel||inReg);
-      m.dot.visible=front&&(sel||inReg);
-      if(!front){continue;}
+      var show=front&&(sel||inReg);
+      m.contour.visible=show;m.halo.visible=show;m.core.visible=show;m.ring.visible=show;
+      /* 贴边淡出：facing .16→.40 由 0 涨到 1，标记转到地球轮廓附近时渐渐消失，
+       * 不会出现"圆盘浮在地球外面"的观感（比一刀切断更自然）。 */
+      var fade=front?Math.max(0,Math.min(1,(facing-0.16)/0.24)):0;
+      m.fade=fade;
+      if(!show)continue;
       var pulse=0.5+0.5*Math.sin(t*2.4+i*0.7);
       if(sel){
-        var g=0.5*(1+0.4*pulse),r=0.78*(1+0.45*pulse);
-        m.glow.material.color.copy(GOLD_COL);
+        m.halo.material.color.copy(GOLD_COL);
+        m.core.material.color.copy(GOLD_COL);
         m.ring.material.color.copy(GOLD_COL);
-        m.line.material.color.copy(GOLD_COL);
-        m.glow.material.map=goldGlowTex;m.ring.material.map=goldRingTex;
-        m.glow.material.opacity=.85;m.ring.material.opacity=.95;m.line.material.opacity=1;
-        m.glow.scale.set(g,g,1);m.ring.scale.set(r,r,1);m.line.scale.set(r,r,1);
-        m.shade.scale.set(r*1.04,r*1.04,1);m.shade.material.opacity=.95;
-        m.dot.material.color.copy(GOLD_COL);
-        m.dot.scale.setScalar(1.15);
+        m.halo.scale.set(0.3*(1+.08*pulse),0.3*(1+.08*pulse),1);
+        m.core.scale.set(0.115,0.115,1);
+        m.contour.scale.set(0.26,0.26,1);
+        m.ring.scale.set(MK_RING_SEL,MK_RING_SEL,1);
+        m.halo.material.opacity=(.62+.14*pulse)*fade;
+        m.core.material.opacity=1*fade;
+        m.contour.material.opacity=.9*fade;
+        m.ring.material.opacity=1*fade;
       }else if(dim){
-        m.glow.material.color.copy(DIM_COL);
+        m.halo.material.color.copy(DIM_COL);
+        m.core.material.color.copy(DIM_COL);
         m.ring.material.color.copy(DIM_COL);
-        m.line.material.color.copy(DIM_COL);
-        m.glow.material.map=glowTex;m.ring.material.map=ringTex;
-        m.glow.scale.set(0.22,0.22,1);m.ring.scale.set(0.34,0.34,1);m.line.scale.set(0.34,0.34,1);
-        m.shade.scale.set(0.35,0.35,1);m.shade.material.opacity=.5;
-        m.dot.material.color.copy(DIM_COL);
-        m.dot.scale.setScalar(0.5);
+        m.halo.scale.set(0.14,0.14,1);
+        m.core.scale.set(0.05,0.05,1);
+        m.contour.scale.set(0.13,0.13,1);
+        m.ring.scale.set(0.14,0.14,1);
+        m.halo.material.opacity=.26*fade;
+        m.core.material.opacity=.7*fade;
+        m.contour.material.opacity=.4*fade;
+        m.ring.material.opacity=.22*fade;
       }else{
-        m.glow.material.color.copy(MOON_COL);
-        m.ring.material.color.copy(MOON_COL);
-        m.line.material.color.copy(MOON_COL);
-        m.glow.material.map=glowTex;m.ring.material.map=ringTex;
-        var g2=0.36*(1+0.22*pulse),r2=0.58*(1+0.28*pulse);
-        m.glow.scale.set(g2,g2,1);m.ring.scale.set(r2,r2,1);m.line.scale.set(r2,r2,1);
-        m.shade.scale.set(r2*1.04,r2*1.04,1);m.shade.material.opacity=.92;
-        m.dot.material.color.copy(MOON_COL);
-        m.dot.scale.setScalar(0.85);
+        m.halo.material.color.copy(m.cHalo);
+        m.core.material.color.copy(m.cCore);
+        m.ring.material.color.copy(m.cRing);
+        m.halo.scale.set(MK_HALO*(1+.12*pulse),MK_HALO*(1+.12*pulse),1);
+        m.core.scale.set(MK_CORE*(1+.06*pulse),MK_CORE*(1+.06*pulse),1);
+        m.contour.scale.set(MK_CONTOUR,MK_CONTOUR,1);
+        m.ring.scale.set(MK_RING,MK_RING,1);
+        m.halo.material.opacity=(.5+.16*pulse)*fade;
+        m.core.material.opacity=1*fade;
+        m.contour.material.opacity=.6*fade;
+        m.ring.material.opacity=.5*fade;
       }
     }
+    /* 脉冲环：只有选中的标记有，1.8 秒从光圈处向外扩一圈并淡出（"音波"式提示） */
+    var sm=(selIdx>=0)?markers[selIdx]:null;
+    if(sm&&sm.front&&sm.ring.visible){
+      var k=(t%1.8)/1.8,ps=MK_RING_SEL*(1+k*1.7)*mkScale;
+      ping.position.copy(sm.grp.position);
+      ping.scale.set(ps,ps,1);
+      ping.material.color.copy(GOLD_COL);
+      ping.material.opacity=(1-k)*(1-k)*.75*sm.fade;
+      ping.visible=true;
+    }else ping.visible=false;
   }
 
-  /* ===== 标签投影（选中或悬浮标记的名称）===== */
-  var tagPool=[];
-  function ensureTags(n){
-    while(tagPool.length<n){
+  /* ===== 标签投影：所有朝向镜头的标记都挂名牌 =====
+   * 之前只给选中的那一个挂牌，其余 13 个点全靠猜（而且选中后点位正好被卡片挡住，
+   * 等于"标签从来没露过面"）。现在改为：每个可见标记一块牌，挤不下时让位。
+   * 排版是一次贪心：先排选中的，再排更正面的（fade 大者先排），
+   * 与已排好的矩形相交就直接隐去 —— 于是地球转起来是"外围的牌子逐个让位"而不是叠成一团。
+   * 名牌里带一颗大洲色的小圆点，和底部筛选条、地球上的光点同色，三处对得上。 */
+  var tagPool=[],tagCand=[];
+  (function initTags(){
+    for(var i=0;i<MYTHS.length;i++){
       var el=document.createElement('div');el.className='tag';el.style.opacity='0';
-      document.body.appendChild(el);tagPool.push(el);
+      var cs=(REG_COL[MYTHS[i].region]||MOON_COL).getStyle();   // 'rgb(r,g,b)'
+      var d=document.createElement('i');
+      d.style.background=cs;
+      el.style.borderColor=cs.replace('rgb(','rgba(').replace(')',',.5)');
+      el.appendChild(d);
+      el.appendChild(document.createTextNode(MYTHS[i].civ+'·'+MYTHS[i].name));
+      (function(idx){
+        el.addEventListener('click',function(){
+          if(!tagPool[idx].on)return;
+          selectMarker(idx);
+        });
+      })(i);
+      document.body.appendChild(el);
+      tagPool.push({el:el,w:0,h:0,on:false,o:0});
     }
-  }
+  })();
   function updateTags(){
-    var need=showLabel?(selIdx>=0?1:0):0;
-    ensureTags(1);
-    var el=tagPool[0];
-    if(need<1){el.style.opacity='0';return;}
-    if(selIdx<0){el.style.opacity='0';return;}
-    var m=markers[selIdx];
-    if(!m.front){el.style.opacity='0';return;}
-    _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
-    el.style.left=((_v.x*0.5+0.5)*W).toFixed(1)+'px';
-    el.style.top=((-_v.y*0.5+0.5)*H).toFixed(1)+'px';
-    el.textContent=m.myth.civ+'·'+m.myth.name;
-    el.style.opacity='1';
+    var i,show=showLabel;
+    tagCand.length=0;
+    if(show){
+      for(i=0;i<markers.length;i++){
+        var m=markers[i];
+        if(!m.front||m.dim||!m.core.visible)continue;
+        _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
+        tagCand.push({i:i,x:(_v.x*0.5+0.5)*W,y:(-_v.y*0.5+0.5)*H,f:m.fade,sel:m.sel});
+      }
+      tagCand.sort(function(a,b){return (b.sel?1:0)-(a.sel?1:0)||(b.f-a.f);});
+    }
+    for(i=0;i<tagPool.length;i++)tagPool[i].on=false;
+    var placed=[];
+    for(i=0;i<tagCand.length;i++){
+      var c=tagCand[i],t=tagPool[c.i],el=t.el;
+      /* 尺寸只在第一次露面时量一次：此时元素已在 DOM 里（opacity:0 仍有布局），
+       * 之后字号不变就一直复用，避免每帧 offsetWidth 触发重排。 */
+      if(!t.w){t.w=el.offsetWidth||96;t.h=el.offsetHeight||22;}
+      var rx=c.x-t.w/2-3,ry=c.y-t.h*1.4-3,rw=t.w+6,rh=t.h+6,ok=true;
+      for(var j=0;j<placed.length;j++){
+        var p=placed[j];
+        if(rx<p.x+p.w&&p.x<rx+rw&&ry<p.y+p.h&&p.y<ry+rh){ok=false;break;}
+      }
+      if(!ok)continue;
+      placed.push({x:rx,y:ry,w:rw,h:rh});
+      t.on=true;
+      var o=c.sel?1:Math.min(1,c.f*1.15);
+      el.style.left=c.x.toFixed(1)+'px';el.style.top=c.y.toFixed(1)+'px';
+      if(Math.abs(o-t.o)>0.02){el.style.opacity=o.toFixed(2);t.o=o;}
+      if(c.sel!==(el.className.indexOf('on')>=0))el.className=c.sel?'tag on':'tag';
+    }
+    for(i=0;i<tagPool.length;i++){
+      var q=tagPool[i];
+      if(!q.on&&q.o!==0){q.el.style.opacity='0';q.o=0;q.el.className='tag';}
+      q.el.style.pointerEvents=q.on?'auto':'none';
+    }
   }
 
   /* ===== 动画 ===== */
@@ -614,21 +918,23 @@
       mainSpin.rotation.y=eSpin;
       clouds.rotation.y=eSpin*1.1;
     }
-    moonAngle+=dt*MOON_SPEED;
-    moonOrbit.rotation.y=moonAngle;
     // 天球与星点同一转速：银河带与星星是同一片天，转速不同会互相错位
     stars.rotation.y+=dt*0.0016;sky.rotation.y+=dt*0.0016;
-    theta+=(thetaG-theta)*0.12;phi+=(phiG-phi)*0.12;radius+=(radiusG-radius)*0.1;
+    theta+=(thetaG-theta)*0.12;phi+=(phiG-phi)*0.12;radius+=(radiusG-radius)*0.1;pan+=(panG-pan)*0.12;
     camPos();
+    astroUpdate();          // 太阳方位、月相、月光：每帧按真实北京时间重算（开销可忽略）
     refreshMarkers(t);
     renderer.render(scene,camera);
     updateTags();
+    tickNowInfo(t);
     perfAccum+=dt;perfCount++;
     if(perfCount>=30){var avg=perfAccum/perfCount;perfAccum=0;perfCount=0;if(avg>0.04&&dprStep>1){dprStep=Math.max(1,dprStep-0.25);renderer.setPixelRatio(dprStep);renderer.setSize(W,H,false);}}
   }
   addEventListener('resize',function(){
     W=innerWidth;H=innerHeight;camera.aspect=W/H;camera.updateProjectionMatrix();renderer.setSize(W,H,false);
     if(!userZoomed)radiusG=fitR();
+    /* 名牌的宽高是按当时字号量的、缓存着用；换视口（尤其横竖屏切换）字号会变，必须重量 */
+    for(var i=0;i<tagPool.length;i++){tagPool[i].w=0;tagPool[i].h=0;}
   });
   addEventListener('visibilitychange',function(){if(document.hidden){running=false;}else if(!running){running=true;clock.getDelta();animate();}});
   cv.addEventListener('webglcontextlost',function(e){e.preventDefault();running=false;document.getElementById('loader').classList.add('hide');document.getElementById('fallback').classList.add('show');},false);
