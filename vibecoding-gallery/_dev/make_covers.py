@@ -19,6 +19,9 @@ ORDER = [
     "xingkong-excavator-pig", "doumi-next-blue-dot", "jiqi-bianzhong-qingtian",
     "muduchuan-relic-viewer", "amao-squeeze-toy", "xianhua-moon-letter",
     "mingo-bala-bala", "piece-of-moonlight",
+    # 第二批（2026-09-26）
+    "alazysong-zhuyue-plan", "xiu-pingpang-dazhan", "neo-diedie",
+    "paean-sea-town", "ailingbianji-walk-back-line", "bihu-fish-tank",
 ]
 # 自己的作品：素材不在 reference/ 内，直接从各自项目目录取（路径相对仓库根）
 SELF = [

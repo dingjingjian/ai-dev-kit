@@ -462,18 +462,21 @@
       /* 详情页是整屏覆盖层，返回键同样要避开顶部安全区，否则会压在状态栏下 */
       top: calc(14px + var(--safe-top));
       z-index: 5;
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: rgba(20, 22, 26, 0.4);
-      color: #fff;
-      font-size: 18px;
-      line-height: 36px;
+      /* 胶囊形白底 + "‹ 返回"文字，与宿主圆形半透明箭头按钮区分，避免误点 */
+      height: 32px;
+      padding: 0 14px 0 8px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #1f2329;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 32px;
       text-align: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
     @supports ((-webkit-backdrop-filter: blur(8px)) or (backdrop-filter: blur(8px))) {
       .back-btn {
-        background: rgba(20, 22, 26, 0.26);
+        background: rgba(255, 255, 255, 0.82);
         -webkit-backdrop-filter: blur(8px);
         backdrop-filter: blur(8px);
       }
@@ -630,7 +633,7 @@
     }
     .bar-like.liked { color: var(--brand); }
     .bar-like.pop { animation: pop 0.42s ease-out; }
-    .bar-note-btn {
+    .bar-share-btn {
       flex: 1;
       background: var(--grad);
       color: #fff;
@@ -638,7 +641,21 @@
       font-weight: 700;
       border-radius: 999px;
       height: 42px;
+      margin-right: 8px;
       box-shadow: 0 5px 14px rgba(255, 60, 52, 0.36);
+      transition: transform 0.15s ease-out;
+    }
+    .bar-share-btn:active { transform: scale(0.97); }
+    .bar-share-btn[disabled] { opacity: 0.55; }
+    .bar-note-btn {
+      flex: none;
+      background: #f2f3f5;
+      color: var(--ink-2);
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 999px;
+      height: 42px;
+      padding: 0 16px;
       transition: transform 0.15s ease-out;
     }
     .bar-note-btn:active { transform: scale(0.97); }
@@ -1042,7 +1059,7 @@
   <!-- 笔记详情页 -->
   <div class="overlay" id="detail">
     <div class="detail-scroll" id="detail-scroll"></div>
-    <button class="back-btn" id="detail-back">&#10094;</button>
+    <button class="back-btn" id="detail-back">&#10094; 返回</button>
     <div class="detail-bar" id="detail-bar"></div>
   </div>
 

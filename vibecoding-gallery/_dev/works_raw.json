@@ -8,7 +8,9 @@
     "toolType": "h5 游戏（小红书小工具）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "",
     "highlights": [
       "实物拟物数字化：把线下流行的「捏捏乐」玩具（慢回弹解压玩具）搬进手机——题材自带解压认知，用户不需要学习「这是干嘛的」，实物热度直接迁移。",
@@ -27,7 +29,9 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#小红书vibecoding大赛 参赛作品）",
     "tech": "（未拆解，推测 Three.js 类 3D 场景 + 道具交互逻辑）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "把《哆啦A梦的家》做成可自由探索的 3D 寻宝游戏：进大雄家翻抽屉、开柜门、戴竹蜻蜓飞高处、用穿墙圈进隐藏藏宝室，共收集 50 件秘密道具。道具之间有解谜链——看见不等于拿得到，需用其他道具（缩小灯/放大灯/包袱巾/美食桌布/记忆面包）创造条件。",
     "highlights": [
       "能力解锁式探索结构：50 件道具 = 34 件自由寻找 + 16 件藏在 8 种能力对应的小冒险里——收集进度有清晰的分层设计，长线可玩性有保障。",
@@ -47,7 +51,10 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#vibegame 赛道参赛作品）",
     "tech": "（未拆解，AI 编写；推测 Three.js 类 3D 渲染，博主标签提及 KimiK3）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame", "#国风vibecoding"],
+    "contestTags": [
+      "#vibegame",
+      "#国风vibecoding"
+    ],
     "intro": "手机免下载直接玩的 3D 漂移赛车小游戏：拖动旋转车身、双指缩放进入赛道，开始驾驶；主打「过弯拉手刹」的漂移手感与解压体验。",
     "highlights": [
       "移动端 3D 驾驶：竖屏单手可玩，拖动旋转车身（选车/观察阶段）→ 双指缩放进入赛道——入场动线把 3D 观察做成交互的一部分。",
@@ -66,7 +73,9 @@
     "toolType": "h5 游戏（小红书小工具）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "",
     "highlights": [
       "三手势六阶段：点 / 按住 / 滑三个手势贯穿六个玩法阶段（拼装蓄能 → 躲避 → 引力弹弓 → 星图分支 → 宇宙网巡航）——操作集合极小、玩法密度极高，「一次都没多」是刻意的设计纪律。",
@@ -87,7 +96,9 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#vibegame 赛道参赛作品）",
     "tech": "（未拆解，Q 版 3D 模拟飞行，推测 Three.js）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "Q 版 3D 模拟飞行小游戏：从机场跑道起飞，在开放天空中飞行游览。宣传图中展示至少 4 架不同涂装的机型（螺旋桨机 MINI1263、特技机 MINI3306、喷气机 MINI0481、客机 MINI1644），疑似多机型可选。",
     "highlights": [
       "多机型阵容：4+ 架 Q 版飞机（螺旋桨/特技/喷气/客机），机身带注册号（MINI1263 等）与作者水印——机型差异可能对应不同飞行手感。",
@@ -105,7 +116,9 @@
     "toolType": "h5 音乐工具（小红书小工具）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#vibemusic"],
+    "contestTags": [
+      "#vibemusic"
+    ],
     "intro": "",
     "highlights": [
       "国乐器数字化：曾侯乙编钟式三层编钟架（钮钟/甬钟/镈钟对应 T/M/B 三排），每口钟标注正鼓音/侧鼓音两个音名（如 M02 标 G3/C3 之类双音位），还原「一钟双音」的形制细节——考据感直接成为内容卖点。",
@@ -125,7 +138,9 @@
     "toolType": "h5（小红书内嵌小工具）",
     "tech": "全程使用 GLM 5.3（智谱 zcode）生成（博主自述）；推测 Canvas 线迹渲染",
     "archived": "2026-09-20",
-    "contestTags": ["#国风vibecoding"],
+    "contestTags": [
+      "#国风vibecoding"
+    ],
     "intro": "把照片/图形转成「苏绣刺绣效果」的国风小工具：将图片处理为仿真针迹（苏绣/缎绣针法），带飞针动画逐针「绣」出来，可调针法密度、针数、速度与丝线配色，成品可储图。复现的是 DOTA2 国际邀请赛（TI）今年的苏绣主题视觉。",
     "highlights": [
       "针法拟真：苏绣 / 缎绣两种针法切换，密度（密/中/疏）与针数（8/12/16/24）可调——不是简单贴滤镜，而是按针迹逐针绘制。",
@@ -146,7 +161,9 @@
     "toolType": "h5 互动工具（小红书小工具，桌面端截图可见时钟/设置/帮助界面）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#vibetool"],
+    "contestTags": [
+      "#vibetool"
+    ],
     "intro": "",
     "highlights": [
       "单一实体感解压：一颗大球占满主界面，戳/按/扒拉三种触觉动词对应三种反馈——与捏捏乐同为纯触觉解压生态位，但交互载体（球 vs 捏捏）与质感（果冻高光 vs 3D 拟物）不同。",
@@ -167,7 +184,9 @@
     "toolType": "h5 教程 / webapp（文物 3D 数字交互网页制作全流程拆解）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#国风vibecoding"],
+    "contestTags": [
+      "#国风vibecoding"
+    ],
     "intro": "",
     "highlights": [
       "界面即展陈设计：宣纸底色 + 青铜绿/印泥朱双配色、竖排书法标题、馆徽 + 中英双馆名排布——整个页面按博物馆展签/画册的版式语言做，3D 文物嵌在「展签」中央；「拖动旋转 · 滚轮缩放」提示语用竖排小字藏在展品下方。",
@@ -187,7 +206,9 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#vibegame 赛道参赛作品）",
     "tech": "（未拆解，像素风竖屏，推测 Canvas 2D）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "竖屏像素风「自动飞升」攀高游戏：角色自动向上升，玩家只负责左右控制踩平台借力，比谁飞得更高；带高度计（当前/最高）、血量（爱心）、区域分层（地面城区等）。",
     "highlights": [
       "单手双区操控：底部左右两侧「按住左侧 / 按住右侧」触区，竖屏单手即可玩，操作极简。",
@@ -207,7 +228,10 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#vibegame 赛道参赛作品）",
     "tech": "（未拆解，3D 卡通小球，推测 Three.js）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame", "#国风vibecoding"],
+    "contestTags": [
+      "#vibegame",
+      "#国风vibecoding"
+    ],
     "intro": "弹跳小球闯关小游戏，本条笔记为其**版本更新公告**：上线三只新皮肤小球（含卡皮巴拉）+ 新增成就系统。博主自述「玩家破 38 万」，是已观察到的参赛作品里体量最大的长线运营案例。",
     "highlights": [
       "长线运营节奏：以「新皮肤上线」为由头发更新笔记召回老玩家（「赶紧回来看看吧」）——把小游戏当持续运营的产品做，而非一次性参赛作品。",
@@ -227,7 +251,9 @@
     "toolType": "h5 互动工具（小红书小工具）",
     "tech": "",
     "archived": "2026-09-20",
-    "contestTags": ["#国风vibecoding"],
+    "contestTags": [
+      "#国风vibecoding"
+    ],
     "intro": "",
     "highlights": [
       "品牌化包装：工具自有品牌名「月下寄笺局 / MOON LETTER · MID-AUTUMN」——不是「中秋小工具」这种功能命名，而是一个有身份感的「局」（机构拟人），宣传图走版画风格（克莱因蓝信封 + 橙月牙），美术统一克制（≤2 主色）。",
@@ -247,7 +273,9 @@
     "toolType": "h5 游戏（小红书内嵌小工具，#vibegame 赛道参赛作品）",
     "tech": "（未拆解，低多边形 3D 场景，推测 Three.js）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "把「广西洪水挖掘机抓猪」网络热点做成的 3D 操作游戏：开挖掘机在庄园里追猪，左手控制底盘追、右手控制机械臂抓，抓到后送回围栏。本条笔记是一篇**用户反馈驱动的迭代复盘**：因女玩家普遍不会开挖掘机（第一人称频繁掉河），连夜把默认视角改为第三人称（半俯视）。",
     "highlights": [
       "热点题材借势：广西洪水挖掘机抓猪是现成的全网热梗，题材自带流量与搜索词。",
@@ -287,7 +315,9 @@
     "toolType": "h5（小红书内嵌小工具，#vibetool 赛道参赛作品）",
     "tech": "（未拆解，推测 WebGL/Three.js 类 3D 渲染，移动端单文件）",
     "archived": "2026-09-20",
-    "contestTags": ["#vibetool"],
+    "contestTags": [
+      "#vibetool"
+    ],
     "intro": "「把博物馆展品缩小到手机里」的 3D 展品浏览器：首件展品为 T-72B3 主战坦克，可 360° 旋转、放大观察细节、从不同角度查看车体结构，像在博物馆里绕着展品慢慢看。系列化运营，按「第 N 件展品」持续更新。",
     "highlights": [
       "3D 交互完备：360° 旋转 / 缩放 / 自转开关 / 复位 / 展签（展品说明卡），移动端手势操作完整。",
@@ -328,7 +358,10 @@
     "toolType": "h5 互动音乐工具（小红书小工具，#vibeart / #国风vibecoding 参赛作品）",
     "tech": "（未拆解，推测 Web Audio 合成音色）",
     "archived": "2026-09-20",
-    "contestTags": ["#国风vibecoding", "#vibeart"],
+    "contestTags": [
+      "#国风vibecoding",
+      "#vibeart"
+    ],
     "intro": "把月亮 15 种圆缺映射成 C3–C5 音高的互动音乐工具：选一个月相就成为五线谱上的一枚音符，短按半拍、长按更长的音，播放时月亮反色亮起、乐谱跟随旋律前移。",
     "highlights": [
       "自然意象承载抽象音乐概念：月相圆缺 ↔ 音高高低，把乐理门槛降到「选月亮」",
@@ -336,6 +369,122 @@
       "7 种合成音色 + 4 种主题色 + 月相谱卡可保存分享，成品能带走"
     ],
     "noteExcerpt": ""
+  },
+  {
+    "dir": "alazysong-zhuyue-plan",
+    "title": "逐月计划",
+    "author": "AlazySong",
+    "link": "https://www.xiaohongshu.com/discovery/item/6ab24d0400000000340351d0?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLJ7A1o_BROcR0EDGfiwEne8=&xsec_source=pc_share",
+    "noteId": "6ab24d0400000000340351d0",
+    "toolType": "h5 游戏（小红书小工具 / 街机小游戏）",
+    "tech": "",
+    "archived": "2026-09-23",
+    "contestTags": [
+      "#vibegame"
+    ],
+    "intro": "复古未来主义街机小游戏：扮演一颗追逐月亮的地球，在不断追逐中过关，四档难度可选。",
+    "highlights": [
+      "把「地球追月亮」的浪漫意象做成街机追逐玩法，题材自带想象空间",
+      "复古未来主义视觉，街机味浓郁而不失精致",
+      "四档难度分层，兼顾休闲与挑战两类用户"
+    ],
+    "noteExcerpt": "中秋将至，月亮被偷走了？\n中秋将至，月亮被偷走了？\n那就把月亮追回来～\n这是一款复古未来主义的街机风格小游戏，你会扮演追逐月亮的地球，挑战四个难度，最难的那一档，我自己都还没打过去你要来试试吗\n#中秋 #小红书vibecoding大赛 #vibegame #一见月亮心就亮 #小红书月亮节 #月亮创作季"
+  },
+  {
+    "dir": "xiu-pingpang-dazhan",
+    "title": "乒乓大战",
+    "author": "Xiu",
+    "link": "https://www.xiaohongshu.com/discovery/item/6ab149aa0000000035013640?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxemDwsvSSTmKdqKsLwa9kRC8=&xsec_source=pc_share",
+    "noteId": "6ab149aa0000000035013640",
+    "toolType": "h5 游戏（小红书小工具 / 街机休闲）",
+    "tech": "",
+    "archived": "2026-09-23",
+    "contestTags": [
+      "#vibegame"
+    ],
+    "intro": "俯视角乒乓球休闲小游戏：操作球拍与对手对打，界面提供「快推 · 强攻」技能选择暗示。",
+    "highlights": [
+      "俯视角呈现乒乓球对垒，视角独特，球路一眼看清",
+      "「快推 · 强攻」技能分支，休闲玩法里嵌了一层策略选择",
+      "上手门槛极低，契合小红书小工具「点开就玩」的分发逻辑"
+    ],
+    "noteExcerpt": "要不要来打一把\n#vibecoding #小红书vibecoding大赛 #IP副本计划 #vibegame #解压小游戏 #休闲游戏 #乒乓球"
+  },
+  {
+    "dir": "neo-diedie",
+    "title": "叠叠（赛博户外叠石头）",
+    "author": "Neo",
+    "link": "https://www.xiaohongshu.com/discovery/item/6aabb5610000000026016bdf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvKMlWU-B3j3zuEhtmcqAAvs=&xsec_source=pc_share",
+    "noteId": "6aabb5610000000026016bdf",
+    "toolType": "h5 游戏（休闲小游戏 / 户外解压）",
+    "tech": "",
+    "archived": "2026-09-23",
+    "contestTags": [],
+    "intro": "把户外叠石头搬进屏幕的解压小工具：在春日溪畔场景里把石头一块块叠起来，「我的小石塔」记录层数。",
+    "highlights": [
+      "「赛博户外」定位巧妙：把需要出门的自然体验转译成随时可玩的屏幕互动",
+      "叠石天然带「越高越险」的张力，失败即重来的轻挫败循环",
+      "日记体文案 + 「我的小石塔」计数，给无目标玩法挂上个人积累感"
+    ],
+    "noteExcerpt": "一起来叠石头吧\n赛博户外叠石头\n#小红书外人节 #赛博户外 #玛尼堆 #vibecoding #vibecoding大赏 #小工具 #小工具游戏"
+  },
+  {
+    "dir": "paean-sea-town",
+    "title": "海上小镇（一起来盖海上小镇）",
+    "author": "Paean",
+    "link": "https://www.xiaohongshu.com/discovery/item/6ab1eda40000000033032330?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxeheHs1Yybvc57IMhARVB9sE=&xsec_source=pc_share",
+    "noteId": "6ab1eda40000000033032330",
+    "toolType": "h5 游戏（等距视角 3D 建造）",
+    "tech": "",
+    "archived": "2026-09-26",
+    "contestTags": [
+      "#vibegame"
+    ],
+    "intro": "在安静的海面上造自己的小镇：轻点水面铺码头，点屋顶叠高，点墙面延伸，逐步长出一座地中海风海上小镇。",
+    "highlights": [
+      "三种点击语义极简建造（水面铺码头 / 点屋顶叠高 / 点墙面延伸），零教学成本",
+      "等距视角 + 柔和低饱和配色 + 水面倒影，首屏即是成片级画面",
+      "评论区晒图互动闭环，玩家产出直接变成社区内容"
+    ],
+    "noteExcerpt": "治愈你：一起来盖海上小镇！\n在这片安静的海面上造属于自己的小镇\n轻点水面铺码头，点屋顶叠高，点墙面延伸\n评论区晒晒你的海上小镇吧 治愈你我\n#我在小红书做游戏 #ai游戏开发 #小工具 #小游戏 #vibecoding #休闲小游戏 #治愈游戏 #自在城镇 #岛屿制造人叠高高"
+  },
+  {
+    "dir": "ailingbianji-walk-back-line",
+    "title": "步行返回线（Walk-Back Limit）",
+    "author": "AI零边际",
+    "link": "https://www.xiaohongshu.com/discovery/item/6ab257940000000033010b20?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLKITXImF4WZyTI3ZwYnfSag=&xsec_source=pc_share",
+    "noteId": "6ab257940000000033010b20",
+    "toolType": "h5 游戏（程序化生成 / WebAudio 零音频文件）",
+    "tech": "",
+    "archived": "2026-09-26",
+    "contestTags": [
+      "#vibegame"
+    ],
+    "intro": "把阿波罗任务的真规则做成游戏：月球车不能开到宇航员走不回登月舱的距离外。氧气 240 秒是任务时钟，地面虚线圈随氧气收缩，圈外耗尽即结束。",
+    "highlights": [
+      "真实航天规则直接变核心机制：步行返回线把风险画在地面上，无需教程",
+      "收益结构克制：7 个采样点越远分越高，剩余氧气与电量计入奖励，「贪不贪自己掂量」",
+      "全离线零资源：地形贴图代码生成，鼓 / 贝斯 / 琶音全靠振荡器现场合成"
+    ],
+    "noteExcerpt": "在月球上，别开到走不回去的地方。\n阿波罗任务有一条真规则：月球车不能开到宇航员走不回登月舱的距离之外。万一车坏了，人得靠自己走回去，氧气只够那么多。\n我把这条规则做成了游戏。视频是一整局，没剪。\n氧气 240 秒，是任务的钟。电量跟着速度平方掉，地板油两分钟就空。地面上有一圈虚线，是你此刻还能走回登月舱的极限——氧气越少，圈越小。电池要是在圈外耗尽，这局就结束了。\n七个采样点，越远的分越高，最远那块是「创世岩」，一百分。到点得停稳，采样要等，等的时候氧气照样在掉。\n回到登月舱停稳结算。剩下的氧气和电量都算奖励，所以贪不贪，自己掂量。\n#小红书vibecoding大赛 #vibegame #小红书小工具 #月球车"
+  },
+  {
+    "dir": "bihu-fish-tank",
+    "title": "小橘的小方缸（一缸鱼）",
+    "author": "壁虎",
+    "link": "https://www.xiaohongshu.com/discovery/item/6ab506da000000001800713c?source=webshare&xhsshare=pc_web&xsec_token=ABe7YHxrvNa9VyFHA_D9KG80szg0tOvUx-d1tOVwESPVw=&xsec_source=pc_share",
+    "noteId": "6ab506da000000001800713c",
+    "toolType": "h5 游戏 / 虚拟宠物（低多边形 3D 缸体）",
+    "tech": "",
+    "archived": "2026-09-26",
+    "contestTags": [],
+    "intro": "低多边形 3D 虚拟鱼缸：养 4 条鱼（樱花色金鱼苗、认家的小丑鱼等）、添置水草贝壳岩石，界面记录「第 7 天 · 4 条鱼 · 品相 36」。",
+    "highlights": [
+      "日记体养成连载承载叙事：给每条鱼写性格，把随机游动读成宠物个性",
+      "「天数 / 条数 / 品相」三个词的极简面板，每天打开即产生新数据点",
+      "「慢慢来，不着急」的慢节奏陪伴定位，与解压系工具同一生态位"
+    ],
+    "noteExcerpt": "金鱼·樱花，养到第 7 天\n养到第 7 天了。\n金鱼·樱花，还是鱼苗，小得像一粒米。白底粉花，樱花色，少见。慢悠悠地逛，看见你会凑到玻璃前。懒，大半时间挂在原地一动不动。独来独往，从不跟别的鱼凑。\n小方缸住着 4 条，添了 3 件摆设。\n小丑鱼·橙白在旁边认家，绕着城堡或珊瑚打转。\n慢慢来，不着急。"
   },
   {
     "dir": "vibegame/defcon",
@@ -346,7 +495,9 @@
     "toolType": "h5 游戏（本人作品，#vibegame 参赛）",
     "tech": "3D 球面策略，复用 vibeknow/earth-3d 球面引擎",
     "archived": "2026-09-20",
-    "contestTags": ["#vibegame"],
+    "contestTags": [
+      "#vibegame"
+    ],
     "intro": "3D 球面核战策略：危机博弈推高 DEFCON 等级，核弹有限、死得少的赢——一场没有赢家的博弈，愿世界和平。",
     "highlights": [
       "最用心的作品：把冷战核威慑做成可玩的球面策略，每一次升级都在赌对方的克制",
@@ -365,7 +516,9 @@
     "toolType": "h5 科普（本人作品，#vibeknow 参赛）",
     "tech": "Three.js 3D 地球",
     "archived": "2026-09-20",
-    "contestTags": ["#vibeknow"],
+    "contestTags": [
+      "#vibeknow"
+    ],
     "intro": "把地球装进口袋：3D 地球科普，昼夜交替、四季成因、月相变化、地球内部结构，近 5000 人玩过。",
     "highlights": [
       "最受用户欢迎：近 5000 人玩过，是这轮参赛人气最高的作品",
@@ -384,7 +537,9 @@
     "toolType": "h5 科普（本人作品，#vibeknow 参赛）",
     "tech": "Three.js，复用 world-food-3d 框架",
     "archived": "2026-09-20",
-    "contestTags": ["#vibeknow"],
+    "contestTags": [
+      "#vibeknow"
+    ],
     "intro": "手机沉浸式逛侏罗纪公园：坐巡逻车探访史前恐龙，30 只恐龙 / 4 条主题路线，行进途中在地球上标注化石发现地。",
     "highlights": [
       "最受欢迎笔记：第一人称巡逻车视角逛公园，沉浸感就是传播点",

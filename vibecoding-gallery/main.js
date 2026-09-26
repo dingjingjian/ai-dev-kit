@@ -234,10 +234,88 @@ var WORKS = [
     ],
     tech: 'h5 · 互动音乐工具 · 推测 Web Audio'
   },
+  {
+    id: 'zhuyue-plan', title: '逐月计划', author: 'AlazySong', track: 'game',
+    cover: '18-alazysong-zhuyue-plan.jpg',
+    noteId: '6ab24d0400000000340351d0',
+    link: 'https://www.xiaohongshu.com/discovery/item/6ab24d0400000000340351d0?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLJ7A1o_BROcR0EDGfiwEne8=&xsec_source=pc_share',
+    intro: '复古未来主义街机小游戏：扮演一颗追逐月亮的地球，在不断追逐中过关，四档难度可选。',
+    highlights: [
+      '把「地球追月亮」的浪漫意象做成街机追逐玩法，题材自带想象空间',
+      '复古未来主义视觉，街机味浓郁而不失精致',
+      '四档难度分层，兼顾休闲与挑战两类用户'
+    ],
+    tech: 'h5 · 复古未来主义街机'
+  },
+  {
+    id: 'pingpang-dazhan', title: '乒乓大战', author: 'Xiu', track: 'game',
+    cover: '19-xiu-pingpang-dazhan.jpg',
+    noteId: '6ab149aa0000000035013640',
+    link: 'https://www.xiaohongshu.com/discovery/item/6ab149aa0000000035013640?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxemDwsvSSTmKdqKsLwa9kRC8=&xsec_source=pc_share',
+    intro: '俯视角乒乓球休闲小游戏：操作球拍与对手对打，界面提供「快推 · 强攻」技能选择暗示。',
+    highlights: [
+      '俯视角呈现乒乓球对垒，视角独特，球路一眼看清',
+      '「快推 · 强攻」技能分支，休闲玩法里嵌了一层策略选择',
+      '上手门槛极低，契合小红书小工具「点开就玩」的分发逻辑'
+    ],
+    tech: 'h5 · 俯视角休闲小游戏'
+  },
+  {
+    id: 'diedie', title: '叠叠（赛博户外叠石头）', author: 'Neo', track: 'game',
+    cover: '20-neo-diedie.jpg',
+    noteId: '6aabb5610000000026016bdf',
+    link: 'https://www.xiaohongshu.com/discovery/item/6aabb5610000000026016bdf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvKMlWU-B3j3zuEhtmcqAAvs=&xsec_source=pc_share',
+    intro: '把户外叠石头搬进屏幕的解压小工具：在春日溪畔场景里把石头一块块叠起来，「我的小石塔」记录层数。',
+    highlights: [
+      '「赛博户外」定位巧妙：把需要出门的自然体验转译成随时可玩的屏幕互动',
+      '叠石天然带「越高越险」的张力，失败即重来的轻挫败循环',
+      '日记体文案 + 「我的小石塔」计数，给无目标玩法挂上个人积累感'
+    ],
+    tech: 'h5 · 春日溪畔 3D 场景'
+  },
+  {
+    id: 'sea-town', title: '海上小镇（一起来盖海上小镇）', author: 'Paean', track: 'game',
+    cover: '21-paean-sea-town.jpg',
+    noteId: '6ab1eda40000000033032330',
+    link: 'https://www.xiaohongshu.com/discovery/item/6ab1eda40000000033032330?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxeheHs1Yybvc57IMhARVB9sE=&xsec_source=pc_share',
+    intro: '在安静的海面上造自己的小镇：轻点水面铺码头，点屋顶叠高，点墙面延伸，逐步长出一座地中海风海上小镇。',
+    highlights: [
+      '三种点击语义极简建造（水面铺码头 / 点屋顶叠高 / 点墙面延伸），零教学成本',
+      '等距视角 + 柔和低饱和配色 + 水面倒影，首屏即是成片级画面',
+      '评论区晒图互动闭环，玩家产出直接变成社区内容'
+    ],
+    tech: 'h5 · 等距视角 3D 建造'
+  },
+  {
+    id: 'walk-back-line', title: '步行返回线（Walk-Back Limit）', author: 'AI零边际', track: 'game',
+    cover: '22-ailingbianji-walk-back-line.jpg',
+    noteId: '6ab257940000000033010b20',
+    link: 'https://www.xiaohongshu.com/discovery/item/6ab257940000000033010b20?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLKITXImF4WZyTI3ZwYnfSag=&xsec_source=pc_share',
+    intro: '把阿波罗任务的真规则做成游戏：月球车不能开到宇航员走不回登月舱的距离外。氧气 240 秒是任务时钟，地面虚线圈随氧气收缩，圈外耗尽即结束。',
+    highlights: [
+      '真实航天规则直接变核心机制：步行返回线把风险画在地面上，无需教程',
+      '收益结构克制：7 个采样点越远分越高，剩余氧气与电量计入奖励，「贪不贪自己掂量」',
+      '全离线零资源：地形贴图代码生成，鼓 / 贝斯 / 琶音全靠振荡器现场合成'
+    ],
+    tech: 'h5 · 程序化生成 · WebAudio 零音频文件'
+  },
+  {
+    id: 'fish-tank', title: '小橘的小方缸（一缸鱼）', author: '壁虎', track: 'game',
+    cover: '23-bihu-fish-tank.jpg',
+    noteId: '6ab506da000000001800713c',
+    link: 'https://www.xiaohongshu.com/discovery/item/6ab506da000000001800713c?source=webshare&xhsshare=pc_web&xsec_token=ABe7YHxrvNa9VyFHA_D9KG80szg0tOvUx-d1tOVwESPVw=&xsec_source=pc_share',
+    intro: '低多边形 3D 虚拟鱼缸：养 4 条鱼（樱花色金鱼苗、认家的小丑鱼等）、添置水草贝壳岩石，界面记录「第 7 天 · 4 条鱼 · 品相 36」。',
+    highlights: [
+      '日记体养成连载承载叙事：给每条鱼写性格，把随机游动读成宠物个性',
+      '「天数 / 条数 / 品相」三个词的极简面板，每天打开即产生新数据点',
+      '「慢慢来，不着急」的慢节奏陪伴定位，与解压系工具同一生态位'
+    ],
+    tech: 'h5 · 低多边形 3D 缸体'
+  },
   /* ===== 以下为本人（人工智能Ding🥕）的作品：mine=true 会打「我的」角标 ===== */
   {
     id: 'defcon', title: '核战危机 DEFCON', author: '人工智能Ding🥕', track: 'game',
-    cover: '18-defcon.jpg',
+    cover: '24-defcon.jpg',
     noteId: '6aa53b220000000011036fb1',
     link: 'https://www.xiaohongshu.com/discovery/item/6aa53b220000000011036fb1?source=webshare&xhsshare=pc_web&xsec_token=ABiV9qFHzzYiVTv08KCbyCv5hz5qYL-CrtVSjn7-d1dX8=&xsec_source=pc_share',
     intro: '3D 球面核战策略：危机博弈推高 DEFCON 等级，核弹有限、死得少的赢——一场没有赢家的博弈，愿世界和平。',
@@ -251,7 +329,7 @@ var WORKS = [
   },
   {
     id: 'earth-3d', title: '口袋地球', author: '人工智能Ding🥕', track: 'tool',
-    cover: '19-earth-3d.jpg',
+    cover: '25-earth-3d.jpg',
     noteId: '6a9cd74300000000290186bf',
     link: 'https://www.xiaohongshu.com/discovery/item/6a9cd74300000000290186bf?source=webshare&xhsshare=pc_web&xsec_token=AB5XVOySMnaRoqvFrY33XFy4oSfyUGfiu3UEZw2Js9CUk=&xsec_source=pc_share',
     intro: '把地球装进口袋：3D 地球科普，昼夜交替、四季成因、月相变化、地球内部结构，近 5000 人玩过。',
@@ -265,7 +343,7 @@ var WORKS = [
   },
   {
     id: 'jurassic-park', title: '恐龙地球（侏罗纪公园）', author: '人工智能Ding🥕', track: 'tool',
-    cover: '20-jurassic-park.jpg',
+    cover: '26-jurassic-park.jpg',
     noteId: '6aaa7730000000002802eff1',
     link: 'https://www.xiaohongshu.com/discovery/item/6aaa7730000000002802eff1?source=webshare&xhsshare=pc_web&xsec_token=ABOhlrW8243-oy4otWhFmVyDvZKrdMkFvwvnhZiFLrKp8=&xsec_source=pc_share',
     intro: '手机沉浸式逛侏罗纪公园：坐巡逻车探访史前恐龙，30 只恐龙 / 4 条主题路线，行进途中在地球上标注化石发现地。',
@@ -299,6 +377,13 @@ var NOTES = {
   'squeeze-toy': '在小红书上随时可以捏的电子宠物！摸鱼时捏一捏很解压！\n目前做了八种捏捏，宝子们有想做的模型可以聊聊哦\n#捏捏乐 #小游戏 #解压小游戏 #摸鱼神器 #vibegame #小红书vibecoding大赛',
   'moon-letter': '中秋，把没来得及说的话寄给月亮。\n有些话，当面说太浓烈，发微信又怕唐突。于是，借着今晚的月色，悄悄寄出去。\n点笔记下方的「用一用」，寄一封你的月亮信。\n#国风vibecoding #小红书vibecoding大赛 #中秋 #vibecoding #中秋赏月 #中秋节文案 #月亮是一种隐喻',
   'bala-bala': '给中秋前上班的你做一个解压小工具。压力大的时候不妨来戳一戳，按一按，扒拉扒拉。\n可以上传照片，定制属于你自己的球球。比如上传你老板的照片，然后狠狠旋转它。\n如果你解锁了好玩的球球，评论区分享给大家看看。\n如果你是同担，输入解锁密码，还可以有专享同担五球哦。\n如果你喜欢这个小工具，欢迎点个关注哦。\n#小红书vibecoding大赛 #vibetool #wmls #5525',
+  'zhuyue-plan': '中秋将至，月亮被偷走了？\n中秋将至，月亮被偷走了？\n那就把月亮追回来～\n这是一款复古未来主义的街机风格小游戏，你会扮演追逐月亮的地球，挑战四个难度，最难的那一档，我自己都还没打过去你要来试试吗\n#中秋 #小红书vibecoding大赛 #vibegame #一见月亮心就亮 #小红书月亮节 #月亮创作季',
+  'pingpang-dazhan': '要不要来打一把\n#vibecoding #小红书vibecoding大赛 #IP副本计划 #vibegame #解压小游戏 #休闲游戏 #乒乓球',
+  'diedie': '一起来叠石头吧\n赛博户外叠石头\n#小红书外人节 #赛博户外 #玛尼堆 #vibecoding #vibecoding大赏 #小工具 #小工具游戏',
+  'piece-of-moonlight': '我们把在黑暗中跳舞的心脏叫做月亮\n⬆️最近做了一个关于月亮的互动音乐小工具：Piece of Moonlight\n\n🌙 我用月亮的15种圆缺形态分别对应 C3—C5 的不同音高。选择一个月相，它就会成为五线谱上的一枚音符。\n短按默认输入半拍，长按可以写下更长的音符，休止符是一枚星星。\n输入时，月相会实时落到五线谱上；播放时，当前经过的月亮会反色亮起，乐谱也会自动跟随旋律向前移动。\n目前做了7种风格差异比较大的合成音色、4种可以切换的主题色，以及可以保存分享的月相谱卡。\n\n🌷欢迎来玩&提点意见！\n\n#国风vibecoding #小红书vibecoding大赛 #中秋 #vibecoding #一见月亮心就亮 #小红书月亮节 #vibeart',
+  'sea-town': '治愈你：一起来盖海上小镇！🌊\n在这片安静的海面上造属于自己的小镇\n轻点水面铺码头，点屋顶叠高，点墙面延伸\n评论区晒晒你的海上小镇吧 治愈你我\n#我在小红书做游戏 #ai游戏开发 #小工具 #小游戏 #vibecoding #休闲小游戏 #治愈游戏 #自在城镇 #岛屿制造人叠高高#GPT6',
+  'walk-back-line': '在月球上，别开到走不回去的地方\n阿波罗任务有一条真规则：月球车不能开到宇航员走不回登月舱的距离之外。万一车坏了，人得靠自己走回去，氧气只够那么多。\n\n我把这条规则做成了游戏。视频是一整局，没剪。\n\n氧气 240 秒，是任务的钟。电量跟着速度平方掉，地板油两分钟就空。地面上有一圈虚线，是你此刻还能走回登月舱的极限——氧气越少，圈越小。电池要是在圈外耗尽，这局就结束了。\n\n七个采样点，越远的分越高，最远那块是「创世岩」，一百分。到点得停稳，采样要等，等的时候氧气照样在掉。\n\n回到登月舱停稳结算。剩下的氧气和电量都算奖励，所以贪不贪，自己揂量。\n\n整个游戏离线跑，地形、月球车、贴图全是代码现场生成的，连背景音乐都是——没有一个音频文件，鼓、贝斯、琶音全是浏览器里的振荡器现场算出来的。开车有电机声，越过返回线会响警报。\n\n点下面的小工具就能开。\n\n#小红书vibecoding大赛  #vibegame  #小红书小工具  #月球车',
+  'fish-tank': '金鱼·樱花，养到第 7 天\n养到第 7 天了。\n金鱼·樱花，还是鱼苗，小得像一粒米。白底粉花，樱花色，少见。慢悠悠地逛，看见你会凑到玻璃前。懒，大半时间挂在原地一动不动。独来独往，从不跟别的鱼凑。\n小方缸住着 4 条，添了 3 件摆设。\n小丑鱼·橙白在旁边认家，绕着城堡或珊瑚打转。\n慢慢来，不着急。',
   /* 本人作品：手头只有笔记标题 + 自己的一句话简介，没有原文全文，故不往下补话题标签 */
   'defcon': '战争策略游戏 | 核战危机 DEFCON 🌏\n一场没有赢家的博弈，愿世界和平🕊️',
   'earth-3d': '把地球装进口袋！太绝了🌍\n3D 地球科普，近 5000 人玩过🌍',
@@ -746,7 +831,8 @@ function openDetail(id) {
     '</div>';
   $('detail-bar').innerHTML =
     '<span class="bar-like' + (isLiked(id) ? ' liked' : '') + '" data-like="' + id + '">&#9829;</span>' +
-    '<button class="bar-note-btn">复制链接去打开</button>';
+    '<button class="bar-share-btn">分享笔记</button>' +
+    '<button class="bar-note-btn">复制链接</button>';
   var overlay = $('detail');
   overlay.classList.add('open');
   /* 必须在 overlay 可见之后再复位滚动：display:none 时给 scrollTop 赋值无效，
@@ -783,6 +869,60 @@ function selectLink() {
     } catch (e) { /* 选中失败不影响后续提示 */ }
   }
   toast('已选中链接，长按复制，再到小红书打开');
+}
+
+/* ===================== 分享到小红书 =====================
+ * 直接用封面图作为分享图片，经 writeTempFile 换 filePath 后调 postNote 唤起笔记发布页。
+ * 容器未注入端能力时（普通浏览器预览）降级提示。API 见
+ * https://miniapp-sandbox.xiaohongshu.com/minitool/doc#s3-3 */
+function shareToXhs(id) {
+  var w = workById(id);
+  if (!w) return;
+  var miniTool = null;
+  try { miniTool = window.xhs && window.xhs.miniTool; } catch (e) { miniTool = null; }
+  if (!miniTool || typeof miniTool.writeTempFile !== 'function' || typeof miniTool.postNote !== 'function') {
+    toast('请在小红书 App 内打开本工具使用分享功能');
+    return;
+  }
+  var btn = document.querySelector('.bar-share-btn');
+  var orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '生成中…'; btn.disabled = true; }
+
+  /* 封面图 → canvas → base64 → writeTempFile → postNote */
+  var im = new Image();
+  im.onload = function () {
+    var c = document.createElement('canvas');
+    c.width = im.naturalWidth || im.width;
+    c.height = im.naturalHeight || im.height;
+    c.getContext('2d').drawImage(im, 0, 0);
+    var dataUrl = c.toDataURL('image/jpeg', 0.92);
+
+    var title = w.title.slice(0, 20);
+    var content = w.intro + '\n\n';
+    content += '作者：' + w.author + ' · ' + w.tech + '\n\n';
+    content += '—— vibecoding 优秀作品展\n';
+    content += '#小红书vibecoding大赛 ' + TRACKS[w.track].tag;
+    if (content.length > 1000) content = content.slice(0, 997) + '…';
+
+    miniTool.writeTempFile({ data: dataUrl }).then(function (r) {
+      return miniTool.postNote({
+        title: title,
+        content: content,
+        pageType: 'photo_publish',
+        mediaInfo: { image_resources: [{ url: r.filePath }] }
+      });
+    }).then(function () {
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
+    }).catch(function (err) {
+      if (btn) { btn.textContent = orig; btn.disabled = false; }
+      toast('分享失败：' + (err && err.errMsg || '未知错误'));
+    });
+  };
+  im.onerror = function () {
+    if (btn) { btn.textContent = orig; btn.disabled = false; }
+    toast('封面图加载失败，无法分享');
+  };
+  im.src = './covers/' + w.cover;
 }
 
 /* ===================== 扭蛋机（刚体物理模拟） =====================
@@ -1117,6 +1257,7 @@ function init() {
       toggleLike(id, !isLiked(id));
       return;
     }
+    if (e.target.closest('.bar-share-btn')) { shareToXhs(detailId); return; }
     if (e.target.closest('.bar-note-btn')) selectLink();
   });
 
