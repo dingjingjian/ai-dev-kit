@@ -81,6 +81,9 @@ reference/
 | AlazySong | 逐月计划 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab24d0400000000340351d0?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLJ7A1o_BROcR0EDGfiwEne8=&xsec_source=pc_share | 复古未来主义街机小游戏，扮演追逐月亮的地球，四档难度 | 2026-09-23 | alazysong-zhuyue-plan/ | ⬜ |
 | Xiu | 乒乓大战 | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab149aa0000000035013640?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxemDwsvSSTmKdqKsLwa9kRC8=&xsec_source=pc_share | 俯视角乒乓球休闲小游戏，含「快推·强攻」技能选择暗示 | 2026-09-23 | xiu-pingpang-dazhan/ | ⬜ |
 | Neo | 叠叠（赛博户外叠石头） | h5 小工具 / 休闲小游戏 | https://www.xiaohongshu.com/discovery/item/6aabb5610000000026016bdf?source=webshare&xhsshare=pc_web&xsec_token=ABPb7oRjzFejpo01O9T4uVvKMlWU-B3j3zuEhtmcqAAvs=&xsec_source=pc_share | 户外解压叠石头，春日溪畔场景，「我的小石塔」计数 + 日记体文案 | 2026-09-23 | neo-diedie/ | ⬜ |
+| Paean | 海上小镇（一起来盖海上小镇） | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab1eda40000000033032330?source=webshare&xhsshare=pc_web&xsec_token=AB1z6ViX0M5IfeMGReLMmxeheHs1Yybvc57IMhARVB9sE=&xsec_source=pc_share | 三种点击语义极简建造（水面铺码头/点屋顶叠高/点墙面延伸）+等距视角治愈系首屏成片+评论区晒图互动闭环 | 2026-09-26 | paean-sea-town/ | ⬜ |
+| AI零边际 | 步行返回线（Walk-Back Limit） | h5 游戏 | https://www.xiaohongshu.com/discovery/item/6ab257940000000033010b20?source=webshare&xhsshare=pc_web&xsec_token=ABwTzU5lcuYM2A5d85435dLKITXImF4WZyTI3ZwYnfSag=&xsec_source=pc_share | 真实航天规则驱动核心机制（步行返回线圈随氧气收缩）+风险收益结算克制+全代码生成零音频文件（振荡器程序化BGM） | 2026-09-26 | ailingbianji-walk-back-line/ | ⬜ |
+| 壁虎 | 小橘的小方缸（一缸鱼） | h5 游戏 / 虚拟宠物 | https://www.xiaohongshu.com/discovery/item/6ab506da000000001800713c?source=webshare&xhsshare=pc_web&xsec_token=ABe7YHxrvNa9VyFHA_D9KG80szg0tOvUx-d1tOVwESPVw=&xsec_source=pc_share | 低多边形 3D 虚拟鱼缸+日记体养成连载（给鱼写性格）+「天数/条数/品相」轻留存面板+慢节奏陪伴定位 | 2026-09-26 | bihu-fish-tank/ | ⬜ |
 
 > 新增工具时在此表追加一行；目录列指向本目录下的子目录路径。
 
