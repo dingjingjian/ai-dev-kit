@@ -144,9 +144,11 @@
   //          的比例不变，所以掠过行星的构图与放大前一致，只有地球回到了原来的观感。
   //          例外一：冥王星等比后掠距 19.3 几乎等于相机抬升 CAM_UP=20，相机会贴着它的中心过去，
   //          故单独压到 14.4，让航线明显从它下方掠过（实测相机离它中心 5.0 单位）。
-  //          例外二：土星光环必须**整个留在掠距之内**（RING_OUT × 半径 < 掠距 − 地球半径），
-  //          否则地球会从环的盘面投影里穿过去（截图可见）。所以光环内缩到 1.12~1.55 倍半径，
-  //          而不是把掠距推到环外 —— 后者会把土星推到画面外（判定点近缘离轴 35.6° > 30° 半视场）。
+  //          例外二：土星光环**不再靠「把环带内缩」规避穿越**，而是把环面摆进土星赤道面
+  //          （法线 +Y 再叠加真实轴倾角 26.73°）：航线穿过环带时距环面最小 30.5 单位 >
+  //          地球半径，所以永远不穿环，环带也因此能用真实比例 1.11~2.27 R（D 环内缘 → A 环外缘）。
+  //          旧做法是保持 RingGeometry 默认的 +Z 法线、把环内缩到 1.12~1.55 R —— 那条已经作废，
+  //          推导与实测见 DESIGN.md §7.2。
   // vNeed  = 判定点速度门槛；低于它 → 被捕获（再低到 ×CRASH_RATIO 以下 → 撞毁）
   // vSling = 该行星的「弹弓速度」：最佳区间内速度按比例向它逼近（差距越大拉得越猛）
   function flyby(o) { o.rad = bodyR(o.rKm); o.vEsc = bodyVesc(o.rKm, o.mEarth); return o; }
@@ -184,7 +186,8 @@
   // ---- 质量 → 时机窗口（两遍：先扫出全体的 v_esc 范围，再归一化）----
   // q = 0（冥王星，v_esc 1.2 km/s，几乎弹不动）→ 窗口 2.5 s、最佳区间只占窗口 28%
   // q = 1（木星，v_esc 60 km/s，引力最强）    → 窗口 2.8 s、最佳区间占窗口 44%
-  // 温度预算（满箱 ≈1.43 s）必须同时满足「< 每颗窗口」与「> 每颗最佳区间」→ 有逐行星断言。
+  // 温度预算（**满功率恒温 ≈1.33 s**、冷机起按住 1.58 s —— 功率要先起转 0.5 s）必须同时
+  // 满足「< 每颗窗口时长」与「> 每颗最佳区间时长」→ 有逐行星断言。
   var WIN_MIN = 2.5, WIN_MAX = 2.8;                            // 窗口时长（秒）随引力强度
   var SWEET_LO_NARROW = 0.62, SWEET_LO_WIDE = 0.46, SWEET_HI = 0.90;
   var SLING_SWEET_PRODUCT = 2.06;   // 吃满最佳区间时的弹弓逼近量 = 1−e^−2.06 ≈ 87%（与旧版等价）
@@ -505,7 +508,9 @@
     if (phase < sweet1) return 'sweet';
     return 'late';
   }
-  // 常规推力效率（与 pulseActive 相乘）。最佳区间不走这里：它由「弹弓比例项」接管。
+  // 常规推力效率（与 pulseActive 相乘）。最佳区间不走这里：它由「弹弓比例项」接管
+  // （见 substep 的说明：这是速度经济的锚点，绿色区间收益与功率大小无关）。
+  // ⓘ 它**不管发动机的「外观」** —— 火焰与口面光点只读 st.pwrOut（输出功率），弹弓不放大它们。
   function zoneEff(zone) {
     if (zone === 'late') return LATE_EFF;
     return 1;
@@ -593,22 +598,35 @@
   }
 
   // ---- 行星发动机（纯函数，渲染层与无头自检共用）----
+  // 2026-09-27 **改环式阵列**（还原原著 / 按参考图）：原先用黄金角螺旋把 48 台均匀撒在
+  // -Z 半球上 —— 均匀是均匀，但读不出「阵列」，远看就是一团乱刺。
+  // 原著里行星发动机是**成环排开**的（一圈包一圈的环带），参考图上地球边缘那圈蓝白亮点
+  // 就是它们。所以改成：**中心 1 台 + 4 圈同心环（5 / 11 / 16 / 15 台，与 ENGINE_RING_COUNT 一致）**，
+  // 全装在 -Z 半球、全部平行朝 -Z 喷 —— 净推力方向与旧版**完全一致**（自检逐台验过）。
+  //   四圈极角 40° / 60° / 74° / 83°：**外两圈占了 31 台**（16 + 15），最外那圈
+  //   sin83° = 0.993 倍半径 —— 从跟拍镜头（正对地球背面）看正好压在地平边缘上，
+  //   就是参考图里那道亮环；中间只剩 6 台，盘心因此是干净的（不是糊成一团蒲公英）。
+  //   逐圈错开一点相位（r × 0.4 rad），免得四圈排成同一条辐条。
   var ENGINE_COUNT = 48;
   var ENGINE_SHELL = 1.08;
   var ENGINE_AXIS = [0, 0, -1];
+  var ENGINE_RING_POLAR = [0, 40, 60, 74, 83];    // 逐圈极角（度），第 0 圈 = 中心那一台
+  var ENGINE_RING_COUNT = [1, 5, 11, 16, 15];     // 逐圈台数，合计 = ENGINE_COUNT
   function engineLayout() {
     var out = [];
-    var golden = Math.PI * (3 - Math.sqrt(5));
-    for (var i = 0; i < ENGINE_COUNT; i++) {
-      var ez = -0.05 - (i / (ENGINE_COUNT - 1)) * 0.95;
-      var err = Math.sqrt(Math.max(0, 1 - ez * ez));
-      var th = i * golden;
-      out.push({
-        pos: [Math.cos(th) * err * EARTH_R * ENGINE_SHELL,
-              Math.sin(th) * err * EARTH_R * ENGINE_SHELL,
-              ez * EARTH_R * ENGINE_SHELL],
-        dir: ENGINE_AXIS.slice()
-      });
+    for (var r = 0; r < ENGINE_RING_COUNT.length; r++) {
+      var n = ENGINE_RING_COUNT[r];
+      var th = ENGINE_RING_POLAR[r] * Math.PI / 180;
+      var sn = Math.sin(th), cz = Math.cos(th), ph0 = r * 0.4;
+      for (var i = 0; i < n; i++) {
+        var ph = ph0 + i * 2 * Math.PI / n;
+        out.push({
+          pos: [Math.cos(ph) * sn * EARTH_R * ENGINE_SHELL,
+                Math.sin(ph) * sn * EARTH_R * ENGINE_SHELL,
+                -cz * EARTH_R * ENGINE_SHELL],
+          dir: ENGINE_AXIS.slice()
+        });
+      }
     }
     return out;
   }
@@ -635,7 +653,8 @@
       rSun: 0, rSunAU: 0, speedKms: 0,
       shellR: SHELL_START, shellV: SHELL_A, shellAU: SHELL_START / AU,
       gap: 0,
-      pwr: 0,                  // 发动机功率（按住起转、松手回落；过热锁定即熄火）
+      pwr: 0,                  // 油门（按住起转、松手回落；过热锁定即熄火）
+      pwrOut: 0,               // 发动机**输出**功率 = 油门 × 乘波（功率表读数与火焰读它，与区间无关）
       heat: 0, overheated: false, overheatLeft: 0, thrustEff: 0, burning: false,
       pullTo: 0, slinging: false,   // 弹弓：本子步向 pullTo 逼近（0 = 未触发）
       slingK: 0,               // 当前行星的弹弓逼近速率（窄区间行星的 K 更大 → 吃满收益一致）
@@ -681,6 +700,11 @@
       //   · 弹弓期（st.pullTo > 0）：a = st.slingK·(pullTo − v)，向该行星的弹弓速度**按比例逼近**。
       //     比例项意味着「落后越多拉得越猛」，所以前面吃得少不会一路崩到底（可追回）；
       //     slingK 是该行星自己的（区间越窄 K 越大），保证「吃满绿色区间」的收益与区间宽度无关。
+      //     ⓘ 弹弓期**由弹弓比例项接管推力**是刻意的：绿色区间的收益必须与**功率大小无关**
+      //     （这条是速度经济的设计锚点，见 DESIGN 的「速度经济 / 弹弓」一节）。玩家反馈的
+      //     「弹弓不该影响功率」
+      //     指的是**发动机外观被弹弓放大**（见渲染层的说明），不是这一条 —— 2026-09-27 实测过
+      //     改成并列相加会让「满弹弓 34.7 s → 34.1 s」，并让「过早 → 被壳追上」的场面翻盘。
       //   · 其余时刻：a = THRUST_ACC × **功率档位**（= 功率 × 区间效率 × 乘波，见上面的积分循环），
       //     也就是「油门踩多深」：巡航/过早 1×、过晚残效 0.2×、脉冲乘波 1.6×，过热熄火 0。
       //     同一档位也决定温升速率 —— 推力与发热共用同一个系数（温度 = ∫ 功率）。
@@ -767,13 +791,21 @@
         // 温度要按功率档位再积一次（见下），所以「功率越大越烫」是被算出来的，不是文案。
         if (st.burning && !st.overheated) st.pwr = Math.min(PWR_MAX, st.pwr + PWR_UP * SUBSTEP_TIME);
         else st.pwr = Math.max(0, st.pwr - PWR_DOWN * SUBSTEP_TIME);
-        // ---- 功率档位（发动机这一刻的有效输出）= 功率 × 区间效率 × 脉冲乘波 ----
-        // 它同时是**推力系数**（普通推力项）与**温升系数** —— 这就是本次重构的耦合点：
-        // 过晚残效 20% 几乎不烫、脉冲乘波 160% 烫得最快、起转未满时推力与发热一起爬升。
-        // 绿色区间的速度增益由弹弓比例项接管、与功率档位无关（弹弓是引力，不是发动机）。
-        var eff = (st.pwr / PWR_MAX) * zoneEff(st.zone);
-        if (eff > 0 && pulseActive(tNow)) eff *= PULSE_THRUST_BOOST;
-        st.thrustEff = (st.burning && !st.overheated) ? eff : 0;
+        // ---- 发动机输出功率 **与** 有效推力档位：两个量，别再混 ------
+        // ⓘ 2026-09-27（玩家反馈：「过晚阶段功率表不该掉到 20%，应该还是 100%」）：
+        //   · **pwrOut（输出功率）** = 油门 × 乘波，**与区间无关** —— 过晚区间里发动机照样
+        //     满功率白烧，只是那一份推力兑不出速度来。功率表读数与火焰读它（火焰 = 白烧的画面）。
+        //   · **thrustEff（有效推力档位）** = 输出功率 × 区间效率（过晚残效 0.2）—— 推力与
+        //     温升读它。它同时是**推力系数**（普通推力项）与**温升系数**：
+        //     过晚残效 20% 几乎不烫、脉冲乘波 160% 烫得最快、起转未满时推力与发热一起爬升。
+        //   · 绿色区间的速度增益由弹弓比例项接管、与这两个量都无关（弹弓是引力，不是发动机）。
+        var out = (st.pwr / PWR_MAX) * (pulseActive(tNow) ? PULSE_THRUST_BOOST : 1);
+        // 输出功率：**不**被 st.burning 一闸到底 —— 松手后跟着那条 0.5 s 熄火斜坡（PWR_DOWN）
+        // 一起落回 0（表盘与火焰因此看得见熄火的过程）；只有过热锁定是真·立即归零（熄火完成）。
+        st.pwrOut = st.overheated ? 0 : out;
+        // 推力档位反过来**必须**带 st.burning 闸：松手那一刻推力就没了（没有残余推力），
+        // 否则整条速度经济会变（自检里「熄火比散热快 / 松开就掉速」那几条锁着这一点）。
+        st.thrustEff = (st.burning && !st.overheated) ? st.pwrOut * zoneEff(st.zone) : 0;
         // ---- 温度：温升速率 ∝ 功率档位；停机降温 ----
         // **过热锁定 = 强制降温阶段**：无论手指按不按，温度都按 COOL_RATE 降。按住既不会升温、
         // 也不会重新起转（功率与推力全程 0），更不会打断降温进度 —— 点也白点，但也不受罚。
@@ -784,7 +816,7 @@
           if (st.heat <= 0) st.overheated = false;
         } else if (st.burning) {
           st.heat = Math.min(TEMP_MAX, st.heat + TEMP_RATE * st.thrustEff * SUBSTEP_TIME);
-          if (st.heat >= TEMP_MAX) { st.overheated = true; st.thrustEff = 0; }
+          if (st.heat >= TEMP_MAX) { st.overheated = true; st.thrustEff = 0; st.pwrOut = 0; }
         } else {
           st.heat = Math.max(0, st.heat - COOL_RATE * SUBSTEP_TIME);
         }
@@ -847,7 +879,7 @@
       st.status = 'flying'; st.reason = ''; st.culprit = '';
       st.t = 0; st.s = 0; st.v = START_SPEED; st.acc = 0;
       st.shellR = SHELL_START; st.shellV = SHELL_A;
-      st.pwr = 0; st.heat = 0; st.overheated = false; st.overheatLeft = 0; st.thrustEff = 0; st.burning = false;
+      st.pwr = 0; st.pwrOut = 0; st.heat = 0; st.overheated = false; st.overheatLeft = 0; st.thrustEff = 0; st.burning = false;
       st.pullTo = 0; st.slinging = false; st.slingK = 0;
       st.pulseHot = false; st.pulseIn = -1; st.target = 0; st.tToGo = 0; st.phase = -1; st.zone = 'appr';
       st.vNeed = flybys[0].def.vNeed; st.safe = false; st.warn = ''; st.warnKind = '';
@@ -923,6 +955,7 @@
     CAM_PAN_TILT_MAX: CAM_PAN_TILT_MAX,
     RING_IN: RING_IN, RING_OUT: RING_OUT, SAT_TILT: SAT_TILT, RING_NORMAL: RING_NORMAL.slice(),
     ENGINE_COUNT: ENGINE_COUNT, ENGINE_SHELL: ENGINE_SHELL, ENGINE_AXIS: ENGINE_AXIS.slice(),
+    ENGINE_RING_POLAR: ENGINE_RING_POLAR.slice(), ENGINE_RING_COUNT: ENGINE_RING_COUNT.slice(),
     INTRO_TIME: INTRO_TIME,
     BOOT_MIN_MS: BOOT_MIN_MS, BOOT_STEPS: BOOT_STEPS, BOOT_DONE_MSG: BOOT_DONE_MSG
   };
@@ -1121,50 +1154,146 @@
   earthBody.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32),
     new THREE.MeshBasicMaterial({ color: 0x4a86c8, side: THREE.BackSide, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false })));
 
-  // 发动机羽流统一成**薄荷白**（0x8af2d4）：整屏主色改成绿之后，青蓝的等离子焰
-  // 会成了画面上唯一一块蓝 —— 加色混合下它仍读作「白热」，只是偏绿。
-  var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.35, EARTH_R * 1.8, 12),
-    new THREE.MeshBasicMaterial({ color: 0x8af2d4, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-  thrustFlame.visible = false; earthGroup.add(thrustFlame);
+  // ---- 发动机与火焰：还原原著 / 按参考图 ---------------
+  // 2026-09-27：主焰与羽流统一改成**蓝白等离子**。旧版为了守「整屏只有一支彩色（绿）」
+  // 把火压成薄荷白 0x8af2d4；但火是**世界里的东西**（不是界面配色）—— 参考图上那圈
+  // 蓝白亮环才是原著里的行星发动机。改回蓝白之后界面那支绿反而更干净：
+  // 界面的绿管信息、世界的蓝管推进，两者不再互相稀释。
+  // 分层：外焰（冷蓝、宽、虚）+ 内芯（白热、窄、实），两层都是加色混合。
+  // 颜色要给**线性空间的深蓝**：three r1xx 不改写 material.color，而输出走 sRGBEncoding
+  // + ACESFilmicToneMapping —— 线性值 0.18 出来就变成 sRGB 0.47（提亮一大截），
+  // 所以浅蓝（0x5cc0ff）出来会发灰青、再加色叠 48 层就糊成白。要让屏幕上是参考图那种蓝，
+  // 线性空间里 R 必须压到接近 0（实测采样：改前最亮处 RGB≈215,250,255 近白）。
+  var EXHAUST_OUT = 0x0d47ff;   // 外焰：深冷蓝（线性值，出来后才是参考图那种亮蓝）
+  var EXHAUST_CORE = 0xcfe6ff;  // 内芯：白热（略偏蓝，不要纯白）
+  var NOZZLE_COLOR = 0x1b3138;  // 喷口本体：深色（在亮焰旁边才读得出「那是一台机器」）
+
+  // ---- 尾焰纹理：一条「喷口白热 → 尾端散尽」的渐变（2026-09-27 优化尾焰）----
+  // 加色混合下，柱体不再是**一块半透明实心锥**（旧版就是那样：锥底一圈硬边、整体一个透明度），
+  // 而是从喷口亮起、往后越喷越淡的等离子：
+  //   · **A 通道 1 → 0**：尾端彻底散尽 —— 有了这条渐变，柱长拉长也不会变成一根实心棒；
+  //   · **RGB 白 → 蓝**：材料色取深蓝，纹理负责把尾端压暗 —— 喷口白热、尾焰转蓝，
+  //     就是参考图里「白芯 + 蓝晕」的读法（加色混合只能逐通道相乘，所以色相得由纹理给）。
+  // 端点在 uv：ConeGeometry（继承 CylinderGeometry）的**锥尖 uv.y = 1、锥底 uv.y = 0**。
+  // 焰柱与主焰现在**都是锥底接喷口、锥尖朝后**（见下面的朝向说明），所以亮端统一画在
+  // **v = 0** 那一头 —— 渐变从**图的下沿**起草（createLinearGradient(0, h, 0, 0)，
+  // 配合默认的 flipY=true，图的下沿就是 v=0）。一张纹理够三处用。
+  function makePlumeTex() {
+    var w = 4, h = 64, c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var x = c.getContext('2d');
+    var g = x.createLinearGradient(0, h, 0, 0);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    // 中段别掉太狠（旧版 0.5 处只剩 0.46，可见的那截就缩成了喷口附近一小团 = 「一个球」）——
+    // 留到 0.55，锥体「越远越细」的轮廓才看得见，尾端仍然一路散尽。
+    g.addColorStop(0.2, 'rgba(206,229,255,0.9)');
+    g.addColorStop(0.55, 'rgba(120,170,255,0.55)');
+    g.addColorStop(0.85, 'rgba(40,92,255,0.2)');
+    g.addColorStop(1, 'rgba(12,52,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+    return new THREE.CanvasTexture(c);
+  }
+  var plumeTex = makePlumeTex();
+
+  // ⓘ 2026-09-27 优化尾焰：主焰**缩小一档**（0.40R/1.9R → **0.22R/1.1R**；内芯同比例）。
+  //   它是「中心那一台发动机」的焰，位置在球后极点（局部 -Z = 朝镜头那一侧），
+  //   尺寸给大时会在**地球正面正中糊出一团白光**（旧版 0.40R 实测就是这样，把冰面糊掉），
+  //   而环式阵列下真正好看的尾焰在边缘那圈焰柱上 —— 主焰只留一枚中心亮芯。
+  var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.22, EARTH_R * 1.1, 16),
+    new THREE.MeshBasicMaterial({ color: EXHAUST_OUT, map: plumeTex, transparent: true, opacity: .3, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  var thrustCore = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.10, EARTH_R * 0.8, 14),
+    new THREE.MeshBasicMaterial({ color: EXHAUST_CORE, map: plumeTex, transparent: true, opacity: .34, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+  thrustFlame.visible = false; thrustCore.visible = false;
+  earthGroup.add(thrustFlame); earthGroup.add(thrustCore);
 
   var _flameAxis = new THREE.Vector3(0, 1, 0), _flameDir = new THREE.Vector3();
   var _zAxis = new THREE.Vector3(0, 0, 1), _negZAxis = new THREE.Vector3(0, 0, -1);
   var _targetQuat = new THREE.Quaternion();
 
-  // ---- 行星发动机 ----
-  // 2026-09-27：原先 48 台只画了本体（一小枚锥体）+ 中间一束主焰 —— 远看是「地球后面挂了一根棒」，
-  // 看不出「上万台发动机同时在喷」。现在每台**自带一道等离子柱**：
-  //   · 柱体 = 同一份几何 + 同一份材质（48 个 Mesh 只改 visible / scale，不新建材质）
+  // ---- 行星发动机（环式阵列，见 engineLayout）----
+  // 每台三件：**深色喷口本体 + 一道蓝白等离子柱 + 口面一枚光点**。
+  //   · 三件都共用几何 / 材质（48 台只改 visible 与 scale，不新建材质，也不新建纹理）
   //   · 柱长随推力实时变（点火起转时从短到长），并叠一点高频抖动 —— 等离子不是稳定水流
   //   · 底座锚在发动机上：只缩放长度时同步改 z，锥底才不会跟着往前爬
+  //   · 口面光点**全程亮着**（怠速一枚暗烬、点火一枚亮环）：48 枚沿环排开，
+  //     加色混合下连成参考图里地球边缘那圈亮环 —— 这也是「一万台发动机」读得出来的原因
   var engineGroup = new THREE.Group(); earthGroup.add(engineGroup);
-  var engines = [], plumes = [];
-  var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.062, EARTH_R * 0.5, 6);
+  var plumes = [];
+  var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.055, EARTH_R * 0.42, 7);
+  var engineMat = new THREE.MeshBasicMaterial({ color: NOZZLE_COLOR });
   var engineQuat = new THREE.Quaternion().setFromUnitVectors(_flameAxis, _negZAxis);
-  var PLUME_LEN = EARTH_R * 1.15;
-  var plumeGeo = new THREE.ConeGeometry(EARTH_R * 0.05, PLUME_LEN, 6);
+  // 焰柱几何：锥底（宽端）在 -Y、锥尖在 +Y。**锥底接在喷口、锥尖朝后收成一条线** ——
+  // 和喷口本体（engineQuat：+Y 摆到 -Z）用同一个朝向，所以柱体直接沿用 engineQuat：
+  //   · 锥底落在喷口（position.z = z0）、锥尖在 z0 − L，尾端因此是**一条细线**；
+  //   · 长度仍由 position.z = z0 − PLUME_LEN · k / 2 给出：缩放只在 Y 上，锚点公式不变。
+  // ⓘ 2026-09-27 玩家反馈「尾焰尾部改为细线条，不要是个球」：**把锥体掉了个头**。旧版为了
+  //   「越喷越散」把锥尖摆在喷口（另给一个四元数把 +Y 摆到 +Z），于是**宽的那头正好甩在尾端**；
+  //   而 48 台发动机全都朝镜头这一侧（-Z 就是镜头方向），宽端等于正对镜头 —— 每道焰柱在屏幕上
+  //   都收成一个圆盘，「一地球的球」。现在宽端贴回喷口、细尖朝后，投影是一条**越远越细的锥线**；
+  //   与渐变纹理配合（细尖那头 A→0）尾端自然散尽，不会退化成旧版的「一根根针」。
+  // ⚠ 纹理的亮端要画在 uv.y=0（锥底 = 喷口那一头），见上面 makePlumeTex 的说明。
+  // ⚠ 材料色取深蓝 EXHAUST_OUT：淡蓝白试过一版，48 层加色一叠整圈糊成白，参考图那种蓝就没了
+  //   —— 「白芯」交给口面光点（它本来就压在喷口上），柱体只负责蓝。
+  // 柱体比例：长 0.95 R、最粗处只有 **0.06 R**（0.085 → 0.06，长细比 ~16:1）——
+  // 数量级上它就是一根**线**，配上「越远越细 + 越远越淡」，尾部收成一条细尖。
+  var PLUME_LEN = EARTH_R * 0.95;
+  var plumeGeo = new THREE.ConeGeometry(EARTH_R * 0.06, PLUME_LEN, 9);
   var plumeMat = new THREE.MeshBasicMaterial({
-    color: 0x8af2d4, transparent: true, opacity: .5,
+    color: EXHAUST_OUT, map: plumeTex, transparent: true, opacity: .55,
     blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  });
+  // 口面光点：一枚加色 sprite（同一张 glowTex），半径按地球半径给 —— 随距离自动缩放
+  var ENGINE_GLOW_R = EARTH_R * 0.32;
+  var engineGlowMat = new THREE.SpriteMaterial({
+    map: glowTex, color: 0x5a94ff, transparent: true, opacity: .28,
+    blending: THREE.AdditiveBlending, depthWrite: false
   });
   var engineSlots = engineLayout();
   for (var ei = 0; ei < engineSlots.length; ei++) {
     var ep = engineSlots[ei].pos;
-    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial({ color: 0x8af2d4, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+    var cone = new THREE.Mesh(engineGeo, engineMat);
     cone.position.set(ep[0], ep[1], ep[2]);
     cone.quaternion.copy(engineQuat);
     engineGroup.add(cone);
-    engines.push(cone);
 
     var plume = new THREE.Mesh(plumeGeo, plumeMat);
-    plume.quaternion.copy(engineQuat);
+    plume.quaternion.copy(engineQuat);   // 锥底接喷口、细尖朝后（见上面的说明）
     plume.position.set(ep[0], ep[1], ep[2] - PLUME_LEN / 2);
     plume.visible = false;
     plume.userData.seed = ei * 1.7;
     plume.userData.z0 = ep[2];
     engineGroup.add(plume);
     plumes.push(plume);
+
+    // 口面光点按**离轴距离**分档：外圈（贴着地平边缘那一圈）给满尺寸，把边缘连成一道亮环；
+    // 越靠中心越小 —— 那几台正对镜头，光点在这张视角下会叠成一坨白光（2026-09-27 优化尾焰）。
+    var radFrac = Math.sqrt(ep[0] * ep[0] + ep[1] * ep[1]) / (EARTH_R * ENGINE_SHELL);
+    var glowR = ENGINE_GLOW_R * (0.62 + 0.38 * radFrac);
+    var eg = new THREE.Sprite(engineGlowMat);
+    eg.scale.set(glowR, glowR, 1);
+    eg.position.set(ep[0], ep[1], ep[2] - EARTH_R * 0.1);
+    engineGroup.add(eg);
   }
+
+  // ---- 总尾焰光晕（2026-09-27 优化尾焰）：48 道焰柱在球后汇成的那片等离子云 ----
+  // 两枚**大而淡**的加色 sprite 垫在地球**背面**（局部 +Z 是航向、镜头在 -Z 那一侧，
+  // 所以「球后」= **正的 z**；第一版写成 -z，等于给地球正面糊了一层白光，实测整颗球发灰）：
+  // 中间那块被地球自己挡掉（sprite 走 depthTest），只有**溢出球缘的那一圈**留在画面上 ——
+  // 点火时地球被一圈冷蓝裹住，正是电影里那股尾焰从球后漫出来的读法。
+  // 两枚叠着放（近的小、远的大）做出层次，共用一次材质。
+  var exhaustHaloMat = new THREE.SpriteMaterial({
+    map: glowTex, color: 0x3f7cff, transparent: true, opacity: 0,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  (function () {
+    var cfg = [[EARTH_R * 3.2, EARTH_R * 2.2], [EARTH_R * 5.2, EARTH_R * 4.2]];
+    for (var hi = 0; hi < cfg.length; hi++) {
+      var hs = new THREE.Sprite(exhaustHaloMat);
+      hs.scale.set(cfg[hi][0], cfg[hi][0], 1);
+      hs.position.set(0, 0, cfg[hi][1]);
+      earthGroup.add(hs);
+    }
+  })();
 
   // ---- 物理 ----
   var game = createGame();
@@ -1196,6 +1325,66 @@
   // 否则 40+ 单位的白色加色面片会糊满整屏（木星会糊成一片橙白，纹理全看不见）。
   // 光晕下限按**近场尺度（地球半径）**取，不用绝对单位：真实比例下冥王星半径只有
   // 0.24 单位，一个 10 单位的光晕是它自身的 42 倍 —— 等于用假面片冒充一颗大行星。
+  // ---- 土星光环纹理（2026-09-27 优化视觉效果）----
+  // 旧版是**一块纯色圆环**（0xd4c89c / opacity .55）：内缘外缘各一条硬边，整片一个亮度，
+  // 贴脸掠过时读起来像「给土星套了个垫圈」。现在按**真实环结构**画一条径向色带：
+  //   D 环（1.11–1.24，极淡）→ C 环（1.24–1.53，灰暗）→ B 环（1.53–1.95，**最亮最密**）
+  //   → 卡西尼缝（1.95–2.03，几乎透明）→ A 环（2.03–2.27，中等亮度，含恩克缝 2.21）。
+  // 每个控制点给 [半径R, alpha, r, g, b]，段间线性插值；再叠一层**确定性细环纹**噪声
+  // （B 环那种「千层糕」质感），内缘 / 外缘 alpha 收到 0 —— 边缘因此是**渐隐**的，不是硬边。
+  // 颜色取**暖奶油色**（不是纯白）：输出走 sRGB + ACES，给白了整圈会糊成白盘子。
+  // 纹理是 1 像素高的径向渐变（512×8，2 的幂），u = 归一化半径（见下面的 UV 重映射）。
+  function satRingTex() {
+    var W = 512, H = 8;
+    var c = document.createElement('canvas'); c.width = W; c.height = H;
+    var x = c.getContext('2d');
+    var img = x.createImageData(W, H);
+    var K = [
+      [1.110, 0.00, 120, 110, 98], [1.125, 0.09, 138, 126, 106], [1.236, 0.07, 136, 124, 104],
+      [1.245, 0.24, 146, 134, 112], [1.300, 0.20, 144, 132, 110], [1.380, 0.28, 154, 142, 118],
+      [1.470, 0.24, 148, 136, 114], [1.520, 0.14, 138, 126, 104], [1.535, 0.80, 206, 190, 150],
+      [1.600, 0.92, 216, 200, 158], [1.700, 0.88, 212, 196, 154], [1.800, 0.94, 220, 204, 162],
+      [1.900, 0.86, 210, 194, 152], [1.947, 0.62, 198, 182, 142], [1.955, 0.09, 118, 108, 92],
+      [2.020, 0.07, 116, 106, 90], [2.030, 0.50, 186, 170, 132], [2.100, 0.58, 196, 180, 142],
+      [2.180, 0.52, 190, 174, 136], [2.212, 0.09, 118, 108, 92], [2.222, 0.48, 188, 172, 134],
+      [2.260, 0.40, 182, 166, 128], [2.266, 0.05, 118, 108, 92], [2.270, 0.00, 118, 108, 92]
+    ];
+    // 确定性伪随机（不用 Math.random：同一张纹理每次跑都该一样，截图对比才有意义）
+    function hash(i) { var s = Math.sin(i * 12.9898) * 43758.5453; return s - Math.floor(s); }
+    for (var px = 0; px < W; px++) {
+      var r = RING_IN + (px / (W - 1)) * (RING_OUT - RING_IN);
+      var k = 0;
+      while (k < K.length - 2 && K[k + 1][0] < r) k++;
+      var a0 = K[k], a1 = K[k + 1];
+      var f = (r - a0[0]) / (a1[0] - a0[0]);
+      f = f < 0 ? 0 : (f > 1 ? 1 : f);
+      var al = a0[1] + (a1[1] - a0[1]) * f;
+      var cr = a0[2] + (a1[2] - a0[2]) * f;
+      var cg = a0[3] + (a1[3] - a0[3]) * f;
+      var cb = a0[4] + (a1[4] - a0[4]) * f;
+      var n1 = hash(px) - 0.5, n2 = hash(px * 7 + 13) - 0.5;
+      var ring = 1 + 0.16 * n1 + 0.10 * Math.sin(px * 0.7) * n2;
+      al *= ring; cr *= (1 + 0.06 * n1); cg *= (1 + 0.05 * n1); cb *= (1 + 0.04 * n1);
+      al = al < 0 ? 0 : (al > 1 ? 1 : al);
+      for (var y = 0; y < H; y++) {
+        var o = (y * W + px) * 4;
+        img.data[o] = Math.round(cr); img.data[o + 1] = Math.round(cg);
+        img.data[o + 2] = Math.round(cb); img.data[o + 3] = Math.round(al * 255);
+      }
+    }
+    x.putImageData(img, 0, 0);
+    var t = new THREE.CanvasTexture(c);
+    // 环带只在**径向**变化，横向必须夹住（否则内缘会绕到外缘去、接出一条假缝）
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.encoding = THREE.sRGBEncoding;
+    // 掠过时环面几乎是**擦着看过**的，各向异性过滤拉满，色带才不会被糊成一片灰
+    if (renderer.capabilities && renderer.capabilities.getMaxAnisotropy) {
+      t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    }
+    return t;
+  }
+  var ringTex = satRingTex();
+
   function makePlanetBody(rad, tex, colorHex) {
     var mesh = new THREE.Mesh(new THREE.SphereGeometry(rad, 40, 28),
       new THREE.MeshStandardMaterial({ map: tex, roughness: .85 }));
@@ -1219,8 +1408,20 @@
       scene.add(glow);
       var ring = null;
       if (def.ring) {
-        ring = new THREE.Mesh(new THREE.RingGeometry(def.rad * RING_IN, def.rad * RING_OUT, 72),
-          new THREE.MeshBasicMaterial({ color: 0xd4c89c, side: THREE.DoubleSide, transparent: true, opacity: .55, depthWrite: false }));
+        // 2026-09-27：纯色圆环 → **按真实环结构画的径向色带**（见 satRingTex）。
+        // 环带几何仍是同一个环形（内缘 / 外缘 = RING_IN / RING_OUT 真实比例），
+        // 但 UV 要**重映射**：RingGeometry 默认按平面投影给 uv（x/y 映射进方图），
+        // 而这条纹理只有一维（u = 从内缘到外缘），所以把 u 改成**归一化半径**、v 固定 0.5。
+        var rgeo = new THREE.RingGeometry(def.rad * RING_IN, def.rad * RING_OUT, 160, 1);
+        var rpos = rgeo.attributes.position, ruv = rgeo.attributes.uv;
+        for (var ri = 0; ri < rpos.count; ri++) {
+          var rx = rpos.getX(ri), ry = rpos.getY(ri);
+          var rr = Math.sqrt(rx * rx + ry * ry) / def.rad;
+          ruv.setXY(ri, (rr - RING_IN) / (RING_OUT - RING_IN), 0.5);
+        }
+        ring = new THREE.Mesh(rgeo, new THREE.MeshBasicMaterial({
+          map: ringTex, side: THREE.DoubleSide, transparent: true, opacity: .92, depthWrite: false
+        }));
         ring.position.set(fb.pos[0], fb.pos[1], fb.pos[2]);
         // 环面朝向 = 土星赤道面：RingGeometry 默认法线 +Z，先放平（法线 +Y），再叠真实轴倾角 26.73°。
         // 这一步同时是「地球不穿环」的几何保证（见 RING_IN/RING_OUT 处的说明与自检断言）。
@@ -1499,10 +1700,13 @@
     elFbEarly = document.getElementById('fb-early'), elFbSweet = document.getElementById('fb-sweet'),
     elFbLate = document.getElementById('fb-late'),
     elFbTrack = document.getElementById('fb-track'), elFbNext = document.getElementById('fb-next'),
-    elFbNextFill = document.getElementById('fb-next-fill'), elFbNextPct = document.getElementById('fb-next-pct');
+    elFbNextFill = document.getElementById('fb-next-fill'), elFbNextPct = document.getElementById('fb-next-pct'),
+    elFbFoot = document.getElementById('fb-foot');
   var elToast = document.getElementById('fb-toast'), elFtName = document.getElementById('ft-name'),
     elFtGrade = document.getElementById('ft-grade'), elFtDetail = document.getElementById('ft-detail');
-  var elRadar = document.getElementById('radar'), radarCtx = elRadar.getContext('2d');
+  // 退场类加在 **wrap** 上（不是 canvas）：画布与它的标识文字是一体的，同进同出
+  var elRadar = document.getElementById('radar'), elRadarWrap = document.getElementById('radar-wrap'),
+    radarCtx = elRadar.getContext('2d');
   elRadar.width = 160; elRadar.height = 160;
   var elResult = document.getElementById('result'), elRsTitle = document.getElementById('rs-title'),
     elRsText = document.getElementById('rs-text'), elRsStat = document.getElementById('rs-stat'),
@@ -1581,12 +1785,13 @@
   }
 
   function updateHUD() {
-    // 计时带毫秒：秒位保持大号、毫秒另起一段小字（#clock-ms）。
-    // 成绩本身仍按 0.1 s 记（结算与分享都读 st.t），毫秒只是仪表盘上的跟手读数。
+    // 计时给**两位小数**（0.01 s）：秒位保持大号、小数另起一段小字（#clock-ms）。
+    // ⓘ 2026-09-27 反馈「顶部记录和用时记录还是保留两位」：原先是三位（毫秒），
+    // 与结算 / 分享 / 最快记录统一收成两位 —— 三处读同一个数，别再出现两个精度。
     var sec = Math.max(0, st.t);
-    var mm = Math.floor(sec / 60), ss = Math.floor(sec % 60), ms = Math.floor((sec % 1) * 1000);
+    var mm = Math.floor(sec / 60), ss = Math.floor(sec % 60), cs = Math.floor(sec * 100) % 100;
     elClock.textContent = mm + ':' + (ss < 10 ? '0' : '') + ss;
-    if (elClockMs) elClockMs.textContent = '.' + ('00' + ms).slice(-3);
+    if (elClockMs) elClockMs.textContent = '.' + (cs < 10 ? '0' : '') + cs;
 
     // 温度（新温度箱，温升速率 ∝ 功率，见物理核心）：满量程即 TEMP_MAX
     var heatPct = st.heat / TEMP_MAX;
@@ -1612,19 +1817,15 @@
     }
 
     // ---- 发动机功率（功率表）----
-    // 物理核心把「这一刻的有效输出」算在 st.thrustEff 里（功率 × 区间效率 × 脉冲乘波，
-    // 过热直接归零），这里只负责在没有推力可谈的时候（没按住 / 过热锁定）把它读成 0：
-    //   0% = 停机或过热锁定、20% = 过晚残效（白烧）、100% = 额定、160% = 耀斑脉冲乘波。
-    // 现在它是一条**起转斜坡**：按住 0.5 s 从 0 涨到额定线（旧版是区间派生的瞬时跳变），
-    // 所以指针的高度同时读出「按了多久」与「此刻的发热强度」—— 温度就是按它积出来的。
-    // 刻度换算：st.thrustEff 是**小数**（1.0 = 额定），先 ×100 折成百分数再除以满量程 160%。
+    // 这张表读的是**发动机的输出功率** st.pwrOut = 油门 × 乘波，与**区间无关**：
+    //   0% = 停机或过热锁定、100% = 额定（按住 0.5 s 起转到额定线）、160% = 耀斑脉冲乘波。
+    // ⓘ 2026-09-27（玩家反馈「过晚阶段功率表不该掉到 20%，应该还是 100%」）：旧读数乘了
+    // zoneEff(zone)，于是过晚区间指针掉到 20% —— 但那是**推力残效**（那一份功率兑不出多少
+    // 推力），不是发动机出了多少力。现在残效只作用于推力与温升（st.thrustEff），表盘照实读
+    // 输出功率：过晚区间 = 满指针 + weak 红态，画面读作「满功率白烧」。
+    // 刻度换算：st.pwrOut 是**小数**（1.0 = 额定），先 ×100 折成百分数再除以满量程 160%。
     // （历史 bug：直接 power / PWR_VMAX = 1/160 = 0.006 → 指针全程只转 1°，看着像死的。）
-    // 2026-09-27：读数改由 **st.pwr（油门本身）** 驱动 —— 旧写法被 st.burning 闸住，
-    // 一松手指针直接归零，而发动机明明还有 0.5 s 的熄火斜坡（「功率不可能一松手就归零」）。
-    // 物理核心那边没动（推力与温升仍按 thrustEff），所以数值与梯度一格没变，
-    // 只是表盘现在**看得见**熄火那段下坡。过热锁定仍然读 0（那是熄火完成，不是斜坡）。
-    var power = st.overheated ? 0
-      : (st.pwr / PWR_MAX) * zoneEff(st.zone) * (pulseActive(st.t) ? PULSE_THRUST_BOOST : 1);
+    var power = st.pwrOut;
     gaugeSet(elPwNeedle, elPwArc, power * 100 / PWR_VMAX);
     if (elPwVal) elPwVal.textContent = Math.round(power * 100);
     elPwGauge.classList.toggle('idle', power <= 0.001);
@@ -1660,7 +1861,10 @@
     var showBar = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase >= 0;
     // 巡航段（窗口还没开）：同一条带改成「下一站进度条」—— 玩家反馈「点火前不知道离下一站还有多远」。
     // 按**弧长**填（上一站 → 下一站），不报秒数：窗口临近仍然靠行星越长越大与进度条走满来表达。
-    var showNext = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase < 0;
+    // ⓘ 2026-09-27：**跑完最后一站之后**（st.target < 0 = 五站全过完）不再把这条带整条隐掉 ——
+    // 玩家反馈「最后没有下一个信息的时候，距离引导改成比邻星」：终点从「下一颗行星」
+    // 换成**航线末端**（冲出太阳系 = 航向比邻星），条按 冥王星 → 航线末端 的弧长继续填。
+    var showNext = briefClosed && st.status === 'flying' && (st.target < 0 || st.phase < 0);
     if (showBar) {
       var def = flybys[st.target].def;
       elFlyby.classList.remove('hide');
@@ -1675,32 +1879,56 @@
       elFbCur.textContent = (st.v * KMS_PER_UNIT).toFixed(1);
       elFbNeed.textContent = (st.vNeed * KMS_PER_UNIT).toFixed(1);
       elFbCur.className = 'fb-v' + (st.safe ? ' good' : ' bad');
+      // 窗口内这一支永远有判定点（st.target >= 0）→ 门槛读数必须露出来
+      // （上一支「航向比邻星」会把它收掉，切回窗口时要还回来）
+      elFbFoot.classList.remove('hide');
       // 三态 = 红绿灯：绿 = 命中区；琥珀（.risk）= 过早（弹弓会作废）；红（.late）= 过晚。
       // 「过早」不看速度也算危险 —— 在那里点过火，这次弹弓就没了。
       elFlyby.classList.toggle('sweet', st.zone === 'sweet');
       elFlyby.classList.toggle('risk', st.zone === 'early');
       elFlyby.classList.toggle('late', st.zone === 'late');
-      if (st.zone === 'sweet') elFbTag.textContent = '引力窗口 · 全功率推进';
+      // ⓘ 2026-09-27：tag 只报**窗口状态**（三态各 ≤5 字，见下一行）—— ① 玩家反馈「窗口外还是
+      // 挂着增益作废的提示，删掉」；② 那截后缀是这一行里最长的文案，320px 窄屏上会被省略号
+      // 吃掉半截（实测只留得下约 55px）。作废这件事由**下面那条琥珀色带 + 掠过后的评级卡**
+      // 交代，开场简报里那条红线也早就讲过规则，状态栏不必再说第三遍。
+      if (st.zone === 'sweet') elFbTag.textContent = '引力窗口';
       else if (st.zone === 'late') elFbTag.textContent = '窗口关闭';
-      else if (st.zone === 'early') elFbTag.textContent = '窗口外点火 · 增益作废';
+      else if (st.zone === 'early') elFbTag.textContent = '窗口外点火';
       else elFbTag.textContent = '';
     } else if (showNext) {
-      var nf = flybys[st.target], nFrom = st.target > 0 ? flybys[st.target - 1].s : 0;
-      // 终点不是行星本身，而是**窗口开启的那一刻**：窗口会提前 winTime（2.5~2.8 s）亮起，
-      // 而木星那一腿总共只有约 4.6 s —— 按「到行星的弧长」算，窗口已开时条才走到 50%（实测）。
-      // 现在把这段提前量（v × winTime）从终点里扣掉，条走到 100% 就是窗口亮起的同一刻。
-      var nGoal = Math.max(nFrom + 1, nf.s - st.v * (nf.def.winTime || 0));
-      var ap = (st.s - nFrom) / (nGoal - nFrom);
+      // 🔺 两个分支共用这一条带：**还有下一站**（巡航段）与**五站已过完**（航向比邻星）。
+      var nf = st.target >= 0 ? flybys[st.target] : null;
+      var nFrom, nGoal;
+      if (nf) {
+        nFrom = st.target > 0 ? flybys[st.target - 1].s : 0;
+        // 终点不是行星本身，而是**窗口开启的那一刻**：窗口会提前 winTime（2.5~2.8 s）亮起，
+        // 而木星那一腿总共只有约 4.6 s —— 按「到行星的弧长」算，窗口已开时条才走到 50%（实测）。
+        // 现在把这段提前量（v × winTime）从终点里扣掉，条走到 100% 就是窗口亮起的同一刻。
+        nGoal = Math.max(nFrom + 1, nf.s - st.v * (nf.def.winTime || 0));
+        elFbName.textContent = nf.def.name;
+        elFbTag.textContent = '下一站 · 逼近中';
+      } else {
+        // 五站过后：距离引导的终点换成**别人家的恒星** —— 玩家读到的是「还剩多远出太阳系」。
+        nFrom = flybys[flybys.length - 1].s;
+        nGoal = route.len;
+        elFbName.textContent = '比邻星';
+        elFbTag.textContent = '航向 · 冲出太阳系';
+      }
+      var ap = (st.s - nFrom) / Math.max(1, nGoal - nFrom);
       ap = ap < 0 ? 0 : (ap > 1 ? 1 : ap);
       elFlyby.classList.remove('hide');
       elFbTrack.style.display = 'none'; elFbNext.style.display = '';
       elFbNextFill.style.width = (ap * 100).toFixed(1) + '%';
       elFbNextPct.textContent = Math.round(ap * 100) + '%';
-      elFbName.textContent = nf.def.name;
-      elFbTag.textContent = '下一站 · 逼近中';
       elFbCur.textContent = (st.v * KMS_PER_UNIT).toFixed(1);
-      elFbNeed.textContent = (st.vNeed * KMS_PER_UNIT).toFixed(1);
       elFbCur.className = 'fb-v' + (st.safe ? ' good' : ' bad');
+      // 五站过完后没有「门槛」这回事了（没有判定点了）→ 只报速度，收掉那截门槛读数
+      if (nf) {
+        elFbFoot.classList.remove('hide');
+        elFbNeed.textContent = (st.vNeed * KMS_PER_UNIT).toFixed(1);
+      } else {
+        elFbFoot.classList.add('hide');
+      }
       elFlyby.classList.toggle('sweet', false);
       elFlyby.classList.toggle('risk', false);
       elFlyby.classList.toggle('late', false);
@@ -1752,7 +1980,9 @@
     // 底不透明度 .88（原 .72）：小地图现在挂在**右上角**，掠到木星时背后就是半屏奶油色，
     // 72% 的黑底会被透亮成灰绿、航线与行星点全糊 —— 这一块是「一眼读位置」的图，先保证读得清。
     radarCtx.fillStyle = 'rgba(5,20,15,.88)'; radarCtx.fillRect(0, 0, rw, rw);
-    radarCtx.strokeStyle = 'rgba(70,232,178,.16)'; radarCtx.lineWidth = 2; radarCtx.strokeRect(1, 1, rw - 2, rw - 2);
+    // ⓘ 2026-09-27 去卡片化：原先这里还会描一圈 1px 的绿框（和 CSS 那圈 box-shadow 叠成双层边），
+    // 现在导航图与尾向观测窗一样**不画框**了 —— 图的边界由这块深底自己交代，
+    // 标识文字嵌在画面左下角（#radar-label）。
     // 航线
     radarCtx.strokeStyle = 'rgba(70,232,178,.38)'; radarCtx.lineWidth = 2;
     radarCtx.beginPath();
@@ -1786,7 +2016,13 @@
 
   // ---- 结算：主角是「逃逸用时」，其余都是注脚 ----
   // 目标就是比谁快，所以用时给最大的字号，其余（完美弹弓数/末速/距日）压缩成一行注脚；
-  // 本站最快记在 localStorage，只有「成功逃出」的成绩才作数（失败的时间没有可比性）。
+  // 最快记录记在 localStorage，只有「成功逃出」的成绩才作数（失败的时间没有可比性）。
+  // ⓘ 2026-09-27：结算与分享的用时**跟局内计时器同一个精度：两位小数**（toFixed(2)）。
+  // 上午先做过一版到毫秒（三位），反馈「顶部记录和用时记录还是保留两位」→ 统一收成两位。
+  //   · t2() 是唯一的取整口径：显示、最快记录的比较与落盘都用它 —— 这样「记录」与
+  //     「显示出来的数」永远一致（否则会出现「显示同一个数却弹新纪录」）。
+  //   · 记录标签 = **「最快记录」**，分享卡 / 分享文案同一套（旧名已按反馈改掉）。
+  function t2(v) { return Math.round(v * 100) / 100; }
   var bestTime = null;
   try {
     var _bt = parseFloat(localStorage.getItem('we3d_best'));
@@ -1799,16 +2035,16 @@
     elRsTitle.className = 'rs-title ' + (win ? 'win' : 'lose');
     // 没逃出去就不是「逃逸用时」——标签跟着胜负换，和分享卡片保持同一套说法
     if (elRsLabel) elRsLabel.textContent = win ? '逃逸用时' : '航至';
-    elRsTime.innerHTML = st.t.toFixed(1) + '<i>s</i>';
+    elRsTime.innerHTML = t2(st.t).toFixed(2) + '<i>s</i>';
     elRsTimeBox.classList.toggle('bad', !win);
 
-    var isNew = win && (bestTime === null || st.t < bestTime);
+    var isNew = win && (bestTime === null || t2(st.t) < bestTime);
     if (isNew) {
-      bestTime = st.t;
+      bestTime = t2(st.t);
       try { localStorage.setItem('we3d_best', String(bestTime)); } catch (e) { }
     }
     if (bestTime !== null) {
-      elRsBest.textContent = (isNew ? '★ 新纪录 ' : '本站最快 ') + bestTime.toFixed(1) + ' s';
+      elRsBest.textContent = (isNew ? '★ 新纪录 ' : '最快记录 ') + bestTime.toFixed(2) + ' s';
       elRsBest.classList.toggle('new', isNew);
     } else {
       elRsBest.textContent = '尚无逃逸记录。完成首次逃逸。';
@@ -1913,26 +2149,60 @@
   probeClientVersion();
   refreshShareButton();
 
+  // ⓘ 2026-09-27 三次改写（按反馈「文案太简单，要更有味道」）：仍然**只讲成绩**、不带玩法介绍 / 教程 /
+  //   去哪找、不带 # 标签 —— 但在成绩骨架上加上世界观佐料：标题按战绩分级、正文加 MOSS 式死评、
+  //   死局按撑了多久自嘲一句，挑战语换成「换你」把球踢回给朋友。标题仍压 postNote 的 20 字上限。
+  //   死因按状态说人话 —— st.reason 是给结算页看的完整句（轨道速度不足，被木星引力捕获），
+  //   分享文案里换成更短的 栽进<行星>大气 / 被<行星>引力留下 / 氦闪壳撵上来。
+  function shareEnding() {
+    var who = st.culprit || '氦闪前壳';
+    if (st.status === 'crashed') return '地球一头栽进了' + who + '的大气层';
+    if (st.status === 'caught') return who + '的引力当场把地球留了下来';
+    return '身后那层氦闪膨胀壳还是撵了上来';       // burned：速度欠账被身后的壳收走
+  }
   function shareTitle() {
-    // postNote 的 title 上限 20 字
-    return ('引力弹弓 · ' + st.t.toFixed(1) + ' 秒').slice(0, 20);
+    // postNote 的 title 上限 20 字 —— 每句都在 20 字内写好，slice(0,20) 只是兜底
+    var T = t2(st.t).toFixed(2) + ' 秒';
+    if (st.status === 'escaped') {
+      if (st.score.perfect >= flybys.length) return ('五连完美弹弓 · ' + T).slice(0, 20);
+      return (T + '，地球活着冲出太阳系').slice(0, 20);
+    }
+    if (st.status === 'crashed') return ('栽进' + (st.culprit || '行星') + '大气层 · 第' + T).slice(0, 20);
+    if (st.status === 'caught') return ('止步' + (st.culprit || '行星') + ' · 第' + T).slice(0, 20);
+    return ('第' + T + '，氦闪还是追上了地球').slice(0, 20);
   }
   function shareContent() {
     var win = st.status === 'escaped';
-    var head = win
-      ? '氦闪前壳追上来之前，我把地球开出了太阳系：' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
-      : '第 ' + st.t.toFixed(1) + ' 秒：' + st.reason + '。';
-    var best = (bestTime !== null && bestTime <= st.t) ? '本站最快 ' + bestTime.toFixed(1) + ' 秒。' : '';
-    return head + best + '\n全程只有一个动作：决定何时点燃行星发动机。看谁先把地球送出太阳系。\n' +
-      '\n#小红书vibecoding大赛 #vibegame #小红书小工具 #流浪地球';
+    var T = t2(st.t).toFixed(2);
+    var head;
+    if (win) {
+      if (st.score.perfect >= flybys.length) {
+        head = T + ' 秒，五次引力弹弓一次没歪。氦闪壳被甩在身后，地球冲出了太阳系。';
+      } else if (st.score.perfect >= 3) {
+        head = T + ' 秒逃出生天。弹弓吃了 ' + st.score.perfect + ' 个完美，身后那层壳咬得很紧。';
+      } else {
+        head = T + ' 秒，好歹是出来了 —— 回头看，壳的光还近得吓人。';
+      }
+      head += '\nMOSS 评定：' + (st.score.perfect >= flybys.length ? '领航精度，满分。'
+        : st.score.perfect >= 3 ? '脱险成功，点火时机还能更准。' : '幸存记录，下把卡住点火时机。');
+    } else {
+      head = '第 ' + T + ' 秒，' + shareEnding() + '。';
+      head += t2(st.t) < 10 ? '\n第一站就翻车，手指没按住节奏。'
+        : t2(st.t) < 25 ? '\n跑过大半程，还是被引力拽了回去。'
+        : '\n都快看见比邻星了，就差这最后一口气。';
+    }
+    // 纪录行：只有「赢了且这一局就是纪录」才写 ★ 新纪录；输的时候报的是自己的 PB（不是本局）
+    var rec = bestTime === null ? ''
+      : '\n' + (win && bestTime >= t2(st.t) ? '★ 新纪录 ' : '我的最快记录 ') + bestTime.toFixed(2) + ' 秒';
+    return head + rec + (win ? '\n换你，几秒能把地球带出去？' : '\n换你，能比我多跑一站吗？');
   }
-  // 评论草稿（§3.9）：评论是短文本，只留成绩 + 挑战，不搬整篇笔记正文
+  // 评论草稿（§3.9）：评论是短文本，一句话成绩 + 一句挑战
   function shareComment() {
     var win = st.status === 'escaped';
-    var head = win
-      ? '我把地球开出太阳系只用了 ' + st.t.toFixed(1) + ' 秒，完美弹弓 ' + st.score.perfect + ' / ' + flybys.length + '。'
-      : '这次第 ' + st.t.toFixed(1) + ' 秒就交代了（' + st.reason + '）。';
-    return head + '全程只有一个操作：决定何时点火 —— 看谁先把地球送出去。 #小红书vibecoding大赛 #vibegame';
+    var T = t2(st.t).toFixed(2);
+    return win
+      ? T + ' 秒，' + st.score.perfect + '/' + flybys.length + ' 完美弹弓，地球在氦闪追到前冲出了太阳系。换你，几秒能逃？'
+      : '第 ' + T + ' 秒，' + shareEnding() + '。换你，能把地球带出去吗？';
   }
 
   // 战绩图：纯 Canvas 现画（不引用任何外部图片，避免画布被污染）
@@ -1973,32 +2243,47 @@
     g.fillStyle = '#7fa79a'; g.font = '28px ' + FONT;
     g.fillText(win ? '逃逸用时' : '航至', CW / 2, 300);
 
-    g.fillStyle = win ? '#ffd24a' : '#cfe8e0';
-    g.font = '800 168px ' + FONT;
-    g.fillText(st.t.toFixed(1), CW / 2 - 24, 452);
+    // ⓘ 2026-09-27：用时统一成**两位小数**（t2，与局内计时器 / 结算页同一个精度）。
+    // ⓘ 2026-09-27（同日再改）：数字 +「秒」按**实测宽度整体居中** —— 旧版写死 CW/2 - 60
+    //   的偏移、再把「秒」钉在 CW/2 + 150，位数一变（两位 / 三位）整组就看着偏左。
+    var tStr = t2(st.t).toFixed(2), wT, wU, gapT, xT;
+    g.font = '800 132px ' + FONT; wT = g.measureText(tStr).width;
+    g.font = '600 52px ' + FONT; wU = g.measureText('秒').width;
+    gapT = 20; xT = (CW - (wT + gapT + wU)) / 2;
+    g.textAlign = 'left';
+    g.fillStyle = win ? '#ffd24a' : '#cfe8e0'; g.font = '800 132px ' + FONT;
+    g.fillText(tStr, xT, 452);
     g.fillStyle = '#7fa79a'; g.font = '600 52px ' + FONT;
-    g.fillText('秒', CW / 2 + 150, 452);
+    g.fillText('秒', xT + wT + gapT, 452);
+    g.textAlign = 'center';
 
+    // ⓘ 2026-09-27 修：失败时不再一律写「被氦闪前壳吞没」—— 用核心给出的**真实死因**
+    //   （被某颗行星捕获 / 坠入大气层 / 被壳追上 / 被壳吞没），与结算页同一句话。
     g.fillStyle = win ? '#7fd0a8' : '#ff4d5e';
     g.font = '800 46px ' + FONT;
-    g.fillText(win ? '逃逸成功' : '被氦闪前壳吞没', CW / 2, 540);
+    g.fillText(win ? '逃逸成功' : (st.reason || '被氦闪前壳吞没'), CW / 2, 540);
 
     if (bestTime !== null) {
       g.fillStyle = '#7fa79a'; g.font = '26px ' + FONT;
-      g.fillText('本站最快 ' + bestTime.toFixed(1) + ' 秒 · 完美弹弓 ' + st.score.perfect + ' / ' + flybys.length, CW / 2, 600);
+      g.fillText('最快记录 ' + bestTime.toFixed(2) + ' 秒 · 完美弹弓 ' + st.score.perfect + ' / ' + flybys.length, CW / 2, 600);
     }
 
     // 五颗行星的评级色标
+    // ⓘ 评级必须带上**该行星**的 ratingSweet（2026-09-27 修）：漏掉它时 r.sweet >= undefined
+    //   恒假 → 「绿色区间吃满」会被判成「弹弓增益未满」，该拿金色的点画成了琥珀色。
     var n = flybys.length, gap = 132, x0 = CW / 2 - (n - 1) * gap / 2;
     for (i = 0; i < n; i++) {
       var r = st.results[i];
       var ok = r.result === 'perfect' || r.result === 'pass';
-      var col = r.result ? (gradeColor[gradeFlyby(r, ok).key] || '#7fa79a') : '#2c4a42';
+      var col = r.result ? (gradeColor[gradeFlyby(r, ok, flybys[i].def.ratingSweet).key] || '#7fa79a') : '#2c4a42';
       g.fillStyle = col; g.globalAlpha = r.result ? 1 : 0.4;
       g.beginPath(); g.arc(x0 + i * gap, 730, 22, 0, 6.283); g.fill();
       g.globalAlpha = 1;
       g.fillStyle = '#7fa79a'; g.font = '22px ' + FONT;
-      g.fillText(flybys[i].def.name.slice(-1), x0 + i * gap, 786);
+      // ⓘ 2026-09-27 修：标签原来取行星名的**末字**（slice(-1)）→ 木星/土星/天王星/海王星/冥王星
+      //   五颗全印成同一个「星」，五个点分不出谁是谁。现按反馈直接写**全名**
+      //   （最长的「天王星 / 海王星 / 冥王星」= 3 字 ≈ 66px，点间距 132px 放得下）。
+      g.fillText(flybys[i].def.name, x0 + i * gap, 786);
     }
 
     g.fillStyle = '#eafff6'; g.font = '700 36px ' + FONT;
@@ -2006,10 +2291,10 @@
     g.fillStyle = '#7fa79a'; g.font = '30px ' + FONT;
     g.fillText('看谁先把地球送出太阳系', CW / 2, 976);
 
-    g.fillStyle = '#5cc8ff'; g.font = '24px ' + FONT;
-    g.fillText('#小红书vibecoding大赛  #vibegame', CW / 2, 1108);
+    // ⓘ 2026-09-27：那行 # 话题标签已删（分享弹窗的图片与文案都不再带标签），
+    //   底部只留一句「去哪儿找这个工具」。
     g.fillStyle = '#3d5a52'; g.font = '22px ' + FONT;
-    g.fillText('小红书小工具 · 搜「流浪地球 引力弹弓」', CW / 2, 1152);
+    g.fillText('小红书小工具 · 搜「流浪地球 引力弹弓」', CW / 2, 1120);
 
     var url = cv.toDataURL('image/webp', 0.92);
     if (url.indexOf('data:image/webp') !== 0) url = cv.toDataURL('image/jpeg', 0.92);
@@ -2018,6 +2303,8 @@
 
   // 战绩图缓存：结算页亮出来时就画好、并落成临时文件（§3.9 的媒体只收本地句柄，必须提前换）
   var cardKey = '', cardData = '', cardFile = '';
+  // ⚠ 这里是**缓存键**（同一局只备一次图），不是显示值 —— 保留三位精度；全站对玩家可见的用时
+  // 一律两位（见 t2()）。
   function runKey() { return st.status + '|' + st.t.toFixed(3); }
   function clearShareCard() { cardKey = ''; cardData = ''; cardFile = ''; }
   function prepareShareCard() {
@@ -2040,10 +2327,11 @@
   }
 
   function shareSnapshot() {
+    // 上报出去的用时与「最快记录」同一口径（两位小数）—— 容器侧看到的就是玩家看到的
     return JSON.stringify({
-      page: 'result', status: st.status, t: Number(st.t.toFixed(1)),
+      page: 'result', status: st.status, t: t2(st.t),
       perfect: st.score.perfect, flyby: flybys.length,
-      best: bestTime === null ? null : Number(bestTime.toFixed(1))
+      best: bestTime === null ? null : bestTime
     });
   }
   // §3.9 分享到评论区：图文评论草稿 + 同步存相册（媒体必须是本地文件句柄）
@@ -2258,29 +2546,48 @@
       _targetQuat.setFromUnitVectors(_zAxis, _flameDir);
       earthGroup.quaternion.slerp(_targetQuat, 1 - Math.exp(-dt * 8));
     }
-    // 发动机：本体亮度跟推力走；点火时每台喷出一道随推力伸缩、带高频抖动的等离子柱
-    var engOp = st.burning ? 1.0 : 0.35;
-    for (var egi = 0; egi < engines.length; egi++) engines[egi].material.opacity = engOp;
-    if (st.burning) {
-      // 柱长 = 起转斜坡（0.5 s 到额定）× 抖动：等离子不该是一根死板的水柱
-      var pk = 0.45 + Math.min(1.3, st.thrustEff) * 0.75;
-      if (st.slinging) pk *= 1.25;
-      plumeMat.opacity = st.slinging ? 0.7 : 0.5;
+    // 发动机与火焰：
+    //   · 口面光点**全程亮着** —— 怠速时是一圈暗烬（0.28），点火时烧成一圈亮环（0.55）
+    //   · 点火时每台再喷出一道随推力伸缩、带高频抖动的等离子柱
+    //   · 主焰（外焰 + 白热内芯）只在点火时出现，长度同样跟着起转斜坡走
+    //   ⓘ 2026-09-27（玩家反馈「弹弓应该只影响速度，不会影响功率」）：**弹弓不再放大发动机外观**。
+    //     旧版弹弓期给主焰 ×2.4、等离子柱 ×1.25、口面光点 0.55→0.8 —— 绿色区间里发动机看起来
+    //     被弹弓加到了 240% 功率。现在这里一律只读 st.pwrOut（= 发动机**输出**功率）：功率表
+    //     指到哪，火焰就烧到哪；「弹弓正在生效」由弹弓警报灯 + 音效 + 速度曲线交代。
+    //   ⓘ 同日第二条（反馈「过晚阶段功率表应该还是 100%」）：火焰与表盘读同一个量 ——
+    //     过晚区间发动机照样满功率白烧（火焰满、表盘满 + 红态），只是那一份推力兑不出速度。
+    // 有输出才有火焰：松手后跟着 0.5 s 熄火斜坡一路缩到灭（与功率表同步），
+    // 过热锁定（pwrOut = 0）= 熄火，火焰当场灭掉、口面光点退回怠速暗烬。
+    var lit = st.pwrOut > 0.001;
+    engineGlowMat.opacity = lit ? 0.55 : 0.28;
+    // 总尾焰光晕：点火时溢出球缘一圈冷蓝（随输出加深），怠速只剩一层几乎看不见的余晖
+    exhaustHaloMat.opacity = lit ? 0.055 + 0.11 * Math.min(1, st.pwrOut) : 0.012;
+    if (lit) {
+      // 柱长 = 起转斜坡（0.5 s 到额定）× 抖动：等离子不该是一根死板的水柱。
+      // 2026-09-27 优化尾焰：抖动改成**两个频率叠加**（慢的一层让整圈焰柱长短交错、
+      // 快的一层做电弧闪烁），再给每台一点**径向呼吸**（scale.x/z 微幅起伏）——
+      // 48 道柱子因此不像同一根复制出来的；配合「越喷越淡」的纹理，拉长也不会变成实心棒。
+      var pk = 0.45 + Math.min(1.3, st.pwrOut) * 0.75;
       for (var pi = 0; pi < plumes.length; pi++) {
         var pl = plumes[pi];
-        var k = pk * (0.86 + 0.14 * Math.sin(now * 0.021 + pl.userData.seed));
+        var sd = pl.userData.seed;
+        var k = pk * (0.82 + 0.13 * Math.sin(now * 0.021 + sd) + 0.07 * Math.sin(now * 0.047 + sd * 2.3));
+        var rw = 0.9 + 0.1 * Math.sin(now * 0.017 + sd * 1.7);
         pl.visible = true;
-        pl.scale.set(1, k, 1);
+        pl.scale.set(rw, k, rw);
         pl.position.z = pl.userData.z0 - PLUME_LEN * k / 2;
       }
-      thrustFlame.visible = true;
-      thrustFlame.position.set(0, 0, -EARTH_R * 1.0);
+      var fk = 0.7 + Math.min(1, st.pwrOut / 8) * 1.6;
+      thrustFlame.visible = true; thrustCore.visible = true;
+      thrustFlame.position.set(0, 0, -EARTH_R * 1.05);
+      thrustCore.position.set(0, 0, -EARTH_R * 1.05);
       thrustFlame.quaternion.setFromUnitVectors(_flameAxis, _negZAxis);
-      var boost = st.slinging ? 2.4 : 1.0;
-      thrustFlame.scale.set(boost, boost * (0.7 + Math.min(1, st.thrustEff / 8) * 1.6), boost);
+      thrustCore.quaternion.copy(thrustFlame.quaternion);
+      thrustFlame.scale.set(1, fk, 1);
+      thrustCore.scale.set(1, fk, 1);
     } else {
       for (var pi2 = 0; pi2 < plumes.length; pi2++) plumes[pi2].visible = false;
-      thrustFlame.visible = false;
+      thrustFlame.visible = false; thrustCore.visible = false;
     }
 
     // 太阳壳膨胀
@@ -2296,7 +2603,9 @@
       var fade = (pdist - pr * 1.9) / (pr * 4.5);
       fade = fade < 0 ? 0 : (fade > 1 ? 1 : fade);
       pg.glow.material.opacity = PLANET_GLOW_MAX * fade;
-      if (pg.ring) pg.ring.material.opacity = 0.55 * (0.55 + 0.45 * fade);
+      // 光环：透明度基线抬到 0.92（旧版纯色环是 .55）—— 现在每段的浓淡由**纹理的 alpha**给，
+      // 材质透明度只负责「贴近时略收一点，别把画面压死」。
+      if (pg.ring) pg.ring.material.opacity = 0.72 + 0.20 * fade;
     }
 
     // 判定环配色：接近→蓝，最佳区间→绿，过晚/速度不足→红
@@ -2318,14 +2627,17 @@
       mirrorOn = true;
       elProg.classList.remove('hide');
       elDash.classList.remove('hide');
-      elRadar.classList.remove('hide');
+      // ⓘ 2026-09-27：退场类挂在 #radar-wrap（整块连标识一起），与 #mirror-frame 行为一致 ——
+      // 旧写法只把 canvas 透明掉，简报/结算盖上来时「导航图」三个字还留在屏幕上。
+      elRadarWrap.classList.remove('hide');
       elClockWrap.classList.remove('hide');
       if (elMute) elMute.classList.remove('hide');
       if (elMirrorFrame) elMirrorFrame.classList.remove('hide');
     } else {
       mirrorOn = false;
       elProg.classList.add('hide'); elDash.classList.add('hide');
-      elRadar.classList.add('hide'); elFlyby.classList.add('hide');
+      elRadarWrap.classList.add('hide');
+      elFlyby.classList.add('hide');
       elClockWrap.classList.add('hide');
       if (elMute) elMute.classList.add('hide');
       if (elMirrorFrame) elMirrorFrame.classList.add('hide');

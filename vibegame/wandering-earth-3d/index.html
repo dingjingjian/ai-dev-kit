@@ -23,16 +23,26 @@
        画面里能看见追上来的氦闪壳与两颗内侧行星。 -->
 
   <div id="topbar">
+    <!-- 尾向观测：**无框显示窗**（2026-09-27 去卡片化），标识文字嵌在画面**左上角**。
+         2026-09-27 二次调整：去掉「氦闪壳」那行（窗里本来就看得见壳，字是多余的），
+         标识上移到顶部，与右侧导航图的标识严格同一位置（left:2px / top:2px）。 -->
     <div id="mirror-frame"><span id="mirror-label">尾向观测</span></div>
 
     <div id="clock">
-      <span id="clock-time"><span id="clock-num">0:00</span><i id="clock-ms">.000</i></span>
+      <span id="clock-time"><span id="clock-num">0:00</span><i id="clock-ms">.00</i></span>
       <span id="clock-label">逃逸用时</span>
     </div>
 
-    <!-- 右列 = 小地图 + 声音开关（竖排；整列的触摸由顶栏统一关掉，只有声音键开回来） -->
+    <!-- 右列 = 导航图 + 声音开关（竖排；整列的触摸由顶栏统一关掉，只有声音键开回来）。
+         导航图与左侧尾向观测同一套做法：无描边、标识文字嵌在画面**左上角**。
+         ⓘ 2026-09-27：退场类 `.hide` 挂在**这块 `#radar-wrap`** 上（不是 canvas 自己）——
+         旧写法只把 canvas 透明掉，标识文字留在屏幕上，和尾向观测窗（整块连字一起退场）
+         行为不一致。 -->
     <div id="top-right">
-      <canvas id="radar"></canvas>
+      <div id="radar-wrap">
+        <canvas id="radar"></canvas>
+        <span id="radar-label">导航图</span>
+      </div>
       <button id="mute" type="button" aria-label="关闭背景音乐">
         <span class="mu-note">♪<span class="mu-slash"></span></span><span class="mu-txt">背景音乐</span>
       </button>
@@ -69,7 +79,7 @@
       <div class="fb-head">
         <span id="fb-name"></span>
         <span id="fb-tag"></span>
-        <span class="fb-foot">速度 <b id="fb-cur">0</b> / 门槛 <b id="fb-need">0</b> km/s</span>
+        <span class="fb-foot" id="fb-foot">速度 <b id="fb-cur">0</b> / 门槛 <b id="fb-need">0</b> km/s</span>
       </div>
       <div id="fb-track">
         <div class="fb-zone fb-early" id="fb-early"><span>过早</span></div>
@@ -224,13 +234,13 @@
           <text x="22" y="83" text-anchor="middle" font-size="10" fill="#ffb84d">氦闪壳</text>
         </svg>
         <!-- MOSS 终端：情报与权限的对照 —— MOSS 算好一切，留给人的决定只剩「什么时候点火」。
-             2026-09-27：处境（氦闪壳在身后追）与目标（最短用时）原本分挂两处，现并成
-             **MOSS 的第二条输出** —— 两条 MOSS（情报 + 处境/目标）对一条「你」（决定何时点火），
+             2026-09-27：三条 MOSS 输出（情报 / 处境 / 目标）对一条「你」（选定点火时刻），
              情报与权限的对照因此更清楚，也不再有两块各说一句的灰字。 -->
         <div class="bf-term">
-          <span class="bf-moss">MOSS：航线已解算 · 5 次点火窗口</span>
-          <span class="bf-moss bf-goal">MOSS：氦闪壳在身后追 · 唯一目标＝用<b>最短用时</b>逃出太阳系</span>
-          <span class="bf-you">你：决定何时点火</span>
+          <span class="bf-moss">MOSS：轨道解算完毕，5 次点火窗口可用</span>
+          <span class="bf-moss">MOSS：氦闪冲击波尾随逼近。</span>
+          <span class="bf-moss bf-goal">MOSS：目标：最短时间脱离太阳系</span>
+          <span class="bf-you">你：选定点火时刻</span>
         </div>
         <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条。
              三条**单行**指令，一条一义 —— 开局只有一次读规则的机会，
@@ -269,8 +279,8 @@
           <div id="rs-title" class="rs-title"></div>
           <div id="rs-time-box" class="rs-time">
             <span id="rst-label" class="rst-label">逃逸用时</span>
-            <span id="rs-time-value" class="rst-value">0.0<i>s</i></span>
-            <span id="rs-best" class="rst-best">本站最快 0.0 s</span>
+            <span id="rs-time-value" class="rst-value">0.00<i>s</i></span>
+            <span id="rs-best" class="rst-best">最快记录 0.00 s</span>
           </div>
           <div id="rs-text" class="rs-text"></div>
           <div id="rs-stat" class="rs-stat"></div>

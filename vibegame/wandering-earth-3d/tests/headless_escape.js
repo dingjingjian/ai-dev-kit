@@ -111,11 +111,34 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(/#clock\{[^}]*flex:1 1 auto/.test(css) && /#clock\{[^}]*align-items:center/.test(css)
     && /#clock\{[^}]*justify-content:center/.test(css),
     '计时占中间那一格（flex:1）并在格内居中显示');
+  // 2026-09-27：计时字号再加大一档（23 → 29 → **36px**，毫秒 15 → 18px）。
+  // 上限仍由 320px 窄屏反推：中间那格 136px，「0:05.423」在 36/18px 下实测约 119px。
+  check(/#clock-num\{font-size:36px/.test(css) && /#clock-ms\{font-size:18px/.test(css),
+    '顶部计时器字号加大（36px / 毫秒 18px），仍留在 320px 的中间格里');
   check(html.indexOf('后视镜') < 0 && html.indexOf('尾向观测') > 0,
-    '「后视镜」已按世界观改名为「尾向观测」（index.html 里不再出现旧名）', '尾向观测 · 氦闪壳');
+    '「后视镜」已按世界观改名为「尾向观测」（index.html 里不再出现旧名）', '尾向观测');
+  // 2026-09-27：两块显示窗一起**去卡片化** —— 窗自己不带描边/投影/背板，
+  // 标识文字**嵌在画面左上角**（不带任何底板），旧版「窗下面一条独立面板条」已删。
+  // ⓘ 同日二次调整：标识上移到**顶部**（与导航图严格同一位置），并去掉第二行「氦闪壳」。
   check(/#mirror-label\{[^}]*position:absolute/.test(css)
-    && /#mirror-label\{[^}]*top:calc\(100%/.test(css),
-    '观测窗标签挪到窗**下面**（方形窗装不下这个词，也让整块窗都归 3D 画面）');
+    && /#mirror-label\{[^}]*left:2px;top:2px/.test(css)
+    && !/#mirror-label\{[^}]*background/.test(css)
+    && /<span id="mirror-label">尾向观测<\/span>/.test(html) && !/#mirror-label i\{/.test(css),
+    '观测窗标识嵌在画面顶部（左上角浮字，不带底板；单行「尾向观测」，氦闪壳那行已删）');
+  check(htmlIds.has('radar-wrap') && htmlIds.has('radar-label')
+    && /#radar-label\{[^}]*position:absolute/.test(css)
+    && /#radar-label\{[^}]*left:2px;top:2px/.test(css),
+    '导航图与观测窗同一套做法：标识文字也在画面左上角（两块同高同位置）');
+  // ⓘ 2026-09-27 反馈「导航图的显示隐藏和尾向观测行为不一致」：退场类必须挂在**整块**
+  // `#radar-wrap` 上（canvas + 标识一起进出一致），旧写法只把 canvas 透明掉、字留在屏幕上。
+  check(/#radar-wrap\.hide\{opacity:0\}/.test(css) && !/#radar\.hide\{/.test(css)
+    && /elRadarWrap\.classList\.add\('hide'\)/.test(appSrc)
+    && /elRadarWrap\.classList\.remove\('hide'\)/.test(appSrc)
+    && /elMirrorFrame\.classList\.add\('hide'\)/.test(appSrc),
+    '两块显示窗的显示/隐藏行为一致：退场类加在整块组件上（画布与标识同进同出）');
+  check(!/#mirror-frame\{[^}]*border:/.test(css) && !/#radar\{[^}]*box-shadow/.test(css)
+    && appSrc.indexOf("strokeRect(1, 1, rw - 2, rw - 2)") < 0,
+    '两块显示窗都去掉了卡片外框（CSS 描边 / 投影 + canvas 自己那圈框一并撤掉）');
   check(muteRule.indexOf('position:fixed') < 0 && muteRule.indexOf('margin-top') > 0
     && topRightRule.indexOf('flex-direction:column') > 0,
     '声音开关竖排在右上列、跟在小地图下面（不再自己 fixed 定位）');
@@ -128,8 +151,12 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   });
   check(noGap.length === 0, '顶部各元素都叠了 --top-gap（元素不会钻进宿主顶栏）',
     noGap.length ? '未叠: ' + noGap.join(' ') : topGapUsers.join(' '));
-  check(/id="clock-ms"/.test(html) && /elClockMs/.test(appSrc) && /% 1\) \* 1000/.test(appSrc),
-    '计时带毫秒（#clock-ms 单独一段，由 JS 逐帧写 m:ss 之外的 3 位毫秒）');
+  // ⓘ 2026-09-27 反馈「顶部记录和用时记录还是保留两位」：计时精度统一成 **两位小数**（0.01 s），
+  // 与结算 / 分享 / 最快记录同一个口径（先做过一版三位毫秒，按反馈收回两位）。
+  check(/id="clock-ms"/.test(html) && /id="clock-ms">\.00</.test(html) && /elClockMs/.test(appSrc)
+    && /var mm = Math\.floor\(sec \/ 60\), ss = Math\.floor\(sec % 60\), cs = Math\.floor\(sec \* 100\) % 100;/.test(appSrc)
+    && /elClockMs\.textContent = '\.' \+ \(cs < 10 \? '0' : ''\) \+ cs;/.test(appSrc),
+    '计时带两位小数（#clock-ms 单独一段，由 JS 逐帧写 m:ss 之外的 2 位）');
   // 指针用 SVG 的 rotate 属性变换，不是 CSS transform（后者在 Chrome 61 的 SVG 上要 transform-box 才转对）
   check(/setAttribute\('transform',\s*'rotate\('/.test(appSrc) && !/transform-origin/.test(css),
     '表盘指针用 SVG rotate 属性驱动（Chrome 61 的 SVG 不支持 CSS transform-origin）');
@@ -159,26 +186,44 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(/PWR_VMAX\s*=\s*160/.test(appSrc) && /elPwGauge\.classList\.toggle\('boost'/.test(appSrc)
     && /elPwArc/.test(appSrc) && /elPwVal/.test(appSrc),
     '功率表满量程 160%（额定 100% + 脉冲乘波 160%）且真的接进了 updateHUD');
-  // 功率读数 = 区间效率 × 脉冲乘波，停机/过热锁定由渲染层读成 0：
-  // 四档 20 / 100 / 160 / 0 —— 满量程取 160% 正好装下最高的一档（乘波会越过额定线）。
+  // 功率读数 = **发动机输出功率** = 油门 × 乘波 —— **与区间无关**。
+  // ⓘ 2026-09-27 反馈「过晚阶段功率表不该掉到 20%，应该还是 100%」：旧读数乘了 zoneEff，
+  // 把「推力残效」画成了「发动机出了多少力」。现在残效只留给推力与温升（st.thrustEff）。
   const pwSafe = M3D.zoneEff('early') === 1 && M3D.zoneEff('sweet') === 1
     && Math.abs(M3D.zoneEff('late') - 0.2) < 1e-9
     && Math.abs(1 * C.PULSE_THRUST_BOOST - 1.6) < 1e-9;
-  check(pwSafe, '功率表四档读数：过晚残效 20% / 额定 100% / 脉冲乘波 160%（停机与过热锁定 = 0）',
+  check(pwSafe, '区间效率表不变（过早 / 绿色 1、过晚残效 0.2、乘波 1.6）—— 它只管推力与温升',
     'late ' + M3D.zoneEff('late') + ' × 乘波 ' + C.PULSE_THRUST_BOOST);
-  // 2026-09-27 反馈「功率不可能一松手就直接归零」：读数改由 st.pwr（油门本身）驱动，
-  // 松手后跟着那条 0.5 s 的熄火斜坡一起下坡（PWR_DOWN），而不是被 st.burning 一闸到底。
-  // 只有**过热锁定**是真 0（那是熄火完成）。物理核心没动（推力/温升仍按 thrustEff）。
-  check(/var power = st\.overheated \? 0[\s\S]{0,160}st\.pwr \/ PWR_MAX/.test(appSrc),
-    '功率读数跟着油门走：松手走 0.5 s 熄火斜坡，只有过热锁定才是 0');
+  check(/var power = st\.pwrOut;/.test(appSrc) && !/st\.pwr \/ PWR_MAX\) \* zoneEff/.test(appSrc),
+    '功率表读 st.pwrOut（输出功率 = 油门 × 乘波）：过晚区间照样满表，不再掉到 20%');
+  check(/st\.pwrOut = st\.overheated \? 0 : out;/.test(appSrc)
+    && /st\.thrustEff = \(st\.burning && !st\.overheated\) \? st\.pwrOut \* zoneEff\(st\.zone\) : 0;/.test(appSrc)
+    && /var out = \(st\.pwr \/ PWR_MAX\) \* \(pulseActive\(tNow\) \? PULSE_THRUST_BOOST : 1\);/.test(appSrc),
+    '核心把「输出功率」与「有效推力档位」拆成两个量：前者上表盘 / 火焰，后者进推力与温升');
+  // 2026-09-27 反馈「功率不可能一松手就直接归零」：读数跟着油门，松手后跟着那条 0.5 s 的
+  // 熄火斜坡一起下坡（PWR_DOWN），而不是被 st.burning 一闸到底；过热锁定时核心把 pwrOut 归零。
+  check(/st\.overheated = true; st\.thrustEff = 0; st\.pwrOut = 0;/.test(appSrc),
+    '过热锁定时输出功率立即归零（熄火完成，不是斜坡）');
+  // 行为侧：松手 0.25 s 后输出功率应落在半途（0.5 s 斜坡），而**推力当场就没了**
+  const gR = M3D.createGame(route), sR = gR.state;
+  gR.debugSet(route.len - 100, 150);
+  sR.pwr = C.PWR_MAX; sR.heat = 0;
+  gR.setBurning(true);
+  gR.step(1 / 200);
+  const outFull = sR.pwrOut;
+  gR.setBurning(false);
+  gR.step(0.25);
+  check(near(outFull, 1, 0.03) && sR.pwrOut > 0.35 && sR.pwrOut < 0.7 && sR.thrustEff === 0,
+    '读数跟着油门：松手走 0.5 s 熄火斜坡（推力当场归零，不拖泥带水）',
+    'pwrOut ' + outFull.toFixed(2) + ' → ' + sR.pwrOut.toFixed(2) + '（thrustEff ' + sR.thrustEff + '）');
   // 2026-09-26 重构：功率是**起转斜坡**（按住 0.5 s 到满额），红态只给「过晚残效」——
   // 若按「功率 < 50%」判，每次按住的起转前 0.25 s 都会闪一次红，那是正常起转不是白烧。
   check(/PWR_UP\s*=\s*200/.test(appSrc) && /PWR_DOWN\s*=\s*200/.test(appSrc)
     && /elPwGauge\.classList\.toggle\('weak', st\.zone === 'late'/.test(appSrc),
-    '功率是起转斜坡（PWR_UP = 200/s）；过晚残效的红态按区间判，不按功率大小判');
+    '功率是起转斜坡（PWR_UP = 200/s）；过晚区间用红态标「这功率没兑成推力」，不降读数');
   check(/TEMP_RATE\s*=\s*75/.test(appSrc)
     && /st\.heat = Math\.min\(TEMP_MAX, st\.heat \+ TEMP_RATE \* st\.thrustEff/.test(appSrc),
-    '温度 = ∫ 功率（温升速率 ∝ 功率档位，不是恒定速率）');
+    '温度 = ∫ 有效推力档位（= 输出功率 × 区间效率，不是恒定速率、也不看表盘读数）');
   // ---- 仪表行顺序：功率 → 温度 → 速度 ----
   // 顺序 = 驾驶时的手上顺序：先看**功率**（这一下按出去多大力）、再看**温度**（离满箱还有多远）、
   // 最后看**速度**（够不够门槛刻度）。改顺序只动 DOM，JS 全按 id 取，所以这里用 DOM 次序锁死。
@@ -248,6 +293,18 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '评级条与 #warn 一样交给槽位定位，入场只靠 translateY（不再各自写死 bottom）');
   check(/position:relative/.test(barRule) && /margin-bottom/.test(barRule),
     '时机条是驾驶舱里的普通一行：与仪表行之间靠 margin 留缝（不写死像素）');
+  // ---- 时机条外框（2026-09-27 改版）：无描边、无折角的暗玻璃板 ----
+  // 旧版是「1px 绿描边 + 上下两个折角（四条绿短线）」，玩家要求删掉这些绿色装饰线。
+  // 现在面板只靠一块更深的底浮在画面上，三态（命中 / 过早 / 过晚）改用**整块外发光**表达。
+  check(!/#flyby\{[^}]*border:/.test(css) && /#flyby\{[^}]*border-radius:8px/.test(css)
+    && /#flyby\.sweet\{box-shadow/.test(css) && /#flyby\.risk\{box-shadow/.test(css)
+    && /#flyby\.late\{box-shadow/.test(css),
+    '时机条外框 = 无描边无折角的暗玻璃板，三态改用外发光（不再换描边色）');
+  // HUD 面板上的绿色折角（每块四条短线）与全部模拟扫描横条一起撤掉
+  check(!/#clock::before/.test(css) && !/#dash::before/.test(css)
+    && !/#progress::before/.test(css) && !/#mirror-frame::before/.test(css)
+    && !/#flyby::before/.test(css),
+    'HUD 面板的绿色折角装饰全部撤掉（计时 / 进度 / 仪表行 / 观测窗 / 时机条一块不留）');
   // 点火提示搬进开场简报：局内底部不再有常驻横条（否则和时机条、仪表行挤成三条满宽）
   const tipRule = (css.match(/#tip\{[^}]*\}/) || [''])[0];
   check(!!tipRule && tipRule.indexOf('position:fixed') < 0 &&
@@ -277,6 +334,9 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(/#dash-row\{[^}]*flex:1 1 auto/.test(css) && /#dash-side\{[^}]*flex:1 1 \d+px/.test(css)
     && /border-left/.test(dashSideRule) && /display:flex/.test(dashLineRule),
     '两列的宽度分工：仪表盘吃满剩余 / 参数列有确定的基准宽度（灯是 50% 两列），列间竖线分隔');
+  // 2026-09-27：三张表盘在列内**居中**（旧版吃满 64px 上限后余量全堆在右边，看着是「贴左一坨」）
+  check(/#dash-row\{[^}]*justify-content:center/.test(css) && /\.dg\{[^}]*max-width:70px/.test(css),
+    '三张表盘在仪表列里居中（左右余量对半分），单格上限 70px');
   check(html.indexOf('id="progress"') > html.indexOf('id="dash-side"')
     && html.indexOf('id="progress"') < html.indexOf('id="danger"')
     && /#progress\{[^}]*width:100%/.test(css),
@@ -294,15 +354,22 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '消息槽在时机条**之前**（column + bottom:0 向上浮动 6px），时机条位置恒定不跳');
   check(appSrc.indexOf('elMsg') < 0 && appSrc.indexOf('MSG_GAP') < 0,
     '不再用 JS 撑高消息槽（提示改为浮动，不推走时机条）');
-  // ---- 两块提示**同一张卡**：共用框 + 共用提示符位，只有提示符字形与顶缘颜色不同 ----
+  // ---- 两块提示**同一张卡**：共用底 + 共用提示符位，只有提示符字形与评级色不同 ----
+  // ⓘ 2026-09-27：1px 细边与顶缘 2px 语义色细线**都撤了** —— 消息卡现在是一条线都没有的
+  // 暗玻璃板，玩家反馈的「弹弓提示框外框改掉、绿色装饰线删掉」指的就是它。
   const shareRule = (css.match(/#warn,#fb-toast\{[^}]*\}/) || [''])[0];
-  check(/min-width:236px/.test(shareRule) && /border-top:2px/.test(shareRule)
+  check(/min-width:236px/.test(shareRule) && /border-radius:8px/.test(shareRule)
+    && shareRule.indexOf('border:') < 0 && shareRule.indexOf('border-top') < 0
     && /padding:9px 13px 9px 26px/.test(shareRule) && /translateY\(8px\)/.test(shareRule),
-    '#warn 与 #fb-toast 共用同一张终端消息卡（同框 / 同内边距 / 同入场动画）',
+    '#warn 与 #fb-toast 共用同一张**无框**暗玻璃卡（同底 / 同内边距 / 同入场动画，一条装饰线都不留）',
     shareRule.replace(/\s+/g, ' ').slice(0, 96));
   check(/#warn::before,#fb-toast::before\{/.test(css) && /#fb-toast::before\{content:'▍'\}/.test(css)
     && /#warn\.pulse::before\{content:'!'/.test(css) && /#warn\.hot::before\{content:'×'/.test(css),
-    '两块提示共用提示符位，语义只由字形与顶缘颜色区分（> / ! / × · ▍）');
+    '两块提示共用提示符位，语义由字形 + 提示符颜色 + 底板色调区分（> / ! / × · ▍）');
+  // 评级四档也各有一条**提示符着色 + 淡色调底**（取代原来那条顶缘细线）
+  check(/#fb-toast\.perfect::before,#fb-toast\.perfect #ft-grade\{color:var\(--gold\)\}/.test(css)
+    && /#fb-toast\.good\{background:/.test(css) && /#fb-toast\.late,#fb-toast\.none,#fb-toast\.fail\{background:/.test(css),
+    '评级色改由提示符 ▍ + 等级文字 + 淡色调底承担（三处都不带线）');
   check(css.indexOf('#fb-toast::before{') > css.indexOf('#flyby::before{')
     && !/#clock::before,#progress::before,#mirror-frame::before,#dash::before,#flyby::before,\s*\n#fb-toast::before/.test(css),
     '评级条已退出折角组（::before 让给提示符，两套规则不再互相污染）');
@@ -310,15 +377,39 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(htmlIds.has('fb-next') && htmlIds.has('fb-next-fill') && htmlIds.has('fb-next-pct')
     && html.indexOf('id="fb-next"') > html.indexOf('id="fb-track"'),
     '巡航段有独立的「下一站进度条」DOM（与窗口内那条三段带同一个盒子）');
-  check(/showNext[\s\S]{0,120}st\.phase < 0/.test(appSrc)
+  check(/showNext[\s\S]{0,120}st\.target < 0 \|\| st\.phase < 0/.test(appSrc)
     && /elFbTrack\.style\.display = 'none'; elFbNext\.style\.display = ''/.test(appSrc)
     && /elFbNextFill\.style\.width/.test(appSrc)
     && /nf\.s - st\.v \* \(nf\.def\.winTime/.test(appSrc)
     && /nGoal = Math\.max/.test(appSrc),
     '窗口外（phase<0）才切到下一站进度条；终点是**窗口开启那一刻**（扣掉 v × winTime 的提前量），不报秒数');
-  // ---- 操作界面不加横线滤镜：全屏扫描线已撤（只在简报 / 结算那两块整屏上保留）----
-  check(!/body::before\{/.test(css) && /#brief::before,#result::before\{/.test(css),
-    '操作界面没有横线滤镜（全屏扫描线已撤，终端质感只留在简报 / 结算那两块整屏上）');
+  // 2026-09-27：五站过完（st.target < 0）不再把这条带整条隐掉 —— 距离引导改指**比邻星**
+  check(/elFbName\.textContent = '比邻星'/.test(appSrc) && /nGoal = route\.len/.test(appSrc)
+    && /nFrom = flybys\[flybys\.length - 1\]\.s/.test(appSrc),
+    '五站过完后距离引导改指「比邻星」（条按 冥王星 → 航线末端 的弧长继续填）');
+  check(/elFbFoot\.classList\.add\('hide'\)/.test(appSrc)
+    && /elFbFoot\.classList\.remove\('hide'\)/.test(appSrc)
+    && /\.fb-foot\.hide\{display:none\}/.test(css),
+    '没有判定点时收掉那截「门槛」读数（不挂一条假的 门槛 0.0），切回窗口时再还回来');
+  // 点火引导只报窗口信息：标签就是「引力窗口」，后面那截「· 全功率推进」（功率信息）已删。
+  // ⚠ 耀斑脉冲提示里的「全功率推进」是**另一条车道**（消息槽的动作指令），必须留着。
+  check(/elFbTag\.textContent = '引力窗口'/.test(appSrc)
+    && appSrc.indexOf('引力窗口 · 全功率推进') < 0,
+    '点火引导只提示窗口信息（标签 =「引力窗口」，后面的功率信息已删）');
+  // ⓘ 2026-09-27 反馈「窗口外还是有『增益作废』的提示，删除；小屏幕显示不全」：
+  // tag 只报**窗口状态**（三态各 ≤5 字）—— 旧文案「窗口外点火 · 增益作废」在 320px 窄屏上
+  // 会被省略号吃掉半截（实测要 95px，那一行只留得下 ~55px）。
+  check(/elFbTag\.textContent = '窗口外点火'/.test(appSrc)
+    && appSrc.indexOf('· 增益作废') < 0 && /elFbTag\.textContent = '窗口关闭'/.test(appSrc),
+    '窗口外那一档只报「窗口外点火」（「· 增益作废」已删）：三态 tag 都是短词，窄屏不截断');
+  // ---- 全站不留模拟扫描横条（2026-09-27）----
+  // 操作界面那层全屏扫描线 2026-09-26 就撤了（它压在 3D 之下、HUD 之上，半透明仪表盘
+  // 会把条纹透出来）；2026-09-27 玩家又要求「所有界面的模拟扫描横条都删掉」——
+  // 于是简报 / 结算 / 加载三块整屏自带的 1px 横线也一并删了。
+  // （`repeating-linear-gradient(90deg …)` 那两处是**刻度轨道与点线引导**，不是扫描线，保留。）
+  check(!/body::before\{/.test(css) && !/#brief::before,#result::before\{/.test(css)
+    && !/#loader::before\{/.test(css) && css.indexOf('repeating-linear-gradient(180deg') < 0,
+    '全站不剩任何模拟扫描横条（简报 / 结算 / 加载的整屏扫描线也已删）');
   // 速度读数只有一套单位：时机条 foot 与表盘都是 km/s（旧版 foot 是内部单位 98 / 156）
   check(/门槛[\s\S]{0,60}km\/s/.test(html) && /KMS_PER_UNIT\)\.toFixed\(1\)/.test(appSrc),
     '时机条 foot 的速度 / 门槛用 km/s（与表盘同一套单位）');
@@ -340,6 +431,9 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '3D 判定环在最佳区间时也是绿色（世界内与 HUD 用同一套颜色）');
   check(html.indexOf('绿色区间') >= 0 && html.indexOf('金色区间') < 0,
     '点火提示文案已改说「绿色区间」（不留旧色名）');
+  // 旧主色是青蓝 5cc8ff（2026-09-26 整体退场）——战绩卡里那行文字一度漏改，这里锁住三处
+  check(appSrc.indexOf('5cc8ff') < 0 && css.indexOf('5cc8ff') < 0 && html.indexOf('5cc8ff') < 0,
+    '旧青蓝（5cc8ff）已从 app.js / style.css / index.html 里整体退场（含战绩卡）');
   const goldUsers = (css.match(/[^{}\n]*\{[^}]*var\(--gold\)[^}]*\}/g) || []).map((r) => r.split('{')[0].trim());
   check(goldUsers.length > 0 && goldUsers.every((sel) => /fb-toast|rst-|rs-hint/.test(sel)),
     '金色只剩「评价 / 结算」轴在用（时机轴 #flyby / .fb-sweet 已无金色）', goldUsers.join(' · '));
@@ -356,7 +450,31 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(htmlIds.has('rs-time-box') && htmlIds.has('rs-time-value') && htmlIds.has('rs-best'),
     '结算页有独立的「用时 / 最快纪录」区块');
   check(/localStorage\.setItem\('we3d_best'/.test(appSrc) && /localStorage\.getItem\('we3d_best'/.test(appSrc),
-    '本站最快成绩持久化（只有成功逃出才记账）');
+    '最快记录持久化（只有成功逃出才记账）');
+  // ⓘ 2026-09-27 反馈「统计结果也要显示毫秒级别，本站最快改为最快记录」→ 当天又反馈
+  // 「顶部记录和用时记录还是保留两位」：**全站用时统一两位小数**（`t2()` 是唯一取整口径：
+  // 显示 / 最快记录的比较与落盘都用它，避免「显示同一个数却弹新纪录」）。
+  // 记录标签统一叫「最快记录」（旧名「本站最快」全文不得再出现）。
+  check(/function t2\(v\) \{ return Math\.round\(v \* 100\) \/ 100; \}/.test(appSrc)
+    && /elRsTime\.innerHTML = t2\(st\.t\)\.toFixed\(2\)/.test(appSrc)
+    && /\(isNew \? '★ 新纪录 ' : '最快记录 '\) \+ bestTime\.toFixed\(2\)/.test(appSrc)
+    && /var isNew = win && \(bestTime === null \|\| t2\(st\.t\) < bestTime\)/.test(appSrc)
+    && /bestTime = t2\(st\.t\);/.test(appSrc)
+    // ⓘ 2026-09-27 反馈「逃逸用时居中显示」：数字 +「秒」按 measureText 实测宽度整体居中
+    //   （旧版写死 CW/2 - 60 的偏移，位数一变就看着偏左）
+    && /var tStr = t2\(st\.t\)\.toFixed\(2\), wT, wU, gapT, xT;/.test(appSrc)
+    && /wT = g\.measureText\(tStr\)\.width/.test(appSrc)
+    && /xT = \(CW - \(wT \+ gapT \+ wU\)\) \/ 2;/.test(appSrc)
+    && /g\.fillText\(tStr, xT, 452\)/.test(appSrc)
+    && /g\.fillText\('秒', xT \+ wT \+ gapT, 452\)/.test(appSrc)
+    && /'最快记录 ' \+ bestTime\.toFixed\(2\) \+ ' 秒 · 完美弹弓 '/.test(appSrc)
+    && (appSrc.match(/toFixed\(3\)/g) || []).length === 1   // 全站只剩 runKey 那条缓存键
+    && /function runKey\(\) \{ return st\.status \+ '\|' \+ st\.t\.toFixed\(3\); \}/.test(appSrc)
+    && /t: t2\(st\.t\),/.test(appSrc) && /best: bestTime === null \? null : bestTime/.test(appSrc)
+    && appSrc.indexOf('本站最快') < 0 && appSrc.indexOf('最快纪录') < 0,
+    '结算 / 分享的用时统一两位小数（t2 + toFixed(2)），记录标签 =「最快记录」');
+  check(html.indexOf('0.00<i>s</i>') > 0 && html.indexOf('最快记录 0.00 s') > 0,
+    'index.html 的结算占位符也按两位小数（0.00 s）+「最快记录」写法');
   // 分享首选 §3.9 interactionOpenApi（文档里唯一标注「分享」的能力）：图文评论草稿 + 同步存相册
   check(/interactionOpenApi/.test(appSrc) && /action: 'post_comment'/.test(appSrc) && /media_bean/.test(appSrc)
     && /media_type: 'image'/.test(appSrc) && /cover_image_url/.test(appSrc) && /saveToAlbum: true/.test(appSrc),
@@ -383,6 +501,18 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '能力检测在调用时做（每次点击重查 window.xhs.miniTool），按钮文案随可用能力定');
   check(/writeTempFile/.test(appSrc) && /toDataURL\('image\/webp'/.test(appSrc) && /createRange/.test(appSrc),
     '配图用 Canvas 现画（不碰被禁的网络请求 API），拿不到端能力时退化为「选中文案 + 引导长按复制」');
+  // 2026-09-27 修：战绩卡上那五颗评级色标必须带上**该行星**的 ratingSweet —— 漏传时
+  // r.sweet >= undefined 恒假，「绿色区间吃满」会被降级成「弹弓增益未满」→ 该金色的点画成琥珀。
+  check(/gradeFlyby\(r, ok, flybys\[i\]\.def\.ratingSweet\)/.test(appSrc)
+    && appSrc.indexOf('gradeFlyby(r, ok)') < 0,
+    '战绩卡评级带上该行星的 ratingSweet（完美弹弓才会画成金色，不被降级成琥珀）');
+  // 2026-09-27 修：① 五个点的标签原来取行星名**末字**（slice(-1)）→ 全印成同一个「星」，
+  //               现按反馈画**全名**（木星 / 土星 / 天王星 / 海王星 / 冥王星，3 字 ≈ 66px < 点间距 132px）；
+  //              ② 失败状态原来一律写「被氦闪前壳吞没」，被行星捕获 / 坠入大气层时是错的。
+  check(/g\.fillText\(flybys\[i\]\.def\.name, x0 \+ i \* gap, 786\)/.test(appSrc)
+    && appSrc.indexOf('def.name.slice(-1)') < 0 && appSrc.indexOf('def.name.charAt(0)') < 0
+    && /g\.fillText\(win \? '逃逸成功' : \(st\.reason \|\| '被氦闪前壳吞没'\), CW \/ 2, 540\)/.test(appSrc),
+    '战绩卡：五颗行星标签写**全名**（不再是五个「星」，也不用单字缩写）、失败写核心给出的真实死因');
   // 2026-09-27：点结算页任意处就重开 = 想点分享却按到正文 → 整页重开、战绩与分享一起被跳过
   check(appSrc.indexOf("elResult.addEventListener('click'") < 0
     && appSrc.indexOf('resultShownAt') < 0
@@ -394,6 +524,38 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '不出现容器禁用能力（execCommand / clipboard.writeText）');
   check(/slice\(0, 20\)/.test(appSrc) && /slice\(0, 1000\)/.test(appSrc),
     '分享标题 ≤20 字、正文 ≤1000 字（postNote 的 API 上限）');
+  // ⓘ 2026-09-27 三次改写分享文案：标题按战绩分级（五连满分 / 压线逃生 / 栽进大气 / 止步行星 / 氦闪追上），
+  //   正文加 MOSS 评定 + 死局自嘲，挑战语统一「换你」；仍然只讲成绩、不带教程 / 标签。
+  check(/function shareTitle\(\)/.test(appSrc) && /function shareEnding\(\)/.test(appSrc)
+    && /'五连完美弹弓 · ' \+ T/.test(appSrc) && /地球活着冲出太阳系/.test(appSrc)
+    && /'栽进' \+ \(st\.culprit \|\| '行星'\) \+ '大气层 · 第'/.test(appSrc)
+    && /'止步' \+ \(st\.culprit \|\| '行星'\) \+ ' · 第'/.test(appSrc)
+    && /氦闪还是追上了地球/.test(appSrc)
+    && /一头栽进了' \+ who \+ '的大气层'/.test(appSrc),
+    '分享标题按战绩分级（五连满分 / 压线逃生 / 栽进大气 / 止步<行星> / 氦闪追上），压在 20 字内');
+  // ⓘ 2026-09-27 三次改写：分享文案**只讲成绩** —— 介绍 / 教程 / 去哪找一律不出现；
+  //   取「shareEnding … shareComment」整段（到 drawShareCard 为止）做白名单 + 黑名单双查。
+  const shareCopy = appSrc.slice(appSrc.indexOf('function shareEnding'), appSrc.indexOf('function drawShareCard'));
+  check(shareCopy.length > 0
+    && shareCopy.indexOf('MOSS 评定：') > 0
+    && /'★ 新纪录 ' : '我的最快记录 '/.test(shareCopy)
+    && shareCopy.indexOf('换你') > 0
+    && shareCopy.indexOf('一路只有五颗行星') < 0
+    && shareCopy.indexOf('目标只有一个') < 0
+    && shareCopy.indexOf('小红书小工具') < 0
+    && shareCopy.indexOf('绿色区间') < 0
+    && shareCopy.indexOf('操作') < 0,
+    '分享文案只讲成绩：成绩 + MOSS 评定 + 纪录 +「换你」挑战；介绍 / 教程 / 去哪找都不出现');
+  // ⓘ 2026-09-27 反馈「删除 # 话题」：分享文案（正文 / 评论草稿）与战绩卡**都不再带标签**
+  check(appSrc.indexOf('#小红书vibecoding大赛') < 0 && appSrc.indexOf('#vibegame') < 0
+    && appSrc.indexOf('#小红书小工具') < 0 && appSrc.indexOf('#流浪地球') < 0,
+    '分享弹窗的文案与战绩卡都不带 # 话题标签（旧版那行标签已删）');
+  // ⓘ 2026-09-27 反馈「手机端长按变成了选中文字，无法正常加速」：整页禁止选中 + 禁 iOS 长按菜单，
+  //   但结算页那段「要让人长按复制」的战绩文案 `.rs-hint` 必须单独把 user-select 开回来。
+  check(/-webkit-user-select:none/.test(css) && /user-select:none/.test(css)
+    && /-webkit-touch-callout:none/.test(css)
+    && /\.rs-hint\{[^}]*-webkit-user-select:text/.test(css),
+    '整页禁止选中（长按 = 按住点火，不会被当成选字 / 弹长按菜单）；只给结算页的分享文案 .rs-hint 开回可选中');
 
   // ---- 启动页（MOSS 自检）契约：内联资源加载只要一两百毫秒，不做最短停留就会一闪而过 ----
   check(htmlIds.has('loader') && htmlIds.has('ld-log') && htmlIds.has('ld-fill') && htmlIds.has('ld-status'),
@@ -494,9 +656,11 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(appSrc.indexOf('procPlanetTex') > 0 && /\|\| procPlanetTex/.test(appSrc),
     'procPlanetTex 保留为兜底（内联数据缺失时退回程序化色块，不会开天窗）');
 
-  // 简报：一句 MOSS 口吻的情报 + 一句「谁做决定」的对照，规则与操作交给局内 HUD 教
-  check(/MOSS：航线已解算/.test(html) && /你：决定何时点火/.test(html),
-    '简报保留「MOSS：航线已解算 / 你：决定何时点火」的对照');
+  // 简报：三条 MOSS 口吻的输出（情报 / 处境 / 目标）+ 一句「谁做决定」的对照，
+  // 规则与操作交给局内 HUD 教（2026-09-27 改文案：轨道解算 / 氦闪冲击波 / 目标脱离太阳系）
+  check(/MOSS：轨道解算完毕，5 次点火窗口可用/.test(html) && /MOSS：氦闪冲击波尾随逼近/.test(html)
+    && /MOSS：目标：最短时间脱离太阳系/.test(html) && /你：选定点火时刻/.test(html),
+    '简报 = 三条 MOSS 输出（情报 / 处境 / 目标）对一条「你：选定点火时刻」');
   // 引导拆成编号操作卡：一条长句拆成「动作 → 时机 → 代价」三张卡，两秒扫完
   const stepCards = html.match(/class="bf-step(?: bad)?"/g) || [];
   check(stepCards.length === 3 && /class="bf-step bad"/.test(html),
@@ -864,14 +1028,14 @@ console.log('\n=== 掠过评级（过完之后必须说清「刚才点得怎么�
   const R = W.flybys[0].ratingSweet;       // 该行星的「吃满」阈值（逐行星）
   const cases = [
     [{ sweet: R * 2, early: 0, late: 0 }, true, 'perfect', '最佳区间吃满 → 完美弹弓'],
-    [{ sweet: R * 0.6, early: 0.4, late: 0 }, true, 'good', '最佳区间吃到一半 → 差一口气'],
-    [{ sweet: R * 0.2, early: 1.2, late: 0 }, true, 'early', '过早区烧得多、最佳区没跟上 → 按早了'],
-    [{ sweet: 0, early: 0, late: 0.9 }, true, 'late', '只在过晚区点火 → 按晚了'],
-    [{ sweet: 0, early: 1.5, late: 0 }, true, 'early', '全程过早区白烧 → 过早白烧'],
-    [{ sweet: 0, early: 0, late: 0 }, true, 'none', '一次没按 → 没点火'],
-    [{ sweet: R * 2, early: 0, late: 0 }, false, 'fail', '判定点速度不够 → 被捕获'],
+    [{ sweet: R * 0.6, early: 0.4, late: 0 }, true, 'good', '最佳区间吃到一半 → 弹弓增益未满'],
+    [{ sweet: R * 0.2, early: 1.2, late: 0 }, true, 'early', '过早区烧得多、最佳区没跟上 → 提前点火'],
+    [{ sweet: 0, early: 0, late: 0.9 }, true, 'late', '只在过晚区点火 → 点火延迟'],
+    [{ sweet: 0, early: 1.5, late: 0 }, true, 'early', '全程过早区白烧 → 无效点火'],
+    [{ sweet: 0, early: 0, late: 0 }, true, 'none', '一次没按 → 发动机未点火'],
+    [{ sweet: R * 2, early: 0, late: 0 }, false, 'fail', '判定点速度不够 → 引力捕获'],
     // 推过了但没过门槛（弹弓作废或前面欠账）不算判死：label 要说明「还活着，只是慢了」
-    [{ sweet: R * 0.6, early: 0.4, late: 0, result: 'slow', lostSling: true }, true, 'early', '弹弓作废、速度没到门槛 → 速度没拉起来（不判死）']
+    [{ sweet: R * 0.6, early: 0.4, late: 0, result: 'slow', lostSling: true }, true, 'early', '弹弓作废、速度没到门槛 → 轨道速度不足（不判死）']
   ];
   let bad = 0, noTip = 0;
   for (const [r, ok, want, note] of cases) {
@@ -885,16 +1049,16 @@ console.log('\n=== 掠过评级（过完之后必须说清「刚才点得怎么�
   const same = { sweet: 0.45, early: 0, late: 0 };
   check(M3D.gradeFlyby(same, true, W.flybys[4].ratingSweet).key === 'perfect' &&
     M3D.gradeFlyby(same, true, W.flybys[0].ratingSweet).key === 'good',
-    '同样 0.45 s 绿色区间点火：冥王星算吃满、木星只算「差一口气」（阈值 ' +
+    '同样 0.45 s 绿色区间点火：冥王星算吃满、木星只算「弹弓增益未满」（阈值 ' +
     W.flybys[4].ratingSweet.toFixed(2) + 's vs ' + W.flybys[0].ratingSweet.toFixed(2) + 's）');
 })();
 
 (function () {
   // 过早即作废弹弓（2026-09-25 新增规则）：一旦在「过早」区间点过火，
-  // 本次掠过失去弹弓机会，之后续进绿色区间也只给普通推力，评级最高「差一口气」。
+  // 本次掠过失去弹弓机会，之后续进绿色区间也只给普通推力，评级最高「弹弓增益损失」。
   const R = W.flybys[0].ratingSweet;
   check(M3D.gradeFlyby({ sweet: R * 2, early: 0.5, late: 0, lostSling: true }, true, R).key === 'good',
-    '过早点过火（lostSling）：绿色区间吃满也封顶「差一口气」、绝不完美弹弓');
+    '过早点过火（lostSling）：绿色区间吃满也封顶「弹弓增益损失」、绝不完美弹弓');
   check(M3D.gradeFlyby({ sweet: R * 2, early: 0, late: 0, lostSling: false }, true, R).key === 'perfect',
     '未作废（lostSling=false）：绿色区间吃满仍是完美弹弓');
   const e2s = play((g, st) => g.setBurning(st.zone === 'early' || st.zone === 'sweet'), 1 / 60);
@@ -987,7 +1151,7 @@ console.log('\n=== 弹弓（过早 / 最佳 / 过晚）===');
     earlyOnce.push({ name: W.flybys[K].name, res: st.results[K].result, lost: st.results[K].lostSling, status: st.status, t: st.t });
   }
   check(earlyOnce.every((x) => x.res === 'slow' && x.lost),
-    '过早区点火（哪怕 1/120 s）→ 该次掠过记为「速度没拉起来」，不再当场被行星捕获',
+    '过早区点火（哪怕 1/120 s）→ 该次掠过记为「轨道速度不足」，不再当场被行星捕获',
     earlyOnce.map((x) => x.name + ' ' + x.res).join(' · '));
   // 过早的代价 = 被壳追上（前 3 颗行星上过早，整局都会拖到 30 s 之后才被追平，而不是 5.6 s 处当场终结）
   const delayed = earlyOnce.slice(0, 3).every((x) => x.status === 'burned' && x.t > 30);
@@ -1102,6 +1266,11 @@ console.log('\n=== 温度由功率决定（本次重构的耦合点）===');
   check(late.zone === 'late' && near(late.heat / H, C.TEMP_RATE * C.LATE_EFF, C.TEMP_RATE * 0.02),
     '过晚区间：推力残效 20% → 温升也只有 20%（旧版在过晚区照样按满速烧温度）',
     (late.heat / H).toFixed(1) + ' /s（zone=' + late.zone + '）');
+  // 2026-09-27 反馈「过晚阶段功率表不该掉到 20%，应该还是 100%」：
+  // 残效是**推力**的折扣，不是发动机出了多少力 —— 输出功率照样满额（表盘与火焰读它）。
+  check(late.zone === 'late' && near(late.pwrOut, 1, 0.02) && near(late.thrustEff, C.LATE_EFF, 0.01),
+    '过晚区间：功率表照样满表 100%（残效 0.2 只作用于推力与温升）',
+    'pwrOut=' + late.pwrOut.toFixed(2) + ' thrustEff=' + late.thrustEff.toFixed(2));
   check(early.zone === 'early' && near(early.heat / H, C.TEMP_RATE, C.TEMP_RATE * 0.03),
     '过早区间：推力与温升都是满额（真·白烧 —— 弹弓会在那里作废）',
     (early.heat / H).toFixed(1) + ' /s（zone=' + early.zone + '）');
@@ -1437,9 +1606,102 @@ console.log('\n=== 地球模型（行星发动机）===');
     '南极洲朝前：EARTH_POLE_SIGN = -1（绕 X 转 -90°：南极 → 航向 +Z，北极朝镜头）');
   // 每台发动机自带一道等离子柱（旧版只有中间那一束，远看像「地球后面挂了根棒」）
   check(/var plumeGeo/.test(appSrc) && /plumes\.push\(plume\)/.test(appSrc)
-    && /pl\.scale\.set\(1, k, 1\)/.test(appSrc)
+    && /pl\.scale\.set\(rw, k, rw\)/.test(appSrc)
     && /pl\.position\.z = pl\.userData\.z0 - PLUME_LEN \* k \/ 2/.test(appSrc),
-    '每台发动机自带等离子柱：长度随推力伸缩 + 高频抖动，且底座锚在发动机上（不随缩放前移）');
+    '每台发动机自带等离子柱：长度随推力伸缩 + 高频抖动（另有一点径向呼吸），底座锚在发动机上');
+  // 2026-09-27 优化尾焰：柱体吃一张「喷口白热 → 尾端散尽」的渐变（A 1→0、RGB 白→蓝），
+  // 加色混合下才是**等离子**而不是一块半透明实心锥；总尾焰另叠两枚大而淡的球后光晕。
+  // ⓘ 焰柱改成「细尖朝后」之后，它与主焰的亮端都在 uv.y=0（锥底那头）→ **一张纹理够两处用**
+  // （旧版主焰与焰柱朝向相反，才需要正、翻两张）。
+  check(/function makePlumeTex\(\)/.test(appSrc) && /var plumeTex = makePlumeTex\(\);/.test(appSrc)
+    && /x\.createLinearGradient\(0, h, 0, 0\)/.test(appSrc)
+    && /map: plumeTex, transparent: true, opacity: \.3/.test(appSrc)     // 主焰
+    && /map: plumeTex, transparent: true, opacity: \.55/.test(appSrc)    // 等离子柱
+    && /map: plumeTex, transparent: true, opacity: \.34/.test(appSrc)    // 白热内芯
+    && appSrc.indexOf('plumeTexRev') < 0,
+    '尾焰渐变纹理（喷口白热 → 尾端散尽）一张给主焰/内芯/等离子柱三处（亮端统一在 uv.y=0）');
+  check(/exhaustHaloMat = new THREE\.SpriteMaterial/.test(appSrc)
+    && /exhaustHaloMat\.opacity = lit \? 0\.055 \+ 0\.11 \* Math\.min\(1, st\.pwrOut\) : 0\.012/.test(appSrc)
+    && /\[EARTH_R \* 3\.2, EARTH_R \* 2\.2\], \[EARTH_R \* 5\.2, EARTH_R \* 4\.2\]/.test(appSrc)
+    && /hs\.position\.set\(0, 0, cfg\[hi\]\[1\]\)/.test(appSrc),
+    '总尾焰光晕：两枚球后（局部 +Z）加色 sprite（被地球挡掉中间、只溢出球缘一圈），亮度随输出功率');
+  // 口面光点按离轴距离分档：外圈满尺寸连成边缘亮环，正对镜头的那几台缩小（否则叠成一坨白光）
+  check(/var glowR = ENGINE_GLOW_R \* \(0\.62 \+ 0\.38 \* radFrac\)/.test(appSrc)
+    && /eg\.scale\.set\(glowR, glowR, 1\)/.test(appSrc),
+    '口面光点尺寸随离轴距离分档（外圈满尺寸、中心那几台收小）');
+  // 2026-09-27 还原原著 / 按参考图：**蓝白等离子**（外焰冷蓝 + 白热内芯），
+  // 每台口面再嵌一枚加色光点 —— 48 枚沿环排开就是参考图里地球边缘那圈亮环。
+  // 注意火是**世界里的东西**，不是界面配色：界面那支绿（信息 / 判定）因此更干净。
+  // 颜色必须是**线性空间的深蓝**：输出走 sRGBEncoding + ACES，浅蓝会被提亮成灰青，
+  // 48 层加色一叠就糊成白（实测采样最亮处 RGB≈215,250,255）。R 压到接近 0 才留得住蓝。
+  // ⓘ 2026-09-27 优化尾焰：主焰从 0.40R/1.9R **缩到 0.22R/1.1R**（内芯 0.17R/1.2R → 0.10R/0.8R）——
+  // 它在球后极点、正对镜头，给大时会在**地球正面正中糊出一团白光**（实测把冰面糊掉）；
+  // 环式阵列下真正好看的是边缘那圈焰柱，主焰只留一枚中心亮芯。
+  check(/EXHAUST_OUT = 0x0d47ff/.test(appSrc) && /EXHAUST_CORE = 0xcfe6ff/.test(appSrc)
+    && /NOZZLE_COLOR = 0x1b3138/.test(appSrc)
+    && /var thrustFlame = new THREE\.Mesh\(new THREE\.ConeGeometry\(EARTH_R \* 0\.22/.test(appSrc)
+    && /var thrustCore = new THREE\.Mesh\(new THREE\.ConeGeometry\(EARTH_R \* 0\.10/.test(appSrc),
+    '主焰 = 外焰（冷蓝）+ 白热内芯两层（尺寸已收小到「中心亮芯」级别），喷口本体是深色');
+  // ⓘ 2026-09-27 玩家反馈「尾焰尾部改为细线条，不要是个球」：焰柱改成**锥底接喷口、细尖朝后**
+  // （与喷口本体同一个 engineQuat）。旧版把锥尖摆在喷口 → 宽端正好甩在尾端，而 48 台全都朝镜头
+  // 这一侧，宽端等于正对镜头 → 每道焰柱都收成一个圆盘（「一地球的球」）。
+  // ⓘ 2026-09-27 光环视觉优化：一块**纯色圆环**（0xd4c89c / opacity .55，内缘外缘两条硬边）
+  // → 按真实环结构画的**径向色带纹理**：D / C / B 环 + 卡西尼缝 + A 环 + 恩克缝，
+  // 段间线性插值 + 确定性细环纹噪声，内缘 / 外缘 alpha 收到 0（渐隐而不是硬切）。
+  check(/function satRingTex\(\)/.test(appSrc) && /var ringTex = satRingTex\(\);/.test(appSrc)
+    && /\[1\.955, 0\.09, 118, 108, 92\]/.test(appSrc)      // 卡西尼缝（几乎透明）
+    && /\[2\.212, 0\.09, 118, 108, 92\]/.test(appSrc)      // 恩克缝
+    && /t\.wrapS = t\.wrapT = THREE\.ClampToEdgeWrapping/.test(appSrc)
+    && /t\.anisotropy = renderer\.capabilities\.getMaxAnisotropy\(\)/.test(appSrc),
+    '光环纹理按真实环结构画径向色带（含卡西尼缝 / 恩克缝），夹边 + 各向异性过滤拉满');
+  // UV 重映射：RingGeometry 默认 UV 是**平面投影**，而这条纹理只有一维（u = 内缘→外缘）
+  check(/var rpos = rgeo\.attributes\.position, ruv = rgeo\.attributes\.uv;/.test(appSrc)
+    && /ruv\.setXY\(ri, \(rr - RING_IN\) \/ \(RING_OUT - RING_IN\), 0\.5\)/.test(appSrc)
+    && /map: ringTex, side: THREE\.DoubleSide, transparent: true, opacity: \.92/.test(appSrc)
+    && /pg\.ring\.material\.opacity = 0\.72 \+ 0\.20 \* fade/.test(appSrc),
+    '光环 UV 重映射成「归一化半径」并挂上纹理（材质透明度只做贴近收放）');
+  check(/plume\.quaternion\.copy\(engineQuat\)/.test(appSrc)
+    && appSrc.indexOf('plumeQuat') < 0
+    && /var plumeGeo = new THREE\.ConeGeometry\(EARTH_R \* 0\.06, PLUME_LEN, 9\)/.test(appSrc),
+    '等离子柱：锥底接喷口、细尖朝后（尾部是细线，不是圆盘），长细比 ~16:1');
+  check(/engineGlowMat = new THREE\.SpriteMaterial/.test(appSrc)
+    && /new THREE\.Sprite\(engineGlowMat\)/.test(appSrc)
+    && /engineGlowMat\.opacity = lit \? 0\.55 : 0\.28/.test(appSrc),
+    '每台口面一枚光点（共用 sprite 材质）：怠速一圈暗烬、点火一圈亮环');
+  // 火焰与功率表读**同一个量** st.pwrOut（发动机输出功率）：表盘指到哪、火焰就烧到哪。
+  // 两条反馈都落在这里 —— ① 弹弓不得放大外观；② 过晚区间照旧满功率白烧（不是 20%）。
+  const flameBlock = (appSrc.match(/var lit = st\.pwrOut > 0\.001;[\s\S]*?thrustCore\.scale\.set\(1, fk, 1\);/) || [''])[0];
+  check(flameBlock.length > 120 && flameBlock.indexOf('slinging') < 0
+    && /thrustFlame\.scale\.set\(1, fk, 1\);/.test(flameBlock)
+    && /var pk = 0\.45 \+ Math\.min\(1\.3, st\.pwrOut\) \* 0\.75;/.test(flameBlock)
+    && /var fk = 0\.7 \+ Math\.min\(1, st\.pwrOut \/ 8\) \* 1\.6;/.test(flameBlock),
+    '弹弓不放大发动机外观，且火焰只读 st.pwrOut（过晚区间照样满焰 = 白烧）',
+    '火焰块 ' + flameBlock.length + ' 字符');
+  // 2026-09-27：**改环式阵列**（还原原著 / 按参考图）。旧版黄金角螺旋均匀撒点 ——
+  // 均匀是均匀，但读不出「阵列」，远看是一团乱刺。现在 = 中心 1 台 + 4 圈同心环。
+  const ringCount = C.ENGINE_RING_COUNT || [];
+  const ringPolar = C.ENGINE_RING_POLAR || [];
+  const ringSum = ringCount.reduce((a, b) => a + b, 0);
+  check(ringCount.length === ringPolar.length && ringCount.length === 5
+    && ringSum === C.ENGINE_COUNT && ringCount[0] === 1,
+    '发动机是环式阵列：中心 1 台 + 4 圈（' + ringCount.join(' / ') + ' = ' + ringSum + '）');
+  // 最外那一圈必须贴着地平边缘：从跟拍镜头（地球正后方）看，sin(极角) ≈ 1 才是「那圈亮环」
+  const outerPolar = ringPolar[ringPolar.length - 1] * Math.PI / 180;
+  check(Math.sin(outerPolar) > 0.95 && Math.cos(outerPolar) > 0,
+    '最外一圈贴地平边缘（sin 极角 = ' + Math.sin(outerPolar).toFixed(3) + ' > 0.95）且仍在 -Z 半球');
+  // 外两圈必须占多数：参考图里那圈亮环靠的就是它们（盘心只留 6 台，干净）
+  check(ringCount[3] + ringCount[4] >= C.ENGINE_COUNT * 0.6,
+    '外两圈占多数（' + (ringCount[3] + ringCount[4]) + '/' + C.ENGINE_COUNT + '）：边缘那圈亮环才立得住');
+  // 环内相邻两台不能挤在一起（焰柱最粗处半径 0.075 R，同圈间距要明显大于它）
+  let minGap = Infinity;
+  for (const r of [1, 2, 3, 4]) {
+    const n = ringCount[r], th = ringPolar[r] * Math.PI / 180;
+    minGap = Math.min(minGap, 2 * Math.PI * Math.sin(th) / n);
+  }
+  const minGapU = minGap * W.EARTH_R;
+  const plumeR = W.EARTH_R * 0.06;    // 焰柱最粗处半径（2026-09-27 尾焰收细：0.075 → 0.085 → 0.06）
+  check(minGapU > plumeR * 4, '同圈相邻发动机的间距明显大于焰柱最粗处（不糊成一片）',
+    '最小圈距 ' + minGapU.toFixed(2) + ' 单位（焰柱半径 ' + plumeR.toFixed(2) + '）');
   check(back === slots.length, '全部装在 -Z 半球（地球背面，正对跟拍镜头）', back + '/' + slots.length);
   check(radiusOk === slots.length, '安装半径统一 = EARTH_R × ENGINE_SHELL',
     shell.toFixed(2) + '（大气 ' + (W.EARTH_R * 1.06).toFixed(2) + '，在地表外）');
