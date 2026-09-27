@@ -7,7 +7,7 @@
 - 状态：已发布
 
 ## 补充
-- 素材源：`ai-dev-kit/vibegame/ai-os/xiaohongshu/`（4 张配图 + `小红书笔记-人工智能OS.md`）
+- 素材源：`ai-dev-kit/vibegame/ai-os/xiaohongshu/`（4 张配图 + `小红书文案.md`）
 - 对应项目：vibegame/ai-os（人工智能 OS · v2，FakePhone 18 NoDuo 桌面模拟）
 - 赛道：`#vibegame`（互动游戏）—— 套「操作系统」外壳、内核为互动玩法
 - 内容：9 个反套路整活 App（会改错答案的计算器 / 0.5 秒响铃窗口的闹钟 / 记忆抽查日程 / 扫雷日历 / 随机挂断的电话 / 一律「不重要」的短信分类 / 美食取景框相机 / 六维人格雷达测评）+ 收录全仓库小工具的「特色应用商店」

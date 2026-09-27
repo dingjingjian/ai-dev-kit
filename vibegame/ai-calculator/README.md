@@ -21,7 +21,7 @@
 
 | 项 | 状态 |
 |----|------|
-| 小红书文案 | `xiaohongshu/小红书文案.md`（主推）、`xiaohongshu/推广笔记-多风格备选.md` |
+| 小红书文案 | `xiaohongshu/小红书文案.md`（主推）、`xiaohongshu/小红书文案-多风格备选.md` |
 | 应用图标 | `icon/app-icon.png`（矢量源 `icon/icon.html`） |
 | 运行截图 | `screenshots/人工智能计算器运行截图.png` |
 | 小工具打包 | `calculator-minitool.zip`（已打包，小红书小工具格式） |

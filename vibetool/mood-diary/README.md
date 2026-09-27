@@ -37,7 +37,7 @@ mood-diary/
 │   ├── build_zip.py        # 前置校验 + 打包 zip
 │   └── make_icon.py        # 生成应用图标
 ├── xiaohongshu/            # 小红书参赛素材
-│   └── 小红书笔记文案.md
+│   └── 小红书文案.md
 └── README.md
 ```
 

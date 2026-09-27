@@ -587,6 +587,99 @@ var badRes = null;
 try { badRes = S.chooseEvent(stBad, 99); } catch (err) { badRes = 'throw:' + err.message; }
 ok(badRes === false, '越界选项索引被安全拒绝（返回 false）', String(badRes));
 
+/* ── 暂停层（抽屉面板打开时冻结回合计时）──
+ *
+ * 为什么单列一节：这是「静默失效」的又一形态 —— 若 tick 里漏判 state.paused，
+ * 玩家打开航线面板慢慢算钱时回合照样推进，表现为「我刚看完，季度已经跳了两个」，
+ * 但没有任何断言会红。故把这条不变量钉在无头环境里（UI 侧的 openPanel/closePanel
+ * 调 S.setPaused，这条链路由 ui.js 保证，这里只验 sim 的契约）。 */
+section('暂停层');
+
+var stP = st9('C01');
+ok(stP.phase === 'operating', '先进入运营阶段', '实际 ' + stP.phase);
+/* ⚠ 基线取当前值而非假定 0：enterPhase('operating') 已把 quarter 置为 1
+ * （见 sim.js enterPhase），所以进入运营 = 第 1 季，不是第 0 季。
+ * 断言必须相对基线写，否则会把「机制正确」误判成失败。 */
+var tBeforeP = stP.t, qBeforeP = stP.quarter;
+S.setPaused(stP, true);
+ok(stP.paused === true, 'setPaused(true) 置位');
+S.advance(stP, (C.quarterSeconds || 60) * 3);
+near(stP.t, tBeforeP, 1e-9, '暂停期间 t 完全冻结（3 个季度的时间被丢弃）');
+ok(stP.quarter === qBeforeP, '暂停期间季度不推进',
+  '实际 Q' + stP.quarter + ' 期望 Q' + qBeforeP);
+/* 暂停时 nextQuarter 必须被拒绝 —— 否则返回 ok:true 而季度纹丝不动，
+ * 调用方会以为「推进成功」却没有动静（契约自相矛盾）。 */
+var nqRes = S.nextQuarter(stP);
+ok(nqRes && nqRes.ok === false, '暂停时 nextQuarter 被拒绝', JSON.stringify(nqRes));
+/* 恢复后计时照常走 */
+S.setPaused(stP, false);
+ok(stP.paused === false, 'setPaused(false) 复位');
+S.advance(stP, (C.quarterSeconds || 60) + 1);
+ok(stP.quarter === qBeforeP + 1, '恢复后季度正常推进一季',
+  '实际 Q' + stP.quarter + ' 期望 Q' + (qBeforeP + 1));
+
+/* ── 单航线架数上限（槽位容不下就拒绝派机）──
+ *
+ * 为什么单列一节：这是「玩家的钱被悄悄吃掉」的防线。此前 assignPlane 不校验架数，
+ * 一条线能塞任意多架飞机 —— 结算时总班次被槽位夹住不再增长，但每架的持有成本照付，
+ * 玩家只看到「加了机却没多赚」却找不到原因。现在把上限显式化并在此钉死。 */
+section('单航线架数上限');
+
+var aC = 'C01', bC = 'C03';
+var stC = st9(aC);
+var distC = S.routeDistance(stC, aC, bC);
+var tyC = AT.PLANES.filter(function (p) { return p.range >= distC; })
+  .sort(function (x, y) { return x.price - y.price; })[0].id;
+S.buyPlane(stC, tyC, 40);
+deliverAll(stC);
+var oC = S.openRoute(stC, aC, bC, tyC, 1);
+ok(oC.ok, '先开通一条测试航线', oC.reason);
+var rC = stC.routes[stC.routes.length - 1];
+
+/* 上限必须 ≥ 1：新线默认就是 1 架，若上限算出 0 会导致「开了线却派不进机」 */
+var capC = S.maxPlanesForRoute(stC, rC);
+ok(capC >= 1, 'maxPlanesForRoute ≥ 1', '实际 ' + capC);
+
+/* 与槽位口径交叉验证：上限 = floor(min(routeMaxPerDay, 槽位) / 每架每日班次)。
+ * 这里用**公开原语**重算一遍 —— 若哪天 settleRoute 的公式改了而这里没跟，
+ * 断言会红，逼两处一起改（避免「能派几架」与「实际飞几班」漂开）。 */
+var perPlaneC = Math.max(1, Math.min(S.maxPerDayFor(tyC, distC), rC.perDay || 3));
+var ceilingC = Math.min(C.routeMaxPerDay || 20, Math.floor(S.routeSlots(stC, aC, bC)));
+var capExpectC = Math.max(1, Math.floor(ceilingC / perPlaneC));
+ok(capC === capExpectC, '上限公式 = floor(min(时刻上限, 槽位) / 每架班次)',
+  '实际 ' + capC + ' 期望 ' + capExpectC);
+
+/* 派满：一直派到被拒为止，最终架数必须恰好等于上限 */
+var okC = 0, denyC = 0, lastDenyC = '';
+S.idlePlanes(stC).map(function (p) { return p.id; }).forEach(function (id) {
+  var res = S.assignPlane(stC, id, rC.key);
+  if (res.ok) okC++;
+  else { denyC++; if (!lastDenyC) lastDenyC = res.reason || ''; }
+});
+ok(S.planesOnRoute(stC, rC.key).length === capC, '派满后架数恰好等于上限',
+  '实际 ' + S.planesOnRoute(stC, rC.key).length + ' 期望 ' + capC);
+ok(denyC > 0, '超出的飞机全部被拒（不静默塞进去）', '成功 ' + okC + ' / 被拒 ' + denyC);
+ok(/饱和|最多容纳/.test(lastDenyC), '拒绝理由说明是时刻饱和', lastDenyC);
+
+/* 被拒的飞机必须原封未动（不能半途把 routeKey 写了一半）——
+ * 「钱花了、飞机闲置」正是这条规则要根治的失败形态。 */
+var assignedC = stC.planes.filter(function (p) { return p.routeKey === rC.key; }).length;
+ok(assignedC === capC, '被拒的飞机维持闲置（routeKey 未被写入）',
+  '实际挂在该线的飞机 ' + assignedC + ' 期望 ' + capC);
+
+/* 重复指派同一架：是空操作，应返回成功而不是「超限」 */
+var onLineC = S.planesOnRoute(stC, rC.key)[0];
+var againResC = S.assignPlane(stC, onLineC.id, rC.key);
+ok(againResC.ok === true, '把已在本线的飞机再指一次 = 空操作成功', JSON.stringify(againResC));
+
+/* 经济含义：cap 架时每架班次能被完整容纳（perPlane×cap ≤ 天花板），
+ * 而再多一架就会越顶 —— 这才是「槽位容不下」的判据（cap=1 为保底，可能已越顶）。 */
+ok(capC === 1 || perPlaneC * capC <= ceilingC,
+  '上限内的每架都能跑满班次（不被槽位夹掉）',
+  'perPlane ' + perPlaneC + ' × cap ' + capC + ' vs 天花板 ' + ceilingC);
+ok(perPlaneC * (capC + 1) > ceilingC, '再多一架就超出时刻天花板（拒绝的根据）',
+  'perPlane ' + perPlaneC + ' × ' + (capC + 1) + ' vs 天花板 ' + ceilingC);
+
 /* ── 汇总 ── */
 console.log('\n' + '═'.repeat(74));
 console.log('  结果：' + pass + ' 通过 / ' + fail + ' 失败  （共 ' + (pass + fail) + ' 项）');

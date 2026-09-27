@@ -7,7 +7,7 @@
 - 状态：已发布
 
 ## 补充
-- 素材源：`ai-dev-kit/vibetool/echarts-gallery/xiaohongshu/`（cover.png + feature-grid/prompt/theme.png + 小红书笔记文案.md）
+- 素材源：`ai-dev-kit/vibetool/echarts-gallery/xiaohongshu/`（cover.png + feature-grid/prompt/theme.png + 小红书文案.md）
 - 工具：vibetool/echarts-gallery（30 种图表速查图鉴小工具）
 - 内容：30 种常用图表速查图鉴，真实渲染预览 + AI 提示词一键复制 + 5 套主题整站一键换色 + 四大分类导航（基础统计 / 进阶 / 层级与关系 / 多维与组合）
 - 亮点：每种图表附「图表介绍 / 配色方案 / 适用-不适用」三段说明与可复制 AI 提示词；完全离线、无需安装，适配小红书小工具入口
