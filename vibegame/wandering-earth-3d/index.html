@@ -11,41 +11,49 @@
   <canvas id="stage"></canvas>
 
   <!-- ===== 顶部：只放「与驾驶无关、想起来才抬头看一眼」的信息 =====
-       用时 / 逃逸进度 / 小地图 / 后视镜 / 声音开关 —— 驾驶舱在屏幕底部（见 `#cockpit`）。
-       理由：点火窗口只有 2.5–2.8 秒，玩家的视线不能在上半屏（表盘）与下半屏（时机条）
-       之间来回跑；所以**凡是点火时要用到的，一律沉到同一条水平带上**。
-       顶部元素一律先叠一条 `--top-gap` 常量（小工具容器自带一排顶部按钮），再叠 `--sat`；
-       左列（用时 / 进度 / 小地图）宽度统一 104px，右上是声音键，中间留给后视镜。 -->
+       **一条顶栏**（`#topbar`）= 左「尾向观测」方形窗 ┊ 中「逃逸用时」┊ 右「小地图 + 声音开关」。
+       理由：点火窗口只有 2.5–2.8 秒，玩家的视线不能在上半屏与下半屏之间来回跑；
+       所以**凡是点火时要用到的，一律沉到屏幕底部同一条水平带上**。
+       整条顶栏先叠一条 `--top-gap` 常量（小工具容器自带一排顶部按钮），再叠 `--sat`。
+       ⓘ 2026-09-26：三块原本各自 `position:fixed`，现收进同一条 flex 顶栏 ——
+       左右两块**同尺寸正方形显示窗**（`--top-sq`）自然对称，中间的计时靠 `flex:1` 居中，
+       三处 top/left 的重复与对不齐一并消失。
+       左侧那块在代码里仍叫 `#mirror-frame`（scissor 复用的是同一块 canvas 矩形），
+       但**显示名已按世界观改成「尾向观测」**：它是朝**舰尾方向**（= 地球身后）的观测窗，
+       画面里能看见追上来的氦闪壳与两颗内侧行星。 -->
 
-  <div id="clock">
-    <span id="clock-time"><span id="clock-num">0:00</span><i id="clock-ms">.000</i></span>
-    <span id="clock-label">逃逸用时</span>
+  <div id="topbar">
+    <div id="mirror-frame"><span id="mirror-label">尾向观测</span></div>
+
+    <div id="clock">
+      <span id="clock-time"><span id="clock-num">0:00</span><i id="clock-ms">.000</i></span>
+      <span id="clock-label">逃逸用时</span>
+    </div>
+
+    <!-- 右列 = 小地图 + 声音开关（竖排；整列的触摸由顶栏统一关掉，只有声音键开回来） -->
+    <div id="top-right">
+      <canvas id="radar"></canvas>
+      <button id="mute" type="button" aria-label="关闭背景音乐">
+        <span class="mu-note">♪<span class="mu-slash"></span></span><span class="mu-txt">背景音乐</span>
+      </button>
+    </div>
   </div>
 
-  <!-- 逃逸进度：任务总进度，与「驾驶」无关 —— 跟着用时挂在左上，需要时抬头看一眼。
-       宽度与上方计时、下方小地图对齐成一列（104px），不占屏幕中间的画面。 -->
-  <div id="progress"><div id="prog-track"><div id="prog-fill"></div></div><span id="prog-label">逃逸进度 0%</span></div>
-
-  <canvas id="radar"></canvas>
-
-  <div id="mirror-frame"><span id="mirror-label">后视镜 · 氦闪壳</span></div>
-
-  <button id="mute" type="button" aria-label="关闭背景音乐">
-    <span class="mu-note">♪</span><span class="mu-slash"></span>
-  </button>
-
-  <!-- ===== 底部驾驶舱 `#cockpit`：本作唯一的操作区（自下而上 = 仪表行 → 时机条 → 消息槽）=====
+  <!-- ===== 底部驾驶舱 `#cockpit`：本作唯一的操作区（自下而上 = 信息栏 → 时机条 → 消息槽）=====
        一次点火窗口只有 2.5–2.8 秒，而判定针、温度余量、速度、发动机功率要同时读 ——
-       三者必须在**同一条水平带上**：所以仪表行与时机条都贴在屏幕底部，消息槽向上生长。
-       时机条与仪表行都是常驻盒子（`.hide` 只改透明度、不塌陷），窗口开合不引起任何跳动。 -->
+       三者必须在**同一条水平带上**：所以信息栏与时机条都贴在屏幕底部，消息槽向上生长。
+       时机条与信息栏都是常驻盒子（`.hide` 只改透明度、不塌陷），窗口开合不引起任何跳动。 -->
 
   <div id="cockpit">
 
-    <!-- 消息槽（整屏唯一一条状态提示，零高度槽位）：同一时刻只显示一条 ——
-         过热 / 耀斑脉冲 > 掠过评级 > 巡航倒计时。评级条由 showFlybyToast 填，
-         状态提示由 updateHUD 填；两者靠 updateHUD 的优先级互斥，绝不叠字。
-         槽位自身高度为 0，两条提示都绝对定位、由底边向上生长 ——
-         长文案只会盖住 3D 画面，永远不会把下面的时机条与仪表行顶走。 -->
+    <!-- 时机条 + 消息槽**同一条带**（`#cockpit-stage`）：
+         2026-09-27 反馈「点火提示框应固定在仪表盘上面；弹弓结果与 toast 统一样式、在它上面浮动」——
+         于是：**时机条固定**贴在仪表盘之上（不再因来提示而上下移动），
+         消息槽排在时机条**之前**（= 显示在它上方）且保持零高度浮动，两者不互相推挤。
+         评级条（#fb-toast）与状态提示（#warn）共用这一个槽位、按优先级互斥，
+         并且共用同一张「终端消息卡」样式。 -->
+    <div id="cockpit-stage">
+    <!-- 消息槽：零高度，浮在时机条上方 -->
     <div id="cockpit-msg">
       <div id="fb-toast">
         <div class="ft-top"><b id="ft-name"></b><span id="ft-grade"></span></div>
@@ -69,9 +77,23 @@
         <div class="fb-zone fb-late" id="fb-late"><span>过晚</span></div>
         <div id="fb-needle"></div>
       </div>
+      <!-- 巡航段（窗口还没开）：同一条带换成**下一站进度条**。
+           窗口外那条带原本是整条隐掉的（.hide 只改透明度，盒子还在）——
+           于是「离下一站还有多远」全靠行星在画面里越长越大来猜。
+           现在它按**弧长**填，终点不是行星本身而是**窗口开启那一刻**
+           （扣掉 v × winTime 那段提前量 —— 否则木星这种短腿在窗口已开时只走到 50%）。
+           不报秒数，张力仍在。 -->
+      <div id="fb-next">
+        <div id="fb-next-track"><div id="fb-next-fill"></div></div>
+        <span id="fb-next-pct">0%</span>
+      </div>
     </div>
 
-    <!-- 仪表行（底部平铺）：**功率 / 温度 / 速度** 三个表盘 + 右端「四盏警报灯 + 距日 / 距壳」。
+    </div>
+
+    <!-- 底部信息栏（`#dash`）两排：上排 = **表盘 │ 参数** 两列（参数 = 四盏警报灯 + 距日 / 距壳），
+         下排 = **逃逸进度独占一行**。ⓘ 2026-09-26：进度从左上列下沉到这里；小地图先并进来、
+         同一天又搬到顶栏（42px 太小），顶部只剩顶栏那三块（尾向观测窗 / 计时 / 小地图 + 声音键）。
          顺序 = 驾驶时的手上顺序：先看**功率**（这一下按出去多大力：起转斜坡，0.5 s 爬到额定线）、
          再看**温度**（按了这么久离满箱还有多远）、最后看**速度**（够不够门槛刻度）。
          表盘弧 = r38 的 270° 弧（正下方留 90° 缺口当数字位），指针绕 (50,50) 旋转 ±135°；
@@ -79,8 +101,14 @@
          这就是「乘波」看得见的样子）、温度 100%、速度 80 km/s（带当前行星的门槛刻度）。
          **温度 = ∫ 功率**：功率指针越高，温度指针爬得越快（过晚残效 20% 几乎不爬）。 -->
     <div id="dash">
+      <div id="dash-line">
       <div id="dash-row">
+        <!-- 每格 = `.dg-face`（表盘本身 + 落在弧缺口里的数值与单位）+ 底下一条标题。
+             2026-09-27：数值与单位原本按**整格**（含标题行）的百分比定位 ——
+             标题一换字号，数字就跟着漂，且和弧之间留出一大段空档。
+             现在它们挂进 `.dg-face`，百分比只相对**表盘**算，永远贴在弧的缺口里。 -->
         <div class="dg" id="dg-pw">
+          <div class="dg-face">
           <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
             <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
             <path class="dg-arc" id="dg-pw-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
@@ -90,9 +118,11 @@
           </svg>
           <span class="dg-v" id="tm-pw">0</span>
           <span class="dg-u">%</span>
+          </div>
           <span class="dg-cap">功率</span>
         </div>
         <div class="dg" id="dg-heat">
+          <div class="dg-face">
           <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
             <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
             <path class="dg-arc" id="dg-heat-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
@@ -101,9 +131,11 @@
           </svg>
           <span class="dg-v" id="tm-heat">0</span>
           <span class="dg-u">%</span>
+          </div>
           <span class="dg-cap">温度</span>
         </div>
         <div class="dg" id="dg-speed">
+          <div class="dg-face">
           <svg class="dg-svg" viewBox="0 0 100 100" aria-hidden="true">
             <path class="dg-track" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
             <path class="dg-arc" id="dg-speed-arc" d="M23.13 76.87A38 38 0 1 1 76.87 76.87"/>
@@ -113,9 +145,11 @@
           </svg>
           <span class="dg-v" id="tm-speed">0.0</span>
           <span class="dg-u">km/s</span>
+          </div>
           <span class="dg-cap">速度</span>
         </div>
       </div>
+      <!-- 第 2 列：参数（四盏警报灯 + 距日 / 距壳） -->
       <div id="dash-side">
         <div id="lamps">
           <span class="lamp" id="lamp-hot"><i></i>过热</span>
@@ -128,6 +162,10 @@
           <span class="dr"><em>距壳</em><b id="tm-gap" class="dr-v">0.00 AU</b></span>
         </div>
       </div>
+      </div>
+      <!-- 逃逸进度**独占最下沿一行**（通宽）：与驾驶无关的任务总进度 ——
+           放在最下沿既不挡画面，也不必再让视线跑到屏幕上边。 -->
+      <div id="progress"><span id="prog-label">逃逸进度 0%</span><div id="prog-track"><div id="prog-fill"></div></div></div>
     </div>
 
   </div>
@@ -136,84 +174,164 @@
   <div id="danger"></div>
   <div id="flash"></div>
 
+  <!-- ===== 开场简报：**整屏终端**，不是居中一张卡片 =====
+       旧版是「居中 352px 圆角卡片 + 边框 + 四角折角 + 三颗窗口圆点 + 投影」——
+       那是宿主里一个对话框的样子；这一页本来就该是「MOSS 把简报打在整块屏上」。
+       三段骨架（`style.css` 里的 `.scr / .scr-top / .scr-body / .scr-foot`）：
+         屏顶状态行（指示灯 + 标题 + 右端信号条）→ 正文（自己滚动）→ 屏底动作区。
+       「点火启航」钉在屏底，矮屏只滚正文，永远不会被推出屏幕。 -->
   <div id="brief">
-    <div class="bf-inner">
-      <div class="bf-kicker">流浪地球 · 引力弹弓</div>
-      <div class="bf-title">逃出太阳系</div>
-      <!-- 航线示意：**扁而宽**（viewBox 210×84，不是 210×130）——
-          高度省掉 1/3，宽度全留给字号：标签从 7.5 提到 9~9.5，缩到 200px 宽也读得清。
-          原版在 216px 宽下标签只有 5px 出头，等于一排灰点。 -->
-      <svg class="bf-svg" viewBox="0 0 210 84">
-        <defs>
-          <radialGradient id="sunG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffec80"/><stop offset="60%" stop-color="#ff7a14"/><stop offset="100%" stop-color="#c43a00"/></radialGradient>
-          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#5cc8ff"/></marker>
-        </defs>
-        <circle cx="20" cy="58" r="9" fill="url(#sunG)"/>
-        <circle cx="20" cy="58" r="15" fill="none" stroke="#ff4a14" stroke-width="1.5" stroke-dasharray="4 3" opacity=".75"/>
-        <text x="20" y="82" text-anchor="middle" font-size="8" fill="#ff7a14">氦闪壳</text>
-        <path d="M34 56 C 88 52, 130 48, 168 30" fill="none" stroke="#5cc8ff" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8"/>
-        <circle cx="58" cy="55" r="5" fill="#5cc8ff" stroke="#fff" stroke-width=".6"/>
-        <text x="58" y="43" text-anchor="middle" font-size="9" fill="#5cc8ff">地球</text>
-        <circle cx="120" cy="35" r="8.5" fill="#dbc29e" opacity=".85"/>
-        <text x="120" y="21" text-anchor="middle" font-size="9" fill="#dbc29e">行星</text>
-        <path d="M166 32 l 10 -8" stroke="#5cc8ff" stroke-width="2" marker-end="url(#arr)"/>
-        <text x="206" y="12" text-anchor="end" font-size="9.5" fill="#5cc8ff">逃出太阳系</text>
-      </svg>
-      <!-- 世界观一句话：与示意图同构（左=身后追击的氦闪壳，右=唯一航向），读图即读文 -->
-      <div class="bf-sub">身后是氦闪膨胀壳，前方只有一条航线。</div>
-      <!-- MOSS 终端：情报与权限的对照 —— MOSS 算好一切，留给人的决定只剩「什么时候点火」 -->
-      <div class="bf-term">
-        <span class="bf-moss">MOSS：航线已解算 · 五次点火窗口</span>
-        <span class="bf-you">你：决定点火时刻</span>
+    <div class="scr">
+      <div class="scr-top">
+        <span class="scr-led"></span><span class="scr-t">流浪地球 · 引力弹弓</span>
+        <span class="scr-meter"><i></i><i></i><i></i></span>
       </div>
-      <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条。
-           三条**单行**指令，一条一义 —— 开局只有一次读规则的机会，
-           动作（按住 / 等判定针）与代价（作废）必须分行、分色；
-           左侧竖线把 1→2 串成「照着做」的流程，在红卡前淡出 —— 那是「别做」的分支。
-           第一版每条各带一行灰色「为什么」，三张两行卡片把面板顶到 620px，
-           320×568 上必须滚动才能看到「点火启航」；那行「为什么」交给局内
-           HUD（温度表盘 / 过热灯 / 消息槽）在玩家真正需要时再讲。 -->
-      <div id="tip" class="bf-steps">
-        <div class="bf-step"><span class="bs-n">1</span><span class="bs-t"><b>按住屏幕</b> ＝ 点火，松手即停机</span></div>
-        <div class="bf-step"><span class="bs-n">2</span><span class="bs-t">等判定针滑进<b>绿色区间</b>再按住</span></div>
-        <div class="bf-step bad"><span class="bs-n">!</span><span class="bs-t">窗口外点火 → <b>本次弹弓作废</b></span></div>
+      <div class="scr-body">
+        <div class="scr-wrap">
+        <div class="bf-title">逃出太阳系</div>
+        <!-- 航线示意：**扁而宽**（viewBox 210×86，不是 210×130）——
+             高度省掉 1/3，宽度全留给字号，缩到 200px 宽也读得清标签。
+             终端风格：网格底 + 虚线航迹 + 空心圆环（地球 / 行星）。
+             **配色只留三个色系**（与整页同一套，见 style.css 里那段「配色」注释）：
+               航迹 / 地球 / 出口 = 主绿 `--acc`；行星 = 中性灰；太阳与氦闪壳 = 琥珀 `--warn`；
+               网格 = 机器绿 `--term` 低透明（只做底纹）。
+             旧版这里是「青绿航迹 + 青蓝地球 + 土黄行星 + 橙红太阳」四色混排，外加 8 / 9 / 9.5
+             三档字号，是这一页读起来乱的主要来源。现全部标签统一 10px。 -->
+        <svg class="bf-svg" viewBox="0 0 210 86">
+          <defs>
+            <radialGradient id="sunG" cx="50%" cy="50%"><stop offset="0%" stop-color="#ffe9a3"/><stop offset="55%" stop-color="#ffb84d"/><stop offset="100%" stop-color="#7a3d00"/></radialGradient>
+            <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#2ecf9a"/></marker>
+          </defs>
+          <g stroke="rgba(70,232,178,.13)" stroke-width="0.6">
+            <line x1="0" y1="24" x2="210" y2="24"/><line x1="0" y1="48" x2="210" y2="48"/><line x1="0" y1="72" x2="210" y2="72"/>
+            <line x1="52" y1="0" x2="52" y2="86"/><line x1="104" y1="0" x2="104" y2="86"/><line x1="156" y1="0" x2="156" y2="86"/>
+          </g>
+          <circle cx="22" cy="60" r="8" fill="url(#sunG)"/>
+          <circle cx="22" cy="60" r="15" fill="none" stroke="#ffb84d" stroke-width="1.4" stroke-dasharray="4 3" opacity=".75"/>
+          <path d="M36 58 C 88 54, 132 48, 170 30" fill="none" stroke="#2ecf9a" stroke-width="1.5" stroke-dasharray="5 4" opacity=".85"/>
+          <circle cx="60" cy="56" r="5.5" fill="none" stroke="#2ecf9a" stroke-width="1.5"/>
+          <circle cx="60" cy="56" r="1.6" fill="#2ecf9a"/>
+          <text x="60" y="42" text-anchor="middle" font-size="10" fill="#2ecf9a">地球</text>
+          <!-- 沿途五站：木 / 土 / 天 / 海 / 冥，尺寸按真实次序递减 —— 「行星 ×5」不是装饰，
+               它就是 MOSS 那行「5 次点火窗口」的图形版（读图即读文） -->
+          <circle cx="92" cy="52" r="3.4" fill="none" stroke="#8fb3aa" stroke-width="1.2" opacity=".75"/>
+          <circle cx="124" cy="36" r="8.5" fill="none" stroke="#8fb3aa" stroke-width="1.5"/>
+          <circle cx="124" cy="36" r="3" fill="#8fb3aa" opacity=".8"/>
+          <circle cx="150" cy="42" r="5.2" fill="none" stroke="#8fb3aa" stroke-width="1.2" opacity=".75"/>
+          <text x="124" y="20" text-anchor="middle" font-size="10" fill="#8fb3aa">行星 ×5</text>
+          <path d="M170 30 l 9 -7" stroke="#2ecf9a" stroke-width="1.5" marker-end="url(#arr)"/>
+          <text x="206" y="12" text-anchor="end" font-size="10" fill="#2ecf9a">太阳系外</text>
+          <text x="22" y="83" text-anchor="middle" font-size="10" fill="#ffb84d">氦闪壳</text>
+        </svg>
+        <!-- MOSS 终端：情报与权限的对照 —— MOSS 算好一切，留给人的决定只剩「什么时候点火」。
+             2026-09-27：处境（氦闪壳在身后追）与目标（最短用时）原本分挂两处，现并成
+             **MOSS 的第二条输出** —— 两条 MOSS（情报 + 处境/目标）对一条「你」（决定何时点火），
+             情报与权限的对照因此更清楚，也不再有两块各说一句的灰字。 -->
+        <div class="bf-term">
+          <span class="bf-moss">MOSS：航线已解算 · 5 次点火窗口</span>
+          <span class="bf-moss bf-goal">MOSS：氦闪壳在身后追 · 唯一目标＝用<b>最短用时</b>逃出太阳系</span>
+          <span class="bf-you">你：决定何时点火</span>
+        </div>
+        <!-- 唯一操作：「怎么点火」只在开场交代一次，局内不再挂常驻提示条。
+             三条**单行**指令，一条一义 —— 开局只有一次读规则的机会，
+             动作（按住 / 等判定针）与代价（作废）必须分行、分色；
+             左侧竖线把 1→2 串成「照着做」的流程，在红卡前淡出 —— 那是「别做」的分支。
+             第一版每条各带一行灰色「为什么」，三张两行卡片把面板顶到 620px，
+             320×568 上必须滚动才能看到「点火启航」；那行「为什么」交给局内
+             HUD（温度表盘 / 过热灯 / 消息槽）在玩家真正需要时再讲。 -->
+        <div id="tip" class="bf-steps">
+          <div class="bf-step"><span class="bs-n">1</span><span class="bs-t"><b>按住屏幕任意处</b> ＝ 点火，松手即停</span></div>
+          <div class="bf-step"><span class="bs-n">2</span><span class="bs-t">判定针进<b>绿色区间</b>再按住</span></div>
+          <div class="bf-step bad"><span class="bs-n">!</span><span class="bs-t">窗口外点火 → <b>本次弹弓作废</b></span></div>
+        </div>
+        </div>
       </div>
-      <div class="bf-goal">唯一目标：用<b>最短的时间</b>逃出太阳系</div>
-      <button id="bf-btn" class="bf-btn" type="button">点火启航</button>
+      <div class="scr-foot">
+        <button id="bf-btn" class="bf-btn" type="button">点火启航</button>
+      </div>
     </div>
   </div>
 
+  <!-- ===== 结算：与简报同一套整屏骨架，正文换成一份任务报告 =====
+       状态行 → 被两条通宽细线夹住的用时读数 → 一句收尾 / 失败原因 →
+       四行统计清单（名目在左、数值在右，一条点线引导）→ 屏底两个按钮。
+       用时仍是唯一的主角。行内统计由脚本现拼（`.rsr` = 名目 + 数值），这里保持空容器。
+       **只有屏底两个按钮有动作**：点正文不再重开（旧版点哪都能关，想点分享却按到正文 →
+       整页重开、战绩与分享入口一起被跳过）。 -->
   <div id="result">
-    <div class="rs-inner">
-      <div id="rs-title" class="rs-title"></div>
-      <div id="rs-time-box" class="rs-time">
-        <span id="rst-label" class="rst-label">逃逸用时</span>
-        <span id="rs-time-value" class="rst-value">0.0<i>s</i></span>
-        <span id="rs-best" class="rst-best">本站最快 0.0 s</span>
+    <div class="scr">
+      <div class="scr-top">
+        <span class="scr-led"></span><span class="scr-t">MOSS · 航迹记录</span>
+        <span class="scr-meter"><i></i><i></i><i></i></span>
       </div>
-      <div id="rs-text" class="rs-text"></div>
-      <div id="rs-stat" class="rs-stat"></div>
-      <div class="rs-actions">
-        <button id="rs-share" class="rs-btn ghost" type="button">分享战绩</button>
-        <button id="rs-btn" class="rs-btn" type="button">再来一次</button>
+      <div class="scr-body">
+        <div class="scr-wrap">
+          <div id="rs-title" class="rs-title"></div>
+          <div id="rs-time-box" class="rs-time">
+            <span id="rst-label" class="rst-label">逃逸用时</span>
+            <span id="rs-time-value" class="rst-value">0.0<i>s</i></span>
+            <span id="rs-best" class="rst-best">本站最快 0.0 s</span>
+          </div>
+          <div id="rs-text" class="rs-text"></div>
+          <div id="rs-stat" class="rs-stat"></div>
+          <div id="rs-hint" class="rs-hint"></div>
+        </div>
       </div>
-      <div id="rs-hint" class="rs-hint"></div>
+      <div class="scr-foot">
+        <div class="rs-actions">
+          <button id="rs-share" class="rs-btn ghost" type="button">分享战绩</button>
+          <button id="rs-btn" class="rs-btn" type="button">再来一次</button>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- ===== 启动页 = MOSS 启动自检 =====
+       资源全部内联，真实加载只要一两百毫秒 —— 启动页会**一闪而过**，
+       玩家来不及读到「这是谁的屏、在做什么」。故给它一段**最短停留时长**
+       （主程序 §5b 的 BOOT_MIN_MS，改那一个数就能调），并把这段时间
+       做成一条**逐项打勾的自检清单**：轨道 → 引力 → 发动机 → 氦闪 → 生命维持。
+       自检没走完就**不推进开场过场**（`introT` 由 `bootDone` 门控），
+       于是过场镜头不会在启动页背后悄悄放完。 -->
   <div id="loader">
-    <div class="loader-spin"></div>
-    <p>正在加载轨道数据…</p>
+    <div class="ld-mark">MOSS</div>
+    <div class="ld-sub">地球联合政府 · 领航员号</div>
+
+    <div class="ld-log" id="ld-log">
+      <div class="ld-line"><em>轨道数据库</em><i></i><b>···</b></div>
+      <div class="ld-line"><em>引力弹弓模型</em><i></i><b>···</b></div>
+      <div class="ld-line"><em>行星发动机</em><i></i><b>···</b></div>
+      <div class="ld-line"><em>氦闪预警</em><i></i><b>···</b></div>
+      <div class="ld-line"><em>生命维持</em><i></i><b>···</b></div>
+    </div>
+
+    <div class="ld-bar"><i id="ld-fill"></i></div>
+    <p id="ld-status">正在校验轨道数据库…</p>
   </div>
 
+  <!-- 不支持 WebGL = 终端报错屏 -->
   <div id="fallback">
-    <h2>无法启动 3D 场景</h2>
-    <p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Safari。</p>
+    <div class="fl-inner">
+      <div class="fl-tag">ERROR</div>
+      <h2>无法启动 3D 场景</h2>
+      <p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Safari。</p>
+    </div>
   </div>
 
+  <!-- 天体贴图：全部**内联 base64**（file:// 直接打开时 <img> 加载本地图片会污染画布，
+       导致 texImage2D 被拒），由 tools/make-texture-data.mjs 从
+       vibeknow/solar-system-3d/assets/（NASA 影像）生成。地球贴图不在此列（历史版本保留）。 -->
   <script src="./assets/earth-data.js"></script>
+  <!-- 掠过五站 -->
   <script src="./assets/jupiter-data.js"></script>
   <script src="./assets/saturn-data.js"></script>
+  <script src="./assets/uranus-data.js"></script>
+  <script src="./assets/neptune-data.js"></script>
+  <script src="./assets/pluto-data.js"></script>
+  <!-- 场上其他行星（不参与判定） -->
+  <script src="./assets/mercury-data.js"></script>
+  <script src="./assets/venus-data.js"></script>
+  <script src="./assets/mars-data.js"></script>
   <script src="./assets/bgm-data.js"></script>
   <script src="./assets/three.min.js"></script>
   <script src="./assets/app.js"></script>

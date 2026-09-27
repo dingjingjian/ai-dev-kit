@@ -153,9 +153,12 @@
   var FLYBYS = [
     flyby({ key: 'jupiter', name: '木星', rKm: 69911, mEarth: 317.8, orbitR: 5.20 * AU, clear: 29.3, vNeed: 98, vSling: 156, tex: 'JUPITER_TEXTURE_URI', color: 0xdbc29e }),
     flyby({ key: 'saturn', name: '土星', rKm: 58232, mEarth: 95.2, orbitR: 9.54 * AU, clear: 26.7, vNeed: 130, vSling: 168, tex: 'SATURN_TEXTURE_URI', color: 0xe0d4a8, ring: true }),
-    flyby({ key: 'uranus', name: '天王星', rKm: 25362, mEarth: 14.54, orbitR: 19.20 * AU, clear: 24, vNeed: 138, vSling: 172, procColor: 0x4fd4e0 }),
-    flyby({ key: 'neptune', name: '海王星', rKm: 24622, mEarth: 17.15, orbitR: 30.10 * AU, clear: 22.7, vNeed: 138, vSling: 172, procColor: 0x3a5fd8 }),
-    flyby({ key: 'pluto', name: '冥王星', rKm: 1188, mEarth: 0.00218, orbitR: 39.50 * AU, clear: 14.4, vNeed: 132, vSling: 164, procColor: 0x8a7a6a })
+    // 2026-09-27：五站**全部换真实影像**（此前天王星 / 海王星 / 冥王星是程序化色块）。
+    // 贴图来自 vibeknow/solar-system-3d/assets/（NASA 影像），同样内联 base64。
+    // color 现在只给**光晕**（柔光 sprite）用，不再兼作程序化贴图底色。
+    flyby({ key: 'uranus', name: '天王星', rKm: 25362, mEarth: 14.54, orbitR: 19.20 * AU, clear: 24, vNeed: 138, vSling: 172, tex: 'URANUS_TEXTURE_URI', color: 0x9dd9e0 }),
+    flyby({ key: 'neptune', name: '海王星', rKm: 24622, mEarth: 17.15, orbitR: 30.10 * AU, clear: 22.7, vNeed: 138, vSling: 172, tex: 'NEPTUNE_TEXTURE_URI', color: 0x4a7fd6 }),
+    flyby({ key: 'pluto', name: '冥王星', rKm: 1188, mEarth: 0.00218, orbitR: 39.50 * AU, clear: 14.4, vNeed: 132, vSling: 164, tex: 'PLUTO_TEXTURE_URI', color: 0xc2a08a })
   ];
 
   // ---- 不参与判定的「场上其他行星」：水星 / 金星 / 火星 ----
@@ -167,13 +170,15 @@
   //                 于是地球会在开局不久从它旁边过去 —— 看得见，但吃不到弹弓。
   //   · 'behind' —— 轨道半径在航线起点**内侧**（水星 0.39 / 金星 0.72 AU，航线根本不到那儿）：
   //                 摆在地球起点同一方位角、黄道面上 → 它永远在地球身后。
-  //                 正前方看不到（物理上也不该看到），靠后视镜 + 小地图读出来。
+  //                 正前方看不到（物理上也不该看到），靠尾向观测窗 + 小地图读出来。
   var SCENERY_LIFT = 40;        // 与 clear 同倍率放大（15 × 2.667），保证「从它旁边过」的构图不变
   function scenery(o) { o.rad = bodyR(o.rKm); return o; }
   var SCENERY = [
-    scenery({ key: 'mercury', name: '水星', rKm: 2440, mEarth: 0.0553, orbitR: 0.387 * AU, color: 0x9a8f86, place: 'behind' }),
-    scenery({ key: 'venus', name: '金星', rKm: 6052, mEarth: 0.815, orbitR: 0.723 * AU, color: 0xe8c88a, place: 'behind' }),
-    scenery({ key: 'mars', name: '火星', rKm: 3390, mEarth: 0.107, orbitR: 1.524 * AU, color: 0xc1440e, place: 'route' })
+    // 同样换成真实影像（2026-09-27）：它们只在尾向观测窗 / 小地图里的小点上出现，
+    // 真实纹理让「那是水星 / 金星 / 火星」这件事一眼可辨，而不是三个灰球。
+    scenery({ key: 'mercury', name: '水星', rKm: 2440, mEarth: 0.0553, orbitR: 0.387 * AU, color: 0x9a8f86, tex: 'MERCURY_TEXTURE_URI', place: 'behind' }),
+    scenery({ key: 'venus', name: '金星', rKm: 6052, mEarth: 0.815, orbitR: 0.723 * AU, color: 0xe8c88a, tex: 'VENUS_TEXTURE_URI', place: 'behind' }),
+    scenery({ key: 'mars', name: '火星', rKm: 3390, mEarth: 0.107, orbitR: 1.524 * AU, color: 0xc1440e, tex: 'MARS_TEXTURE_URI', place: 'route' })
   ];
 
   // ---- 质量 → 时机窗口（两遍：先扫出全体的 v_esc 范围，再归一化）----
@@ -351,6 +356,28 @@
   }
 
   var INTRO_TIME = 2.6;         // 开场过场时长（秒）
+
+  // ============================================================
+  //  5b. 启动页（MOSS 自检）常量
+  // ============================================================
+  // 资源全部内联（贴图 / BGM / 引擎都是 base64 或同目录 js），真实加载只要一两百毫秒 ——
+  // 启动页会**一闪而过**，玩家读不到「这是谁的屏、在为出发做什么准备」。
+  // 故给启动页一段**最短停留**：BOOT_MIN_MS 就是那个**唯一旋钮**（改这一个数即可调长短）。
+  // 停留期间按 BOOT_STEPS 逐项打勾自检清单，走满才交出操控权；
+  // 期间**不推进开场过场**（introT 由 bootDone 门控），过场镜头不会在启动页背后放完。
+  var BOOT_MIN_MS = 3000;
+  // 走满之后再多留一拍：让「自检完成 · 移交操控权」这句话真的被看到
+  // （否则 100% 与撤屏发生在同一帧，最后一句状态等于没写）
+  var BOOT_TAIL_MS = 400;
+  // t = 该项打勾的时刻（占 BOOT_MIN_MS 的比例）；k = 清单上的名字（与 index.html 的 .ld-line 一一对应）
+  var BOOT_STEPS = [
+    { t: 0.12, k: '轨道数据库' },
+    { t: 0.32, k: '引力弹弓模型' },
+    { t: 0.52, k: '行星发动机' },
+    { t: 0.72, k: '氦闪预警' },
+    { t: 0.90, k: '生命维持' }
+  ];
+  var BOOT_DONE_MSG = '自检完成 · 移交操控权';
 
   // ============================================================
   //  6. 相机常量（渲染层与无头自检共用）
@@ -896,7 +923,8 @@
     CAM_PAN_TILT_MAX: CAM_PAN_TILT_MAX,
     RING_IN: RING_IN, RING_OUT: RING_OUT, SAT_TILT: SAT_TILT, RING_NORMAL: RING_NORMAL.slice(),
     ENGINE_COUNT: ENGINE_COUNT, ENGINE_SHELL: ENGINE_SHELL, ENGINE_AXIS: ENGINE_AXIS.slice(),
-    INTRO_TIME: INTRO_TIME
+    INTRO_TIME: INTRO_TIME,
+    BOOT_MIN_MS: BOOT_MIN_MS, BOOT_STEPS: BOOT_STEPS, BOOT_DONE_MSG: BOOT_DONE_MSG
   };
 
   // ============================================================
@@ -986,7 +1014,7 @@
   })();
 
   // ---- 光照 ----
-  scene.add(new THREE.AmbientLight(0x223044, 0.6));
+  scene.add(new THREE.AmbientLight(0x1e3a34, 0.6));
   var sunLight = new THREE.PointLight(0xfff2d0, 2.5, 0, 1.2);
   sunLight.position.set(0, 0, 0); scene.add(sunLight);
 
@@ -1072,17 +1100,31 @@
     var t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; return t;
   }
   var earthGroup = new THREE.Group(); scene.add(earthGroup);
+  // **南极洲朝前**：SphereGeometry 的南极在 -Y，而本组的 +Z 才是航向（羽流朝 -Z 喷）。
+  // 把承载球体的这一组绕 X 轴转 **-90°** → 南极（-Y）落到 +Z（= 正前方）。
+  // 自检推算（也写进 tests）：rotation.x = θ 时，镜头那一侧看到的点 = R_x(-θ)·(0,0,-1)，
+  //   θ = -90° → 局部 +Y = **北极**朝镜头（南极在正前方，背对镜头）✅ 要的就是这个；
+  //   θ = +90° → 局部 -Y = **南极**朝镜头 → 南极变成「向后」❌（2026-09-27 实机反馈踩到过）。
+  // 所以符号必须是 -1；若哪天换贴图或改相机，先翻这一行再按下面对照表验一次。
+  // 判定口径：镜头正对的那一侧中心应是**灰白海冰 + 四周有陆地**（北极），
+  //           而**一整块白色大陆**（南极洲）只出现在飞行正前方、背对镜头。
+  var EARTH_POLE_SIGN = -1;  // +1 / -1：南极朝行进方向（-1）还是朝镜头（+1）
+  var earthBody = new THREE.Group();
+  earthBody.rotation.x = EARTH_POLE_SIGN * Math.PI / 2;
+  earthGroup.add(earthBody);
   var earthMat = new THREE.MeshStandardMaterial({ map: dataTex(global.EARTH_TEXTURE_URI) || plainTex('#3a5a7a'), color: 0x8aa8c8, roughness: .8, metalness: .06 });
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 48, 32), earthMat));
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.004, 48, 32),
+  earthBody.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R, 48, 32), earthMat));
+  earthBody.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.004, 48, 32),
     new THREE.MeshStandardMaterial({ map: iceOverlayTex(), transparent: true, opacity: .75, roughness: .9, metalness: .02, depthWrite: false })));
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.012, 48, 32),
+  earthBody.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.012, 48, 32),
     new THREE.MeshStandardMaterial({ color: 0xdde8f5, transparent: true, opacity: .2, roughness: 1, depthWrite: false })));
-  earthGroup.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32),
+  earthBody.add(new THREE.Mesh(new THREE.SphereGeometry(EARTH_R * 1.06, 48, 32),
     new THREE.MeshBasicMaterial({ color: 0x4a86c8, side: THREE.BackSide, transparent: true, opacity: .22, blending: THREE.AdditiveBlending, depthWrite: false })));
 
+  // 发动机羽流统一成**薄荷白**（0x8af2d4）：整屏主色改成绿之后，青蓝的等离子焰
+  // 会成了画面上唯一一块蓝 —— 加色混合下它仍读作「白热」，只是偏绿。
   var thrustFlame = new THREE.Mesh(new THREE.ConeGeometry(EARTH_R * 0.35, EARTH_R * 1.8, 12),
-    new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+    new THREE.MeshBasicMaterial({ color: 0x8af2d4, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
   thrustFlame.visible = false; earthGroup.add(thrustFlame);
 
   var _flameAxis = new THREE.Vector3(0, 1, 0), _flameDir = new THREE.Vector3();
@@ -1090,17 +1132,38 @@
   var _targetQuat = new THREE.Quaternion();
 
   // ---- 行星发动机 ----
+  // 2026-09-27：原先 48 台只画了本体（一小枚锥体）+ 中间一束主焰 —— 远看是「地球后面挂了一根棒」，
+  // 看不出「上万台发动机同时在喷」。现在每台**自带一道等离子柱**：
+  //   · 柱体 = 同一份几何 + 同一份材质（48 个 Mesh 只改 visible / scale，不新建材质）
+  //   · 柱长随推力实时变（点火起转时从短到长），并叠一点高频抖动 —— 等离子不是稳定水流
+  //   · 底座锚在发动机上：只缩放长度时同步改 z，锥底才不会跟着往前爬
   var engineGroup = new THREE.Group(); earthGroup.add(engineGroup);
-  var engines = [];
-  var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.05, EARTH_R * 0.45, 6);
+  var engines = [], plumes = [];
+  var engineGeo = new THREE.ConeGeometry(EARTH_R * 0.062, EARTH_R * 0.5, 6);
   var engineQuat = new THREE.Quaternion().setFromUnitVectors(_flameAxis, _negZAxis);
+  var PLUME_LEN = EARTH_R * 1.15;
+  var plumeGeo = new THREE.ConeGeometry(EARTH_R * 0.05, PLUME_LEN, 6);
+  var plumeMat = new THREE.MeshBasicMaterial({
+    color: 0x8af2d4, transparent: true, opacity: .5,
+    blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide
+  });
   var engineSlots = engineLayout();
   for (var ei = 0; ei < engineSlots.length; ei++) {
-    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
-    cone.position.set(engineSlots[ei].pos[0], engineSlots[ei].pos[1], engineSlots[ei].pos[2]);
+    var ep = engineSlots[ei].pos;
+    var cone = new THREE.Mesh(engineGeo, new THREE.MeshBasicMaterial({ color: 0x8af2d4, transparent: true, opacity: .75, blending: THREE.AdditiveBlending, depthWrite: false }));
+    cone.position.set(ep[0], ep[1], ep[2]);
     cone.quaternion.copy(engineQuat);
     engineGroup.add(cone);
     engines.push(cone);
+
+    var plume = new THREE.Mesh(plumeGeo, plumeMat);
+    plume.quaternion.copy(engineQuat);
+    plume.position.set(ep[0], ep[1], ep[2] - PLUME_LEN / 2);
+    plume.visible = false;
+    plume.userData.seed = ei * 1.7;
+    plume.userData.z0 = ep[2];
+    engineGroup.add(plume);
+    plumes.push(plume);
   }
 
   // ---- 物理 ----
@@ -1145,8 +1208,9 @@
   for (var pi = 0; pi < flybys.length; pi++) {
     (function (fb) {
       var def = fb.def;
-      var pcol = def.procColor != null ? def.procColor : def.color;
-      var tex = def.procColor != null ? procPlanetTex(def.procColor) : (dataTex(global[def.tex]) || plainTex('#888'));
+      var pcol = def.color;
+      // 优先真实影像；内联数据缺失时退回程序化色块（procPlanetTex）
+      var tex = def.tex ? (dataTex(global[def.tex]) || procPlanetTex(pcol)) : procPlanetTex(pcol);
       var body = makePlanetBody(def.rad, tex, pcol);
       var mesh = body.mesh, glow = body.glow;
       mesh.position.set(fb.pos[0], fb.pos[1], fb.pos[2]);
@@ -1165,7 +1229,7 @@
       }
       // 判定环：垂直于航线、正好套在地球必经之处 —— 玩家一眼知道「要在这里通过」
       var gate = new THREE.Mesh(new THREE.TorusGeometry(EARTH_R * 2.6, EARTH_R * 0.16, 8, 40),
-        new THREE.MeshBasicMaterial({ color: 0x5cc8ff, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
+        new THREE.MeshBasicMaterial({ color: 0x45e0b0, transparent: true, opacity: .5, blending: THREE.AdditiveBlending, depthWrite: false }));
       var gp = [0, 0, 0], gt = [0, 0, 0];
       routeSample(route, fb.s, gp, gt);
       gate.position.set(gp[0], gp[1], gp[2]);
@@ -1183,7 +1247,8 @@
   for (var sci = 0; sci < scenery.length; sci++) {
     (function (sc) {
       var d = sc.def;
-      var body = makePlanetBody(d.rad, procPlanetTex(d.color), d.color);
+      var stex = d.tex ? (dataTex(global[d.tex]) || procPlanetTex(d.color)) : procPlanetTex(d.color);
+      var body = makePlanetBody(d.rad, stex, d.color);
       body.mesh.position.set(sc.pos[0], sc.pos[1], sc.pos[2]);
       body.glow.position.set(sc.pos[0], sc.pos[1], sc.pos[2]);
       scene.add(body.mesh);
@@ -1385,8 +1450,10 @@
     camera.position.copy(camPos); camera.lookAt(camLook);
   }
 
-  // ---- 后视镜：单 renderer + scissor 画在同一块 canvas 的顶部矩形里 ----
-  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 120 / 62, 0.5, 60000);
+  // ---- 尾向观测窗（代码里仍叫 mirror）：单 renderer + scissor 画在同一块 canvas 的顶部矩形里。
+  // 初始 aspect 只是占位，layoutMirror() 每次布局都按 #mirror-frame 的实际矩形改写 ——
+  // 所以 2026-09-26 把 120×62 的横窗改成 80×80 的方窗时，画面不会被拉扁。
+  var mirrorCam = new THREE.PerspectiveCamera(MIRROR_FOV, 80 / 80, 0.5, 60000);
   var elMirrorFrame = document.getElementById('mirror-frame');
   var mirrorOn = false;
   var mirrorRect = { x: 0, y: 0, w: 0, h: 0, ok: false };
@@ -1409,6 +1476,7 @@
     elClockMs = document.getElementById('clock-ms');
   var elSpeed = document.getElementById('tm-speed'), elDist = document.getElementById('tm-dist'), elGap = document.getElementById('tm-gap');
   var elWarn = document.getElementById('warn'), elDanger = document.getElementById('danger'), elTip = document.getElementById('tip');
+
   var elBrief = document.getElementById('brief'), elBfBtn = document.getElementById('bf-btn'), briefClosed = false;
   var elProg = document.getElementById('progress'), elProgFill = document.getElementById('prog-fill'), elProgLabel = document.getElementById('prog-label');
   // 汽车式仪表盘（底部平铺）：功率 / 温度 / 速度三根指针 + 三段随值生长的弧
@@ -1429,11 +1497,13 @@
     elFbNeedle = document.getElementById('fb-needle'), elFbTag = document.getElementById('fb-tag'),
     elFbCur = document.getElementById('fb-cur'), elFbNeed = document.getElementById('fb-need'),
     elFbEarly = document.getElementById('fb-early'), elFbSweet = document.getElementById('fb-sweet'),
-    elFbLate = document.getElementById('fb-late');
+    elFbLate = document.getElementById('fb-late'),
+    elFbTrack = document.getElementById('fb-track'), elFbNext = document.getElementById('fb-next'),
+    elFbNextFill = document.getElementById('fb-next-fill'), elFbNextPct = document.getElementById('fb-next-pct');
   var elToast = document.getElementById('fb-toast'), elFtName = document.getElementById('ft-name'),
     elFtGrade = document.getElementById('ft-grade'), elFtDetail = document.getElementById('ft-detail');
   var elRadar = document.getElementById('radar'), radarCtx = elRadar.getContext('2d');
-  elRadar.width = 104; elRadar.height = 104;
+  elRadar.width = 160; elRadar.height = 160;
   var elResult = document.getElementById('result'), elRsTitle = document.getElementById('rs-title'),
     elRsText = document.getElementById('rs-text'), elRsStat = document.getElementById('rs-stat'),
     elRsBtn = document.getElementById('rs-btn'), elFlash = document.getElementById('flash');
@@ -1549,7 +1619,12 @@
     // 所以指针的高度同时读出「按了多久」与「此刻的发热强度」—— 温度就是按它积出来的。
     // 刻度换算：st.thrustEff 是**小数**（1.0 = 额定），先 ×100 折成百分数再除以满量程 160%。
     // （历史 bug：直接 power / PWR_VMAX = 1/160 = 0.006 → 指针全程只转 1°，看着像死的。）
-    var power = (st.burning && !st.overheated) ? st.thrustEff : 0;
+    // 2026-09-27：读数改由 **st.pwr（油门本身）** 驱动 —— 旧写法被 st.burning 闸住，
+    // 一松手指针直接归零，而发动机明明还有 0.5 s 的熄火斜坡（「功率不可能一松手就归零」）。
+    // 物理核心那边没动（推力与温升仍按 thrustEff），所以数值与梯度一格没变，
+    // 只是表盘现在**看得见**熄火那段下坡。过热锁定仍然读 0（那是熄火完成，不是斜坡）。
+    var power = st.overheated ? 0
+      : (st.pwr / PWR_MAX) * zoneEff(st.zone) * (pulseActive(st.t) ? PULSE_THRUST_BOOST : 1);
     gaugeSet(elPwNeedle, elPwArc, power * 100 / PWR_VMAX);
     if (elPwVal) elPwVal.textContent = Math.round(power * 100);
     elPwGauge.classList.toggle('idle', power <= 0.001);
@@ -1583,9 +1658,13 @@
     // 速度用 km/s —— 与身边那三张表盘同一个单位，
     // 不然屏幕会同时出现两套速度读数（98 单位 vs 41.3 km/s）谁也读不懂。
     var showBar = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase >= 0;
+    // 巡航段（窗口还没开）：同一条带改成「下一站进度条」—— 玩家反馈「点火前不知道离下一站还有多远」。
+    // 按**弧长**填（上一站 → 下一站），不报秒数：窗口临近仍然靠行星越长越大与进度条走满来表达。
+    var showNext = briefClosed && st.status === 'flying' && st.target >= 0 && st.phase < 0;
     if (showBar) {
       var def = flybys[st.target].def;
       elFlyby.classList.remove('hide');
+      elFbTrack.style.display = ''; elFbNext.style.display = 'none';
       elFbName.textContent = def.name;
       // 时机条的三个区间**逐行星**：引力越强（质量越大）绿色区间越宽、窗口越长。
       // 宽度只由 def.sweet0/sweet1 驱动，CSS 里那套百分比只是初始值。
@@ -1605,6 +1684,26 @@
       else if (st.zone === 'late') elFbTag.textContent = '窗口关闭';
       else if (st.zone === 'early') elFbTag.textContent = '窗口外点火 · 增益作废';
       else elFbTag.textContent = '';
+    } else if (showNext) {
+      var nf = flybys[st.target], nFrom = st.target > 0 ? flybys[st.target - 1].s : 0;
+      // 终点不是行星本身，而是**窗口开启的那一刻**：窗口会提前 winTime（2.5~2.8 s）亮起，
+      // 而木星那一腿总共只有约 4.6 s —— 按「到行星的弧长」算，窗口已开时条才走到 50%（实测）。
+      // 现在把这段提前量（v × winTime）从终点里扣掉，条走到 100% 就是窗口亮起的同一刻。
+      var nGoal = Math.max(nFrom + 1, nf.s - st.v * (nf.def.winTime || 0));
+      var ap = (st.s - nFrom) / (nGoal - nFrom);
+      ap = ap < 0 ? 0 : (ap > 1 ? 1 : ap);
+      elFlyby.classList.remove('hide');
+      elFbTrack.style.display = 'none'; elFbNext.style.display = '';
+      elFbNextFill.style.width = (ap * 100).toFixed(1) + '%';
+      elFbNextPct.textContent = Math.round(ap * 100) + '%';
+      elFbName.textContent = nf.def.name;
+      elFbTag.textContent = '下一站 · 逼近中';
+      elFbCur.textContent = (st.v * KMS_PER_UNIT).toFixed(1);
+      elFbNeed.textContent = (st.vNeed * KMS_PER_UNIT).toFixed(1);
+      elFbCur.className = 'fb-v' + (st.safe ? ' good' : ' bad');
+      elFlyby.classList.toggle('sweet', false);
+      elFlyby.classList.toggle('risk', false);
+      elFlyby.classList.toggle('late', false);
     } else {
       elFlyby.classList.add('hide');
     }
@@ -1626,6 +1725,8 @@
     elWarn.classList.toggle('pulse', st.warnKind === 'pulse');
     elWarn.classList.toggle('hot', !!st.overheated);
 
+
+
     // ---- 全屏边缘光：红色 = 危险，绿色 = 最佳区间到了、该按了 ----
     // 没有按钮可点之后，「该按了」只能靠屏幕本身喊出来：绿色呼吸比红边优先级更高，
     // 因为此刻玩家需要的是「现在按」而不是「正在变危险」。
@@ -1636,14 +1737,24 @@
     elDanger.classList.toggle('active', !ready && danger && st.status === 'flying');
   }
 
+  // 小地图：位图固定 **160×160**，CSS 里按 **80px**（= --top-sq）显示 —— 正好 2× 超采样
+  // （真机 2~3x DPR 下也够锐）。因此**所有线宽与点半径都按「2 位图像素 = 1 CSS 像素」给**：
+  // 屏幕上要 1px 的线，这里就写 2；要 2px 的点，这里写 4。改 CSS 尺寸时这一组要跟着改。
+  // ⓘ 2026-09-26：位图基准由 104 提到 160（配上 80px 的显示尺寸，继续守住上面那条换算）。
+  // 除线宽外的一切几何都乘 RS —— 放大的是**整张图**，不是把线一起吹粗（线宽仍写 2 = 1 CSS px）。
   function drawRadar() {
-    var rw = 104, cx = 52, cy = 52;
-    var scl = 48 / (ROUTE_R1 * 1.05);
+    var RS = 160 / 104;
+    var rw = 160, cx = 80, cy = 80;
+    var scl = (48 * RS) / (ROUTE_R1 * 1.05);
     radarCtx.clearRect(0, 0, rw, rw);
-    radarCtx.fillStyle = 'rgba(12,18,34,.65)'; radarCtx.fillRect(0, 0, rw, rw);
-    radarCtx.strokeStyle = 'rgba(120,160,220,.12)'; radarCtx.lineWidth = 1; radarCtx.strokeRect(0.5, 0.5, rw - 1, rw - 1);
+    // 小地图与 HUD 同一套配色：底 = 绿黑、航线与地球 = 机器绿、太阳与壳 = 琥珀。
+    // 这里全是 canvas 现画，颜色**不受 CSS 变量影响**，改界面配色时要同步改这一处。
+    // 底不透明度 .88（原 .72）：小地图现在挂在**右上角**，掠到木星时背后就是半屏奶油色，
+    // 72% 的黑底会被透亮成灰绿、航线与行星点全糊 —— 这一块是「一眼读位置」的图，先保证读得清。
+    radarCtx.fillStyle = 'rgba(5,20,15,.88)'; radarCtx.fillRect(0, 0, rw, rw);
+    radarCtx.strokeStyle = 'rgba(70,232,178,.16)'; radarCtx.lineWidth = 2; radarCtx.strokeRect(1, 1, rw - 2, rw - 2);
     // 航线
-    radarCtx.strokeStyle = 'rgba(92,200,255,.28)'; radarCtx.lineWidth = 1;
+    radarCtx.strokeStyle = 'rgba(70,232,178,.38)'; radarCtx.lineWidth = 2;
     radarCtx.beginPath();
     var p = [0, 0, 0];
     for (var k = 0; k <= 60; k++) {
@@ -1652,23 +1763,25 @@
       if (k === 0) radarCtx.moveTo(X, Y); else radarCtx.lineTo(X, Y);
     }
     radarCtx.stroke();
-    radarCtx.fillStyle = '#ff7a14'; radarCtx.beginPath(); radarCtx.arc(cx, cy, 3, 0, 6.283); radarCtx.fill();
-    radarCtx.strokeStyle = 'rgba(255,74,20,.5)'; radarCtx.beginPath(); radarCtx.arc(cx, cy, st.shellR * scl, 0, 6.283); radarCtx.stroke();
+    radarCtx.fillStyle = '#ffb84d'; radarCtx.beginPath(); radarCtx.arc(cx, cy, 5 * RS, 0, 6.283); radarCtx.fill();
+    radarCtx.strokeStyle = 'rgba(255,184,77,.55)'; radarCtx.lineWidth = 2;
+    radarCtx.beginPath(); radarCtx.arc(cx, cy, st.shellR * scl, 0, 6.283); radarCtx.stroke();
     for (var ri = 0; ri < flybys.length; ri++) {
       var fb = flybys[ri], pc = fb.def.procColor != null ? fb.def.procColor : fb.def.color;
       radarCtx.fillStyle = 'rgb(' + ((pc >> 16) & 255) + ',' + ((pc >> 8) & 255) + ',' + (pc & 255) + ')';
-      radarCtx.beginPath(); radarCtx.arc(cx + fb.pos[0] * scl, cy + fb.pos[2] * scl, 2, 0, 6.283); radarCtx.fill();
+      radarCtx.beginPath(); radarCtx.arc(cx + fb.pos[0] * scl, cy + fb.pos[2] * scl, 4 * RS, 0, 6.283); radarCtx.fill();
     }
     // 场上的其他行星：更小更暗的点。水星/金星在地球内侧 —— 小地图上永远看得见，
     // 也解释了为什么正前方看不到它们（它们是真的在身后）。
     for (var si = 0; si < scenery.length; si++) {
       var scm = scenery[si], cm = scm.def.color;
       radarCtx.fillStyle = 'rgba(' + ((cm >> 16) & 255) + ',' + ((cm >> 8) & 255) + ',' + (cm & 255) + ',.62)';
-      radarCtx.beginPath(); radarCtx.arc(cx + scm.pos[0] * scl, cy + scm.pos[2] * scl, 1.5, 0, 6.283); radarCtx.fill();
+      radarCtx.beginPath(); radarCtx.arc(cx + scm.pos[0] * scl, cy + scm.pos[2] * scl, 3 * RS, 0, 6.283); radarCtx.fill();
     }
     var ex = cx + st.pos[0] * scl, ey = cy + st.pos[2] * scl;
-    radarCtx.fillStyle = '#5cc8ff'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 2.5, 0, 6.283); radarCtx.fill();
-    radarCtx.strokeStyle = 'rgba(92,200,255,.4)'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 5, 0, 6.283); radarCtx.stroke();
+    radarCtx.fillStyle = '#45e0b0'; radarCtx.beginPath(); radarCtx.arc(ex, ey, 5 * RS, 0, 6.283); radarCtx.fill();
+    radarCtx.strokeStyle = 'rgba(70,232,178,.5)'; radarCtx.lineWidth = 2;
+    radarCtx.beginPath(); radarCtx.arc(ex, ey, 10 * RS, 0, 6.283); radarCtx.stroke();
   }
 
   // ---- 结算：主角是「逃逸用时」，其余都是注脚 ----
@@ -1680,7 +1793,6 @@
     if (isFinite(_bt) && _bt > 0) bestTime = _bt;
   } catch (e) { bestTime = null; }
 
-  var resultShownAt = 0;
   function showResult() {
     var win = st.status === 'escaped';
     elRsTitle.textContent = win ? '冲出太阳系' : '逃逸失败';
@@ -1706,20 +1818,29 @@
     // 失败原因（被谁捕获 / 撞毁 / 被壳吞没）留给 body；成功时标题已经说了「冲出太阳系」，
     // 再复述一遍那句 reason 是纯重复，这里换成一句收尾。
     elRsText.textContent = win ? '地球已脱离太阳系引力束缚。比邻星航程，约两千五百年。' : st.reason;
+    // 注脚统计改成**终端清单**：每行「名目 …… 数值」，名目灰、数值亮且右对齐，
+    // 中间那条点线引导由 CSS 给（.rsr-l 自己撑满余下宽度，不靠空格拼）。
+    // 四行等高、左缘对齐，比旧版两条用全角空格拼起来的横排更好比对 ——
+    // 一眼扫完名目，再看右端数值。「速度不足」只在真的发生过时才写进那一行。
     var passed = st.score.perfect + st.score.pass + st.score.slow;
-    var passLine = st.score.slow
-      ? '引力助推 <b>' + passed + '</b> 次　其中 <b>' + st.score.slow + '</b> 次速度不足'
-      : '引力助推 <b>' + passed + '</b> 次';
-    elRsStat.innerHTML =
-      '完美弹弓 <b>' + st.score.perfect + ' / ' + flybys.length + '</b>　' + passLine +
-      '<br>末速 <b>' + st.speedKms.toFixed(0) + ' km/s</b>　距日 <b>' + st.rSunAU.toFixed(1) + ' AU</b>';
+    var statRows = [
+      ['完美弹弓', st.score.perfect + ' / ' + flybys.length],
+      ['引力助推', st.score.slow ? passed + ' 次 · 速度不足 ' + st.score.slow + ' 次' : passed + ' 次'],
+      ['末速', st.speedKms.toFixed(0) + ' km/s'],
+      ['距日', st.rSunAU.toFixed(1) + ' AU']
+    ];
+    var statHtml = '', si;
+    for (si = 0; si < statRows.length; si++) {
+      statHtml += '<span class="rsr"><em>' + statRows[si][0] + '</em><i class="rsr-l"></i><b>' +
+        statRows[si][1] + '</b></span>';
+    }
+    elRsStat.innerHTML = statHtml;
     if (elRsHint) elRsHint.textContent = '';
     // 结算页盖住整个 HUD：评级条先撤掉，免得在面板背后透出一条
     if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
     if (elToast) elToast.classList.remove('show');
     elWarn.classList.remove('show');
     elResult.classList.add('show');
-    resultShownAt = performance.now();
     // 分享入口：按钮文案随当下可用能力定（§3.9 评论区 / §3.3 发笔记 / 无端能力），
     // 战绩卡与本地句柄在面板亮出来时就备好 —— 点击时才能不带异步地发起（§3.9 要求用户主动触发）
     refreshShareButton();
@@ -1825,37 +1946,37 @@
     var FONT = '"PingFang SC","Microsoft YaHei",-apple-system,sans-serif';
 
     var bg = g.createLinearGradient(0, 0, 0, CH);
-    bg.addColorStop(0, '#04060d'); bg.addColorStop(0.5, '#0a1122'); bg.addColorStop(1, '#04060d');
+    bg.addColorStop(0, '#030807'); bg.addColorStop(0.5, '#071a16'); bg.addColorStop(1, '#030807');
     g.fillStyle = bg; g.fillRect(0, 0, CW, CH);
 
     // 星点
     for (i = 0; i < 300; i++) {
       g.globalAlpha = 0.18 + Math.random() * 0.6;
-      g.fillStyle = '#cfe4ff';
+      g.fillStyle = '#dbf5ec';
       g.beginPath(); g.arc(Math.random() * CW, Math.random() * CH, Math.random() * 1.7 + 0.3, 0, 6.283); g.fill();
     }
     g.globalAlpha = 1;
 
-    // 左下角氦闪
+    // 左下角氦闪（琥珀族，与界面里的「氦闪」警报灯同色）
     var sg = g.createRadialGradient(90, CH - 90, 6, 90, CH - 90, 320);
-    sg.addColorStop(0, 'rgba(255,236,128,.95)');
-    sg.addColorStop(0.3, 'rgba(255,122,20,.5)');
-    sg.addColorStop(1, 'rgba(196,58,0,0)');
+    sg.addColorStop(0, 'rgba(255,233,163,.95)');
+    sg.addColorStop(0.3, 'rgba(255,184,77,.5)');
+    sg.addColorStop(1, 'rgba(140,74,0,0)');
     g.fillStyle = sg; g.beginPath(); g.arc(90, CH - 90, 320, 0, 6.283); g.fill();
 
     var win = st.status === 'escaped';
     g.textAlign = 'center';
 
-    g.fillStyle = '#8da2c0'; g.font = '30px ' + FONT;
+    g.fillStyle = '#7fa79a'; g.font = '30px ' + FONT;
     g.fillText('流浪地球 · 引力弹弓', CW / 2, 130);
 
-    g.fillStyle = '#8da2c0'; g.font = '28px ' + FONT;
+    g.fillStyle = '#7fa79a'; g.font = '28px ' + FONT;
     g.fillText(win ? '逃逸用时' : '航至', CW / 2, 300);
 
-    g.fillStyle = win ? '#ffd24a' : '#c9d6e8';
+    g.fillStyle = win ? '#ffd24a' : '#cfe8e0';
     g.font = '800 168px ' + FONT;
     g.fillText(st.t.toFixed(1), CW / 2 - 24, 452);
-    g.fillStyle = '#8da2c0'; g.font = '600 52px ' + FONT;
+    g.fillStyle = '#7fa79a'; g.font = '600 52px ' + FONT;
     g.fillText('秒', CW / 2 + 150, 452);
 
     g.fillStyle = win ? '#7fd0a8' : '#ff4d5e';
@@ -1863,7 +1984,7 @@
     g.fillText(win ? '逃逸成功' : '被氦闪前壳吞没', CW / 2, 540);
 
     if (bestTime !== null) {
-      g.fillStyle = '#8da2c0'; g.font = '26px ' + FONT;
+      g.fillStyle = '#7fa79a'; g.font = '26px ' + FONT;
       g.fillText('本站最快 ' + bestTime.toFixed(1) + ' 秒 · 完美弹弓 ' + st.score.perfect + ' / ' + flybys.length, CW / 2, 600);
     }
 
@@ -1872,22 +1993,22 @@
     for (i = 0; i < n; i++) {
       var r = st.results[i];
       var ok = r.result === 'perfect' || r.result === 'pass';
-      var col = r.result ? (gradeColor[gradeFlyby(r, ok).key] || '#8da2c0') : '#3a4a63';
+      var col = r.result ? (gradeColor[gradeFlyby(r, ok).key] || '#7fa79a') : '#2c4a42';
       g.fillStyle = col; g.globalAlpha = r.result ? 1 : 0.4;
       g.beginPath(); g.arc(x0 + i * gap, 730, 22, 0, 6.283); g.fill();
       g.globalAlpha = 1;
-      g.fillStyle = '#8da2c0'; g.font = '22px ' + FONT;
+      g.fillStyle = '#7fa79a'; g.font = '22px ' + FONT;
       g.fillText(flybys[i].def.name.slice(-1), x0 + i * gap, 786);
     }
 
-    g.fillStyle = '#eaf1fb'; g.font = '700 36px ' + FONT;
+    g.fillStyle = '#eafff6'; g.font = '700 36px ' + FONT;
     g.fillText('只决定一件事：何时点火', CW / 2, 920);
-    g.fillStyle = '#8da2c0'; g.font = '30px ' + FONT;
+    g.fillStyle = '#7fa79a'; g.font = '30px ' + FONT;
     g.fillText('看谁先把地球送出太阳系', CW / 2, 976);
 
     g.fillStyle = '#5cc8ff'; g.font = '24px ' + FONT;
     g.fillText('#小红书vibecoding大赛  #vibegame', CW / 2, 1108);
-    g.fillStyle = '#4a5a74'; g.font = '22px ' + FONT;
+    g.fillStyle = '#3d5a52'; g.font = '22px ' + FONT;
     g.fillText('小红书小工具 · 搜「流浪地球 引力弹弓」', CW / 2, 1152);
 
     var url = cv.toDataURL('image/webp', 0.92);
@@ -2012,7 +2133,7 @@
       if (fp) { cardFile = fp; asComment(fp); } else { asNote(); }
     }, function () { asNote(); });
   }
-  if (elRsShare) elRsShare.addEventListener('click', function (e) { e.stopPropagation(); doShare(); });
+  if (elRsShare) elRsShare.addEventListener('click', doShare);
 
   function restart() {
     elResult.classList.remove('show');
@@ -2035,14 +2156,51 @@
 
   elRsBtn.addEventListener('click', restart);
   elBfBtn.addEventListener('click', function () { briefClosed = true; elBrief.classList.remove('show'); });
-  elResult.addEventListener('click', function (e) {
-    if (e.target === elRsBtn) return;
-    if (performance.now() - resultShownAt > 1000) restart();
-  });
+  // ⓘ 2026-09-27：删掉「点结算页任意处就再来一次」。它和分享按钮同处一屏，
+  //   玩家想点分享、手指落在正文上就直接重开 —— 战绩与分享入口一起被跳过（反馈：容易错过分享）。
+  //   现在结算页**只有屏底两个按钮有动作**（分享战绩 / 再来一次），点正文什么都不发生。
+
+  // ---- 启动页：MOSS 自检（§5b）----
+  // 真实加载早就完成了，这里做的是「**至少停留 BOOT_MIN_MS**」：
+  // 每帧按已停留时长刷新清单打勾与自检条，走满 + 已经渲染出画面才交出操控权。
+  var bootT0 = performance.now();
+  var bootDone = false, bootFrames = 0;
+  var elLoader = document.getElementById('loader');
+  var elLdFill = document.getElementById('ld-fill');
+  var elLdStatus = document.getElementById('ld-status');
+  var ldLines = (function () {
+    var out = [], log = document.getElementById('ld-log');
+    if (!log) return out;
+    for (var i = 0; i < log.children.length; i++) out.push(log.children[i]);
+    return out;
+  })();
+
+  function updateBoot(now) {
+    var p = (now - bootT0) / BOOT_MIN_MS;
+    if (p > 1) p = 1;
+    var i, last = -1;
+    for (i = 0; i < BOOT_STEPS.length; i++) {
+      var on = p >= BOOT_STEPS[i].t;
+      if (on) last = i;
+      var ln = ldLines[i];
+      if (!ln) continue;
+      if (on && !ln.classList.contains('done')) {
+        ln.classList.add('done');
+        var b = ln.getElementsByTagName('b')[0];
+        if (b) b.textContent = 'OK';
+      }
+    }
+    if (elLdFill) elLdFill.style.width = (p * 100).toFixed(1) + '%';
+    if (elLdStatus) {
+      // 状态行只报**当前正在校验的那一句**（全貌由清单给）；走满则换成收尾那句
+      var txt = p >= 1 ? BOOT_DONE_MSG : '正在校验' + BOOT_STEPS[last < 0 ? 0 : last].k + '…';
+      if (elLdStatus.textContent !== txt) elLdStatus.textContent = txt;
+    }
+    return (now - bootT0) >= (BOOT_MIN_MS + BOOT_TAIL_MS);
+  }
 
   // ---- 主循环 ----
   var last = performance.now();
-  var loaderHidden = false;
   var prevT = 0, prevOverheated = false;
   function flashScreen() {
     if (!elFlash) return;
@@ -2055,7 +2213,17 @@
     var dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
-    if (introT < INTRO_TIME) {
+    // 启动页还没走完 → 连过场镜头也不推进（否则 2.6 s 的过场会在启动页背后放完，
+    // 玩家一进来就只看到简报，白白少了一段「出发」的镜头）
+    if (!bootDone) {
+      var bootFull = updateBoot(now);
+      bootFrames++;
+      // 多等一帧：确保自检条 100% 与画面第一帧都真的画出来了再撤屏
+      if (bootFull && bootFrames >= 2) {
+        bootDone = true;
+        if (elLoader) elLoader.classList.add('hide');
+      }
+    } else if (introT < INTRO_TIME) {
       introT += dt;
       var s = Math.min(1, introT / INTRO_TIME);
       var e = s * s * (3 - 2 * s);
@@ -2090,15 +2258,30 @@
       _targetQuat.setFromUnitVectors(_zAxis, _flameDir);
       earthGroup.quaternion.slerp(_targetQuat, 1 - Math.exp(-dt * 8));
     }
+    // 发动机：本体亮度跟推力走；点火时每台喷出一道随推力伸缩、带高频抖动的等离子柱
     var engOp = st.burning ? 1.0 : 0.35;
     for (var egi = 0; egi < engines.length; egi++) engines[egi].material.opacity = engOp;
     if (st.burning) {
+      // 柱长 = 起转斜坡（0.5 s 到额定）× 抖动：等离子不该是一根死板的水柱
+      var pk = 0.45 + Math.min(1.3, st.thrustEff) * 0.75;
+      if (st.slinging) pk *= 1.25;
+      plumeMat.opacity = st.slinging ? 0.7 : 0.5;
+      for (var pi = 0; pi < plumes.length; pi++) {
+        var pl = plumes[pi];
+        var k = pk * (0.86 + 0.14 * Math.sin(now * 0.021 + pl.userData.seed));
+        pl.visible = true;
+        pl.scale.set(1, k, 1);
+        pl.position.z = pl.userData.z0 - PLUME_LEN * k / 2;
+      }
       thrustFlame.visible = true;
       thrustFlame.position.set(0, 0, -EARTH_R * 1.0);
       thrustFlame.quaternion.setFromUnitVectors(_flameAxis, _negZAxis);
       var boost = st.slinging ? 2.4 : 1.0;
       thrustFlame.scale.set(boost, boost * (0.7 + Math.min(1, st.thrustEff / 8) * 1.6), boost);
-    } else thrustFlame.visible = false;
+    } else {
+      for (var pi2 = 0; pi2 < plumes.length; pi2++) plumes[pi2].visible = false;
+      thrustFlame.visible = false;
+    }
 
     // 太阳壳膨胀
     sunGroup.scale.setScalar(Math.max(1, st.shellR / SUN_R));
@@ -2120,11 +2303,13 @@
     for (var gi = 0; gi < gateMeshes.length; gi++) {
       var gm = gateMeshes[gi];
       if (gi === st.target && st.phase >= 0) {
+        // 判定环三态仍按「时机轴」上色，但**默认态从青蓝改成机器绿 0x45e0b0**：
+        // 命中态是更亮更柔的 0x7fd0a8 + 不透明度 0.95 —— 转绿这件事变成了「转亮」。
         if (st.zone === 'sweet') { gm.material.color.setHex(0x7fd0a8); gm.material.opacity = 0.95; }
         else if (st.zone === 'late' || !st.safe) { gm.material.color.setHex(0xff4d5e); gm.material.opacity = 0.9; }
-        else { gm.material.color.setHex(0x5cc8ff); gm.material.opacity = 0.7; }
-      } else if (gi < st.target) { gm.material.color.setHex(0x2a4a68); gm.material.opacity = 0.18; }
-      else { gm.material.color.setHex(0x5cc8ff); gm.material.opacity = 0.4; }
+        else { gm.material.color.setHex(0x45e0b0); gm.material.opacity = 0.7; }
+      } else if (gi < st.target) { gm.material.color.setHex(0x1e4a3d); gm.material.opacity = 0.18; }
+      else { gm.material.color.setHex(0x45e0b0); gm.material.opacity = 0.4; }
     }
 
     if (introT >= INTRO_TIME) updateCamera(dt);
@@ -2154,7 +2339,6 @@
     pollJudged();
 
     if (st.status !== 'flying' && !elResult.classList.contains('show')) showResult();
-    if (!loaderHidden) { document.getElementById('loader').classList.add('hide'); loaderHidden = true; }
 
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, W, H);

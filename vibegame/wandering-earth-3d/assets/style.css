@@ -1,29 +1,84 @@
+/* ==========================================================================
+   流浪地球 · 引力弹弓 —— HUD 视觉（MOSS 舰载终端）
+   --------------------------------------------------------------------------
+   **视觉**：整屏按「MOSS 电脑终端」做 —— 等宽字体、绿黑底 + 绿色磷光、半透明
+   仪表板 + 方形角标、扫描线 + 暗角、`>` 提示符与呼吸光标。所有面板共用一套：
+     · 面：`--panel` 半透明底 + 1px `--line` 细边（掠到木星时半屏是亮橙，
+       纯浮字与暗色指示灯会糊掉，所以一块底是必须的）；
+     · 角：左右下角各一小段 `--term` 折角（`::before` / `::after`），终端屏的
+       角标感，不占高度、不挡命中（`pointer-events:none`）；
+     · 字：数字一律 tabular-nums（跳动时不抖宽），标签一律加宽字距。
+
+   **配色：一支绿 + 三个语义色**（自检逐条锁死，改色前先看这几条）：
+     · 界面主色 = 绿：`--acc`（主绿）与 `--term`（机器绿）是同一支彩色的两个明度，
+       不再有青蓝 —— 曾经「绿终端 + 蓝标题 / 蓝按钮」是这屏读起来违和的根源；
+     · 时机轴 = 绿(--ok) / 红(--danger)：绿色区间、判定针、全屏「该按了」呼吸光、
+       3D 判定环同色。主色也是绿，所以命中态与常态靠**明度**区分
+       （`--ok` 比 `--acc` 亮而柔，表盘与判定环因此是「转亮」而不是「变色」）；
+     · 金色**只**允许出现在「评价／结算」轴（`#fb-toast` / `.rst-*` / `.rs-hint`），
+       自检会列举所有 `var(--gold)` 选择器并断言这一点。
+
+   **布局**（不变）：顶部只放「与驾驶无关、想起来才抬头看一眼」的信息
+   （用时 / 逃逸进度 / 小地图 / 后视镜 / 声音开关）；操作相关的一切平铺在屏幕
+   底部 `#cockpit`，自下而上 = 仪表行 → 时机条 → 零高度消息槽。
+
+   **兼容基线**（Chrome / WebView 61，见根 AGENTS.md 与 `.skill/minitool-zip-builder`）：
+     · 不用 flex `gap`（间距一律子项 margin）、不用逻辑属性 / `inset` / `clamp()`；
+     · 多段色标一律写「色标 位置, 色标 位置」的经典形式（`color 0 1px` 双位置语法
+       是 Chrome 71+，会整条被丢弃）；
+     · 表盘指针走 SVG `rotate` **属性**（CSS transform 在 Chrome 61 的 SVG 上还要
+       额外补锚点才转得对），所以全文**不得出现**那个 CSS 锚点属性名 ——
+       它连注释里出现都会让静态契约自检判红；
+     · 半透明毛玻璃只是增强层：先给实色底，再叠 `backdrop-filter`。
+   ========================================================================== */
+
 :root{
-  --bg:#05060d;
-  --panel:rgba(12,18,34,.78);
-  --line:rgba(120,160,220,.18);
-  --txt:#eaf1fb;
-  --mut:#8da2c0;
-  --acc:#5cc8ff;
+  /* 底色是**绿黑**（不是蓝黑）：终端屏的磷光是绿色的，底子也跟一点绿，
+     面板铺上去才不会显出一层蓝灰。 */
+  --bg:#030807;
+  --panel:rgba(4,14,12,.80);
+  --panel-deep:rgba(3,10,9,.95);
+  --line:rgba(70,232,178,.20);
+  --line-soft:rgba(70,232,178,.10);
+  --txt:#dbf5ec;
+  --mut:#8fb8a8;
+  /* 主色 = 绿（2026-09-26 从青蓝改成绿）：标题、按钮、导航、值弧、信息全是这一支。
+     整屏**只有绿这一支彩色**（外加红 / 琥珀 / 金三个语义色），不再有青蓝。 */
+  --acc:#2ecf9a;
+  /* 终端机器面：比主色**亮一档**的薄荷绿，只给「机器在场」的装饰用
+     （指示灯、窗口点、`▍ $ > ▶`、折角、扫描线、进度条轨道）。 */
+  --term:#45e0b0;
   --warn:#ffb84d;
   --danger:#ff4d5e;
+  /* 命中区用的绿（自检里 `.fb-sweet` 与 `@keyframes dangerReady` 直接写死了
+     `rgba(127,208,168`，所以这一支不能动）。它比主色更**亮而柔和**，
+     因此「表盘在最佳区间转绿」表现为一次**变亮**，方向不会反。 */
   --ok:#7fd0a8;
   --gold:#ffd24a;
   /* 顶部预留：小红书小工具容器自带一排顶部按钮，且容器内 env(safe-area-inset-top) 恒为 0，
      只靠安全区会把 HUD 顶到宿主按钮底下。故在安全区之上再无条件叠一条显式常量，
      改这一个值就能整体下移顶部那一列（对齐 moon-myths / world-food-3d / perler-city 同款机制）。 */
   --top-gap:50px;
+  /* 顶栏左右两块**方形显示窗**的边长（左 = 尾向观测，右 = 小地图；声音键同宽）。
+     计时按同一高度垂直居中，所以改这一个数就能整体放大 / 缩小顶栏那一排。 */
+  --top-sq:80px;
+  /* 简报 / 结算正文的**块间距节奏**（2026-09-26 统一）：
+     原先标题 10 / 图 12 / 世界观 12 / 操作卡 14 各自一个值，读起来是「到处都有缝但哪儿都不齐」。
+     现在正文里**块与块只有这一档**（12px），唯一的例外是卡内行距与终端块内的虚线分层。 */
+  --bf-gap:12px;
   /* 顶部/底部安全区：优先取小工具容器注入的变量，其次 env()，都没有则 0（对齐 vibegame/ai-calculator 写法）。
      每个元素的 top/bottom 都先给一条纯像素基线声明，Chrome 61 丢弃下面那条 calc 后自动回落，无需额外兼容分支。 */
   --sat:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
   --sab:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
 }
 *{margin:0;padding:0;box-sizing:border-box}
+/* 等宽字体是「终端」这件事的第一信号：数字列不会跳动，中文回落到系统黑体。
+   西文等宽在前、中文在后 —— 中文没有等宽字形，靠 system 字体保证可读。 */
 html,body{
   width:100%;height:100%;overflow:hidden;overscroll-behavior:none;
   touch-action:none;
   background:var(--bg);color:var(--txt);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","DejaVu Sans Mono","PingFang SC","Microsoft YaHei",monospace;
   -webkit-font-smoothing:antialiased;
   -webkit-tap-highlight-color:transparent;
 }
@@ -31,46 +86,112 @@ html,body{
   position:fixed;top:0;left:0;width:100%;height:100%;display:block;
 }
 
+/* ===== 暗角（整屏，z-index:6）=====
+   压在 3D 画面之上、所有 HUD 之下 —— 读作「画面是屏里的内容，HUD 是屏上的浮层」。
+   ⓘ 2026-09-26：**全屏扫描线（横线滤镜）已撤掉**。它本来是压在这一层的，但下面那层
+   3D 画面会透过半透明的仪表盘（`--panel` alpha .80）显出来，于是**操作界面看起来自带
+   一层横条纹** —— 玩家的反馈是「操作界面不要加横线滤镜」。终端质感现在只留在
+   **简报 / 结算 / 加载**三块整屏上（它们各自带自己的扫描线，见 `#brief::before`）。 */
+body::after{
+  content:'';position:fixed;left:0;top:0;width:100%;height:100%;
+  pointer-events:none;z-index:6;
+  background:radial-gradient(118% 88% at 50% 46%,rgba(0,0,0,0) 52%,rgba(0,0,0,.52) 100%);
+}
+
+/* ===== 面板通用件 =====
+   折角：下面这组 `::before / ::after` 给 HUD 各面板加角标。
+   注意 `#warn` / `#fb-toast` 由 `#cockpit-msg > *` 置为 absolute，
+   本身就是定位元素，伪元素能挂住，因此**不必**再写 position（写了反而会
+   覆盖掉槽位的绝对定位，把消息槽顶开）。
+   （开场简报与结算页曾经共用一条 `.tw-bar` 窗口标题栏 —— 2026-09-26 起两页
+   都改成**整屏终端**，那条标题栏并入下面的 `.scr-top` 屏幕骨架，连同小卡片
+   的边框 / 圆角 / 窗口圆点一起删掉了。） */
+
+/* 注意 `#warn` **不在这组里**：它的 `::before` 被 `>` / `!` / `×` 提示符占用了，
+   两套规则撞在同一个伪元素上会互相污染（折角的 `left/bottom/width/height/border`
+   会残留在提示符上，把它变成一个小方框）—— 所以消息槽改用提示符、放弃折角。 */
+/* `#fb-toast` **不在这组里**（2026-09-27）：它与 #warn 统一成一张卡之后，
+   ::before 让给了左缘提示符，两套规则会互相污染（折角会变成一个小方框）。 */
+#clock::before,#progress::before,#mirror-frame::before,#dash::before,#flyby::before{
+  content:'';position:absolute;left:-1px;bottom:-1px;width:9px;height:9px;
+  border-left:1px solid var(--term);border-bottom:1px solid var(--term);
+  opacity:.5;pointer-events:none;
+}
+#clock::after,#progress::after,#mirror-frame::after,#dash::after,#flyby::after{
+  content:'';position:absolute;right:-1px;top:-1px;width:9px;height:9px;
+  border-right:1px solid var(--term);border-top:1px solid var(--term);
+  opacity:.5;pointer-events:none;
+}
+
 /* 计时（左上）：正计时，唯一的死线是身后的氦闪壳。它就是成绩本身（逃逸用时），
    所以带一个小标签把它和「逃逸进度」区分开 —— 一行数字孤零零挂着会被读成装饰。
-   毫秒单独一段小字（`#clock-ms`）：秒位保持大号可读，毫秒跟手跳动 —— 赛车计时牌的做法。
-   字号压到 27px（旧 32px）是为了给毫秒腾宽度：320px 窄屏上「0:05.423」也必须和居中镜框分开。 */
+   毫秒单独一段小字（`#clock-ms`）：秒位保持大号可读、毫秒跟手跳动 —— 赛车计时牌的做法。
+   字号 23/12（旧 27/14）：换成等宽字体后字宽变大，320px 窄屏上「0:05.423」必须
+   留在 94px 内，否则会顶到居中后视镜的左缘（顶部三列互不重叠是一条硬约束）。 */
 #clock{
-  position:fixed;left:14px;top:64px;
-  top:calc(var(--top-gap) + 14px + var(--sat));
-  display:flex;flex-direction:column;align-items:flex-start;
+  flex:1 1 auto;min-width:0;height:var(--top-sq);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
   font-variant-numeric:tabular-nums;
-  z-index:10;pointer-events:none;
-  text-shadow:0 2px 12px rgba(0,0,0,.6);
+  text-shadow:0 2px 12px rgba(0,0,0,.85),0 0 3px rgba(0,0,0,.9);
   transition:opacity .3s;
 }
 #clock.hide{opacity:0}
 /* 秒位与毫秒同一基线上并排：#clock-num 只放「m:ss」，毫秒另起一段小字 ——
-   两个节点分开更新，才不会被 textContent 一次写掉（同节点内嵌 <i> 会被冲掉）。 */
+   两个节点分开更新，才不会被 textContent 一次写掉（同节点内嵌 <i> 会被冲掉）。
+   ⓘ 2026-09-27：**成绩是这一局唯一的主角**，字号 23 → **29px**（毫秒 12 → 15px）。
+   上限由 320px 窄屏反推：中间那格 = `320 − 24(左右留白) − 80 − 80 = 136px`，
+   而「0:05.423」在 29/15px 等宽字下约 104px —— 两侧各留 16px，仍不碰左右两块方窗。 */
 #clock-time{display:flex;align-items:baseline}
-#clock-num{font-size:27px;font-weight:700;line-height:1;color:var(--txt);letter-spacing:-.5px}
-#clock-ms{font-size:14px;font-style:normal;font-weight:600;color:var(--acc);letter-spacing:0;margin-left:1px}
-#clock-label{font-size:10px;letter-spacing:2px;color:var(--mut);margin-top:4px}
+#clock-num{font-size:29px;font-weight:700;line-height:1;color:var(--txt);letter-spacing:-.5px}
+#clock-ms{font-size:15px;font-style:normal;font-weight:600;color:var(--acc);letter-spacing:0;margin-left:1px}
+#clock-label{
+  display:flex;align-items:center;
+  font-size:10px;letter-spacing:1.5px;color:var(--mut);margin-top:5px;
+}
+/* `T+` 是任务时间轴前缀（终端里的计时记号），纯装饰，不占正文 */
+#clock-label::before{
+  content:'T+';margin-right:5px;padding:1px 3px;border-radius:2px;
+  font-size:8.5px;letter-spacing:.5px;color:var(--term);
+  background:rgba(70,232,178,.12);
+}
 
-/* 背景音乐开关（右上角，与计时同一行的上沿对齐）：♪ 音符上加一道斜杠表示已关闭。
-   放在右上而不是左上：左上是「用时 → 逃逸进度 → 小地图」这条成绩 / 导航轴，
-   而操作与仪表整体下沉到了底部驾驶舱（`#cockpit`），顶部右侧只留这一颗开关。 */
-#mute{
-  position:fixed;right:12px;top:64px;
+/* ===== 顶栏：一条 flex 条，左右两块方形窗 + 中间计时 =====
+   ⓘ 2026-09-26：三块原本各自 fixed（三处 top/left 各写一遍），现在收成一条 ——
+   左右两块同尺寸（`--top-sq`）自然对称，计时 `flex:1` 夹在中间 = 天然居中，
+   整条只叠一次 `--top-gap` 与安全区。整条不吃触摸：3D 画布仍是「按哪儿都点火」，
+   只有声音键把自己那份 `pointer-events` 开回来。 */
+#topbar{
+  position:fixed;left:12px;right:12px;top:64px;
   top:calc(var(--top-gap) + 14px + var(--sat));
-  width:36px;height:32px;border-radius:10px;cursor:pointer;
+  display:flex;align-items:flex-start;justify-content:space-between;
+  z-index:12;pointer-events:none;
+}
+
+/* 右列（小地图 + 声音开关）：竖排，声音键与地图**同宽**（`--top-sq`）对齐成一条 */
+#top-right{
+  flex:0 0 auto;
+  display:flex;flex-direction:column;
+}
+/* 背景音乐开关：与上方小地图**同宽**的一条（`--top-sq`），内容 = ♪ + 「背景音乐」。
+   ⓘ 2026-09-26：只有一枚 ♪ 时，80px 宽的条在宽屏上看着像个空盒子 —— 补一行 10px 标签，
+   并把斜杠**绑到音符上**（斜杠改成 `.mu-note` 的子元素、按它定位），加标签也不会跑偏。 */
+#mute{
+  margin-top:8px;pointer-events:auto;
+  /* 高度与左列那条标签条一致（26px）：两列底边对齐，顶栏才真的左右对称 */
+  width:var(--top-sq);height:26px;border-radius:3px;cursor:pointer;
   background:var(--panel);border:1px solid var(--line);
-  color:var(--acc);font-size:16px;line-height:1;
+  color:var(--term);font-size:15px;line-height:1;
   display:flex;align-items:center;justify-content:center;
-  z-index:12;padding:0;
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  padding:0;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
   -webkit-tap-highlight-color:transparent;
 }
 #mute:active{opacity:.7}
 #mute .mu-note{position:relative;top:-1px}
+#mute .mu-txt{font-size:10px;letter-spacing:1px;color:var(--mut);margin-left:5px}
 #mute .mu-slash{
-  position:absolute;width:20px;height:1.5px;border-radius:1px;
-  background:var(--danger);transform:rotate(-38deg);
+  position:absolute;left:-3px;top:50%;width:14px;height:1.5px;margin-top:-.75px;
+  border-radius:1px;background:var(--danger);transform:rotate(-38deg);
   opacity:0;transition:opacity .15s;
 }
 #mute.off{color:var(--mut);opacity:.6}
@@ -78,24 +199,81 @@ html,body{
 /* 简报 / 结算盖上来时整块顶栏退场（.hide 必须排在 .off 之后，否则「已静音」的 0.6 会盖过 0） */
 #mute.hide{opacity:0}
 
-/* 后视镜（顶部居中）：帧只是装饰，3D 画面由主 renderer 用 scissor 画在同一块 canvas 的这块矩形里。
-   120×62（旧 132×68）：顶部多了一条 --top-gap 预留后，镜框要往下让，
-   窄屏上还要给左上的「0:05.423」和右上的声音键留出各自的地盘，所以收窄一点。 */
+/* 左列 · 尾向观测窗（方形，与右端小地图**同尺寸对称**）：
+   帧只是装饰，3D 画面由主 renderer 用 scissor 画在同一块 canvas 的这块矩形里；
+   `layoutMirror()` 按帧的实际矩形设 `mirrorCam.aspect` —— 所以改方形画面不会被拉扁。
+   ⓘ 2026-09-26：120×62 的横窗改 80×80 方窗（`--top-sq`），与右侧小地图一左一右对称，
+   代码里的 id 仍是 `mirror-frame`（显示名改成「尾向观测」）。 */
 #mirror-frame{
-  position:fixed;left:50%;transform:translateX(-50%);
-  top:64px;
-  top:calc(var(--top-gap) + 14px + var(--sat));
-  width:120px;height:62px;
-  border:1px solid var(--line);border-radius:8px;
-  box-shadow:inset 0 0 0 1px rgba(0,0,0,.45),0 4px 14px rgba(0,0,0,.5);
-  z-index:12;pointer-events:none;transition:opacity .3s;
+  position:relative;flex:0 0 auto;
+  width:var(--top-sq);height:var(--top-sq);
+  border:1px solid var(--line);border-radius:3px;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.5),0 4px 16px rgba(0,0,0,.5);
+  transition:opacity .3s;
 }
 #mirror-frame.hide{opacity:0}
-/* 标签直接压在 WebGL 画面上，掠到亮行星时纯文字会糊掉 —— 垫一层由下往上加深的暗底 */
+/* 标签挪到**窗下面**，并做成与右侧声音键**同宽同高的一条**（2026-09-27 顶栏对称化）：
+   旧版它只是一行 9px 的浮字 —— 宽 95px 比 80px 的窗还宽（探出窗外 15px），
+   且左列底边 160 / 右列底边 182，左右两列的重量完全不一样。
+   现在左列 = 方块 + 一条（26px，与右列的声音键同高、同款面板底、同 margin-top 8），
+   两列底边严格对齐；条宽 = 窗宽（含 1px 边框外沿对齐）。
+   条内**两行**：「尾向观测 / 氦闪壳」—— 单行排要 87px，80px 的条装不下（会被省略号截断），
+   拆两行后每行只有 4 字，字号仍是 9px 那档丝印字，不必缩到看不清。 */
 #mirror-label{
-  position:absolute;left:0;right:0;bottom:0;text-align:center;padding:7px 0 3px;
-  font-size:9px;letter-spacing:.5px;color:#9fd8ff;text-shadow:0 1px 4px rgba(0,0,0,.9);
-  background:linear-gradient(180deg,rgba(5,8,16,0),rgba(5,8,16,.78));
+  /* +9px：窗有 1px 边框，绝对定位的原点是 padding box，多补 1px 才与右列声音键同一基线 */
+  position:absolute;left:-1px;top:calc(100% + 9px);
+  width:calc(100% + 2px);height:26px;padding:0 3px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  white-space:nowrap;overflow:hidden;
+  font-size:9px;letter-spacing:0;line-height:1.25;color:#a8e6d8;
+  background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+  text-shadow:0 1px 4px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9);
+}
+#mirror-label i{font-style:normal;opacity:.72}
+/* `▍` 是终端提示符，做成**贴左缘**的独立装饰（不是 flex 项，否则两行会变成三行） */
+#mirror-label::before{
+  content:'▍';position:absolute;left:5px;top:50%;
+  transform:translateY(-50%);color:var(--term);opacity:.9;
+}
+
+/* 右列第 1 件 · 小地图（2026-09-26 从底部信息栏搬上来：那里只有 42px，点与线都太小）：
+   位图固定 **160×160**，CSS 按 **80px**（`--top-sq`）显示 —— 正好 2× 超采样，
+   屏幕 1px 的线 = 位图 2px。canvas 不支持伪元素，外框用 box-shadow 描（不占布局、不改分辨率）。 */
+#radar{
+  width:var(--top-sq);height:var(--top-sq);
+  transition:opacity .3s;
+  box-shadow:0 0 0 1px var(--line);
+  /* 底由 canvas 自己画（.88 的黑绿）；这一层再糊掉背后的亮星球，双保险 */
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+}
+#radar.hide{opacity:0}
+
+/* 逃逸进度条（底部信息栏下排，撑满小地图右边的剩余宽度，2026-09-26 从左上列下沉）：
+   与驾驶无关的任务总进度 —— 放在最下沿既不挡画面，也不必再让视线跑到屏幕上边。
+   标签在左（`逃逸进度 12%`）、细条在右横向撑满。 */
+#progress{
+  flex:0 0 auto;width:100%;min-width:0;margin-top:8px;
+  display:flex;align-items:center;
+  transition:opacity .3s;
+}
+#progress.hide{opacity:0}
+/* 刻度式轨道：底纹就是刻度，填充是一段发光的绿条 —— 横向撑满标签右边的余下宽度 */
+#prog-track{
+  flex:1 1 auto;min-width:0;height:6px;border-radius:2px;overflow:hidden;
+  background:repeating-linear-gradient(90deg,
+    rgba(70,232,178,.20) 0px, rgba(70,232,178,.20) 1px,
+    rgba(70,232,178,.07) 1px, rgba(70,232,178,.07) 4px);
+}
+#prog-fill{
+  height:100%;width:0%;border-radius:2px;
+  background:linear-gradient(90deg,#2ecf9a,#7fd0a8);
+  box-shadow:0 0 10px rgba(127,208,168,.55);
+  transition:width .15s;
+}
+#prog-label{
+  flex:0 0 auto;font-size:10px;letter-spacing:1px;color:var(--mut);
+  margin-right:8px;font-variant-numeric:tabular-nums;white-space:nowrap;
 }
 
 /* ===== 底部驾驶舱 `#cockpit`：本作唯一的操作区 =====
@@ -103,7 +281,6 @@ html,body{
    而「判定针在哪、还剩多少温度、速度够不够、发动机出了多大力」必须同时读到 ——
    视线在上下半屏之间往返，就是纯粹的失误来源。所以整块操作区下沉到屏幕底部，
    自下而上只有三层：**仪表行 → 时机条 → 消息槽**，读的时候只需看这一条带。
-   顶部只留「与驾驶无关、想起来才抬头看一眼」的东西（用时 / 逃逸进度 / 小地图 / 后视镜 / 声音）。
    时机条与仪表行都是**常驻盒子**（`.hide` 只改透明度、不塌陷盒子）→ 窗口开合不引起任何跳动。
    间距一律走 margin：Chrome 61 的 flex 不支持 `gap`。 */
 #cockpit{
@@ -112,11 +289,16 @@ html,body{
   z-index:13;pointer-events:none;
   display:flex;flex-direction:column;
 }
-/* 消息槽：**零高度**槽位，两条提示都绝对定位、贴着槽位底边向上生长。
-   旧版靠写死 `bottom:180px` 去和时机条对齐 —— 时机条一换行（窄屏 tag 变长）就会叠字；
-   零高度槽位把「时机条正上方」这件事交给排版算，长文案只盖 3D 画面，绝不顶走下面的条。 */
-#cockpit-msg{position:relative;height:0}
-#cockpit-msg > *{position:absolute;left:0;right:0;bottom:0;margin:0 auto}
+/* 时机条 + 消息槽同一条带：`#cockpit-stage` 把两者放进同一个定位上下文，
+   **消息槽排在时机条之上**（2026-09-27：反馈「点火提示框应固定在仪表盘上面，
+   弹弓结果与 toast 在它上面浮动」—— 于是槽位回到这条带的**上沿**、浮动显示，
+   不再撑开高度把时机条顶走；时机条因此永远固定在仪表盘之上，不会因为来一条提示而上下跳）。
+   槽位 height:0：不占高度、不为提示单独空出一条空白带；子元素以 bottom:0 + 6px 下外边距
+   向上生长，正好浮在时机条上方 6px。
+   （注释里**不要**写出带花括号的选择器片段：静态契约自检是按 CSS 原文正则匹配规则的。） */
+#cockpit-stage{position:relative;display:flex;flex-direction:column}
+#cockpit-msg{position:relative;z-index:1;height:0}
+#cockpit-msg > *{position:absolute;left:0;right:0;bottom:0;margin:0 auto 6px}
 
 /* ===== 仪表行（底部平铺）：功率 / 温度 / 速度 三张表盘 + 警报灯与两条读数 =====
    驾驶舱的读法是**余光扫一眼指针角度**，不是逐行读数字，所以三张盘并排平铺。
@@ -125,22 +307,31 @@ html,body{
    温度 = ∫ 功率，所以左两张盘之间存在「功率指针越高、温度指针爬得越快」的因果。
    整块垫 `--panel` 底：掠到木星 / 土星时半屏是亮橙，纯浮字与暗色指示灯会糊掉。 */
 #dash{
-  display:flex;align-items:center;
-  background:var(--panel);border:1px solid var(--line);border-radius:14px;
-  padding:7px 10px 6px;
-  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-  box-shadow:0 6px 22px rgba(0,0,0,.4);
+  position:relative;
+  display:flex;flex-direction:column;align-items:center;
+  background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:8px 10px 8px;
+  -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+  box-shadow:0 6px 22px rgba(0,0,0,.45),inset 0 0 34px rgba(70,232,178,.05);
   transition:opacity .3s;
 }
 #dash.hide{opacity:0}
-/* 仪表行三格平分宽度、上限 64px（再宽就要吃掉右端灯组的地盘）；
-   320px 窄屏上自动压到 43~50px —— 指针 + 值弧 + 数字仍然读得清。 */
-#dash-row{flex:0 1 auto;min-width:0;display:flex;align-items:flex-start}
+/* 上排：三个表盘 + 右端（小地图 / 灯组 / 读数） */
+/* 上排 = **控制台两列**：仪表盘 │ 参数（列间只用一条**竖线**分隔，横线一条不加）。
+   ⓘ 2026-09-26：三列里的**雷达搬去右上角**（42px 太小），这里只剩两列 ——
+   空出来的宽度全归表盘：320px 上从 43px 长到 **约 60px** 一格，信息栏高度一点没变。 */
+#dash-line{width:100%;display:flex;align-items:center}
+/* 第 1 列 · 仪表盘：三格平分剩余宽度、上限 64px（再宽就要吃掉参数列的地盘）；
+   320px 窄屏上自动落到 58~62px —— 指针 + 值弧 + 数字都读得清。 */
+#dash-row{flex:1 1 auto;min-width:0;display:flex;align-items:flex-start}
 .dg{position:relative;flex:1 1 0;min-width:0;max-width:64px}
 .dg + .dg{margin-left:6px}
-/* 右端竖排：四盏警报灯（2×2）+ 距日 / 距壳 —— 灯回答「有没有事」，读数回答「离死线多远」。 */
+/* 第 2 列 · 参数：四盏警报灯（2×2）+ 距日 / 距壳 —— 灯回答「有没有事」，读数回答「离死线多远」。
+   给一条**确定的基准宽度**（不是内容宽度）：灯是 `width:50%` 的两列，父级宽度不定时
+   百分比没有参照，整列会按一行四个灯铺开，把表盘挤没。 */
 #dash-side{
-  flex:1 1 auto;min-width:96px;margin-left:9px;padding-left:9px;
+  flex:1 1 84px;min-width:76px;max-width:104px;
+  margin-left:8px;padding-left:8px;
   border-left:1px solid var(--line);
   display:flex;flex-direction:column;justify-content:center;
 }
@@ -148,19 +339,22 @@ html,body{
 /* 表盘：底弧（轨道）+ 值弧（亮）+ 刻度 + 指针 + 轴心，全部画在一个 100×100 的 viewBox 里，
    渲染尺寸由 CSS 决定（50–64px）—— SVG 缩放比在真机各种 DPR 下都稳。 */
 .dg-svg{display:block;width:100%;height:auto}
-.dg-track{fill:none;stroke:rgba(120,160,220,.16);stroke-width:9;stroke-linecap:round}
-/* 值弧用 dasharray/dashoffset 表示进度：弧长 = 2π×38×270/360 ≈ 179.1，dashoffset 由 JS 写 */
+.dg-track{fill:none;stroke:rgba(70,232,178,.15);stroke-width:9;stroke-linecap:round}
+/* 值弧用 dasharray/dashoffset 表示进度：弧长 = 2π×38×270/360 ≈ 179.1，dashoffset 由 JS 写。
+   注意 JS 写的是 **inline style**（CSS 声明永远压过同名的 SVG 表现属性）——
+   下面这条 179.1 只是首帧基线，不是进度真源。 */
 .dg-arc{
   fill:none;stroke:var(--acc);stroke-width:9;stroke-linecap:round;
   stroke-dasharray:179.1;stroke-dashoffset:179.1;
   transition:stroke .25s;
 }
-.dg-needle{stroke:#eaf1fb;stroke-width:2.6;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(0,0,0,.7))}
-/* 速度表：值弧默认青蓝；指针踩进最佳区间时整段转绿 —— 与 3D 判定环、时机条、全屏呼吸光同一套
+.dg-needle{stroke:#eafff6;stroke-width:2.6;stroke-linecap:round;filter:drop-shadow(0 0 2px rgba(0,0,0,.75))}
+/* 速度表：值弧默认主绿（`--acc`）；指针踩进最佳区间时整段转**更亮的命中绿**（`--ok`）+ 辉光 ——
+   主色本来就是绿，所以「转绿」这件事在这里表现为**变亮**，与 3D 判定环、时机条、全屏呼吸光同一套
    时机轴颜色，余光扫到表盘就知道「就是现在」。 */
-#dg-speed.sweet .dg-arc{stroke:var(--ok)}
+#dg-speed.sweet .dg-arc{stroke:var(--ok);filter:drop-shadow(0 0 5px rgba(127,208,168,.85))}
 #dg-speed.sweet .dg-needle{stroke:var(--ok)}
-.dg-hub{fill:#dfe8f6;stroke:#0b1220;stroke-width:2}
+.dg-hub{fill:#e2faf1;stroke:#04120e;stroke-width:2}
 /* 门槛刻度：当前行星的判定速度门槛在表盘上的位置（满量程 80 km/s）。
    速度够 = 绿、不够 = 红 —— 汽车仪表盘上那道「红区」的等价物。 */
 .dg-tick{stroke:var(--danger);stroke-width:3;stroke-linecap:round;transition:stroke .25s,opacity .25s}
@@ -168,21 +362,28 @@ html,body{
 .dg-tick.hide{opacity:0}
 /* 功率表的**额定线**：满量程 160% 时，100% 落在弧长的 62.5% 处。它不是「红区」而是
    「额定刻度」（像汽车转速表上的红线之前那道刻度），所以用中性灰、不参与红绿语义。 */
-.dg-tick.dg-ref{stroke:rgba(150,180,220,.55);stroke-width:2.4}
+.dg-tick.dg-ref{stroke:rgba(160,195,185,.55);stroke-width:2.4}
 
-/* 表盘内的数字：落在弧的正下方那 90° 缺口里（指针只在 ±135° 两端扫过，且那时横坐标已离开中列）。
-   百分比是相对 .dg 的高度（= svg 62px + 标题行）算的，不是相对 svg —— 45% / 65% 这一对是量出来的：
-   数字底 48.2、单位顶 49.4，留 1.2px 缝，两行绝不叠字。 */
+/* 表盘面 = svg + 压在弧缺口里的**数值 / 单位**两行。
+   2026-09-27：这两行原先按**整格**（表盘 + 标题行）的百分比定位，于是
+     ① 标题行一改字号它们就漂；② 数字悬在表盘中间，与弧之间留出一大段空档。
+   现在它们只相对 `.dg-face`（= 表盘本身）定位，恒在 270° 弧**正下方那 90° 缺口**里：
+   缺口从弧端点的 76.9% 起，数值 64%→89%、单位 87%→102%（单位末 2% 探出弧外，
+   正好接上 2px 之下的标题），三行贴成一簇，中间不再有空档。 */
+.dg-face{position:relative}
 .dg-v{
-  position:absolute;left:0;right:0;top:45%;text-align:center;
-  font-size:14px;font-weight:800;line-height:1;color:var(--txt);
+  position:absolute;left:0;right:0;top:64%;text-align:center;
+  font-size:15px;font-weight:800;line-height:1;color:var(--txt);
   font-variant-numeric:tabular-nums;text-shadow:0 1px 4px rgba(0,0,0,.75);
 }
 .dg-u{
-  position:absolute;left:0;right:0;top:65%;text-align:center;
-  font-size:8.5px;line-height:1;color:var(--mut);letter-spacing:.5px;
+  position:absolute;left:0;right:0;top:89%;text-align:center;
+  font-size:9px;line-height:1;color:var(--mut);letter-spacing:.5px;
 }
+/* 标题行用 `[功率]` 的终端写法：两侧方括号由 CSS 给，DOM 里仍是干净的两字标签 */
 .dg-cap{display:block;text-align:center;font-size:9px;color:var(--mut);letter-spacing:1.5px;margin-top:3px}
+.dg-cap::before{content:'[';opacity:.55;margin-right:2px}
+.dg-cap::after{content:']';opacity:.55;margin-left:2px}
 
 /* 温度表：>70% 转暖色（`hot`）、烧满锁定转红并呼吸（`locked`）—— 与旧温度条同一套语义 */
 #dg-heat.hot .dg-arc{stroke:var(--warn)}
@@ -197,14 +398,14 @@ html,body{
    四态各有自己的颜色，回读的是「这一刻发动机出了多大力」，而不是「该不该按」：
    - `.idle` 停机或过热锁定 → 指针归零、指针与弧一起转灰（按住后指针立刻爬起来，
      所以这张表同时也是**手指按住多久**的反馈）；
-   - 默认（青蓝）= 额定推力；
+   - 默认（主绿）= 额定推力；
    - `.weak`（过晚区间，残效 20%）= 红：那里点火几乎不推进，视觉上就该是「白烧」。
      注意这个红态由**区间**决定（JS 里判 `st.zone === 'late'`），不能按读数大小判 ——
      否则每次按住的起转前 0.25 s 都会闪一次红，而那是正常起转；
    - `.boost`（脉冲乘波 160%）= 琥珀：与 `耀斑` 警报灯同色，指针会越过额定线。
    温度 = ∫ 功率，所以这张表的指针高度**就是**本刻的发热强度。 */
-#dg-pw.idle .dg-arc{stroke:rgba(120,160,220,.42)}
-#dg-pw.idle .dg-needle{stroke:#93a6c0}
+#dg-pw.idle .dg-arc{stroke:rgba(70,232,178,.36)}
+#dg-pw.idle .dg-needle{stroke:#8fb3aa}
 #dg-pw.weak .dg-arc{stroke:var(--danger)}
 #dg-pw.weak .dg-needle{stroke:var(--danger)}
 #dg-pw.weak .dg-v{color:var(--danger)}
@@ -214,18 +415,20 @@ html,body{
 
 /* 警报灯组（2×2）：驾驶舱的指示灯 —— 平时全暗，出事才亮。
    红=已经出事（过热锁定 / 被壳咬住）、琥珀=即将发生（耀斑脉冲）、绿=弹弓正在生效。
+   灯珠做成小方块（不是圆点）：终端指示灯的形状，比圆点更像硬件面板；
    图标 + 两字标签并排，比一整句提示更快被余光读到（详细文案仍归消息槽）。 */
 #lamps{display:flex;flex-wrap:wrap}
 .lamp{
   flex:0 0 50%;width:50%;box-sizing:border-box;
   display:flex;align-items:center;justify-content:center;
-  font-size:9.5px;letter-spacing:.5px;color:rgba(141,162,192,.6);
+  /* 未点亮的灯也要读得清「这是哪一盏」（旧版 9px + 0.72 透明度偏糊） */
+  font-size:9.5px;letter-spacing:.5px;color:rgba(143,184,168,.85);
   padding:2.5px 0;transition:color .2s;
 }
 /* 灯珠与标签的间距走 margin：Chrome 61 的 flex 没有 `gap` */
 .lamp i{
-  width:7px;height:7px;border-radius:2px;flex:0 0 auto;margin-right:4px;
-  background:rgba(120,160,220,.26);box-shadow:none;transition:background .2s,box-shadow .2s;
+  width:7px;height:7px;border-radius:1px;flex:0 0 auto;margin-right:4px;
+  background:rgba(70,232,178,.18);box-shadow:none;transition:background .2s,box-shadow .2s;
 }
 .lamp.on{color:var(--ok)}
 .lamp.on i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
@@ -236,27 +439,27 @@ html,body{
 @keyframes lampBlink{0%,100%{opacity:1}50%{opacity:.25}}
 
 /* 距日 / 距壳两条读数（仪表行右端、灯组之下）：表盘给「现在多快、多烫、发动机多大力」，
-   这两条给「离死线还有多远」。窄屏上字号各收 0.5px，320px 也不会把 AU 挤出去。 */
-#dash-read{margin-top:4px;padding-top:5px;border-top:1px solid var(--line)}
+   这两条给「离死线还有多远」。窄屏上字号收 0.5px，320px 也不会把 AU 挤出去。 */
+#dash-read{margin-top:4px;padding-top:5px;border-top:1px solid var(--line-soft)}
 .dr{display:flex;align-items:baseline;justify-content:space-between;line-height:1.5}
-.dr em{font-style:normal;font-size:9px;color:var(--mut);letter-spacing:.5px;white-space:nowrap}
-.dr-v{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt);white-space:nowrap;margin-left:5px}
+.dr em{font-style:normal;font-size:9.5px;color:var(--mut);letter-spacing:.5px;white-space:nowrap}
+.dr-v{font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--txt);white-space:nowrap;margin-left:4px}
 .dr-v.good{color:var(--ok)}
 .dr-v.warn{color:var(--warn)}
 .dr-v.bad{color:var(--danger)}
 
 /* ===== 加速时机条（本作核心 HUD）：驾驶舱的第一层，压在整个仪表行之上 =====
    与仪表行同宽同列 —— 「判定针滑到哪一段」和「功率 / 温度 / 速度」是同一次余光里的信息。
-   位置交给 `#cockpit` 的 flex 排版（不再写死 bottom）：表盘行长高一点、tag 换一行，
+   位置交给 `#cockpit` 的 flex 排版（不写死 bottom）：表盘行长高一点、tag 换一行，
    都不会把这条挤到别处去。 */
 #flyby{
   position:relative;margin-bottom:6px;
   pointer-events:none;transition:opacity .2s;
-  background:linear-gradient(180deg,rgba(10,16,30,.82),rgba(8,12,24,.88));
-  border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,rgba(7,20,17,.86),rgba(3,12,10,.90));
+  border:1px solid var(--line);border-radius:4px;
   padding:8px 11px 9px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 6px 22px rgba(0,0,0,.45);
+  -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
+  box-shadow:0 6px 22px rgba(0,0,0,.45),inset 0 0 30px rgba(70,232,178,.045);
 }
 #flyby.hide{opacity:0}
 /* 三态 = 红绿灯：绿=命中区、琥珀=过早（弹弓有风险，且正在白烧温度）、红=过晚（已来不及）。
@@ -268,7 +471,8 @@ html,body{
    旧版速度另占一行（白吃 20px 高度），底部整条带因此更高；窗口只有 2.6 s，
    高度和视线一样是预算。窄屏放不下时只让 tag 收省略号，行星名与读数不动。 */
 .fb-head{display:flex;align-items:baseline;margin-bottom:6px}
-#fb-name{flex:0 0 auto;font-size:15px;font-weight:800;color:var(--txt);letter-spacing:.5px}
+#fb-name{flex:0 0 auto;font-size:14px;font-weight:800;color:var(--txt);letter-spacing:1px}
+#fb-name::before{content:'◆';color:var(--acc);font-size:9px;margin-right:5px;position:relative;top:-1px}
 #fb-tag{
   flex:0 1 auto;min-width:0;margin-left:8px;
   font-size:11px;color:var(--mut);
@@ -279,15 +483,15 @@ html,body{
 #flyby.late #fb-tag{color:var(--danger);font-weight:700}
 
 #fb-track{
-  position:relative;height:22px;border-radius:6px;overflow:hidden;
-  background:rgba(120,160,220,.12);
+  position:relative;height:22px;border-radius:3px;overflow:hidden;
+  background:rgba(70,232,178,.10);
   display:flex;
 }
 .fb-zone{
   display:flex;align-items:center;justify-content:center;
   font-size:10px;letter-spacing:.5px;white-space:nowrap;overflow:hidden;
 }
-.fb-early{flex:0 0 46%;background:rgba(120,140,170,.16);color:#93a6c0}
+.fb-early{flex:0 0 46%;background:rgba(140,168,158,.16);color:#8fb3aa}
 .fb-sweet{flex:0 0 44%;background:linear-gradient(90deg,rgba(127,208,168,.42),rgba(127,208,168,.70));color:#0f2a1e}
 .fb-sweet span{font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.55)}
 .fb-late{flex:1 1 auto;background:rgba(255,77,94,.24);color:#ffb3bb}
@@ -303,6 +507,23 @@ html,body{
 }
 #flyby.sweet #fb-needle{background:var(--ok);box-shadow:0 0 10px var(--ok)}
 #flyby.late #fb-needle,#flyby.risk #fb-needle{background:var(--danger);box-shadow:0 0 10px var(--danger)}
+/* 巡航段的「下一站进度条」：与窗口内那条三段带**同一个盒子、同一个高度**
+   （所以窗口开合时这条带不会跳），只是把内容换成一条按弧长填的进度条。
+   填到 100% = 窗口开启的那一刻；**不显示秒数**（倒计时会把张力泄掉，见 DESIGN）。 */
+#fb-next{display:flex;align-items:center;height:22px}
+#fb-next-track{
+  flex:1 1 auto;height:10px;border-radius:3px;overflow:hidden;
+  background:rgba(70,232,178,.10);border:1px solid var(--line-soft);
+}
+#fb-next-fill{
+  height:100%;width:0;
+  background:linear-gradient(90deg,rgba(45,207,154,.35),var(--acc));
+  box-shadow:0 0 10px rgba(45,207,154,.45);
+}
+#fb-next-pct{
+  flex:0 0 auto;margin-left:8px;font-size:10px;color:var(--mut);
+  font-variant-numeric:tabular-nums;
+}
 /* 速度 / 门槛：贴着头条右端，与行星名同一基线（数字用 tabular-nums，跳动时不抖宽） */
 .fb-foot{margin-left:auto;padding-left:8px;font-size:10.5px;color:var(--mut);font-variant-numeric:tabular-nums;white-space:nowrap}
 .fb-foot b{font-weight:700}
@@ -310,44 +531,75 @@ html,body{
 .fb-v.good{color:var(--ok)}
 .fb-v.bad{color:var(--danger)}
 
-/* 小地图（左上，计时与进度之下）：与左列同宽（104px），抬头才看的导航信息 */
-#radar{
-  position:fixed;left:14px;top:158px;
-  top:calc(var(--top-gap) + 108px + var(--sat));
-  width:104px;height:104px;z-index:11;pointer-events:none;transition:opacity .3s;
+/* ===== 消息槽：**一张「终端消息卡」两种内容** =====
+   2026-09-27：#warn（状态提示）与 #fb-toast（掠过评级）原来是两套视觉 ——
+   一个左内边距 28px 放提示符、一个左缘竖条 + min-width 236px，并排出现时像两个应用。
+   现在**共用一个框**：同一张面板底 / 同一条 1px 细边 / 同一条顶缘 2px 语义色细线 /
+   同一个左缘提示符位 / 同一个入场动画（上浮 8px + 淡入）、同样 236px 起宽。
+   区别只剩**两个字段**：提示符字形 与 顶缘那条线的颜色 ——
+     #warn      `>` 绿（信息） / `!` 琥珀（耀斑脉冲） / `×` 红（过热锁定）
+     #fb-toast  `▍` + 评级色（金=完美弹弓 / 绿=差一口气 / 琥珀=按早了 / 红=其余）
+   两块都**浮动**在时机条上方（槽位零高度、不撑高度）：时机条因此永远**固定在仪表盘之上**，
+   不会因为来一条提示就上下跳。 */
+#warn,#fb-toast{
+  min-width:236px;max-width:calc(100vw - 28px);
+  background:rgba(5,18,15,.95);border:1px solid var(--line);border-top:2px solid var(--acc);
+  border-radius:4px;padding:9px 13px 9px 26px;pointer-events:none;
+  -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
+  box-shadow:0 8px 26px rgba(0,0,0,.5);
+  opacity:0;transform:translateY(8px);transition:opacity .22s,transform .22s;
 }
-#radar.hide{opacity:0}
-
-/* ===== 消息槽（零高度槽位，挂在驾驶舱上沿、向上生长）=====
-   整屏唯一一条状态提示：过热 / 耀斑脉冲 / 掠过评级共用，由 updateHUD 的优先级互斥。
-   位置不再写死像素：它在 `#cockpit-msg` 这个零高度槽位里绝对定位，
-   底边永远贴着时机条上沿 —— 时机条换行、表盘行变高都不会把它挤到别处去。
-   三态用颜色分开：常规 = 蓝（这是信息，不是警告）；耀斑脉冲 = 琥珀呼吸；过热 = 红。 */
+#warn.show,#fb-toast.show{opacity:1;transform:translateY(0)}
+/* 提示符：绝对定位在左内边距里，文字因此不必缩进（换行第二行仍贴左缘） */
+#warn::before,#fb-toast::before{
+  content:'>';position:absolute;left:11px;top:9px;
+  font-size:12.5px;color:var(--term);opacity:.9;
+}
+/* 状态提示 #warn：一行正文（12.5px 正文档），三态换色 + 换提示符 */
 #warn{
-  max-width:calc(100vw - 28px);text-align:center;line-height:1.5;
-  font-size:12px;color:#cfe4ff;
-  background:rgba(10,16,30,.86);border:1px solid rgba(92,200,255,.38);border-left:3px solid var(--acc);
-  border-radius:10px;padding:8px 14px;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 6px 22px rgba(0,0,0,.45);
-  opacity:0;transition:opacity .25s;pointer-events:none;
+  text-align:left;line-height:1.5;
+  font-size:12.5px;color:#d6f5ec;
 }
-#warn.show{opacity:1}
-/* 耀斑脉冲：琥珀底 + 加粗 + 呼吸辉光，与「蓝色倒计时」一眼分开 */
+/* 耀斑脉冲：琥珀底 + 加粗 + 呼吸辉光，与常规提示一眼分开 */
 #warn.pulse{
   color:#fff3d6;font-weight:700;letter-spacing:.3px;
-  background:rgba(62,34,6,.9);border-color:var(--warn);border-left-color:var(--warn);
+  background:rgba(44,25,4,.92);border-color:var(--warn);border-top-color:var(--warn);
   animation:warnPulse .55s ease-in-out infinite;
 }
+#warn.pulse::before{content:'!';color:var(--warn)}
 /* 过热锁定：红色，和时机条的「过晚」同色系 */
 #warn.hot{
   color:#ffe0e4;font-weight:700;
-  background:rgba(52,10,16,.9);border-color:var(--danger);border-left-color:var(--danger);
+  background:rgba(40,8,13,.92);border-color:var(--danger);border-top-color:var(--danger);
 }
+#warn.hot::before{content:'×';color:var(--danger)}
 @keyframes warnPulse{
   0%,100%{box-shadow:0 0 0 rgba(255,184,77,0)}
   50%{box-shadow:0 0 18px rgba(255,184,77,.8)}
 }
+
+/* ===== 掠过评级提示（与 #warn 同一张卡，只是多一行明细）=====
+   终端读数块：提示符 `▍` + 标题行（行星名 + `[等级]`）+ 明细行（11px）。
+   ⓘ 2026-09-27：左缘那道竖条已撤 —— 它是「卡片」的语言，与这一屏的终端骨架不搭，
+   也和上面统一的框重复；评级色改由**顶缘 2px 细线 + 等级文字**承担。 */
+#fb-toast::before{content:'▍'}
+#fb-toast.show{opacity:1;transform:translateY(0)}
+.ft-top{display:flex;align-items:baseline;margin-bottom:3px}
+/* 行星名与等级同一行 → 同一字号（旧版 12.5 / 12 差 0.5px，看起来像没对齐）；
+   两者只靠「粗细 + 颜色」区分：名字白粗、等级用评级色。 */
+#ft-name{font-size:12.5px;font-weight:800;color:#fff;margin-right:8px;letter-spacing:.5px}
+#ft-grade{font-size:12.5px;font-weight:700}
+#ft-grade::before{content:'[';opacity:.6;margin-right:1px}
+#ft-grade::after{content:']';opacity:.6;margin-left:1px}
+#ft-detail{font-size:11px;color:var(--mut);line-height:1.5;white-space:pre-line}
+#fb-toast.perfect{border-top-color:var(--gold)}
+#fb-toast.perfect #ft-grade{color:var(--gold)}
+#fb-toast.good{border-top-color:var(--ok)}
+#fb-toast.good #ft-grade{color:var(--ok)}
+#fb-toast.early{border-top-color:var(--warn)}
+#fb-toast.early #ft-grade{color:var(--warn)}
+#fb-toast.late,#fb-toast.none,#fb-toast.fail{border-top-color:var(--danger)}
+#fb-toast.late #ft-grade,#fb-toast.none #ft-grade,#fb-toast.fail #ft-grade{color:var(--danger)}
 
 /* 全屏边缘光：红色=危险，绿色=最佳区间到了、该按了 */
 #danger{
@@ -373,202 +625,254 @@ html,body{
 #flash.on{animation:flashA .8s ease-out forwards}
 @keyframes flashA{0%{opacity:1}100%{opacity:0}}
 
-/* 逃逸进度条（左上列：计时 → 进度 → 小地图）：与驾驶无关的任务总进度。
-   原本压在屏幕最下沿占一条满宽横带，但那一条带是点火时要盯的地方 ——
-   交给左列，需要时抬头看一眼就够。宽度与上下两块对齐（104px）。 */
-#progress{
-  position:fixed;left:14px;top:124px;
-  top:calc(var(--top-gap) + 74px + var(--sat));
-  width:104px;z-index:10;pointer-events:none;transition:opacity .3s;
-}
-#progress.hide{opacity:0}
-#prog-track{height:5px;border-radius:3px;background:rgba(120,160,220,.15);overflow:hidden}
-#prog-fill{height:100%;width:0%;border-radius:3px;background:linear-gradient(90deg,#5cc8ff,#7fd0a8);transition:width .15s}
-#prog-label{display:block;text-align:center;font-size:11px;color:var(--mut);margin-top:5px}
+/* ===== 开场任务简报 / 结算：**整屏终端屏**（不是居中一张卡片）=====
+   2026-09-26：反馈「引导页不要弹窗套方框」。旧版是「居中一张 352px 圆角卡片 +
+   1px 边框 + 四角折角 + 三颗窗口圆点 + 卡片投影」—— 那是宿主里一个对话框的样子，
+   而这一页本来就该是「MOSS 把简报打在整块屏上」。现在两页共用下面这套骨架：
 
-/* ===== 掠过评级提示（与 #warn 同槽：驾驶舱上沿、时机条正上方）===== */
-#fb-toast{
-  transform:translateY(8px);
-  min-width:236px;max-width:calc(100vw - 28px);
-  background:rgba(8,13,24,.94);border:1px solid var(--line);border-left:3px solid var(--acc);
-  border-radius:10px;padding:9px 13px;pointer-events:none;
-  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-  box-shadow:0 8px 26px rgba(0,0,0,.5);
-  opacity:0;transition:opacity .22s,transform .22s;
-}
-#fb-toast.show{opacity:1;transform:translateY(0)}
-.ft-top{display:flex;align-items:baseline;margin-bottom:3px}
-#ft-name{font-size:13px;font-weight:800;color:var(--txt);margin-right:8px}
-#ft-grade{font-size:12px;font-weight:700}
-#ft-detail{font-size:11px;color:var(--mut);line-height:1.5;white-space:pre-line}
-#fb-toast.perfect{border-left-color:var(--gold)}
-#fb-toast.perfect #ft-grade{color:var(--gold)}
-#fb-toast.good{border-left-color:var(--ok)}
-#fb-toast.good #ft-grade{color:var(--ok)}
-#fb-toast.early{border-left-color:var(--warn)}
-#fb-toast.early #ft-grade{color:var(--warn)}
-#fb-toast.late,#fb-toast.none,#fb-toast.fail{border-left-color:var(--danger)}
-#fb-toast.late #ft-grade,#fb-toast.none #ft-grade,#fb-toast.fail #ft-grade{color:var(--danger)}
+     `.scr`        整屏外壳：纵排、左右留 16px、上下叠安全区与 --top-gap
+     `.scr-top`    屏顶状态行（指示灯 + 标题 + 右端信号条），下面一条通宽细线
+     `.scr-body`   正文区：**自己滚动**（矮屏只滚正文，绝不把按钮推走）
+     `.scr-foot`   屏底动作区：上面一条通宽细线，主按钮钉在这里
+     `::before`    整屏扫描线（屏就是屏）
 
-/* 开场任务简报 */
-#brief{
-  position:fixed;top:0;left:0;width:100%;height:100%;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(5,6,13,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  z-index:25;opacity:0;pointer-events:none;transition:opacity .4s;
-  overflow-y:auto;
-  /* 与 HUD 同一套顶部预留：宿主顶部按钮不会压住面板首行；上下不对称是有意的 ——
-     面板整体顺势下沉，正好落在容器顶栏之下。 */
-  padding-top:calc(var(--top-gap) + var(--sat) + 10px);
-  padding-bottom:calc(var(--sab) + 10px);
+   **没有**卡片边框 / 圆角 / 投影 / 窗口圆点 —— 分层只靠那两条通宽细线与字距颜色。
+
+   ---- 字号阶梯（这两页内只有这几档，**不再出现 11.5 / 12 / 12.5 这种「差不多但不一样」的尺寸**）----
+     22px 页面标题（`.bf-title`）
+     14px 主操作行（`.bf-you`「你：…」、`.bf-btn` / `.rs-btn` 按钮文字）
+     12.5px 正文（`.bf-step` 三步、**`.bf-moss` 两条 MOSS 输出（含目标行 `.bf-goal`）**、
+                   消息槽 `#warn`、`.rs-text` / `.rs-stat`）
+     11px 次要说明（**`.scr-top` 屏顶状态行**、`.rst-best`、`.rs-hint`）
+     10px 标签（`.rst-label`、`.dg-cap` 盘内标签、示意图内标签）
+     例外有三：结算页的**大号用时**（成绩本体，44px）；正文里的方括号由 CSS 生成；
+     仪表行里那圈 **9~9.5px 的硬件小字**（`.lamp` / `.dr em` / `.dg-u` / `#clock-label`
+     —— 它们相当于驾驶舱面板上的丝印，不参与这两页的阶梯）。
+     **凡是要玩家读的句子，都不许落在 11px 以下**。
+
+   ---- 配色（全站只有**一支彩色**绿 + 三个语义色 + 中性）----
+     主绿 `--acc`：标题、信息与导航（示意图里的航线 / 地球 / 出口、主按钮、书名号、值弧）
+     机器绿 `--term`：终端「在机器里」的装饰（指示灯、信号条、`▍` `$` `>` `▶`、折角、扫描线）
+     命中绿 `--ok`：该做的事与命中区（1→2 步骤与流程线、绿色区间、判定环、呼吸光）
+     语义色：红 `--danger` = 代价、琥珀 `--warn` = 威胁（太阳与氦闪壳）
+     中性：`--txt` 正文 / `--mut` 次要文字
+   三支绿是**同一色系的三个明度**（主绿最沉、机器绿最亮、命中绿最柔），不是三种颜色；
+   **不许再引入第四支彩色**（旧版简报里同时出现过青蓝、橙 #ff7a14、土黄 #dbc29e，加灰有五种）。 */
+#brief,#result{
+  position:fixed;left:0;top:0;width:100%;height:100%;
+  display:flex;justify-content:center;
+  background:rgba(3,9,8,.94);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  opacity:0;pointer-events:none;transition:opacity .4s;
 }
-#brief.show{opacity:1;pointer-events:auto}
-/* 面板要压得住背后的 3D 场景（掠到木星时整屏是亮橙色，半透明面板会让文字糊掉）。
-   整块预算按 320×568 的最紧可用高度（498px）排：需要滚动才能看到「点火启航」= 引导失败。
-   重排后的分区自上而下：眉题（两侧收线）→ 标题 → 扁版示意 → 世界观一句话 →
-   MOSS 终端 → 三步流程（绿→红）→ 目标行 → 主按钮，总高约 480px，仍留 18px 余量。 */
-.bf-inner{
-  position:relative;
-  width:calc(100vw - 32px);max-width:352px;
-  background:rgba(9,13,24,.95);border:1px solid var(--line);border-radius:18px;
-  padding:18px 18px 20px;margin:auto;
-  box-shadow:0 18px 48px rgba(0,0,0,.55);
+#brief{z-index:25}
+#result{z-index:30}
+#brief.show,#result.show{opacity:1;pointer-events:auto}
+/* 整屏扫描线：全屏那层扫描线（body::before）在 z-index:6，会被这两页盖住，所以自带一层 */
+#brief::before,#result::before{
+  content:'';position:absolute;left:0;top:0;width:100%;height:100%;
+  pointer-events:none;
+  background:repeating-linear-gradient(180deg,
+    rgba(70,232,178,.03) 0px, rgba(70,232,178,.03) 1px,
+    rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px);
 }
-/* 顶缘一道居中的青色微光：面板的「通电」感，不占任何高度 */
-.bf-inner::before{
-  content:'';position:absolute;left:56px;right:56px;top:0;height:1px;
-  background:linear-gradient(90deg,transparent,var(--acc),transparent);
+.scr{
+  display:flex;flex-direction:column;
+  width:100%;max-width:430px;min-height:0;
+  /* 与 HUD 同一套顶部预留：宿主顶部按钮不会压住屏顶状态行 */
+  padding-top:calc(var(--top-gap) + var(--sat) + 8px);
+  padding-bottom:calc(var(--sab) + 8px);
 }
-/* 眉题两侧细线收边（── 流浪地球 · 引力弹弓 ──）：一行高度不变，只加证件感 */
-.bf-kicker{
-  display:flex;align-items:center;text-align:center;
-  font-size:10.5px;letter-spacing:3px;color:var(--mut);margin-bottom:5px;
+.scr-top{
+  flex:0 0 auto;display:flex;align-items:center;
+  padding:0 16px 9px;
+  border-bottom:1px solid var(--line-soft);
+  font-size:11px;letter-spacing:2px;color:var(--mut);
 }
-.bf-kicker::before,.bf-kicker::after{content:'';flex:1;height:1px;margin:0 12px}
-.bf-kicker::before{background:linear-gradient(90deg,transparent,var(--line))}
-.bf-kicker::after{background:linear-gradient(90deg,var(--line),transparent)}
+.scr-led{
+  flex:0 0 auto;width:7px;height:7px;border-radius:1px;margin-right:8px;
+  background:var(--term);box-shadow:0 0 9px var(--term);
+}
+.scr-t{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 右端三根递增高的小竖条：一台在线终端的读数。**不是窗口圆点** —— 那是「对话框」的语言 */
+.scr-meter{flex:0 0 auto;display:flex;align-items:flex-end;height:11px;margin-left:10px}
+.scr-meter i{width:3px;height:4px;border-radius:1px;margin-left:3px;background:var(--term);opacity:.45}
+.scr-meter i:nth-child(2){height:7px}
+.scr-meter i:nth-child(3){height:11px;opacity:.7}
+/* 在线读数：三根条轮流亮一下就是「这台终端还活着」（幅度极小，只做质感） */
+.scr-meter i{animation:scr-meter 1.8s ease-in-out infinite}
+.scr-meter i:nth-child(2){animation-delay:.3s}
+.scr-meter i:nth-child(3){animation-delay:.6s}
+@keyframes scr-meter{0%,100%{opacity:.35}50%{opacity:.85}}
+/* 正文区：**自己滚动**（矮屏只滚正文，屏底按钮永远钉住）。
+   `.scr-wrap` 的 `margin:auto 0` 是「内容少时垂直居中、内容多时从顶部开始并可滚动」
+   的标准写法（比给容器写 `justify-content:center` 稳：后者在溢出时会把顶部内容
+   推到滚动区之外，用 translate 也不行）—— 高屏上不会在正文与按钮之间空一大片。 */
+.scr-body{flex:1 1 auto;min-height:0;overflow-y:auto;padding:12px 16px 14px;display:flex;flex-direction:column}
+.scr-wrap{margin:auto 0;width:100%}
+.scr-foot{flex:0 0 auto;padding:14px 16px 0;border-top:1px solid var(--line-soft)}
+/* 标题：行首一个 `>` 提示符（终端里的一条指令），左对齐 —— 终端里的输出不居中。
+   22px —— 与下面最粗的「你：…」14px 拉开一档，中间不再有 15~20px 的中间态。 */
 .bf-title{
-  font-size:24px;font-weight:800;color:var(--acc);margin-bottom:10px;text-align:center;letter-spacing:1px;
-  text-shadow:0 0 22px rgba(92,200,255,.35);
+  font-size:22px;font-weight:800;color:var(--acc);margin-bottom:8px;letter-spacing:1px;
+  text-shadow:0 0 22px rgba(70,232,178,.35);
 }
-.bf-svg{width:100%;max-width:220px;display:block;margin:0 auto 8px}
+.bf-title::before{content:'>';color:var(--term);margin-right:8px;font-weight:700;opacity:.9}
+/* 标题 → 图 → 世界观句 是**一组**（「要干什么 + 长什么样」），组内贴紧、组间才用 --bf-gap */
+/* 200px 是「标签仍读得清」的下限（210×86 的 viewBox 缩到 200 宽时字号 ≈9.5px）；
+   再大只是插画变胖，会把正文与按钮一起往下顶 —— 矮屏上不划算。 */
+.bf-svg{width:100%;max-width:200px;display:block;margin:0 auto var(--bf-gap)}
 /* 超矮屏（≤520px 高，如 320×480）只留文字：插画是氛围，说明书不能因此被推下去 */
 @media (max-height:520px){.bf-svg{display:none}}
-.bf-sub{font-size:12px;color:var(--mut);line-height:1.6;text-align:center;margin-bottom:10px}
-/* MOSS 终端：左缘青条 + 微青底，像舰载终端的一屏输出。
-   「MOSS 已算定航线 / 你决定什么时候点火」：情报与权限的对照，一句压住世界观。 */
+
+/* MOSS 终端：左缘绿条 + 微绿底，像舰载终端的一屏输出。
+   「MOSS 已算定航线 / 你决定什么时候点火」：情报与权限的对照，一句压住世界观。
+   两行各自带终端前缀（`▍` 与 `$`），把「机器输出」与「等你输入」分开。
+   **MOSS 那行是正文、不是标签**（旧版给了 11px 灰字，实测「太小了看不清」）：
+   字号提到正文档 12.5px、颜色给**机器绿 `--term`**（全站最亮的一支绿）——
+   于是这两行形成「机器 = 亮绿 / 你 = 纯白」的对照，而不是「灰字 vs 白字」。 */
 .bf-term{
-  padding:8px 12px;text-align:left;
-  background:rgba(92,200,255,.055);
-  border:1px solid rgba(92,200,255,.16);
-  border-left:2px solid var(--acc);
-  border-radius:8px;
+  padding:10px 13px;text-align:left;
+  background:rgba(70,232,178,.055);
+  border-left:2px solid var(--term);
+  margin-bottom:var(--bf-gap);
+  /* 只留左缘一条竖条：卡片化的一圈边框与圆角都去掉了（这一页整屏是终端，
+     块内再用盒子套盒子就又成了「弹窗套方框」） */
 }
-.bf-moss{display:block;font-size:11.5px;color:var(--mut);letter-spacing:.6px}
-.bf-moss::before{content:'▍';color:var(--acc);opacity:.85;margin-right:5px}
-.bf-you{display:block;font-size:15px;font-weight:700;color:var(--txt);margin-top:2px}
+.bf-moss{display:block;font-size:12.5px;color:var(--term);letter-spacing:.4px}
+.bf-moss::before{content:'>';color:var(--term);opacity:.85;margin-right:5px}
+.bf-you{display:block;font-size:14px;font-weight:700;color:#fff;margin-top:2px}
+.bf-you::before{content:'$';color:var(--term);margin-right:5px;font-weight:700}
 /* 呼吸的下划线光标：终端还开着，等你输入「点火」这一条指令 */
-.bf-you::after{content:'_';color:var(--acc);margin-left:2px;animation:bf-caret 1.1s steps(1,end) infinite}
+.bf-you::after{content:'_';color:var(--term);margin-left:2px;animation:bf-caret 1.1s steps(1,end) infinite}
 @keyframes bf-caret{50%{opacity:0}}
 
 /* 三步操作卡（简报内唯一一次规则交代）：**每条一行**，一条一义、两秒扫完。
    左侧竖线把 1→2 串成「照着做」的流程、在红卡前淡出 —— 那是「别做」的分支，
    与两条绿编号正面相对，比揉进一段长句更容易记住。
    行内间距全部走 margin（不是 flex gap）：Chrome 61 没有 flex gap，退化后会贴死。 */
-#tip{position:relative;margin-top:12px;transition:opacity .4s}
+#tip{position:relative;transition:opacity .4s}
 #tip.hide{opacity:0}
+/* 1→2 之间的流程线：从第一枚编号的下缘画到第二枚编号的上缘（按新的行高重算：
+   行 padding-top 5 + 编号 17 = 22 起，跨到下一行的编号顶，24px 后淡出） */
 #tip::before{
-  content:'';position:absolute;left:17px;top:12px;height:26px;width:1px;
+  content:'';position:absolute;left:18px;top:22px;height:24px;width:1px;
   background:linear-gradient(180deg,rgba(127,208,168,.55),rgba(127,208,168,0));
 }
-.bf-step{display:flex;align-items:center;text-align:left;padding:4px 0 4px 9px}
+/* 三步卡的**左右缩进必须一致**：普通卡 padding-left 10，红卡 padding-left 9 + 1px 边框 = 10
+   —— 于是三行文字（含红框里的那行）左缘对齐在同一条竖线上，红框则从更左的卡片外沿起。
+   旧版普通 9 / 红卡 9+1 相差 1px，看着像两栏各排各的。 */
+.bf-step{display:flex;align-items:center;text-align:left;padding:5px 0 5px 10px}
 .bf-step + .bf-step{margin-top:2px}
-/* 「窗口外点火 → 弹弓作废」：整条转红底，与上面两条绿编号正面相对 */
+/* 编号做成方形终端 chip（旧版是圆形徽标）；字号与标题栏同为 10px 一档 */
+.bs-n{
+  position:relative;flex:0 0 auto;width:17px;height:17px;margin-right:9px;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:800;color:#04140f;background:var(--ok);
+  box-shadow:0 0 10px rgba(127,208,168,.45);
+}
+.bs-t{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.5;color:var(--txt)}
+/* 强调只提「粗细 + 纯白」，不加色相 —— 正文里出现的颜色只有绿（该做）与红（代价）两种 */
+.bs-t b{font-weight:700;color:#fff}
+/* 「窗口外点火 → 弹弓作废」：整条转红底，与上面两条绿编号正面相对。
+   padding-left 9 + 1px 边框 = 10，与普通卡的 10 **正好对齐**（见上面那条注释）；
+   margin-top 8 比卡内行距（2px）大 —— 它是「别做」的分支，要在视觉上断开。 */
 .bf-step.bad{
-  margin-top:6px;padding:6px 9px;border-radius:9px;
+  margin-top:8px;padding:6px 9px;border-radius:3px;
   background:rgba(255,77,94,.1);border:1px solid rgba(255,77,94,.34);
 }
-.bs-n{
-  position:relative;flex:0 0 auto;width:16px;height:16px;margin-right:9px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  font-size:10px;font-weight:800;color:#06121f;background:var(--ok);
-}
-.bs-t{flex:1 1 auto;min-width:0;font-size:12.5px;line-height:1.4;color:var(--txt)}
-.bs-t b{font-weight:700}
-.bf-step.bad .bs-n{background:var(--danger);color:#21060a}
+.bf-step.bad .bs-n{background:var(--danger);color:#21060a;box-shadow:0 0 10px rgba(255,77,94,.5)}
 .bf-step.bad .bs-t{color:#ffc9d0}
-/* 目标单独一行、居中收尾，两侧青色书名号把它框成一句「任务摘要」。
-   **不用金色**：金色被契约锁在「评价 / 结算」轴
-   （自检会列举所有 var(--gold) 选择器并断言全部落在评级 / 结算上），
-   这里靠「灰字 + 白粗 + 青括号」做同等的强调。 */
-.bf-goal{font-size:12px;color:var(--mut);text-align:center;line-height:1.6;margin-top:10px}
-.bf-goal::before{content:'「';color:var(--acc)}
-.bf-goal::after{content:'」';color:var(--acc)}
-.bf-goal b{color:var(--txt);font-weight:700}
+/* 目标行 = **MOSS 的第二条输出**（2026-09-27）：
+   处境「氦闪壳在身后追」与「唯一目标＝最短用时」原本分挂两处（一句在图下、一句在操作卡下），
+   现在并成一句，并且**与第一条 MOSS 行完全同款**（`>` 提示符 + 机器绿 + 12.5px 正文档）——
+   这一块因此读成「两条 MOSS 的输出」对「一条你的回答」：
+   MOSS 把情报与处境/目标说完，你只回一句「决定何时点火」。
+   `.bf-goal` 退化成**修饰类**（只管行距与句内强调），样式全部继承 `.bf-moss`。 */
+.bf-goal{display:block;margin-top:2px}
+/* 句内强调统一用「纯白 + 加粗」（与三步卡里的 <b> 同一套）：
+   这一行是机器绿 --term，强调才跳到 #fff。 */
+.bf-goal b{color:#fff;font-weight:700}
+/* 主按钮 = 终端里的执行键：方角、等宽字 + 宽字距，按压时下沉。
+   配色收进**绿一个色系**（渐变、边框、辉光、`▶` 全部同源）——
+   旧版是「深蓝渐变 + 青绿边框 + 青绿箭头」，三种色挤在一个按钮上，是这页最乱的一处。 */
 .bf-btn{
-  width:100%;margin-top:12px;font-size:15px;font-weight:600;color:#fff;letter-spacing:2px;
-  background:linear-gradient(135deg,#1a6fc4,#5cc8ff);
-  border:none;border-radius:12px;padding:13px 0;cursor:pointer;
+  width:100%;font-size:14px;font-weight:600;color:#eafff6;letter-spacing:3px;
+  background:linear-gradient(135deg,#0a4a38,#17a37c);
+  border:1px solid rgba(70,232,178,.45);border-radius:3px;padding:14px 0;cursor:pointer;
   font-family:inherit;-webkit-tap-highlight-color:transparent;
-  box-shadow:0 6px 20px rgba(38,140,220,.35);
+  box-shadow:0 6px 20px rgba(24,150,110,.35),inset 0 0 24px rgba(70,232,178,.12);
 }
-.bf-btn:active{opacity:.85;transform:translateY(1px)}
+.bf-btn::before{content:'▶';font-size:10px;margin-right:8px;color:inherit;opacity:.9}
+/* 执行键轻微呼吸：这一页只有一个出口，视线要被它接住（幅度很小，不抢正文） */
+.bf-btn{animation:bf-btn-glow 2.8s ease-in-out infinite}
+@keyframes bf-btn-glow{
+  0%,100%{box-shadow:0 6px 20px rgba(24,150,110,.35),inset 0 0 24px rgba(70,232,178,.12)}
+  50%{box-shadow:0 6px 26px rgba(24,150,110,.55),inset 0 0 24px rgba(70,232,178,.2)}
+}
+.bf-btn:active{opacity:.9;transform:translateY(1px);animation:none}
 
-/* 结算 */
-#result{
-  position:fixed;top:0;left:0;width:100%;height:100%;
-  display:flex;align-items:center;justify-content:center;
-  background:rgba(5,6,13,.82);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
-  z-index:30;opacity:0;pointer-events:none;transition:opacity .4s;
-  overflow-y:auto;
-  padding-top:calc(var(--top-gap) + var(--sat) + 10px);
-  padding-bottom:calc(var(--sab) + 10px);
-}
-#result.show{opacity:1;pointer-events:auto}
-.rs-inner{
-  width:calc(100vw - 32px);max-width:360px;margin:auto;
-  background:rgba(9,13,24,.95);border:1px solid var(--line);border-radius:18px;
-  padding:26px 22px;text-align:center;
-}
-.rs-title{font-size:22px;font-weight:800;margin-bottom:12px}
-.rs-title.win{color:var(--ok)}
-.rs-title.lose{color:var(--danger)}
-/* 用时成绩：结算页的主角，「谁更快逃出去」就比这一行 */
+/* ===== 结算：同一套整屏终端骨架（见 §简报），只是正文换成一份任务报告 =====
+   状态行 → 被两条通宽细线夹住的用时读数 → 收尾句 → 四行清单 → 屏底两个按钮。
+   对齐方式与简报一致：**左对齐**（终端输出不居中），只有那块成绩仍在左端起排。 */
+/* 状态行：`▍` + 结果（冲出太阳系 / 逃逸失败），颜色由 .win / .lose 给。
+   16px：比简报的 22px 页面标题低一档（它是状态而不是标题），但仍明显高于 14px 按钮。 */
+.rs-title{font-size:16px;font-weight:800;margin-bottom:12px;letter-spacing:2px}
+.rs-title::before{content:'▍';font-size:11px;margin-right:6px;opacity:.9}
+.rs-title.win{color:var(--ok);text-shadow:0 0 20px rgba(127,208,168,.4)}
+.rs-title.lose{color:var(--danger);text-shadow:0 0 20px rgba(255,77,94,.35)}
+/* 用时成绩：结算页的主角，「谁更快逃出去」就比这一行。
+   上下用细边夹住，像终端里被框出来的一行读数。 */
 .rs-time{
-  display:flex;flex-direction:column;align-items:center;gap:2px;
+  display:flex;flex-direction:column;align-items:flex-start;
   margin-bottom:14px;padding:12px 0;
-  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);
 }
-.rst-label{font-size:11px;color:var(--mut);letter-spacing:2px}
+.rst-label{font-size:10px;color:var(--mut);letter-spacing:3px}
 .rst-value{
-  font-size:46px;font-weight:800;line-height:1.05;letter-spacing:-1px;
+  font-size:44px;font-weight:800;line-height:1.05;letter-spacing:-1px;
   font-variant-numeric:tabular-nums;color:var(--gold);
   text-shadow:0 0 22px rgba(255,210,74,.35);
 }
 .rs-time.bad .rst-value{color:var(--mut);text-shadow:none}
-.rst-value i{font-size:20px;font-style:normal;font-weight:600;margin-left:3px;color:var(--mut)}
-.rst-best{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+.rst-value i{font-size:18px;font-style:normal;font-weight:600;margin-left:3px;color:var(--mut)}
+.rst-best{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;margin-top:2px}
 .rst-best.new{color:var(--gold);font-weight:700}
-.rs-text{font-size:13px;color:var(--mut);line-height:1.6;margin-bottom:10px}
-/* 注脚统计：两行「名目 + 数值」，名目灰、数值亮 —— 一眼扫完，不用读整句 */
-.rs-stat{font-size:12px;color:var(--mut);font-variant-numeric:tabular-nums;margin-bottom:16px;line-height:1.95}
-.rs-stat b{color:var(--txt);font-weight:700}
+.rs-text{font-size:12.5px;color:var(--mut);line-height:1.6;margin-bottom:12px}
+/* 注脚统计：四行「名目 …… 数值」，名目灰、数值亮，中间一条点线引导（终端里的清单） */
+.rs-stat{
+  font-size:12.5px;color:var(--mut);font-variant-numeric:tabular-nums;
+  margin-bottom:14px;text-align:left;
+}
+.rsr{display:flex;align-items:baseline;line-height:1.85}
+.rsr em{font-style:normal;flex:0 0 auto;color:var(--mut)}
+/* 中间那条点线引导（终端清单的读法）：由 JS 在名目与数值之间补一个空的 <i>，
+   它自己 flex-grow 撑满余下宽度，行高不变 —— 不靠 border 拼字符，缩放不会错位。 */
+.rsr-l{
+  flex:1 1 auto;height:1px;margin:0 8px;align-self:center;
+  background:repeating-linear-gradient(90deg,
+    rgba(70,232,178,.30) 0px, rgba(70,232,178,.30) 2px,
+    rgba(0,0,0,0) 2px, rgba(0,0,0,0) 6px);
+}
+.rsr b{margin-left:auto;padding-left:10px;color:var(--txt);font-weight:700;white-space:nowrap}
 /* 按钮间距走 margin（Chrome 61 的 flex 没有 gap）；分享键被隐藏时不能留下那道 10px 缝 */
 .rs-actions{display:flex}
 .rs-btn + .rs-btn{margin-left:10px}
 .rs-btn.hide + .rs-btn{margin-left:0}
+/* 按钮与简报的 `.bf-btn` 同一套（绿一个色系）：实心 = 主操作，描边 = 次操作。
+   注意**不用金色**：金色被契约锁在「评价 / 结算成绩」轴（自检列举所有 var(--gold) 选择器）。 */
 .rs-btn{
-  flex:1;font-size:15px;font-weight:600;color:#fff;
-  background:linear-gradient(135deg,#1a6fc4,#5cc8ff);
-  border:none;border-radius:12px;padding:13px 0;cursor:pointer;
+  flex:1;font-size:14px;font-weight:600;color:#eafff6;letter-spacing:1px;
+  background:linear-gradient(135deg,#0a4a38,#17a37c);
+  border:1px solid rgba(70,232,178,.45);border-radius:4px;padding:13px 0;cursor:pointer;
   font-family:inherit;-webkit-tap-highlight-color:transparent;
 }
-.rs-btn:active{opacity:.85}
+.rs-btn:active{opacity:.9}
 .rs-btn.ghost{
   background:transparent;color:var(--acc);
-  border:1px solid rgba(92,200,255,.55);
+  border:1px solid rgba(70,232,178,.5);
 }
-.rs-btn.ghost:active{background:rgba(92,200,255,.14)}
+.rs-btn.ghost:active{background:rgba(70,232,178,.14)}
 .rs-btn.hide{display:none}
 /* 拿不到容器 bridge 时，这里会被填进整段战绩文案并自动选中 —— 所以要能换行、能被长按选中 */
 .rs-hint{
@@ -578,26 +882,84 @@ html,body{
 }
 .rs-hint b{color:var(--gold)}
 
-/* 加载 */
+/* ===== 加载：MOSS 启动自检 ===== */
 #loader{
   position:fixed;top:0;left:0;width:100%;height:100%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   background:var(--bg);z-index:100;transition:opacity .6s;
 }
-#loader.hide{opacity:0;pointer-events:none}
-.loader-spin{
-  width:42px;height:42px;border:3px solid rgba(92,200,255,.2);
-  border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite;
+#loader::before{
+  content:'';position:absolute;left:0;top:0;width:100%;height:100%;
+  pointer-events:none;
+  background:repeating-linear-gradient(180deg,
+    rgba(120,255,214,.04) 0px, rgba(120,255,214,.04) 1px,
+    rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px);
 }
-@keyframes sp{to{transform:rotate(360deg)}}
-#loader p{margin-top:14px;font-size:13px;color:var(--mut)}
+#loader.hide{opacity:0;pointer-events:none}
+.ld-mark{
+  font-size:32px;font-weight:800;letter-spacing:10px;color:var(--term);
+  text-shadow:0 0 26px rgba(70,232,178,.45);padding-left:10px;
+}
+/* 字标下面一行小字：答「这块屏是谁的」。10px 档（面板丝印级），
+   与 `MOSS` 的字距对齐，视觉上像屏幕抬头而不是标题。 */
+.ld-sub{
+  margin-top:8px;padding-left:10px;
+  font-size:10px;letter-spacing:2px;color:var(--mut);opacity:.8;
+}
+/* 自检清单：逐项由 app.js 打勾（`.done`）。
+   名字 → 点线引导 → 状态（`···` 未完成 / `OK` 完成），就是终端自检单的排版。 */
+.ld-log{
+  width:62%;max-width:250px;margin-top:24px;
+}
+.ld-line{
+  display:flex;align-items:center;
+  font-size:11px;line-height:22px;color:var(--mut);
+}
+.ld-line em{font-style:normal;letter-spacing:1px}
+.ld-line i{flex:1;height:0;margin:0 7px;border-top:1px dotted rgba(70,232,178,.22)}
+.ld-line b{font-weight:400;font-size:10px;color:var(--mut);opacity:.55}
+.ld-line.done{color:var(--txt)}
+.ld-line.done b{color:var(--term);opacity:1}
+/* 自检条：由 app.js 按 `已停留 / BOOT_MIN_MS` 写宽度（不再是无限扫描的假进度）。 */
+.ld-bar{
+  width:44%;max-width:170px;height:4px;margin-top:18px;border-radius:2px;overflow:hidden;
+  background:rgba(70,232,178,.14);
+}
+.ld-bar i{
+  display:block;width:0;height:100%;
+  background:linear-gradient(90deg,rgba(70,232,178,.35),var(--term));
+}
+/* 状态行：只报**当前正在校验的那一句**（清单已经把全貌给出来了）。 */
+#loader p{margin-top:14px;font-size:11px;color:var(--mut);letter-spacing:1.5px}
 
-/* 不支持 */
+/* ===== 不支持 WebGL：终端报错 ===== */
 #fallback{
   position:fixed;top:0;left:0;width:100%;height:100%;
   display:none;flex-direction:column;align-items:center;justify-content:center;
   background:var(--bg);z-index:200;text-align:center;padding:30px;
 }
 #fallback.show{display:flex}
-#fallback h2{color:var(--warn);margin-bottom:10px}
-#fallback p{color:var(--mut);max-width:420px;line-height:1.6}
+.fl-inner{
+  width:100%;max-width:330px;padding:18px;border-radius:4px;
+  border:1px solid rgba(255,77,94,.38);background:rgba(22,6,10,.6);text-align:left;
+}
+.fl-tag{font-size:10px;letter-spacing:4px;color:var(--danger);margin-bottom:9px}
+#fallback h2{color:var(--warn);font-size:16px;margin-bottom:8px;letter-spacing:1px}
+#fallback p{color:var(--mut);font-size:12px;line-height:1.7}
+
+/* ===== 窄屏（≤340px，320×568 是最紧的实测下限）=====
+   只压字号与字距，不动任何几何 —— 顶部三列（用时 / 后视镜 / 声音）
+   与底部驾驶舱（三张表盘 + 右端灯组）都必须继续互不重叠、互不溢出。 */
+@media (max-width:340px){
+  /* 计时**不在这里压缩**：320px 上中间那格有 136px，而「0:05.423」在 29/15px 下约 94px，
+     两侧各余 21px，压小反而让成绩变小 —— 窄屏只压下面那几处。 */
+  /* 窄屏表盘只有 59px，数值退回 14px —— 否则它和下面那行单位会咬在一起 */
+  .dg-v{font-size:14px}
+  #fb-name{font-size:13px}
+  #fb-tag{font-size:10px}
+  .fb-foot{font-size:9.5px}
+  .lamp{font-size:8.5px;letter-spacing:0}
+  #dash{padding:7px 8px 6px}
+  .dg + .dg{margin-left:5px}
+  .rst-value{font-size:40px}
+}

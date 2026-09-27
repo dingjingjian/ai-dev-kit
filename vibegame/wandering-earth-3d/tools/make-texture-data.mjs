@@ -17,13 +17,20 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 // 每项：源文件（相对项目根） / 输出文件 / 全局变量名 / 说明
-// 行星贴图统一取自 vibeknow/solar-system-3d/assets/（NASA 影像）
-// 航线上用真实影像的行星只有木星 / 土星；天王星 / 海王星 / 冥王星用程序化贴图（见 app.js procPlanetTex）。
+// 行星贴图统一取自 vibeknow/solar-system-3d/assets/（NASA 影像），
+// 2026-09-27 起**掠过五站 + 场上三颗全部用真实影像**（此前天王星 / 海王星 / 冥王星 /
+// 水星 / 金星 / 火星是程序化色块）。`procPlanetTex` 仍在，只作贴图缺失时的兜底。
 // 地球贴图 earth-data.js 另由历史版本保留（体积大、重复生成成本高，未纳入本表）。
 const SRC = '../../vibeknow/solar-system-3d/assets';
 const TARGETS = [
   { key: 'jupiter', src: `${SRC}/jupiter.jpg`, out: 'assets/jupiter-data.js', name: 'JUPITER', note: '木星贴图（自带大红斑与大气条纹）' },
-  { key: 'saturn', src: `${SRC}/saturn.jpg`, out: 'assets/saturn-data.js', name: 'SATURN', note: '土星贴图' }
+  { key: 'saturn', src: `${SRC}/saturn.jpg`, out: 'assets/saturn-data.js', name: 'SATURN', note: '土星贴图' },
+  { key: 'uranus', src: `${SRC}/uranus.jpg`, out: 'assets/uranus-data.js', name: 'URANUS', note: '天王星贴图（青蓝冰巨星）' },
+  { key: 'neptune', src: `${SRC}/neptune.jpg`, out: 'assets/neptune-data.js', name: 'NEPTUNE', note: '海王星贴图（深蓝冰巨星）' },
+  { key: 'pluto', src: `${SRC}/pluto.jpg`, out: 'assets/pluto-data.js', name: 'PLUTO', note: '冥王星贴图（心形冰原）' },
+  { key: 'mercury', src: `${SRC}/mercury.jpg`, out: 'assets/mercury-data.js', name: 'MERCURY', note: '水星贴图（陨石坑地貌）' },
+  { key: 'venus', src: `${SRC}/venus.jpg`, out: 'assets/venus-data.js', name: 'VENUS', note: '金星贴图（硫酸云层）' },
+  { key: 'mars', src: `${SRC}/mars.jpg`, out: 'assets/mars-data.js', name: 'MARS', note: '火星贴图（铁锈色地表 + 极冠）' }
 ];
 
 const MIME = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };

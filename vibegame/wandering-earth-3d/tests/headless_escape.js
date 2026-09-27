@@ -71,6 +71,11 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   const noRule = need.filter((sel) => css.indexOf(sel) < 0);
   check(noRule.length === 0, '加速时机条 / 汽车式仪表盘等新 HUD 的样式规则齐全',
     noRule.length ? '缺规则: ' + noRule.join(',') : need.length + ' 条选择器全部命中');
+  // 2026-09-27：数值 / 单位必须相对**表盘面**定位（旧版相对整格 —— 含标题行 ——
+  // 于是数字悬在盘中间、与弧之间空出一大段，且标题改字号它就跟著漂）。
+  check(html.indexOf('class="dg-face"') > 0 && /\.dg-face\{[^}]*position:relative/.test(css)
+    && /\.dg-v\{[^}]*top:64%/.test(css) && /\.dg-u\{[^}]*top:89%/.test(css),
+    '表盘的数值 / 单位相对 .dg-face 定位（恒在弧的缺口里，不随标题行漂移）');
   const stateCls = ['hot', 'locked', 'hide', 'show', 'sweet', 'late', 'risk', 'good', 'bad', 'off',
     'ready', 'active', 'perfect', 'fail', 'early', 'none', 'pulse', 'on', 'warn',
     'idle', 'weak', 'boost'];
@@ -81,12 +86,42 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   // 旧版是一整块文字遥测（速度 / 距日 / 距壳 + 一条温度条）。现在按「要不要跟刻度比对」分工：
   // 温度 = 柱（单调余量，填充高度即答案）、速度 = 盘（跟门槛刻度比）、功率 = 盘（跟额定线比）。
   const dashRule = (css.match(/#dash\{[^}]*\}/) || [''])[0];
+  // ---- 顶栏（2026-09-26 收成一条 flex）：左 尾向观测窗 │ 中 计时 │ 右 小地图 + 声音键 ----
+  // 三块原本各自 `position:fixed`；现在只由 `#topbar` 定位 —— 于是 `--top-gap` 只叠在这一条上，
+  // 左右两块共用 `--top-sq` 这个边长（方形、对称），中间的计时吃满余下宽度自然居中。
+  const topbarRule = (css.match(/#topbar\{[^}]*\}/) || [''])[0];
+  const topRightRule = (css.match(/#top-right\{[^}]*\}/) || [''])[0];
   const muteRule = (css.match(/#mute\{[^}]*\}/) || [''])[0];
-  check(muteRule.indexOf('right:') > 0 && muteRule.indexOf('left:') < 0,
-    '声音开关挂在右上角（不再是左上小地图右侧）');
-  // 顶部预留：小红书容器自带一排顶部按钮，HUD 顶部各元素必须再叠一条 --top-gap
+  check(topbarRule.indexOf('position:fixed') > 0 && topbarRule.indexOf('left:') > 0
+    && topbarRule.indexOf('right:') > 0 && topbarRule.indexOf('display:flex') > 0
+    && topbarRule.indexOf('var(--top-gap)') > 0,
+    '顶栏是一条两侧对齐的 flex 条，并且只叠一次 --top-gap（三块不再各自 fixed）',
+    topbarRule.replace(/\s+/g, ' ').slice(0, 88));
+  check(/--top-sq:\s*\d+px/.test(css)
+    && /#mirror-frame\{[^}]*width:var\(--top-sq\)/.test(css)
+    && /#mirror-frame\{[^}]*height:var\(--top-sq\)/.test(css)
+    && /#radar\{[^}]*width:var\(--top-sq\)/.test(css)
+    && /#mute\{[^}]*width:var\(--top-sq\)/.test(css),
+    '左右两块是**同尺寸方形窗**（尾向观测 / 小地图共用 --top-sq 边长），声音键与之同宽');
+  check(html.indexOf('id="topbar"') < html.indexOf('id="mirror-frame"')
+    && html.indexOf('id="mirror-frame"') < html.indexOf('id="clock"')
+    && html.indexOf('id="clock"') < html.indexOf('id="top-right"')
+    && html.indexOf('id="radar"') < html.indexOf('id="mute"'),
+    '顶栏 DOM 次序 = 尾向观测窗 → 计时 → 小地图 + 声音键（一左一右对称、计时夹在中间）');
+  check(/#clock\{[^}]*flex:1 1 auto/.test(css) && /#clock\{[^}]*align-items:center/.test(css)
+    && /#clock\{[^}]*justify-content:center/.test(css),
+    '计时占中间那一格（flex:1）并在格内居中显示');
+  check(html.indexOf('后视镜') < 0 && html.indexOf('尾向观测') > 0,
+    '「后视镜」已按世界观改名为「尾向观测」（index.html 里不再出现旧名）', '尾向观测 · 氦闪壳');
+  check(/#mirror-label\{[^}]*position:absolute/.test(css)
+    && /#mirror-label\{[^}]*top:calc\(100%/.test(css),
+    '观测窗标签挪到窗**下面**（方形窗装不下这个词，也让整块窗都归 3D 画面）');
+  check(muteRule.indexOf('position:fixed') < 0 && muteRule.indexOf('margin-top') > 0
+    && topRightRule.indexOf('flex-direction:column') > 0,
+    '声音开关竖排在右上列、跟在小地图下面（不再自己 fixed 定位）');
+  // 顶部预留：小红书容器自带一排顶部按钮，整条顶栏必须再叠一条 --top-gap。
   check(/--top-gap:\s*50px/.test(css), '顶部预留常量 --top-gap 已定义（对齐 moon-myths 安全区写法）');
-  const topGapUsers = ['#clock{', '#mute{', '#mirror-frame{', '#radar{', '#progress{'];
+  const topGapUsers = ['#topbar{'];
   const noGap = topGapUsers.filter((sel) => {
     const r = (css.match(new RegExp(sel.replace('{', '\\{[^}]*\\}'))) || [''])[0];
     return r.indexOf('var(--top-gap)') < 0;
@@ -131,8 +166,11 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     && Math.abs(1 * C.PULSE_THRUST_BOOST - 1.6) < 1e-9;
   check(pwSafe, '功率表四档读数：过晚残效 20% / 额定 100% / 脉冲乘波 160%（停机与过热锁定 = 0）',
     'late ' + M3D.zoneEff('late') + ' × 乘波 ' + C.PULSE_THRUST_BOOST);
-  check(/var power = \(st\.burning && !st\.overheated\) \? st\.thrustEff : 0/.test(appSrc),
-    '功率在「没按住 / 过热锁定」时归零（同时也是手指有没有按住的反馈）');
+  // 2026-09-27 反馈「功率不可能一松手就直接归零」：读数改由 st.pwr（油门本身）驱动，
+  // 松手后跟着那条 0.5 s 的熄火斜坡一起下坡（PWR_DOWN），而不是被 st.burning 一闸到底。
+  // 只有**过热锁定**是真 0（那是熄火完成）。物理核心没动（推力/温升仍按 thrustEff）。
+  check(/var power = st\.overheated \? 0[\s\S]{0,160}st\.pwr \/ PWR_MAX/.test(appSrc),
+    '功率读数跟着油门走：松手走 0.5 s 熄火斜坡，只有过热锁定才是 0');
   // 2026-09-26 重构：功率是**起转斜坡**（按住 0.5 s 到满额），红态只给「过晚残效」——
   // 若按「功率 < 50%」判，每次按住的起转前 0.25 s 都会闪一次红，那是正常起转不是白烧。
   check(/PWR_UP\s*=\s*200/.test(appSrc) && /PWR_DOWN\s*=\s*200/.test(appSrc)
@@ -187,8 +225,9 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   // ---- HUD 布局契约：消息槽 / 时机条 / 仪表行三层同属驾驶舱，自上而下排开、互不贴边 ----
   // 旧版 #warn 先是 top:208 悬浮画面中间（读起来像一条没主的浮标），后来改成写死
   // bottom:180px 去和时机条对齐 —— 时机条一换行（窄屏 tag 变长）就会叠字。
-  // 现在两条提示都塞进 `#cockpit-msg` 这个**零高度**槽位，贴着时机条上沿向上生长：
-  // 位置由排版算，不写死像素，长文案只盖 3D 画面、绝不顶走下面的条。
+  // 现在两条提示都塞进 `#cockpit-msg` 这个**零高度**槽位；2026-09-27 起它排在时机条**之后**
+  // （= 显示在时机条下面、紧贴底部状态框），有提示时才撑开高度把时机条顶上去 ——
+  // 位置由排版算，不写死像素，长文案既不压下面的状态框、也不浮在画面里压氦闪壳。
   const warnRule = (css.match(/#warn\{[^}]*\}/) || [''])[0];
   const toastRule = (css.match(/#fb-toast\{[^}]*\}/) || [''])[0];
   const barRule = (css.match(/#flyby\{[^}]*\}/) || [''])[0];
@@ -204,7 +243,7 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     && html.indexOf('id="cockpit-msg"') < html.indexOf('id="fb-toast"')
     && html.indexOf('id="warn"') < html.indexOf('id="flyby"')
     && html.indexOf('id="fb-toast"') < html.indexOf('id="flyby"'),
-    '#warn 与评级条同槽：都在 #cockpit-msg 里、且排在时机条之前（= 显示在它上方）');
+    '#warn 与评级条同槽：都在 #cockpit-msg 里、且排在时机条之前（= 浮动在它上方）');
   check(!!toastRule && toastRule.indexOf('position:fixed') < 0 && /transform:translateY/.test(toastRule),
     '评级条与 #warn 一样交给槽位定位，入场只靠 translateY（不再各自写死 bottom）');
   check(/position:relative/.test(barRule) && /margin-bottom/.test(barRule),
@@ -214,11 +253,72 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   check(!!tipRule && tipRule.indexOf('position:fixed') < 0 &&
     html.indexOf('id="tip"') > html.indexOf('id="brief"'),
     '点火提示在开场简报内（局内底部只剩消息槽 / 时机条 / 仪表行）');
-  // 逃逸进度：与驾驶无关，从底部满宽横条搬进左上列（计时与雷达之间），不再占操作区
+  // ---- 逃逸进度 / 小地图：2026-09-26 从左上列**下沉到底部信息栏**，同一天小地图又搬回**右上角** ----
+  // 进度：`#dash-foot` 里的 flex 子项 —— 不该 fixed、也不该叠 --top-gap。
+  // 小地图：现在挂在右上列 `#top-right`（`position:fixed` 的容器）里 —— 它自己**仍然不该**
+  // fixed（父级已经定位），--top-gap 由容器统一叠，所以它自己那条也不带。
   const progRule = (css.match(/#progress\{[^}]*\}/) || [''])[0];
-  check(/var\(--top-gap\)/.test(progRule) && progRule.indexOf('bottom:') < 0,
-    '逃逸进度搬到左上列（计时 → 进度 → 小地图），底部整条让给驾驶舱',
+  const radarRule2 = (css.match(/#radar\{[^}]*\}/) || [''])[0];
+  check(!!progRule && progRule.indexOf('position:fixed') < 0 && progRule.indexOf('var(--top-gap)') < 0,
+    '逃逸进度挂在底部信息栏最下沿（不再占左上列）',
     progRule.replace(/\s+/g, ' ').slice(0, 88));
+  check(!!radarRule2 && radarRule2.indexOf('position:fixed') < 0
+    && radarRule2.indexOf('var(--top-gap)') < 0
+    && html.indexOf('id="radar"') < html.indexOf('id="cockpit"')
+    && html.indexOf('id="radar"') < html.indexOf('id="dash"'),
+    '小地图搬出底部信息栏、进顶栏右列（自己不带 --top-gap，由 #topbar 统一叠）',
+    radarRule2.replace(/\s+/g, ' ').slice(0, 88));
+  // ---- 控制台**两列**（同日最终版）：仪表盘 │ 参数（雷达搬去右上角后只剩这两列）----
+  const dashSideRule = (css.match(/#dash-side\{[^}]*\}/) || [''])[0];
+  const dashLineRule = (css.match(/#dash-line\{[^}]*\}/) || [''])[0];
+  check(html.indexOf('id="dash-row"') < html.indexOf('id="dash-side"')
+    && html.indexOf('id="lamps"') > html.indexOf('id="dash-side"'),
+    '控制台两列 = 仪表盘 → 参数（灯组 / 读数都在参数列里，雷达不再占列）');
+  check(/#dash-row\{[^}]*flex:1 1 auto/.test(css) && /#dash-side\{[^}]*flex:1 1 \d+px/.test(css)
+    && /border-left/.test(dashSideRule) && /display:flex/.test(dashLineRule),
+    '两列的宽度分工：仪表盘吃满剩余 / 参数列有确定的基准宽度（灯是 50% 两列），列间竖线分隔');
+  check(html.indexOf('id="progress"') > html.indexOf('id="dash-side"')
+    && html.indexOf('id="progress"') < html.indexOf('id="danger"')
+    && /#progress\{[^}]*width:100%/.test(css),
+    '逃逸进度单独一行（信息栏最下沿、通宽，不再与小地图同排）');
+  // ---- 时机条**固定**贴在仪表盘之上；提示框统一成一张卡、浮动在时机条上方 ----
+  // 2026-09-27 反馈「点火提示框应固定在仪表盘上面；弹弓结果与 toast 统一样式、在它上面浮动」：
+  // 消息槽回到时机条**之前**（= 显示在它上方），保持 height:0 浮动 ——
+  // 不再撑开高度，所以时机条的位置**恒定**，不会因来一条提示而上下跳。
+  check(htmlIds.has('cockpit-stage') && html.indexOf('id="cockpit-stage"') < html.indexOf('id="cockpit-msg"')
+    && html.indexOf('id="cockpit-msg"') < html.indexOf('id="flyby"')
+    && /#cockpit-stage\{[^}]*flex-direction:column\}/.test(css)
+    && /#cockpit-msg\{[^}]*z-index/.test(css)
+    && /#cockpit-msg\{[^}]*height:0/.test(css)
+    && /#cockpit-msg > \*\{[^}]*bottom:0[^}]*margin:0 auto \d+px/.test(css),
+    '消息槽在时机条**之前**（column + bottom:0 向上浮动 6px），时机条位置恒定不跳');
+  check(appSrc.indexOf('elMsg') < 0 && appSrc.indexOf('MSG_GAP') < 0,
+    '不再用 JS 撑高消息槽（提示改为浮动，不推走时机条）');
+  // ---- 两块提示**同一张卡**：共用框 + 共用提示符位，只有提示符字形与顶缘颜色不同 ----
+  const shareRule = (css.match(/#warn,#fb-toast\{[^}]*\}/) || [''])[0];
+  check(/min-width:236px/.test(shareRule) && /border-top:2px/.test(shareRule)
+    && /padding:9px 13px 9px 26px/.test(shareRule) && /translateY\(8px\)/.test(shareRule),
+    '#warn 与 #fb-toast 共用同一张终端消息卡（同框 / 同内边距 / 同入场动画）',
+    shareRule.replace(/\s+/g, ' ').slice(0, 96));
+  check(/#warn::before,#fb-toast::before\{/.test(css) && /#fb-toast::before\{content:'▍'\}/.test(css)
+    && /#warn\.pulse::before\{content:'!'/.test(css) && /#warn\.hot::before\{content:'×'/.test(css),
+    '两块提示共用提示符位，语义只由字形与顶缘颜色区分（> / ! / × · ▍）');
+  check(css.indexOf('#fb-toast::before{') > css.indexOf('#flyby::before{')
+    && !/#clock::before,#progress::before,#mirror-frame::before,#dash::before,#flyby::before,\s*\n#fb-toast::before/.test(css),
+    '评级条已退出折角组（::before 让给提示符，两套规则不再互相污染）');
+  // ---- 巡航段：同一条带换成「下一站进度条」（玩家反馈：点火前不知道离下一站还有多远）----
+  check(htmlIds.has('fb-next') && htmlIds.has('fb-next-fill') && htmlIds.has('fb-next-pct')
+    && html.indexOf('id="fb-next"') > html.indexOf('id="fb-track"'),
+    '巡航段有独立的「下一站进度条」DOM（与窗口内那条三段带同一个盒子）');
+  check(/showNext[\s\S]{0,120}st\.phase < 0/.test(appSrc)
+    && /elFbTrack\.style\.display = 'none'; elFbNext\.style\.display = ''/.test(appSrc)
+    && /elFbNextFill\.style\.width/.test(appSrc)
+    && /nf\.s - st\.v \* \(nf\.def\.winTime/.test(appSrc)
+    && /nGoal = Math\.max/.test(appSrc),
+    '窗口外（phase<0）才切到下一站进度条；终点是**窗口开启那一刻**（扣掉 v × winTime 的提前量），不报秒数');
+  // ---- 操作界面不加横线滤镜：全屏扫描线已撤（只在简报 / 结算那两块整屏上保留）----
+  check(!/body::before\{/.test(css) && /#brief::before,#result::before\{/.test(css),
+    '操作界面没有横线滤镜（全屏扫描线已撤，终端质感只留在简报 / 结算那两块整屏上）');
   // 速度读数只有一套单位：时机条 foot 与表盘都是 km/s（旧版 foot 是内部单位 98 / 156）
   check(/门槛[\s\S]{0,60}km\/s/.test(html) && /KMS_PER_UNIT\)\.toFixed\(1\)/.test(appSrc),
     '时机条 foot 的速度 / 门槛用 km/s（与表盘同一套单位）');
@@ -283,11 +383,47 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
     '能力检测在调用时做（每次点击重查 window.xhs.miniTool），按钮文案随可用能力定');
   check(/writeTempFile/.test(appSrc) && /toDataURL\('image\/webp'/.test(appSrc) && /createRange/.test(appSrc),
     '配图用 Canvas 现画（不碰被禁的网络请求 API），拿不到端能力时退化为「选中文案 + 引导长按复制」');
+  // 2026-09-27：点结算页任意处就重开 = 想点分享却按到正文 → 整页重开、战绩与分享一起被跳过
+  check(appSrc.indexOf("elResult.addEventListener('click'") < 0
+    && appSrc.indexOf('resultShownAt') < 0
+    && /elRsBtn\.addEventListener\('click', restart\)/.test(appSrc)
+    && /elRsShare\.addEventListener\('click', doShare\)/.test(appSrc),
+    '结算页只有屏底两个按钮有动作（不再点哪都能重开，避免错过分享）');
   // 容器把剪贴板类 API 列进禁用能力扫描清单：写了 verify-minitool.mjs 会直接判不合规
   check(!/execCommand/.test(appSrc) && !/clipboard\.writeText/.test(appSrc),
     '不出现容器禁用能力（execCommand / clipboard.writeText）');
   check(/slice\(0, 20\)/.test(appSrc) && /slice\(0, 1000\)/.test(appSrc),
     '分享标题 ≤20 字、正文 ≤1000 字（postNote 的 API 上限）');
+
+  // ---- 启动页（MOSS 自检）契约：内联资源加载只要一两百毫秒，不做最短停留就会一闪而过 ----
+  check(htmlIds.has('loader') && htmlIds.has('ld-log') && htmlIds.has('ld-fill') && htmlIds.has('ld-status'),
+    '启动页 DOM 齐全（#loader / #ld-log / #ld-fill / #ld-status）');
+  const ldLines = (html.match(/<div class="ld-line">[\s\S]*?<\/div>/g) || []);
+  const ldNames = ldLines.map((s) => ((s.match(/<em>([^<]+)<\/em>/) || ['', ''])[1]));
+  check(Array.isArray(C.BOOT_STEPS) && C.BOOT_STEPS.length === ldNames.length
+    && C.BOOT_STEPS.every((s, i) => s.k === ldNames[i]),
+    '自检清单逐项与 BOOT_STEPS 一一对应（HTML 与代码不会各写一套）', ldNames.join(' → '));
+  check(C.BOOT_STEPS.every((s, i) => i === 0 || s.t > C.BOOT_STEPS[i - 1].t)
+    && C.BOOT_STEPS[C.BOOT_STEPS.length - 1].t <= 1,
+    '自检项的打勾时刻严格递增且都在停留时长内（清单按顺序一条条亮）');
+  check(typeof C.BOOT_MIN_MS === 'number' && C.BOOT_MIN_MS >= 1500 && C.BOOT_MIN_MS <= 5000,
+    '启动页有最短停留时长（BOOT_MIN_MS ≥1.5 s 且 ≤5 s，不再一闪而过也不拖沓）', C.BOOT_MIN_MS + ' ms');
+  check(/function updateBoot\(now\)/.test(appSrc) && /elLdFill\.style\.width/.test(appSrc)
+    && /classList\.add\('done'\)/.test(appSrc),
+    '自检条按已停留时长写宽度、清单逐项打勾（是真实进度，不是无限扫动的假动画）');
+  // 收尾那句话必须真的看得见：100% 与撤屏若在同一帧发生，等于最后一句没写
+  check(typeof C.BOOT_DONE_MSG === 'string' && C.BOOT_DONE_MSG.length > 0
+    && /BOOT_TAIL_MS/.test(appSrc) && /BOOT_DONE_MSG/.test(appSrc)
+    && /BOOT_MIN_MS \+ BOOT_TAIL_MS/.test(appSrc),
+    '走满后再多留一拍（BOOT_TAIL_MS），让「自检完成」这句真的被看到', C.BOOT_DONE_MSG);
+  check(appSrc.indexOf('@keyframes ldScan') < 0 && !/@keyframes ldScan/.test(css),
+    '旧的无限扫描动画（ldScan）已随假进度一起移除');
+  // 撤屏必须发生在自检走满之后（旧版是「渲染出第一帧就 hide」→ 一闪而过）
+  check(appSrc.indexOf('loaderHidden') < 0 && /bootDone = true;[\s\S]{0,80}elLoader\.classList\.add\('hide'\)/.test(appSrc),
+    '启动页由 bootDone 门控撤屏（不再是第一帧就 hide 的一闪而过）');
+  check(/if \(!bootDone\)[\s\S]{0,120}updateBoot\(now\)/.test(appSrc)
+    && /\} else if \(introT < INTRO_TIME\)/.test(appSrc),
+    '自检没走完就不推进开场过场（2.6 s 的过场镜头不会在启动页背后放完）');
 
   // 背景音乐：真正的 mp3 字节藏在 assets/bgm-data.js 里（不是 .mp3 文件、不是 <audio src>），
   // 页面必须在 app.js 之前加载它，app.js 必须走 decodeAudioData 并带一个静音开关。
@@ -339,22 +475,34 @@ console.log('\n=== 工程（DOM / 样式静态契约）===');
   }
 
   // 已删除的旧元素/旧机制不应再被引用（自由飞行版遗留）
+  // ⓘ 2026-09-27：水星 / 金星 / 火星的贴图**回来了**（改成真实影像），
+  //   故把 mercury-data / venus-data / mars-data 与 *_TEXTURE_URI 从「死亡名单」里撤掉。
   const dead = ['compass', 'cmp-svg', 'cmp-label', 'aim-name', 'aim-dist', 'aim-tag', 'screenDragToWorld',
-    'mercury-data', 'venus-data', 'mars-data', 'MERCURY_TEXTURE_URI', 'VENUS_TEXTURE_URI', 'MARS_TEXTURE_URI',
     'bf-rule', 'bf-line', 'bf-dot', 'elThrust', '#thrust', 'th-flame', 'refreshThrust',
     'pulseWarn', 'pulseWarnLevel'];   // 旧的二值脉冲预警（已换 pulseHot / pulseIn / pulseTip）
   const residue = dead.filter((d) => appSrc.indexOf(d) >= 0 || html.indexOf(d) >= 0);
   check(residue.length === 0, '已删除的旧元素/旧机制无残留引用', residue.length ? '残留: ' + residue.join(',') : '干净');
 
+  // ---- 行星贴图：掠过五站 + 场上三颗**全部真实影像**（2026-09-27；地球另有 earth-data.js）----
+  // 仍以「内联 base64 的 *-data.js」分发（file:// 下 <img> 会污染画布 → texImage2D 被拒），
+  // 所以每颗都要同时满足：① index.html 引了数据文件 ② app.js 里挂了 *_TEXTURE_URI。
+  const planetTexKeys = ['JUPITER', 'SATURN', 'URANUS', 'NEPTUNE', 'PLUTO', 'MERCURY', 'VENUS', 'MARS'];
+  const missTex = planetTexKeys.filter((n) => html.indexOf(n.toLowerCase() + '-data.js') < 0
+    || appSrc.indexOf(n + '_TEXTURE_URI') < 0);
+  check(missTex.length === 0, '八颗行星全部用真实影像贴图（地球除外：仍用 earth-data.js）',
+    missTex.length ? '缺: ' + missTex.join(',') : planetTexKeys.length + ' 颗全部命中');
+  check(appSrc.indexOf('procPlanetTex') > 0 && /\|\| procPlanetTex/.test(appSrc),
+    'procPlanetTex 保留为兜底（内联数据缺失时退回程序化色块，不会开天窗）');
+
   // 简报：一句 MOSS 口吻的情报 + 一句「谁做决定」的对照，规则与操作交给局内 HUD 教
-  check(/MOSS：航线已解算/.test(html) && /你：决定点火时刻/.test(html),
-    '简报保留「MOSS：航线已解算 / 你：决定点火时刻」的对照');
+  check(/MOSS：航线已解算/.test(html) && /你：决定何时点火/.test(html),
+    '简报保留「MOSS：航线已解算 / 你：决定何时点火」的对照');
   // 引导拆成编号操作卡：一条长句拆成「动作 → 时机 → 代价」三张卡，两秒扫完
   const stepCards = html.match(/class="bf-step(?: bad)?"/g) || [];
   check(stepCards.length === 3 && /class="bf-step bad"/.test(html),
     '开场引导是三步操作卡（第三条为代价，单独标红）', stepCards.length + ' 张卡');
-  check(/绿色区间/.test(html) && /本次弹弓作废/.test(html) && /class="bf-goal"/.test(html),
-    '操作卡把「绿色区间」「弹弓作废」与唯一目标都写清楚了');
+  check(/绿色区间/.test(html) && /本次弹弓作废/.test(html) && /class="bf-moss bf-goal"/.test(html),
+    '操作卡把「绿色区间」「弹弓作废」与唯一目标都写清楚了（目标行已是 MOSS 第二条输出）');
   check(html.indexOf('地球沿固定航线自动前进') < 0 && html.indexOf('烧满会过热锁定') < 0,
     '旧的路线描述与操作说明已从简报删除');
 
@@ -1277,6 +1425,21 @@ console.log('\n=== 地球模型（行星发动机）===');
     sx += d[0]; sy += d[1]; sz += d[2];
   }
   check(slots.length === C.ENGINE_COUNT, '发动机数量 = ENGINE_COUNT', slots.length + ' 台');
+  // 渲染层（朝向 / 等离子柱）在沙箱里跑不到（没有 THREE），只能按源码静态断言
+  const appSrc = fs.readFileSync(path.join(ASSETS, 'app.js'), 'utf8');
+  // 2026-09-27：**南极洲朝前**。球体那一组绕 X 转 -90° → 南极（-Y）落到 +Z（= 航向），
+  // 于是画面里一直是南极洲领着地球飞、发动机在北半球那一侧朝后喷。
+  // 极性由 `EARTH_POLE_SIGN` 一个符号控制（实机观察定正负，翻这一行即可换向）
+  check(/earthBody = new THREE\.Group\(\)/.test(appSrc)
+    && /var EARTH_POLE_SIGN = -1/.test(appSrc)
+    && /earthBody\.rotation\.x = EARTH_POLE_SIGN \* Math\.PI \/ 2/.test(appSrc)
+    && /earthBody\.add\(new THREE\.Mesh\(new THREE\.SphereGeometry\(EARTH_R/.test(appSrc),
+    '南极洲朝前：EARTH_POLE_SIGN = -1（绕 X 转 -90°：南极 → 航向 +Z，北极朝镜头）');
+  // 每台发动机自带一道等离子柱（旧版只有中间那一束，远看像「地球后面挂了根棒」）
+  check(/var plumeGeo/.test(appSrc) && /plumes\.push\(plume\)/.test(appSrc)
+    && /pl\.scale\.set\(1, k, 1\)/.test(appSrc)
+    && /pl\.position\.z = pl\.userData\.z0 - PLUME_LEN \* k \/ 2/.test(appSrc),
+    '每台发动机自带等离子柱：长度随推力伸缩 + 高频抖动，且底座锚在发动机上（不随缩放前移）');
   check(back === slots.length, '全部装在 -Z 半球（地球背面，正对跟拍镜头）', back + '/' + slots.length);
   check(radiusOk === slots.length, '安装半径统一 = EARTH_R × ENGINE_SHELL',
     shell.toFixed(2) + '（大气 ' + (W.EARTH_R * 1.06).toFixed(2) + '，在地表外）');
