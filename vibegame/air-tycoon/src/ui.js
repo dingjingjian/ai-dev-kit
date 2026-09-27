@@ -6,7 +6,8 @@
  *
  * ── 架构：HUD + 抽屉 + 模态层（三层，各有明确职责）──
  *   HUD    —— 常驻读数（资金/净资产/排名/回合/计时）。每帧刷新，只改 textContent。
- *   抽屉   —— 左下按钮打开的面板：航线列表、机队、开新线。可开可关，不阻塞计时。
+ *   抽屉   —— 左下按钮打开的面板：航线列表、机队、开新线。**打开时暂停回合计时**
+ *             （见 pauseForPanel；2026-09-27 起，此前是不阻塞）。
  *   模态   —— 事件卡、季报、终局。**阻塞回合计时**，必须处理完才能继续。
  *
  * ── 为什么事件卡必须阻塞 ──
@@ -255,9 +256,17 @@
     else openPanel(name);
   }
 
+  /* 面板打开 = 暂停回合计时（2026-09-27 用户要求：在底部面板里操作时不该被计时催）。
+   * 走 sim 的 setPaused 而不是直接写 state.paused —— 维持「UI 只调 sim 接口」的约定，
+   * 也让这条链路能被无头测试断言（tests/headless.js 的暂停层）。 */
+  function pauseForPanel(on) {
+    if (S && S.setPaused) S.setPaused(ui.state, on);
+  }
+
   function openPanel(name) {
     ui.panel = name;
     if (el.uPanel) el.uPanel.classList.add('show');
+    pauseForPanel(true);
     dirty.panel = true;
     dirty.hud = true;
   }
@@ -265,6 +274,7 @@
   function closePanel() {
     ui.panel = null;
     if (el.uPanel) el.uPanel.classList.remove('show');
+    pauseForPanel(false);
     dirty.hud = true;
   }
 
@@ -309,6 +319,18 @@
         dirty.panel = true;
         break;
       case 'add-plane': {
+        /* ⚠ 先预检架数上限，再买机（2026-09-27 加）。
+         * 本分支把「买机 + 派机」合成一步，若先买后派，超限时玩家会
+         * **白花购机款还多出一架闲置机** —— 钱被吃掉、飞机闲着，是最难受的失败形态。
+         * 所以上限必须在掏钱之前校验（sim 的 assignPlane 也会拒，但那时钱已经花了）。 */
+        var rr = S.findRouteByKey(st, key);
+        if (!rr) { sfx('deny'); toast('航线不存在', 'bad'); break; }
+        var capA = S.maxPlanesForRoute(st, rr);
+        if (S.planesOnRoute(st, key).length >= capA) {
+          sfx('deny');
+          toast('该线时刻已饱和：最多 ' + capA + ' 架。想增运力请换更大机型或调低频次档位', 'bad');
+          break;
+        }
         var o = S.buyPlane(st, val.trim(), 1);
         if (!o.ok) { sfx('deny'); toast(o.reason, 'bad'); break; }
         var np = st.planes[st.planes.length - 1];
@@ -570,14 +592,26 @@
       el.uTimerBar.style.width = w + '%';
     }
     if (el.uTimer) {
-      el.uTimer.textContent = rem == null
-        ? (st.card ? '待决策' : (st.phase === 'over' ? '已结束' : '—'))
-        : Math.ceil(rem) + 's';
+      el.uTimer.textContent = st.paused
+        ? '已暂停'
+        : (rem == null
+            ? (st.card ? '待决策' : (st.phase === 'over' ? '已结束' : '—'))
+            : Math.ceil(rem) + 's');
     }
   }
 
   /* ───────────────────────── 渲染：面板 ───────────────────────── */
 
+  /* 面板体渲染的签名缓存：内容没变就不碰 DOM。
+   *
+   * ⚠ 这不是「省一点性能」的优化，是修一个真实的手感 bug：
+   *   `innerHTML = html` 会**整树替换**子节点。若这次替换恰好落在一次点击的
+   *   mousedown 与 mouseup 之间，Chrome 会认为「按下的节点已被移除」而**根本不派发
+   *   click** —— 玩家的感受就是「点了航线卡片没反应」，且重试一次往往就好了。
+   *   面板本来就有 1Hz 定时重刷（见 frame），而它绝大多数时候渲染出的是同一份 HTML，
+   *   于是每秒都在制造一次这样的空窗。低帧率机型上窗口更大（实测冒烟：12fps 连中两次）。
+   *   内容真变了才重建，等于把这个窗口从「每秒一次」压到「只在季结算等真变化时」。 */
+  var panelSig = null;
   function syncPanel() {
     if (!ui.panel || !el.uPanelBody) return;
     var st = ui.state;
@@ -593,6 +627,10 @@
       title = '开通新航线';
       html = renderNewRoute(st);
     }
+    /* 签名带上面板名：避免「换面板却撞上相同 HTML」时误跳过（如空航线 vs 空机队） */
+    var sig = ui.panel + '\u0000' + html;
+    if (sig === panelSig) return;
+    panelSig = sig;
     if (el.uPanelTitle) el.uPanelTitle.textContent = title;
     el.uPanelBody.innerHTML = html;
   }
@@ -671,12 +709,20 @@
     });
     out += '</div></div>';
 
-    /* 运力 */
-    out += '<div class="rd-sec"><div class="rd-h">运力</div><div class="rd-btns">' +
-      '<button class="btn" data-act="add-plane" data-key="' + h(r.key) + '" data-val="' + h(r.type) +
-      '" type="button">加 1 架 ' + h(T.name) + '（' + money(T.price) + '）</button>' +
+    /* 运力：架数到顶时把「加 1 架」置灰并说明原因 —— 再买也只是闲置，
+     * 不如在按下去之前就告诉玩家「出路是换机型」。上限口径来自 sim，
+     * UI 不自己算（见 S.maxPlanesForRoute）。 */
+    var planeCap = S.maxPlanesForRoute(st, r);
+    var capFull = n >= planeCap;
+    out += '<div class="rd-sec"><div class="rd-h">运力（' + n + ' / ' + planeCap + ' 架）</div><div class="rd-btns">' +
+      '<button class="btn' + (capFull ? ' dis' : '') + '" data-act="add-plane" data-key="' + h(r.key) +
+      '" data-val="' + h(r.type) + '" type="button">' +
+      (capFull ? '时刻已满 · ' + planeCap + ' 架'
+               : '加 1 架 ' + h(T.name) + '（' + money(T.price) + '）') + '</button>' +
       '<button class="btn" data-act="drop-plane" data-key="' + h(r.key) + '" type="button">撤回 1 架</button>' +
-      '</div></div>';
+      '</div>' +
+      (capFull ? '<div class="rd-note">该线时刻已用满：再加机不会增班，只会白付持有成本 —— 请换更大机型</div>' : '') +
+      '</div>';
 
     /* 换机型：槽位满后唯一出路，故只在机型可升级时给按钮 */
     var cands = AT.PLANES.filter(function (p) { return p.range >= dist && p.id !== r.type && p.price > T.price; });
@@ -1043,9 +1089,11 @@
       el.uTimerBar.style.width = w + '%';
     }
     if (el.uTimer) {
-      el.uTimer.textContent = rem == null
-        ? (state.card ? '待决策' : (state.phase === 'over' ? '已结束' : '—'))
-        : Math.ceil(rem) + 's';
+      el.uTimer.textContent = state.paused
+        ? '已暂停'
+        : (rem == null
+            ? (state.card ? '待决策' : (state.phase === 'over' ? '已结束' : '—'))
+            : Math.ceil(rem) + 's');
     }
   }
   var panelT = 0;

@@ -60,6 +60,10 @@
       t: 0,                     // 当前阶段已过秒数
       quarter: 0,               // 当前回合（季度）
       speed: 1,
+      /* 玩家操作暂停：抽屉面板（航线/机队/新航线）打开时置 true，由 UI 设置。
+       * ⚠ 与 state.card 的区别：card 是「必须做决策才能继续」（模态层，sim 自管），
+       *   paused 是「玩家正在操作，先别催」（抽屉面板）。两者都冻结回合计时。 */
+      paused: false,
       autoPlayer: !!opts.autoPlayer,
       companyName: opts.companyName || '环球航空',
       homeCityId: homeId,
@@ -1255,6 +1259,11 @@
       if (!dNow) return;
       /* 槽位已满时，加机纯属烧钱 —— 直接跳过，别让 AI 做傻事 */
       if (dNow.slotTight) return;
+      /* 架数已达上限（槽位容不下「再一架的完整班次」）—— 与 slotTight 同理跳过。
+       * ⚠ 必须显式判：上限是 floor(天花板/每架班次)，天花板除不尽时仍有余量，
+       *   于是「加第 n+1 架」的假想利润可能仍为正（班次从 9 涨到 10）而被选为最优；
+       *   但执行时 assignPlane 会拒（那架机跑不满自己的班次），整个回合就空转了。 */
+      if (planesOnRoute(state, r.key).length >= maxPlanesForRoute(state, r)) return;
       /* 需要一架该线执飞机型的飞机：优先用闲机，否则买（要算钱） */
       var spare = free.filter(function (p) { return p.type === r.type; });
       var needBuyA = !spare.length;
@@ -1892,6 +1901,32 @@
     return { ok: true };
   }
 
+  /* 一条航线最多能容纳几架飞机（按时刻槽位算）。
+   *
+   * 口径与 settleRoute 完全一致：每架每日占用 perPlanePerDay 个时刻，
+   * 全线的时刻天花板是 min(routeMaxPerDay, 槽位)。超过这个架数时，
+   * settleRoute 里 `perPlanePerDay * nP` 会被 min 夹住 —— 总班次不再增长，
+   * 但持有成本照付。也就是说「多出来的飞机」是纯亏，不是「运力无限」。
+   *
+   * 这里把它显式算出来，供 assignPlane 拒绝派机、UI 提前置灰按钮 ——
+   * 与其让玩家的钱被悄悄吃掉，不如在按下去之前就说清楚。
+   *
+   * ⚠ 与 settleRoute 共用 maxPerDayFor / routeSlots 两个口径来源，
+   *   若哪天公式改了，两处必须一起改（否则「能派几架」与「实际飞几班」会漂）。 */
+  function maxPlanesForRoute(state, r) {
+    if (!r) return 1;
+    var dist = routeDistance(state, r.a, r.b);
+    /* 每架每日班次：档位值再按机型物理上限夹一次（同 settleRoute 的 perPlanePerDay） */
+    var perPlanePerDay = Math.max(1, Math.min(
+      maxPerDayFor(r.type, dist),
+      r.perDay || CONFIG.defaultFreqPerDay || 3
+    ));
+    var slotCap = Math.floor(routeSlots(state, r.a, r.b));
+    var total = Math.min(CONFIG.routeMaxPerDay || 20, slotCap);
+    /* 下限 1：即使槽位被竞对吃光，也允许停 1 架（与 settleRoute 的 perDay = max(1, …) 对齐） */
+    return Math.max(1, Math.floor(total / perPlanePerDay));
+  }
+
   /* 在航线上增派/撤回飞机 */
   function assignPlane(state, planeId, routeKey) {
     var p = findPlane(state, planeId);
@@ -1903,6 +1938,20 @@
     var T = AT.planeOf(p.type);
     var dist = routeDistance(state, r.a, r.b);
     if (dist > T.range) return { ok: false, reason: T.name + ' 航程不足' };
+    /* 已在本线：重复指派是无操作，直接成功（否则会把「没有变化」误报成超限/错误） */
+    if (p.routeKey === routeKey) return { ok: true };
+    /* 架数硬上限（2026-09-27 加）：槽位容不下的飞机，派上去只会白付持有成本。
+     * ⚠ 必须在写 p.routeKey 之前拒绝 —— 超限时玩家的机队不能被动到。 */
+    var cap = maxPlanesForRoute(state, r);
+    if (planesOnRoute(state, routeKey).length >= cap) {
+      return {
+        ok: false,
+        reason: '该线时刻已饱和：最多容纳 ' + cap + ' 架（每架每日 ' +
+                (r.perDay || CONFIG.defaultFreqPerDay || 3) + ' 班，全线时刻上限 ' +
+                Math.min(CONFIG.routeMaxPerDay || 20, Math.floor(routeSlots(state, r.a, r.b))) +
+                ' 班/日）。想增运力请换更大机型，或调低频次档位'
+      };
+    }
     p.routeKey = routeKey;
     recalcCityRoutes(state);
     return { ok: true };
@@ -2222,6 +2271,9 @@
     }
 
     if (state.phase === 'operating') {
+      /* 面板打开（paused）时冻结回合计时 —— 玩家在读航线详情、挑目的地、
+       * 算钱的时候，时间不该继续走。放在简报阶段之外，简报不受影响。 */
+      if (state.paused) return state;
       state.t += dt;
       /* 有未处理的事件卡时暂停回合计时 —— 玩家要先做出决策才能继续，
        * 否则「事件卡弹出 → 玩家还在读 → 回合已经跳过了」的体验很糟。 */
@@ -2248,7 +2300,7 @@
 
   /* 立即结算当前季度并进入下一季 —— 供 UI 的「加速本回合」按钮调用。
    *
-   * ⚠ 为什么需要它：季度推进原本只由 tick 里的 22 秒倒计时驱动，
+   * ⚠ 为什么需要它：季度推进原本只由 tick 里的倒计时驱动，
    *   玩家想快进就得干等。真实经营游戏（如《铁路大亨》）都给一个「推进」按钮，
    *   让熟练玩家跳过等待 —— 这是节奏控制权，不是作弊。
    *
@@ -2261,6 +2313,10 @@
    *   返回 {ok:false, reason} 让 UI 提示「请先处理事件卡」。 */
   function nextQuarter(state) {
     if (!state || state.phase !== 'operating') return { ok: false, reason: '尚未进入运营阶段' };
+    /* 暂停时拒绝推进：本函数是「跳过本回合」的对外接口（当前 UI 未接线，由
+     * 测试与脚本调用）。若不拒绝，调用方会拿到 ok:true 而季度纹丝不动 ——
+     * 返回值与实际效果自相矛盾，比直接拒绝更难排查。 */
+    if (state.paused) return { ok: false, reason: '面板打开中，请先关闭面板' };
     if (state.card) return { ok: false, reason: '有未处理的事件卡' };
     state.t = (AT.CONFIG.quarterSeconds || 22);
     tick(state, TICK);
@@ -2274,6 +2330,16 @@
     if (state.card) return null;
     var total = AT.CONFIG.quarterSeconds || 22;
     return Math.max(0, total - state.t);
+  }
+
+  /* 暂停/恢复回合计时。抽屉面板（航线/机队/新航线）打开时由 UI 调用 ——
+   * 玩家在面板里读数据、挑目的地、算钱的时候，计时不该继续往前跑。
+   * ⚠ 只冻结 operating 阶段（见 tick）；简报阶段不受影响，不会卡在开场。
+   * ⚠ 与 state.card 分工：card 由 sim 自管（必须做决策），paused 只由 UI 设置。 */
+  function setPaused(state, on) {
+    if (!state) return false;
+    state.paused = !!on;
+    return state.paused;
   }
 
   /* ───────────────────────── 12. 排名与终局 ─────────────────────────
@@ -2382,6 +2448,7 @@
     totalSeats: totalSeats, fleetValue: fleetValue, netWorth: netWorth,
     routePotential: routePotential, routeFlights: routeFlights,
     maxPerDayFor: maxPerDayFor, tierOf: tierOf, routeSlots: routeSlots,
+    maxPlanesForRoute: maxPlanesForRoute,
     settleRoute: settleRoute, costMul: costMul, modMul: modMul,
     // 指令
     openRoute: openRoute, closeRoute: closeRoute, assignPlane: assignPlane,
@@ -2395,7 +2462,7 @@
     myRank: myRank, verdict: verdict, globalization: globalization,
     recalcCityRoutes: recalcCityRoutes,
     // UI 节奏控制
-    nextQuarter: nextQuarter, quarterRemain: quarterRemain
+    nextQuarter: nextQuarter, quarterRemain: quarterRemain, setPaused: setPaused
   };
 
 })(typeof window !== 'undefined' ? window : globalThis);
