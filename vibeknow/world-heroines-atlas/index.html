@@ -6,7 +6,7 @@
 <title>世界女英雄图鉴 · WORLD HEROINES ATLAS</title>
 <style>
   /* ===== 配图位（逐项规格、提示词与落位契约见 docs/配图提示词.md）=====
-     ① 女英雄配图 ×22   assets/illus/<slug>.webp
+     ① 女英雄配图 ×28   assets/illus/<slug>.webp
         尺寸 1080×360（约 3:1 横幅，上机后按 cover 裁切填 132px 高的图槽），
         主体居中，左右各留约 10%、上下各留约 12% 安全边。
         路径写在 heroines.js 的 img 字段；缺图或加载失败时回退到下方形制化占位，
@@ -111,7 +111,7 @@
   /* 标记名牌：圆点 + 描边取该大洲的颜色 */
   .tag{position:absolute;transform:translate(-50%,-140%);font-size:11.5px;color:var(--dawn);background:rgba(26,10,20,.72);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
   .tag i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
-  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(40,16,28,.9);box-shadow:0 2px 10px rgba(232,160,74,.28)}
+  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(40,16,28,.9);box-shadow:0 2px 10px rgba(232,160,74,.28);z-index:7}
 
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
   #loader.hide{opacity:0;pointer-events:none}
