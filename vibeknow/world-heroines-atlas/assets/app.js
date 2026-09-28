@@ -363,11 +363,13 @@
     aimLatLon(markers[i].hero.lat,markers[i].hero.lon);
     if(!userZoomed)radiusG=fitR()*0.82;
     showCard(i);
+    syncList();
   }
   function clearSelection(){
     selIdx=-1;
     if(!userZoomed)radiusG=fitR();
     hideCard();
+    syncList();
   }
 
   /* ===== 女英雄卡片 ===== */
@@ -559,6 +561,85 @@
   function tabsFade(){tabsEl.classList.toggle('scrollable',tabsEl.scrollWidth>tabsEl.clientWidth+1);}
   tabsEl.addEventListener('scroll',function(){tabsEl.classList.add('scrollable');});
   addEventListener('resize',tabsFade);setTimeout(tabsFade,400);
+
+  /* ===== 完整清单：28 位女英雄一览，按地域分列（左上按钮开合）=====
+   * 分列顺序与底部筛选条同源（REGIONS），组内保持 heroines.js 原序（大致按年代）。
+   * 点任意一行 = 收起清单 + selectMarker()，地球飞过去并展开卡片，与直接点标记同一条路径。
+   * 高亮（.on）与地域筛选态（.dim）始终与实际状态同步，见 syncList()。 */
+  var listWrap=document.getElementById('listWrap');
+  var listScroll=document.getElementById('listScroll');
+  var listRows=[];
+  var listOpen=false;
+  function mkEl(tag,cls,txt){var e=document.createElement(tag);if(cls)e.className=cls;if(txt!=null)e.appendChild(document.createTextNode(txt));return e;}
+  function buildList(){
+    listScroll.innerHTML='';
+    listRows=[];
+    var total=0,r,i;
+    for(r=0;r<REGIONS.length;r++){
+      var reg=REGIONS[r];
+      if(reg.id==='all')continue;
+      var idxs=[];
+      for(i=0;i<HEROINES.length;i++)if(HEROINES[i].region===reg.id)idxs.push(i);
+      if(!idxs.length)continue;
+      var grp=mkEl('div','grp');
+      grp.setAttribute('data-r',reg.id);
+      var h=mkEl('h4'),di=mkEl('i');
+      di.style.background=reg.color||'#f4e4c1';
+      h.appendChild(di);
+      h.appendChild(document.createTextNode(reg.name));
+      h.appendChild(mkEl('em',null,idxs.length+' 位'));
+      grp.appendChild(h);
+      for(i=0;i<idxs.length;i++){
+        var idx=idxs[i],m=HEROINES[idx];
+        var it=document.createElement('button');
+        it.type='button';it.className='item';
+        var th=mkEl('div','th');
+        if(m.img){
+          var im=document.createElement('img');
+          im.alt='';
+          (function(cell,img){img.onerror=function(){img.style.display='none';cell.className='th bad';};})(th,im);
+          im.src=m.img;
+          th.appendChild(im);
+        }else th.className='th bad';
+        th.appendChild(mkEl('b'));
+        it.appendChild(th);
+        var tx=mkEl('div','tx');
+        tx.appendChild(mkEl('div','nm',m.name));
+        var mt=mkEl('div','mt');
+        mt.appendChild(document.createTextNode(m.civ+' · '));
+        mt.appendChild(mkEl('span','k',eraName(m.era)+' · '+roleName(m.role)));
+        tx.appendChild(mt);
+        it.appendChild(tx);
+        it.addEventListener('click',(function(x){return function(){openList(false);selectMarker(x);};})(idx));
+        grp.appendChild(it);
+        listRows[idx]=it;
+        total++;
+      }
+      listScroll.appendChild(grp);
+    }
+    var cnt=document.getElementById('listCnt');
+    if(cnt)cnt.textContent=total+' 位';
+    syncList();
+  }
+  function syncList(){
+    for(var i=0;i<HEROINES.length;i++){
+      var el=listRows[i];if(!el)continue;
+      var cls='item';
+      if(i===selIdx)cls+=' on';
+      if(curRegion!=='all'&&HEROINES[i].region!==curRegion)cls+=' dim';
+      if(el.className!==cls)el.className=cls;
+    }
+  }
+  function openList(v){
+    listOpen=!!v;
+    if(v){syncList();openSheet(false);}
+    listWrap.className=v?'listwrap show':'listwrap';
+    listWrap.setAttribute('aria-hidden',v?'false':'true');
+  }
+  document.getElementById('listBtn').addEventListener('click',function(){openList(!listOpen);});
+  document.getElementById('lClose').addEventListener('click',function(){openList(false);});
+  addEventListener('keydown',function(e){if(listOpen&&(e.key==='Escape'||e.keyCode===27))openList(false);});
+  buildList();
 
   /* ===== 设置 ===== */
   var autoSpin=true,showStars=true,showClouds=true,showLabel=true;

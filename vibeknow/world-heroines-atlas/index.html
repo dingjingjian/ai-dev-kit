@@ -113,6 +113,39 @@
   .tag i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
   .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(40,16,28,.9);box-shadow:0 2px 10px rgba(232,160,74,.28)}
 
+  /* ===== 清单：28 位女英雄一览（左上按钮开合，点任意一行飞到该标记并展开卡片）=====
+     分列方式与底部地域筛选条同源（REGIONS 顺序），组内保持数据原序（大致按年代）。
+     高度全部交给滚动容器；每段标题 sticky 吸顶，长名单滚动时仍有「当前在哪一洲」的定位感。 */
+  .listbtn{position:absolute;left:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .listbtn svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
+  .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(13,5,10,.94);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
+  .listwrap.show{opacity:1;visibility:visible;pointer-events:auto}
+  /* 头部安全高度与顶部标题条同一套：--sat + --top-gap（与 .sheet 一致，env() 取不到时也留出状态栏高度） */
+  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;align-items:center;padding:calc(var(--sat) + var(--top-gap)) 56px 10px 16px;border-bottom:1px solid var(--line)}
+  .listtitle{font-family:var(--serif);font-size:17px;color:var(--dawn);letter-spacing:1.5px}
+  .listtitle span{display:block;font-family:var(--sans);font-size:11px;font-weight:400;color:var(--mut);letter-spacing:1px;margin-top:3px}
+  .listtitle i{font-style:normal;color:var(--acc)}
+  /* 关闭按钮与设置抽屉的 .sheet .close 完全同一套定位与形制（含 --sat 安全高度） */
+  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
+  .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:2px 14px calc(var(--sab) + 26px)}
+  .grp{margin-top:6px}
+  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:10px 2px 8px;background:linear-gradient(180deg,rgba(13,5,10,.97) 66%,rgba(13,5,10,0))}
+  .grp h4 i{width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0}
+  .grp h4 em{font-style:normal;font-size:11px;font-weight:400;color:var(--mut);margin-left:auto;letter-spacing:.5px}
+  .item{display:flex;align-items:center;width:100%;text-align:left;font-family:var(--sans);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer;transition:background .18s,border-color .18s,transform .15s,opacity .2s}
+  .item:active{transform:scale(.985)}
+  .item.on{border-color:var(--acc);background:rgba(232,160,74,.12);box-shadow:0 0 0 1px rgba(232,160,74,.28)}
+  .item.dim{opacity:.42}
+  .item .th{position:relative;flex:0 0 auto;width:66px;height:44px;margin-right:11px;border-radius:8px;overflow:hidden;background-color:#2a1020;background-image:linear-gradient(158deg,#2a1020,#1a0a14 62%,#241018);box-shadow:inset 0 0 0 1px var(--line)}
+  .item .th img{display:block;width:100%;height:100%;object-fit:cover}
+  .item .th b{display:none;position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(circle at 50% 48%,rgba(244,196,120,.85),rgba(244,196,120,0) 40%)}
+  .item .th.bad b{display:block}
+  .item .tx{min-width:0;flex:1 1 auto}
+  .item .nm{font-family:var(--serif);font-size:15px;color:var(--dawn);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item.on .nm{color:var(--gold-2)}
+  .item .mt{font-size:11px;color:var(--mut);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .mt .k{color:var(--gold-2)}
+
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
   #loader.hide{opacity:0;pointer-events:none}
   .lt{font-family:var(--serif);font-size:22px;color:var(--dawn);letter-spacing:3px;margin-bottom:10px;text-shadow:0 0 14px rgba(232,160,74,.4)}
@@ -133,6 +166,9 @@
     .card .name{font-size:17px}
     .card .story{font-size:13px}
     .card .pic{height:112px}
+    .listtitle{font-size:16px}
+    .listscroll{padding-left:12px;padding-right:12px}
+    .item .th{width:58px;height:40px;margin-right:9px}
   }
 </style>
 </head>
@@ -141,6 +177,9 @@
 
 <div class="top">
   <div class="brand">世界女英雄图鉴<span class="sub">WORLD HEROINES ATLAS</span></div>
+  <div class="listbtn" id="listBtn" role="button" tabindex="0" aria-label="女英雄完整清单">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.6C10.4 5.2 8.3 4.4 4.5 4.4v13.2c3.8 0 5.9.8 7.5 2.2 1.6-1.4 3.7-2.2 7.5-2.2V4.4c-3.8 0-5.9.8-7.5 2.2z"/><line x1="12" y1="6.6" x2="12" y2="19.8"/></svg>
+  </div>
   <div class="gear" id="gear">
     <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
   </div>
@@ -177,6 +216,14 @@
     <button class="act" id="bReset" style="margin-right:8px">重置视角</button>
     <button class="act gold" id="bTop">俯视</button>
   </div>
+</div>
+
+<div class="listwrap" id="listWrap" aria-hidden="true" aria-label="女英雄完整清单">
+  <div class="listbar">
+    <div class="listtitle">女英雄清单<span><i id="listCnt">28 位</i> · 按地域分列 · 点任意一行飞过去</span></div>
+    <button class="lclose" id="lClose" aria-label="关闭清单">×</button>
+  </div>
+  <div class="listscroll" id="listScroll"></div>
 </div>
 
 <div id="loader">
