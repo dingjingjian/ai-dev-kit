@@ -665,7 +665,7 @@
         });
       })(i);
       document.body.appendChild(el);
-      tagPool.push({el:el,on:false,o:0,z:0});
+      tagPool.push({el:el,w:0,h:0,on:false,o:0});
     }
   })();
   function updateTags(){
@@ -678,16 +678,23 @@
         _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
         tagCand.push({i:i,x:(_v.x*0.5+0.5)*W,y:(-_v.y*0.5+0.5)*H,f:m.fade,sel:m.sel});
       }
+      tagCand.sort(function(a,b){return (b.sel?1:0)-(a.sel?1:0)||(b.f-a.f);});
     }
     for(i=0;i<tagPool.length;i++)tagPool[i].on=false;
-    /* 全量显示：不做碰撞让位，名牌允许相互重叠；仅选中态置顶，其余平铺在同一层级 */
+    var placed=[];
     for(i=0;i<tagCand.length;i++){
       var c=tagCand[i],t=tagPool[c.i],el=t.el;
+      if(!t.w){t.w=el.offsetWidth||96;t.h=el.offsetHeight||22;}
+      var rx=c.x-t.w/2-3,ry=c.y-t.h*1.4-3,rw=t.w+6,rh=t.h+6,ok=true;
+      for(var j=0;j<placed.length;j++){
+        var p=placed[j];
+        if(rx<p.x+p.w&&p.x<rx+rw&&ry<p.y+p.h&&p.y<ry+rh){ok=false;break;}
+      }
+      if(!ok)continue;
+      placed.push({x:rx,y:ry,w:rw,h:rh});
       t.on=true;
       var o=c.sel?1:Math.min(1,c.f*1.15);
       el.style.left=c.x.toFixed(1)+'px';el.style.top=c.y.toFixed(1)+'px';
-      var z=c.sel?7:5;
-      if(t.z!==z){el.style.zIndex=z;t.z=z;}
       if(Math.abs(o-t.o)>0.02){el.style.opacity=o.toFixed(2);t.o=o;}
       if(c.sel!==(el.className.indexOf('on')>=0))el.className=c.sel?'tag on':'tag';
     }
