@@ -87,28 +87,12 @@
    }
   ]
  },
- "pax-01": {
-  "name": "21 型客车",
-  "cat": "pax",
-  "photos": [
-   {
-    "file": "pax-01-01.jpg",
-    "title": "File:21 hard seat train.JPG",
-    "source": "https://commons.wikimedia.org/wiki/File:21_hard_seat_train.JPG",
-    "license": "CC BY-SA 3.0",
-    "author": "Jucember",
-    "orig": "5616x3744",
-    "kb": 142,
-    "quality": "lapvar 708 mean 99"
-   }
-  ]
- },
- "pax-04": {
+ "pax-03": {
   "name": "25G 型客车",
   "cat": "pax",
   "photos": [
    {
-    "file": "pax-04-01.jpg",
+    "file": "pax-03-01.jpg",
     "title": "File:China Railways 25G passenger coaches 20141009 211530.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25G_passenger_coaches_20141009_211530.jpg",
     "license": "CC BY-SA 4.0",
@@ -118,7 +102,7 @@
     "quality": "lapvar 360 mean 109"
    },
    {
-    "file": "pax-04-02.jpg",
+    "file": "pax-03-02.jpg",
     "title": "File:China Railways 25G passenger coaches 20141009 211517.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:China_Railways_25G_passenger_coaches_20141009_211517.jpg",
     "license": "CC BY-SA 4.0",
@@ -783,12 +767,12 @@
    }
   ]
  },
- "pax-02": {
+ "pax-01": {
   "name": "22 型客车",
   "cat": "pax",
   "photos": [
    {
-    "file": "pax-02-01.jpg",
+    "file": "pax-01-01.jpg",
     "title": "File:201606 China Railways UZ22 at 798.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:201606_China_Railways_UZ22_at_798.jpg",
     "license": "CC BY-SA 4.0",
@@ -798,7 +782,7 @@
     "quality": "lapvar 1057 mean 138"
    },
    {
-    "file": "pax-02-03.jpg",
+    "file": "pax-01-03.jpg",
     "title": "File:China Railways YZ22 336250 in 2678 Ordinary Fast Train 20131001.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:China_Railways_YZ22_336250_in_2678_Ordinary_Fast_Train_20131001.jpg",
     "license": "CC BY-SA 3.0",
@@ -809,12 +793,12 @@
    }
   ]
  },
- "pax-03": {
+ "pax-02": {
   "name": "双层客车",
   "cat": "pax",
   "photos": [
    {
-    "file": "pax-03-01.jpg",
+    "file": "pax-02-01.jpg",
     "title": "File:Railroad passenger car of China SRZ25B.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:Railroad_passenger_car_of_China_SRZ25B.jpg",
     "license": "CC BY-SA 3.0",
@@ -824,7 +808,7 @@
     "quality": "lapvar 696 mean 121"
    },
    {
-    "file": "pax-03-02.jpg",
+    "file": "pax-02-02.jpg",
     "title": "File:Railroad passenger car of China, SYW25B.jpg",
     "source": "https://commons.wikimedia.org/wiki/File:Railroad_passenger_car_of_China,_SYW25B.jpg",
     "license": "CC BY-SA 3.0",
@@ -1627,6 +1611,42 @@
     "orig": "4096x3072",
     "kb": 194,
     "quality": "lapvar 1360 mean 144"
+   }
+  ]
+ },
+ "pax-04": {
+  "name": "行李车",
+  "cat": "pax",
+  "photos": [
+   {
+    "file": "pax-04-01.jpg",
+    "title": "File:China Railways XL25G 205813 20120616 01.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_XL25G_205813_20120616_01.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "zhangchangzhen",
+    "orig": "1600x1200",
+    "kb": 159,
+    "quality": "lapvar 693 mean 129"
+   },
+   {
+    "file": "pax-04-02.jpg",
+    "title": "File:China Railways XL25G 205813 20120616 02.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:China_Railways_XL25G_205813_20120616_02.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "zhangchangzhen",
+    "orig": "1600x1200",
+    "kb": 197,
+    "quality": "lapvar 1058 mean 127"
+   },
+   {
+    "file": "pax-04-03.jpg",
+    "title": "File:XL25G 20111017.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:XL25G_20111017.jpg",
+    "license": "CC BY-SA 3.0",
+    "author": "颐园新居",
+    "orig": "2560x1200",
+    "kb": 175,
+    "quality": "lapvar 1884 mean 120"
    }
   ]
  }

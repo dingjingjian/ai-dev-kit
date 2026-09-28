@@ -44,6 +44,10 @@ def find_raw(base):
         p = RAW / (base + ext)
         if p.exists():
             return p
+    # 原图已清理时，退而用 assets/img 里已有的 webp 当源再压一次（只用于补缩放 / 补压）
+    p = OUT / (base + ".webp")
+    if p.exists():
+        return p
     return None
 
 

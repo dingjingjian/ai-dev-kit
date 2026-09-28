@@ -314,6 +314,23 @@
       ]
     },
     {
+      "file": "assets/img/loco-16.webp",
+      "base": "loco-16",
+      "kind": "item",
+      "cat": "loco",
+      "name": "和谐电3D型电力机车",
+      "kindZh": "准高速客运电力机车",
+      "era": "2013 年 — 至今",
+      "zh": "一台现代客运电力机车，车体平滑、两端司机室为倾斜的流线大窗，车顶两副受电弓和贯通母线，侧面近无百叶窗只有几道简洁散热口，白蓝或红黄涂装，两台三轴转向架。",
+      "size": "640x360",
+      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a modern Chinese HXD3D high-power electric passenger locomotive, sleek body with smoothly sloped cab fronts and large panoramic windshields, two roof pantographs with a connecting busbar, nearly flush smooth flanks with a few narrow slot vents, white base colour with broad blue sweeping panels along the lower body and thin gold lines, two three-axle bogies, full side elevation",
+      "refs": [
+        "ref/loco-16-01.jpg",
+        "ref/loco-16-02.jpg",
+        "ref/loco-16-03.jpg"
+      ]
+    },
+    {
       "file": "assets/img/loco-17.webp",
       "base": "loco-17",
       "kind": "item",
@@ -344,23 +361,6 @@
         "ref/loco-18-01.jpg",
         "ref/loco-18-02.jpg",
         "ref/loco-18-03.jpg"
-      ]
-    },
-    {
-      "file": "assets/img/loco-16.webp",
-      "base": "loco-16",
-      "kind": "item",
-      "cat": "loco",
-      "name": "和谐电3D型电力机车",
-      "kindZh": "准高速客运电力机车",
-      "era": "2013 年 — 至今",
-      "zh": "一台现代客运电力机车，车体平滑、两端司机室为倾斜的流线大窗，车顶两副受电弓和贯通母线，侧面近无百叶窗只有几道简洁散热口，白蓝或红黄涂装，两台三轴转向架。",
-      "size": "640x360",
-      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a modern Chinese HXD3D high-power electric passenger locomotive, sleek body with smoothly sloped cab fronts and large panoramic windshields, two roof pantographs with a connecting busbar, nearly flush smooth flanks with a few narrow slot vents, white base colour with broad blue sweeping panels along the lower body and thin gold lines, two three-axle bogies, full side elevation",
-      "refs": [
-        "ref/loco-16-01.jpg",
-        "ref/loco-16-02.jpg",
-        "ref/loco-16-03.jpg"
       ]
     },
     {
@@ -402,21 +402,6 @@
       "base": "pax-01",
       "kind": "item",
       "cat": "pax",
-      "name": "21 型客车",
-      "kindZh": "中国第一代自造客车",
-      "era": "1953 年 — 1990 年代",
-      "zh": "一节短而方正的老式硬座车厢，车体较低，车顶圆润并有一排通长的小通风器，侧墙一排方形上提车窗，下面是明显的铆钉线，两端有开放式通过台板，深绿色车身，两台带踏板的二轴转向架，没有车下裙板。",
-      "size": "640x360",
-      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 an early Chinese Type 21 mainline passenger coach, noticeably short body, low stance with a gently arched roof carrying a continuous row of small torpedo ventilators, a row of tall rectangular windows with sliding upper frames, exposed vertical rivet lines along the flank, open end platforms with low railings at each end, deep green livery, two plain two-axle bogies with footboards, full side elevation",
-      "refs": [
-        "ref/pax-01-01.jpg"
-      ]
-    },
-    {
-      "file": "assets/img/pax-02.webp",
-      "base": "pax-02",
-      "kind": "item",
-      "cat": "pax",
       "name": "22 型客车",
       "kindZh": "绿皮硬座车",
       "era": "1959 年 — 2010 年代",
@@ -424,13 +409,13 @@
       "size": "640x360",
       "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a classic Chinese Type 22 green passenger coach, long low body with a slightly rounded roof carrying two rows of boxy ventilator housings, a long row of rectangular windows divided by narrow pillars with ribbed panels beneath, through gangway connections with folded bellows at each end, dark green livery with a thin pale beltline, outside-hung doors near each end, two simple two-axle bogies, full side elevation",
       "refs": [
-        "ref/pax-02-01.jpg",
-        "ref/pax-02-03.jpg"
+        "ref/pax-01-01.jpg",
+        "ref/pax-01-03.jpg"
       ]
     },
     {
-      "file": "assets/img/pax-03.webp",
-      "base": "pax-03",
+      "file": "assets/img/pax-02.webp",
+      "base": "pax-02",
       "kind": "item",
       "cat": "pax",
       "name": "双层客车",
@@ -439,6 +424,22 @@
       "zh": "一节明显高大的双层客车，车体几乎顶到车辆限界，上层是一长条连续的带形窗，下层是一排更大的独立窗，两排窗之间有一条明显的腰带，每端一个塞拉门、门的上方是楼梯间的位置，通体蓝白涂装，两台转向架几乎被车下裙板遮住。",
       "size": "640x360",
       "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a Chinese double-deck passenger coach, unusually tall body nearly filling the loading gauge, two rows of windows with the upper row forming a long continuous band and the lower row of wider upright windows, a strong horizontal band separating the two rows, single-leaf plug doors set low at each end with the stair vestibule above them, pale blue and white livery, two bolsterless bogies tucked beneath, full side elevation",
+      "refs": [
+        "ref/pax-02-01.jpg",
+        "ref/pax-02-02.jpg"
+      ]
+    },
+    {
+      "file": "assets/img/pax-03.webp",
+      "base": "pax-03",
+      "kind": "item",
+      "cat": "pax",
+      "name": "25G 型客车",
+      "kindZh": "空调硬座车",
+      "era": "1992 年 — 至今",
+      "zh": "一节现代感较强的空调硬座车厢，车体长而中部略高，车顶平整只装一排薄型空调机组，侧墙是一整排封闭式大窗，两端各一个与墙面平齐的塞拉门，车下有一条通长裙板遮住设备，橙红色车身配白色窗带，两台带空气弹簧的转向架。",
+      "size": "640x360",
+      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a Chinese Type 25G air-conditioned passenger coach, long body with a flat roof carrying a row of low-profile air conditioning units, a continuous row of large sealed single-pane windows with black rubber framing, one single-leaf plug door near each end set flush into the flank, smooth continuous lower skirt hiding the underfloor equipment, deep orange-red body with a white window band, two air-spring bogies, full side elevation",
       "refs": [
         "ref/pax-03-01.jpg",
         "ref/pax-03-02.jpg"
@@ -449,15 +450,16 @@
       "base": "pax-04",
       "kind": "item",
       "cat": "pax",
-      "name": "25G 型客车",
-      "kindZh": "空调硬座车",
+      "name": "行李车",
+      "kindZh": "XL25G 型行李车",
       "era": "1992 年 — 至今",
-      "zh": "一节现代感较强的空调硬座车厢，车体长而中部略高，车顶平整只装一排薄型空调机组，侧墙是一整排封闭式大窗，两端各一个与墙面平齐的塞拉门，车下有一条通长裙板遮住设备，橙红色车身配白色窗带，两台带空气弹簧的转向架。",
+      "zh": "一节橘红涂装的行李车厢：车体与普通客车等高，大面积是红漆，车体中下部一条很宽的奶白色腰带贯通全车，车顶深灰而低平；行李室段几乎不开窗，只有上沿一排稀疏的小方窗（位置偏高、间距很宽），车身中部一组高大的对开式大拉门（两扇门板在中线对缝、门顶带着外露的吊架导轨）；另一端是乘务间，有窄门、两三个小窗与通过台，车下是敞开的底架（设备箱与制动装置外露），两台二轴转向架。",
       "size": "640x360",
-      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a Chinese Type 25G air-conditioned passenger coach, long body with a flat roof carrying a row of low-profile air conditioning units, a continuous row of large sealed single-pane windows with black rubber framing, one single-leaf plug door near each end set flush into the flank, smooth continuous lower skirt hiding the underfloor equipment, deep orange-red body with a white window band, two air-spring bogies, full side elevation",
+      "prompt": "Clean railway museum technical illustration, one single rail vehicle shown alone in a strict side elevation view, vector-flat illustration with precise proportions and very subtle soft shading, thin dark ink outlines, flat pale warm off-white background completely free of scenery, horizon, sky, buildings, rails and sleepers, no horizontal ground line running across the image, only a very faint soft contact shadow hugging the bottom of the wheels, the vehicle is small in the frame and fully inside it, horizontally centered with an equal empty margin at both ends, occupying only the middle half of the frame height, wide empty background above and below, no text, no letters, no numbers, no logos, no emblems, no flags, no brand marks, no watermarks, no people, landscape 16:9 a Chinese XL25G railway luggage van shown alone in strict side elevation, body the same length and height as an ordinary passenger coach but almost windowless, bright orange-red upper body with one very wide cream-white waist band running the full length below the windows and a low dark grey gently arched roof, the baggage compartment taking about three quarters of the flank as long plain red side sheets broken only by one sparse row of very small square windows set high near the roof line, one tall two-leaf sliding loading door with its seam on the centre line riding on an exposed overhead rail track at mid-body, the remaining quarter at one end forming a small crew vestibule with one narrow door and two small windows and a gangway end, open underframe exposing equipment boxes, battery boxes and brake gear instead of a smooth skirt, two plain two-axle passenger bogies, no lettering and no running numbers on the body, full side elevation",
       "refs": [
         "ref/pax-04-01.jpg",
-        "ref/pax-04-02.jpg"
+        "ref/pax-04-02.jpg",
+        "ref/pax-04-03.jpg"
       ]
     },
     {
