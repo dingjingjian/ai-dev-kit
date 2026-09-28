@@ -8,14 +8,17 @@
  * 经纬度与 earth-3d 的 ll2v 对齐（贴图 UV：lon+180 转 u）
  * 数据源自 vibeknow/world-food-3d，字段名适配本骨架
  */
+/* color 为「大洲色」，同时用于：地球标记点、底部筛选条圆点、清单分组圆点、名牌圆点。
+   取色按香料盘来定：六个色同一明度带（L 53%~64%）、饱和度收敛（不再用纯绿/纯青/兰紫），
+   彼此只靠色相区分，因此放在深底上成组出现时不打架、也不像图表的默认调色板。 */
 var REGIONS=[
-  {id:'all',    name:'全部',   lat:20, lon:30,  color:'#f4ecd8'},
-  {id:'asia',   name:'亚洲',   lat:30, lon:105, color:'#e0574d'},
-  {id:'europe', name:'欧洲',   lat:52, lon:15,  color:'#5a8fd8'},
-  {id:'africa', name:'非洲',   lat:5,  lon:20,  color:'#6fb84a'},
-  {id:'nam',    name:'北美',   lat:40, lon:-90, color:'#c07bc4'},
-  {id:'sam',    name:'南美',   lat:-15,lon:-60, color:'#f0a24f'},
-  {id:'oce',    name:'大洋洲', lat:-25,lon:140, color:'#4fc3c7'}
+  {id:'all',    name:'全部',   lat:20, lon:30,  color:'#f5ebd8'},
+  {id:'asia',   name:'亚洲',   lat:30, lon:105, color:'#e2604a'},
+  {id:'europe', name:'欧洲',   lat:52, lon:15,  color:'#6c9bd2'},
+  {id:'africa', name:'非洲',   lat:5,  lon:20,  color:'#86ab5c'},
+  {id:'nam',    name:'北美',   lat:40, lon:-90, color:'#b07cc6'},
+  {id:'sam',    name:'南美',   lat:-15,lon:-60, color:'#eaa34e'},
+  {id:'oce',    name:'大洋洲', lat:-25,lon:140, color:'#46b0a4'}
 ];
 
 /* 六维味觉维度名（与 taste 数组顺序对齐，app.js 的味型推断依赖此顺序）*/

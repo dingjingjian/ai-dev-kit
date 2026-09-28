@@ -12,18 +12,22 @@
      ② 地球贴图       assets/earth.jpg / clouds.png   复用 earth-3d 系列
      ③ Three.js       assets/three.min.js              复用 earth-3d 系列 */
   :root{
-    /* 深炭墨 + 暖橙红 + 奶油白 —— 现代美食杂志风
+    /* 暖琥珀 · 烛光 —— 现代美食杂志风（深夜厨房的一盏暖灯）
+       焦糖黑底 + 蜜金强调 + 奶油白文字。底色的暖是「低明度、低彩度」的暖，
+       只在黑里透一点褐，不铺成棕；真正的暖留给强调色、地球辉光与菜品本身。
        与 world-heroines-atlas（深紫红曙光调）/ world-food-3d（中式老馆木铜朱墨）拉开 */
-    --bg:#141014;
-    --panel:rgba(38,26,24,.82);
-    --line:rgba(232,180,140,.16);
-    --line-2:rgba(232,90,60,.38);
-    --txt:#f4ecd8;
-    --mut:#c9a98e;
-    --acc:#e85a3c;
-    --dawn:#f4ecd8;
-    --gold:#e85a3c;
-    --gold-2:#f4a87a;
+    --bg:#16100a;
+    --bg-2:#21180d;
+    --panel:rgba(38,29,19,.84);
+    --line:rgba(245,235,216,.14);
+    --line-2:rgba(232,163,61,.34);
+    --txt:#f5ebd8;
+    --mut:#c0ae92;
+    --acc:#e8a33d;
+    --dawn:#f5ebd8;
+    --gold:#e8a33d;
+    --gold-2:#f4c579;
+    --ink:#1a1108;
     --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
     --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
     --top-gap:50px;
@@ -38,7 +42,7 @@
   #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
 
   .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:center;padding:calc(var(--top-gap) + var(--sat)) 12px 8px;z-index:10;pointer-events:none}
-  .brand{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2px;color:var(--dawn);text-shadow:0 0 12px rgba(232,90,60,.4);text-align:center}
+  .brand{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2px;color:var(--dawn);text-shadow:0 0 12px rgba(232,163,61,.4);text-align:center}
   .brand .sub{display:block;font-size:10px;font-weight:400;letter-spacing:3px;color:var(--acc);margin-top:2px;font-family:var(--sans)}
   .gear{position:absolute;right:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   .gear svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
@@ -48,10 +52,10 @@
   .tabs.scrollable{-webkit-mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
   .tabs button{flex:0 0 auto;margin:0 2px;border:none;background:transparent;color:var(--mut);font-size:13px;font-weight:500;padding:8px 14px;border-radius:999px;cursor:pointer;transition:color .18s,background .18s,transform .18s;white-space:nowrap;scroll-snap-align:center}
   .tabs button:active{transform:scale(.93)}
-  .tabs button.on{background:linear-gradient(135deg,rgba(232,90,60,.92),rgba(244,168,122,.92));color:#141014;box-shadow:0 2px 10px rgba(232,90,60,.35)}
+  .tabs button.on{background:linear-gradient(135deg,rgba(232,163,61,.92),rgba(244,197,121,.92));color:var(--ink);box-shadow:0 2px 10px rgba(232,163,61,.35)}
   .tabs button:hover{color:var(--txt)}
   .tabs button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 6px rgba(255,255,255,.25);transition:box-shadow .18s}
-  .tabs button.on .dot{box-shadow:0 0 0 2px rgba(20,16,20,.3)}
+  .tabs button.on .dot{box-shadow:0 0 0 2px rgba(26,17,8,.32)}
 
   .card{position:fixed;left:50%;bottom:calc(var(--sab) + 72px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;max-height:calc(100vh - var(--sab) - 90px);overflow-y:auto;-webkit-overflow-scrolling:touch}
   .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -60,34 +64,33 @@
   .card .name{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--dawn);margin-top:2px;letter-spacing:1px;padding-right:32px}
   /* 味型·热量行：美食卡片特有，替代女英雄卡片的年代·身份 */
   .card .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
-  .card .meta span{font-size:11px;color:var(--gold-2);background:rgba(232,90,60,.12);border:1px solid rgba(232,90,60,.3);border-radius:6px;padding:2px 8px;letter-spacing:.5px}
+  .card .meta span{font-size:11px;color:var(--gold-2);background:rgba(232,163,61,.12);border:1px solid rgba(232,163,61,.3);border-radius:6px;padding:2px 8px;letter-spacing:.5px}
   .card .story{font-size:13.5px;color:var(--txt);margin-top:10px;line-height:1.72;font-family:var(--serif)}
   /* 食材行：美食卡片特有，列出关键食材 */
   .card .ingr{font-size:12px;color:var(--mut);margin-top:8px;line-height:1.6}
   .card .ingr b{color:var(--gold-2);font-weight:500;margin-right:4px}
   .card .tags{display:flex;flex-wrap:wrap;margin-top:10px}
-  .card .tags span{font-size:11px;color:var(--acc);background:rgba(232,90,60,.1);border:1px solid rgba(232,90,60,.28);border-radius:6px;padding:3px 9px;margin:0 6px 6px 0}
+  .card .tags span{font-size:11px;color:var(--acc);background:rgba(232,163,61,.1);border:1px solid rgba(232,163,61,.28);border-radius:6px;padding:3px 9px;margin:0 6px 6px 0}
   .card .loc{font-size:11px;color:var(--mut);margin-top:8px;font-variant-numeric:tabular-nums}
-  .card .share{margin-top:12px;width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#c2402f,#e85a3c);color:#141014;font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;transition:transform .15s}
+  .card .share{margin-top:12px;width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#c2812a,#e8a33d);color:var(--ink);font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;transition:transform .15s}
   .card .share:active{transform:scale(.98)}
   .card .share:disabled{opacity:.6;cursor:default}
 
-  /* 配图位：有图走 cover 铺满，无图走程序化占位（暖橙渐变 + 星点 + 火候圆盘 + 文件名） */
-  .card .pic{position:relative;height:132px;margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:#1f1410;
+  /* 配图位：有图走 cover 铺满，无图走程序化占位（暗盘底 + 炉火余光 + 飞星 + 火候圆盘 + 文件名） */
+  .card .pic{position:relative;height:200px;margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
     background-image:
-      radial-gradient(circle at 22% 18%,rgba(255,220,180,.55),rgba(255,220,180,0) 1.5%),
-      radial-gradient(circle at 63% 76%,rgba(255,200,160,.4),rgba(255,200,160,0) 1.2%),
-      radial-gradient(circle at 88% 60%,rgba(255,210,170,.45),rgba(255,210,170,0) 1.3%),
-      radial-gradient(circle at 79% 24%,rgba(244,168,122,.2),rgba(244,168,122,0) 42%),
-      radial-gradient(circle at 18% 84%,rgba(232,90,60,.18),rgba(232,90,60,0) 46%),
-      linear-gradient(158deg,#2a1a14,#141014 62%,#1f1410);
+      radial-gradient(circle at 22% 18%,rgba(255,224,190,.5),rgba(255,224,190,0) 1.5%),
+      radial-gradient(circle at 63% 76%,rgba(255,206,166,.34),rgba(255,206,166,0) 1.2%),
+      radial-gradient(circle at 88% 60%,rgba(255,214,176,.38),rgba(255,214,176,0) 1.3%),
+      radial-gradient(112% 86% at 50% 122%,rgba(232,163,61,.26),rgba(232,163,61,0) 64%),
+      linear-gradient(158deg,#241a0e,#16100a 62%,#1e160c);
     box-shadow:inset 0 0 0 1px var(--line),inset 0 -22px 40px rgba(0,0,0,.32)}
   .card .pic.has{background-size:cover;background-position:center}
   .card .pic.has .ph{display:none}
   .card .pic .ph{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-  .card .pic .ph i{width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff4e0,#f4a87a 58%,#c2402f 100%);box-shadow:0 0 16px rgba(244,168,122,.4)}
+  .card .pic .ph i{width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff4e0,#f4c579 58%,#c2812a 100%);box-shadow:0 0 16px rgba(244,197,121,.4)}
   .card .pic .ph span{font-size:10.5px;color:var(--mut);letter-spacing:1.5px;margin-top:9px}
-  .card .pic .ph em{font-style:normal;font-size:10px;color:rgba(201,169,142,.5);margin-top:3px;font-variant-numeric:tabular-nums}
+  .card .pic .ph em{font-style:normal;font-size:10px;color:rgba(192,174,146,.5);margin-top:3px;font-variant-numeric:tabular-nums}
 
   /* 抽屉：顶部同样保留安全区（--sat），再加一段与顶部标题同高的 --top-gap */
   .sheet{position:fixed;top:0;right:0;bottom:0;width:86vw;width:min(300px,86vw);background:var(--panel);border-left:1px solid var(--line);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);z-index:20;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto;padding-top:calc(var(--sat) + var(--top-gap));padding-bottom:calc(var(--sab) + 22px)}
@@ -104,7 +107,7 @@
   .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.4);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
   .scrim.show{opacity:1;pointer-events:auto}
   .sheet button.act{flex:1;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer}
-  .sheet button.act.gold{background:linear-gradient(135deg,#c2402f,#e85a3c);border:none;color:#141014}
+  .sheet button.act.gold{background:linear-gradient(135deg,#c2812a,#e8a33d);border:none;color:var(--ink)}
   .now{font-size:13px;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:.5px}
   .now b{color:var(--acc);font-weight:600}
   .now em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);line-height:1.85}
@@ -113,14 +116,14 @@
   .tip.show{opacity:1}
 
   /* 标记名牌：圆点 + 描边取该大洲的颜色 */
-  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11.5px;color:var(--dawn);background:rgba(20,16,20,.72);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11.5px;color:var(--dawn);background:rgba(22,17,10,.74);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
   .tag i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
-  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(38,26,24,.9);box-shadow:0 2px 10px rgba(232,90,60,.28)}
+  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(38,29,19,.92);box-shadow:0 2px 10px rgba(232,163,61,.28)}
 
   /* ===== 清单：36 道美食一览（左上按钮开合，点任意一行飞到该标记并展开卡片）===== */
   .listbtn{position:absolute;left:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   .listbtn svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
-  .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(10,8,10,.94);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
+  .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(12,10,7,.94);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
   .listwrap.show{opacity:1;visibility:visible;pointer-events:auto}
   .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;align-items:center;padding:calc(var(--sat) + var(--top-gap)) 56px 10px 16px;border-bottom:1px solid var(--line)}
   .listtitle{font-family:var(--serif);font-size:17px;color:var(--dawn);letter-spacing:1.5px}
@@ -129,16 +132,16 @@
   .lclose{position:absolute;z-index:2;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
   .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:2px 14px calc(var(--sab) + 26px)}
   .grp{margin-top:6px}
-  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:10px 2px 8px;background:linear-gradient(180deg,rgba(10,8,10,.97) 66%,rgba(10,8,10,0))}
+  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:10px 2px 8px;background:linear-gradient(180deg,rgba(12,10,7,.97) 66%,rgba(12,10,7,0))}
   .grp h4 i{width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0}
   .grp h4 em{font-style:normal;font-size:11px;font-weight:400;color:var(--mut);margin-left:auto;letter-spacing:.5px}
   .item{display:flex;align-items:center;width:100%;text-align:left;font-family:var(--sans);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer;transition:background .18s,border-color .18s,transform .15s,opacity .2s}
   .item:active{transform:scale(.985)}
-  .item.on{border-color:var(--acc);background:rgba(232,90,60,.12);box-shadow:0 0 0 1px rgba(232,90,60,.28)}
+  .item.on{border-color:var(--acc);background:rgba(232,163,61,.12);box-shadow:0 0 0 1px rgba(232,163,61,.28)}
   .item.dim{opacity:.42}
-  .item .th{position:relative;flex:0 0 auto;width:66px;height:44px;margin-right:11px;border-radius:8px;overflow:hidden;background-color:#2a1a14;background-image:linear-gradient(158deg,#2a1a14,#141014 62%,#1f1410);box-shadow:inset 0 0 0 1px var(--line)}
+  .item .th{position:relative;flex:0 0 auto;width:66px;height:44px;margin-right:11px;border-radius:8px;overflow:hidden;background-color:var(--bg-2);background-image:linear-gradient(158deg,#241a0e,#16100a 62%,#1e160c);box-shadow:inset 0 0 0 1px var(--line)}
   .item .th img{display:block;width:100%;height:100%;object-fit:cover}
-  .item .th b{display:none;position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(circle at 50% 48%,rgba(244,168,122,.85),rgba(244,168,122,0) 40%)}
+  .item .th b{display:none;position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(circle at 50% 48%,rgba(244,197,121,.85),rgba(244,197,121,0) 40%)}
   .item .th.bad b{display:block}
   .item .tx{min-width:0;flex:1 1 auto}
   .item .nm{font-family:var(--serif);font-size:15px;color:var(--dawn);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -148,8 +151,8 @@
 
   #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
   #loader.hide{opacity:0;pointer-events:none}
-  .lt{font-family:var(--serif);font-size:22px;color:var(--dawn);letter-spacing:3px;margin-bottom:10px;text-shadow:0 0 14px rgba(232,90,60,.4)}
-  .spin{width:42px;height:42px;border:3px solid rgba(232,90,60,.2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  .lt{font-family:var(--serif);font-size:22px;color:var(--dawn);letter-spacing:3px;margin-bottom:10px;text-shadow:0 0 14px rgba(232,163,61,.4)}
+  .spin{width:42px;height:42px;border:3px solid rgba(232,163,61,.2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
   #loader p{margin-top:14px;font-size:13px;color:var(--mut)}
   #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}

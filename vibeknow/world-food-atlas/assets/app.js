@@ -9,7 +9,7 @@
   renderer.setPixelRatio(DPR);renderer.setSize(W,H,false);
   renderer.outputEncoding=THREE.sRGBEncoding;
   renderer.toneMapping=THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure=1.05;
+  renderer.toneMappingExposure=1.2;
 
   var scene=new THREE.Scene();
   var camera=new THREE.PerspectiveCamera(50,W/H,0.1,5000);
@@ -20,7 +20,7 @@
   function starfieldTex(){
     var w=2048,h=1024,c=document.createElement('canvas');c.width=w;c.height=h;var x=c.getContext('2d'),i;
     var bg=x.createLinearGradient(0,0,0,h);
-    bg.addColorStop(0,'#06040a');bg.addColorStop(.5,'#0a0810');bg.addColorStop(1,'#06040a');
+    bg.addColorStop(0,'#0a0806');bg.addColorStop(.5,'#0e0b08');bg.addColorStop(1,'#0a0806');
     x.fillStyle=bg;x.fillRect(0,0,w,h);
     function band(col,spread,peak){
       var g=x.createLinearGradient(0,h/2-spread,0,h/2+spread);
@@ -29,8 +29,8 @@
       g.addColorStop(1,'rgba('+col+',0)');
       x.fillStyle=g;x.fillRect(0,h/2-spread,w,spread*2);
     }
-    band('118,142,225',h*0.30,0.075);band('138,162,235',h*0.17,0.075);
-    band('178,192,230',h*0.075,0.075);band('218,220,235',h*0.028,0.07);
+    band('190,180,164',h*0.30,0.062);band('210,202,188',h*0.17,0.058);
+    band('228,222,212',h*0.075,0.056);band('242,238,230',h*0.028,0.056);
     function blot(px,py,r,col,a){
       var g2=x.createRadialGradient(0,0,0,0,0,r);
       g2.addColorStop(0,'rgba('+col+','+a+')');g2.addColorStop(1,'rgba('+col+',0)');
@@ -39,20 +39,23 @@
         x.save();x.translate(px+k*w,py);x.fillStyle=g2;x.fillRect(-r,-r,r*2,r*2);x.restore();
       }
     }
-    for(i=0;i<46;i++){
-      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.32,180+Math.random()*240,Math.random()<.5?'150,170,230':'200,196,225',.008+Math.random()*.014);
+    /* 大团低透明度的彩色云气是之前最脏的一块：在深底上偏紫偏棕、糊成一片。
+       这里把团数减半、透明度压低，并把蓝紫一律换成中性暖灰，让银河带收成一条
+       「银灰浮尘」而不是彩雾——暖琥珀主调下再留冷色云，就会重新糊回脏。 */
+    for(i=0;i<22;i++){
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.30,200+Math.random()*220,Math.random()<.62?'158,148,132':'198,178,148',.007+Math.random()*.012);
     }
-    for(i=0;i<16;i++)blot(Math.random()*w,Math.random()*h,120+Math.random()*260,Math.random()<.5?'150,170,230':'220,180,150',.010+Math.random()*.018);
-    for(i=0;i<120;i++){
-      var warm=Math.random()<.45;
-      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.36,36+Math.random()*200,warm?'220,170,130':'150,172,232',.02+Math.random()*.045);
+    for(i=0;i<9;i++)blot(Math.random()*w,Math.random()*h,160+Math.random()*280,Math.random()<.55?'160,150,134':'208,182,152',.008+Math.random()*.014);
+    for(i=0;i<90;i++){
+      var warm=Math.random()<.34;
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.34,36+Math.random()*190,warm?'230,190,148':'172,162,148',.016+Math.random()*.032);
     }
-    for(i=0;i<34;i++){
-      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.20,60+Math.random()*230,'6,4,10',.04+Math.random()*.07);
+    for(i=0;i<30;i++){
+      blot(Math.random()*w,h/2+(Math.random()-.5)*h*.20,60+Math.random()*230,'8,7,5',.04+Math.random()*.07);
     }
     var vg=x.createLinearGradient(0,0,0,h);
-    vg.addColorStop(0,'rgba(0,0,0,.34)');vg.addColorStop(.34,'rgba(0,0,0,0)');
-    vg.addColorStop(.66,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.34)');
+    vg.addColorStop(0,'rgba(0,0,0,.30)');vg.addColorStop(.34,'rgba(0,0,0,0)');
+    vg.addColorStop(.66,'rgba(0,0,0,0)');vg.addColorStop(1,'rgba(0,0,0,.30)');
     x.fillStyle=vg;x.fillRect(0,0,w,h);
     var c2=document.createElement('canvas');c2.width=w;c2.height=h;
     var x2=c2.getContext('2d');
@@ -65,10 +68,13 @@
   var sky=new THREE.Mesh(new THREE.SphereGeometry(3500,48,32),new THREE.MeshBasicMaterial({map:starfieldTex(),side:THREE.BackSide,depthWrite:false}));
   sky.rotation.z=GALAXY_TILT;scene.add(sky);
 
-  /* ===== 光照：取真实北京时间，补光偏暖橙契合美食杂志调 ===== */
-  var ambient=new THREE.AmbientLight(0x3a2018,0.5);scene.add(ambient);
-  var sunLight=new THREE.DirectionalLight(0xfff2d8,1.75);scene.add(sunLight);
-  var fillLight=new THREE.DirectionalLight(0x8a4a3a,0.22);scene.add(fillLight);
+  /* ===== 光照：取真实北京时间。
+     环境光用「暖中性」而不是冷蓝——冷蓝环境光会把整颗地球染成橄榄灰，
+     真正负责「夜面偏冷」的是背光补光（fillLight 只打在暗面，不影响日照面）。
+     暖琥珀主调下把环境光再往褐里挪一点，让地球的暗面与页面底色连成一体。 ===== */
+  var ambient=new THREE.AmbientLight(0x40382a,0.34);scene.add(ambient);
+  var sunLight=new THREE.DirectionalLight(0xfff4e2,2.3);scene.add(sunLight);
+  var fillLight=new THREE.DirectionalLight(0x3a6675,0.3);scene.add(fillLight);
   var SUN_DIST=40;
   var OBLIQ=23.44;
   var _sunV=new THREE.Vector3();
@@ -104,6 +110,13 @@
     g.addColorStop(0,c0);g.addColorStop(.4,c1);g.addColorStop(1,c2);x.fillStyle=g;x.fillRect(0,0,128,128);
     return new THREE.CanvasTexture(c);
   }
+  function radialStops(stops){
+    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
+    var g=x.createRadialGradient(64,64,0,64,64,64),i;
+    for(i=0;i<stops.length;i++)g.addColorStop(stops[i][0],stops[i][1]);
+    x.fillStyle=g;x.fillRect(0,0,s,s);
+    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+  }
   function plainTex(col){var c=document.createElement('canvas');c.width=c.height=4;c.getContext('2d').fillStyle=col;c.getContext('2d').fillRect(0,0,4,4);return new THREE.CanvasTexture(c);}
 
   /* 经纬度 → 球面坐标（与 three.js SphereGeometry 贴图 UV 对齐，同 earth-3d）*/
@@ -115,35 +128,40 @@
   /* ===== 主地球 ===== */
   var mainTilt=new THREE.Group();mainTilt.rotation.z=23.5*Math.PI/180;scene.add(mainTilt);
   var mainSpin=new THREE.Group();mainTilt.add(mainSpin);
-  var earthMat=new THREE.MeshStandardMaterial({map:plainTex('#2a1a14'),roughness:.85,metalness:.04});
+  var earthMat=new THREE.MeshStandardMaterial({map:plainTex('#171310'),color:new THREE.Color('#fff2e2'),roughness:.9,metalness:.02});
   var earthMesh=new THREE.Mesh(new THREE.SphereGeometry(R,48,32),earthMat);mainSpin.add(earthMesh);
-  var cloudMat=new THREE.MeshStandardMaterial({map:plainTex('#ffffff'),transparent:true,alphaMap:plainTex('#ffffff'),opacity:.5,roughness:1,depthWrite:false});
+  var cloudMat=new THREE.MeshStandardMaterial({map:plainTex('#ffffff'),transparent:true,alphaMap:plainTex('#ffffff'),opacity:.34,roughness:1,depthWrite:false});
   var clouds=new THREE.Mesh(new THREE.SphereGeometry(R*1.012,48,32),cloudMat);mainTilt.add(clouds);
-  var atmo=new THREE.Mesh(new THREE.SphereGeometry(R*1.06,48,32),new THREE.MeshBasicMaterial({color:0x8a3a2a,side:THREE.BackSide,transparent:true,opacity:.22,blending:THREE.AdditiveBlending,depthWrite:false}));
+  /* 大气辉光：不用 BackSide 空壳——壳背面的可见部分是一圈等宽环带，
+     外缘硬切、宽度只由半径差决定，收窄了照样像给地球套了个土星环。
+     改用「贴在地心的加性光晕 sprite」：峰值落在地球轮廓上，向外柔和衰减，
+     被地球自身的正面挡掉中心（depthTest 保留），于是只剩一圈自然的边缘辉光。
+     峰值半径 = 光晕半径 × 0.67，取 2.4 × 0.67 ≈ 1.6 = R。 */
+  var atmo=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:radialStops([
+      [0,'rgba(240,190,110,0)'],[.52,'rgba(240,190,110,0)'],[.615,'rgba(234,168,70,.5)'],
+      [.67,'rgba(232,163,61,.6)'],[.78,'rgba(214,142,44,.2)'],[.9,'rgba(202,132,40,.05)'],[1,'rgba(196,128,38,0)']
+    ]),
+    transparent:true,depthWrite:false,depthTest:true,blending:THREE.AdditiveBlending,opacity:.62
+  }));
+  atmo.scale.set(4.8,4.8,1);
   mainTilt.add(atmo);
 
   /* ===== 美食标记点 =====
    * 形制同 world-heroines-atlas（实心点 + 光晕 + 描边 + 细环四层），配色按大洲取色：
    *   亚洲红 / 欧洲蓝 / 非洲绿 / 北美紫 / 南美橙 / 大洋洲青 */
   var markerGroup=new THREE.Group();mainSpin.add(markerGroup);
-  function radialStops(stops){
-    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
-    var g=x.createRadialGradient(64,64,0,64,64,64),i;
-    for(i=0;i<stops.length;i++)g.addColorStop(stops[i][0],stops[i][1]);
-    x.fillStyle=g;x.fillRect(0,0,s,s);
-    var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
-  }
   var haloTex=radialStops([
-    [0,'rgba(255,255,255,.96)'],[.16,'rgba(248,251,255,.78)'],[.34,'rgba(224,234,252,.4)'],
-    [.56,'rgba(198,215,246,.12)'],[.8,'rgba(180,200,240,.02)'],[1,'rgba(170,196,240,0)']
+    [0,'rgba(255,252,246,.96)'],[.16,'rgba(255,246,230,.78)'],[.34,'rgba(250,232,204,.4)'],
+    [.56,'rgba(244,214,168,.12)'],[.8,'rgba(238,204,150,.02)'],[1,'rgba(236,200,146,0)']
   ]);
   var coreTex=radialStops([
     [0,'rgba(255,255,255,1)'],[.7,'rgba(255,255,255,1)'],[.84,'rgba(255,255,255,.5)'],
     [1,'rgba(255,255,255,0)']
   ]);
   var contourTex=radialStops([
-    [0,'rgba(4,4,8,0)'],[.46,'rgba(4,4,8,0)'],[.56,'rgba(4,4,8,.3)'],
-    [.68,'rgba(4,4,8,.44)'],[.8,'rgba(4,4,8,.2)'],[.92,'rgba(4,4,8,.04)'],[1,'rgba(4,4,8,0)']
+    [0,'rgba(10,8,5,0)'],[.46,'rgba(10,8,5,0)'],[.56,'rgba(10,8,5,.3)'],
+    [.68,'rgba(10,8,5,.44)'],[.8,'rgba(10,8,5,.2)'],[.92,'rgba(10,8,5,.04)'],[1,'rgba(10,8,5,0)']
   ]);
   var ringLineTex=radialStops([
     [0,'rgba(255,255,255,0)'],[.6,'rgba(255,255,255,0)'],[.64,'rgba(255,255,255,.45)'],
@@ -151,14 +169,19 @@
   ]);
   var MK_HALO=0.24,MK_CORE=0.085,MK_CONTOUR=0.13,MK_RING=0.24,MK_RING_SEL=0.3;
   var REF_DIST=9.7;
-  var DAWN_COL=new THREE.Color('#f4ecd8');
-  var GOLD_COL=new THREE.Color('#e85a3c');
-  var DIM_COL=new THREE.Color('#8a6a5a');
+  /* 色彩管理：本文件带的 three 仍是 legacy 模式（ColorManagement.legacyMode=true）。
+     这种模式下 new Color('#hex') 给材质时颜色被当作线性值，再经 outputEncoding=sRGB 回写，
+     屏幕上等于白提亮一档——大洲色会被洗成同一片粉白（#e2604a 会显示成 #f1a696）。
+     所以凡是交给材质的颜色都要 convertSRGBToLinear() 过一遍；
+     交给 CSS 的（名牌圆点）保持 sRGB 原色，因此 REG_COL / DAWN_COL 不转换。 */
+  var DAWN_COL=new THREE.Color('#f5ebd8');
+  var GOLD_COL=new THREE.Color('#e8a33d').convertSRGBToLinear();
+  var DIM_COL=new THREE.Color('#8a7a63').convertSRGBToLinear();
   var WHITE_COL=new THREE.Color('#ffffff');
-  /* 地域色表：与 foods.js 的 REGIONS.color 同源 */
+  /* 地域色表：与 foods.js 的 REGIONS.color 同源（保留 sRGB，取材质色时再转线性） */
   var REG_COL={};
   (function(){
-    for(var i=0;i<REGIONS.length;i++)REG_COL[REGIONS[i].id]=new THREE.Color(REGIONS[i].color||'#f4ecd8');
+    for(var i=0;i<REGIONS.length;i++)REG_COL[REGIONS[i].id]=new THREE.Color(REGIONS[i].color||'#f5ebd8');
   })();
   /* 当前筛选地域 id */
   var curRegion='all';
@@ -169,8 +192,9 @@
       var grp=new THREE.Group();
       grp.position.copy(ll2v(m.lat,m.lon,R*1.012));
       grp.lookAt(0,0,0);grp.rotateX(Math.PI);
-      var cReg=REG_COL[m.region]||DAWN_COL;
-      var cHalo=cReg.clone(),cCore=cReg.clone().lerp(WHITE_COL,.18),cRing=cReg.clone();
+      var cReg=(REG_COL[m.region]||DAWN_COL).clone().convertSRGBToLinear();
+      /* cCore 只往白里提 7%：提太多会把大洲色洗成同一个粉白点，颜色编码就废了 */
+      var cHalo=cReg.clone(),cCore=cReg.clone().lerp(WHITE_COL,.07),cRing=cReg.clone();
       var contour=new THREE.Sprite(new THREE.SpriteMaterial({map:contourTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,opacity:.85}));
       contour.scale.set(MK_CONTOUR,MK_CONTOUR,1);
       var halo=new THREE.Sprite(new THREE.SpriteMaterial({map:haloTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cHalo.clone(),opacity:.5}));
@@ -427,84 +451,139 @@
 
   /* ===== 分享到小红书 ===== */
   var cShareBtn=document.getElementById('cShare');
+  /* 分享图版式：顶部通栏菜品图 → 下方暖黑底上的「大洲行 / 菜名 / 味型·热量 / 故事 / 食材 / 标签」→ 页脚品牌。
+     整块文字都落在纯底色上，不与照片交叠，确保任何一张图上都清晰可读。 */
   function drawShareCard(idx,m,onDone){
-    var sw=1080,sh=1440;
+    var sw=1080,sh=1440,P=80,HERO=870,W=sw-P*2;
+    var SERIF='Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif';
+    var SANS='-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+    var BG='#130e07';                       /* 文字区底色，与顶部图下缘的渐隐色一致 */
     var c=document.createElement('canvas');c.width=sw;c.height=sh;
     var x=c.getContext('2d');
-    var bg=x.createLinearGradient(0,0,0,sh);
-    bg.addColorStop(0,'#141014');bg.addColorStop(.5,'#2a1a14');bg.addColorStop(1,'#141014');
-    x.fillStyle=bg;x.fillRect(0,0,sw,sh);
-    x.fillStyle='rgba(255,220,180,.85)';
-    for(var i=0;i<140;i++){
-      x.globalAlpha=Math.random()*0.6+0.2;
-      x.beginPath();x.arc(Math.random()*sw,Math.random()*sh*0.45,Math.random()*1.6+0.3,0,Math.PI*2);x.fill();
-    }
-    x.globalAlpha=1;
-    var mx=sw/2,my=200,mr=72;
-    var mg=x.createRadialGradient(mx,my,0,mx,my,mr*2.4);
-    mg.addColorStop(0,'rgba(244,168,122,.45)');mg.addColorStop(1,'rgba(244,168,122,0)');
-    x.fillStyle=mg;x.fillRect(mx-mr*2.4,my-mr*2.4,mr*4.8,mr*4.8);
-    var mgrad=x.createRadialGradient(mx-mr*0.3,my-mr*0.3,0,mx,my,mr);
-    mgrad.addColorStop(0,'#fff4e0');mgrad.addColorStop(.6,'#f4a87a');mgrad.addColorStop(1,'#c2402f');
-    x.fillStyle=mgrad;x.beginPath();x.arc(mx,my,mr,0,Math.PI*2);x.fill();
-    var y=340;
-    function drawText(){
-      x.textAlign='center';
-      x.fillStyle='#f4ecd8';x.font='600 66px Georgia,"Songti SC","Noto Serif SC",serif';
-      x.fillText(m.name,sw/2,y);y+=70;
-      x.fillStyle='#e85a3c';x.font='28px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      x.fillText(m.civ+' · '+regionName(m.region)+' · '+tasteProfile(m.taste)+' · '+(m.kcal||'?')+'千卡',sw/2,y);y+=60;
-      x.textAlign='left';x.fillStyle='#f4ecd8';x.font='30px Georgia,"Songti SC","Noto Serif SC",serif';
-      var chars=m.story.split(''),line='',maxW=sw-120,lines=[];
-      for(var k=0;k<chars.length;k++){
-        var t=line+chars[k];
-        if(x.measureText(t).width>maxW){lines.push(line);line=chars[k];}else line=t;
+    var NO_START='，。、；：？！）』」》〉”’…—·%';
+    function wrap(str,font,maxW){
+      x.font=font;var chars=str.split(''),line='',out=[];
+      for(var i=0;i<chars.length;i++){
+        var ch=chars[i],t=line+ch;
+        if(x.measureText(t).width>maxW&&line){
+          /* 中文禁则：标点不另起一行，挂在上行行尾之后再换行 */
+          if(NO_START.indexOf(ch)>=0){out.push(t);line='';}
+          else{out.push(line);line=ch;}
+        }else line=t;
       }
-      if(line)lines.push(line);
-      var lh=46;
-      for(var li=0;li<lines.length&&y+lh<sh-280;li++){x.fillText(lines[li],60,y);y+=lh;}
-      y+=24;
+      if(line)out.push(line);return out;
+    }
+    function drawBg(){
+      var bg=x.createLinearGradient(0,0,0,sh);
+      bg.addColorStop(0,'#1b1409');bg.addColorStop(.62,BG);bg.addColorStop(1,'#0d0904');
+      x.fillStyle=bg;x.fillRect(0,0,sw,sh);
+      var vg=x.createRadialGradient(sw/2,sh*0.72,0,sw/2,sh*0.72,sw*0.78);
+      vg.addColorStop(0,'rgba(232,163,61,.055)');vg.addColorStop(1,'rgba(232,163,61,0)');
+      x.fillStyle=vg;x.fillRect(0,HERO,sw,sh-HERO);
+      x.fillStyle='rgba(255,224,190,.5)';
+      for(var i=0;i<46;i++){
+        x.globalAlpha=Math.random()*0.22+0.06;
+        x.beginPath();x.arc(Math.random()*sw,HERO+40+Math.random()*(sh-HERO-140),Math.random()*1.5+0.4,0,Math.PI*2);x.fill();
+      }
+      x.globalAlpha=1;
+    }
+    function heroFade(){
+      var fg=x.createLinearGradient(0,HERO-170,0,HERO);
+      fg.addColorStop(0,'rgba(19,14,7,0)');fg.addColorStop(1,'rgba(19,14,7,1)');
+      x.fillStyle=fg;x.fillRect(0,HERO-170,sw,170);
+    }
+    /* 无图回退：暗盘底 + 炉火余光 + 火候圆盘 + 文件名，与卡片里的占位保持一致 */
+    function drawPlaceholder(){
+      var pg=x.createLinearGradient(0,0,0,HERO);
+      pg.addColorStop(0,'#241a0e');pg.addColorStop(1,'#150f08');
+      x.fillStyle=pg;x.fillRect(0,0,sw,HERO);
+      var rg=x.createRadialGradient(sw/2,HERO*0.5,0,sw/2,HERO*0.5,540);
+      rg.addColorStop(0,'rgba(232,163,61,.20)');rg.addColorStop(1,'rgba(232,163,61,0)');
+      x.fillStyle=rg;x.fillRect(0,0,sw,HERO);
+      var cy=HERO*0.46;
+      x.strokeStyle='rgba(244,197,121,.45)';x.lineWidth=2;
+      x.beginPath();x.arc(sw/2,cy,86,0,Math.PI*2);x.stroke();
+      x.strokeStyle='rgba(244,197,121,.22)';x.lineWidth=1;
+      x.beginPath();x.arc(sw/2,cy,112,0,Math.PI*2);x.stroke();
+      var og=x.createRadialGradient(sw/2-8,cy-8,0,sw/2,cy,30);
+      og.addColorStop(0,'#fff4e0');og.addColorStop(.6,'#f4c579');og.addColorStop(1,'#c2812a');
+      x.fillStyle=og;x.beginPath();x.arc(sw/2,cy,30,0,Math.PI*2);x.fill();
+      x.textAlign='center';
+      x.fillStyle='#c0ae92';x.font='500 28px '+SANS;
+      x.fillText('配图待生成',sw/2,cy+190);
+      x.fillStyle='rgba(143,127,104,.75)';x.font='400 22px '+SANS;
+      x.fillText(m.slug?m.slug+'.webp':'',sw/2,cy+228);
+      x.textAlign='left';
+      heroFade();
+    }
+    function drawText(){
+      var TOP=HERO+40;
+      x.textAlign='left';
+      x.shadowColor='rgba(0,0,0,.55)';x.shadowBlur=8;x.shadowOffsetY=2;
+      /* 大洲行：左「文明·大洲」，右「经纬度」 */
+      x.fillStyle='#e8a33d';x.font='600 27px '+SANS;
+      x.fillText(m.civ+' · '+regionName(m.region),P,TOP);
+      x.textAlign='right';
+      x.fillStyle='#8f7f68';x.font='400 23px '+SANS;
+      x.fillText('纬度 '+m.lat.toFixed(1)+'°  经度 '+m.lon.toFixed(1)+'°',sw-P,TOP);
+      /* 菜名 */
+      x.textAlign='left';
+      x.fillStyle='#f8f1e2';x.font='600 72px '+SERIF;
+      x.fillText(m.name,P,TOP+74);
+      /* 味型 · 热量 */
+      x.fillStyle='#d3a75f';x.font='500 27px '+SANS;
+      x.fillText(tasteProfile(m.taste)+'　·　'+(m.kcal||'?')+' 千卡',P,TOP+126);
+      /* 故事：最多三行，超出截断加省略号 */
+      x.fillStyle='#e9dfcc';x.font='32px '+SERIF;
+      var lines=wrap(m.story,'32px '+SERIF,W);
+      if(lines.length>3){lines=lines.slice(0,3);lines[2]=lines[2].slice(0,-1)+'…';}
+      var y=TOP+184,lh=47;
+      for(var i=0;i<lines.length;i++){x.fillText(lines[i],P,y);y+=lh;}
+      var lastBaseline=y-lh;
       /* 食材行 */
       if(m.ingredients&&m.ingredients.length){
-        x.fillStyle='#c9a98e';x.font='24px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-        var ingLine='食材 · '+m.ingredients.join('、');
-        var ingChars=ingLine.split(''),il='',ilines=[];
-        for(k=0;k<ingChars.length;k++){
-          t=il+ingChars[k];
-          if(x.measureText(t).width>maxW){ilines.push(il);il=ingChars[k];}else il=t;
-        }
-        if(il)ilines.push(il);
-        for(li=0;li<ilines.length&&y+lh<sh-220;li++){x.fillText(ilines[li],60,y);y+=lh;}
-        y+=18;
+        var igy=lastBaseline+52;
+        x.font='500 26px '+SANS;
+        x.fillStyle='#d3a75f';x.fillText('食材',P,igy);
+        x.fillStyle='#b3a086';x.fillText(' · '+m.ingredients.join('、'),P+x.measureText('食材').width,igy);
+        lastBaseline=igy;
       }
-      x.font='24px -apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
-      var tx=60;
+      /* 标签：一行胶囊，超出换行 */
+      x.shadowBlur=0;x.shadowOffsetY=0;
+      x.font='500 24px '+SANS;
+      var tx=P,ty=lastBaseline+34;
       for(var ti=0;ti<m.tags.length;ti++){
-        var tag=m.tags[ti],tw=x.measureText(tag).width+28;
-        if(tx+tw>sw-60){tx=60;y+=46;}
-        x.fillStyle='rgba(232,90,60,.14)';x.fillRect(tx,y-26,tw,38);
-        x.strokeStyle='rgba(232,90,60,.55)';x.lineWidth=1;x.strokeRect(tx,y-26,tw,38);
-        x.fillStyle='#e85a3c';x.fillText(tag,tx+14,y);tx+=tw+14;
+        var tag=m.tags[ti],tw=x.measureText(tag).width+32;
+        if(tx+tw>sw-P&&tx>P){tx=P;ty+=44+12;}
+        x.fillStyle='rgba(232,163,61,.13)';x.fillRect(tx,ty,tw,44);
+        x.strokeStyle='rgba(232,163,61,.45)';x.lineWidth=1.5;x.strokeRect(tx+0.75,ty+0.75,tw-1.5,42.5);
+        x.fillStyle='#e8a33d';x.fillText(tag,tx+16,ty+30);
+        tx+=tw+14;
       }
-      y+=56;
-      x.fillStyle='#c9a98e';x.font='22px -apple-system,"PingFang SC",sans-serif';
-      x.fillText('纬度 '+m.lat.toFixed(1)+'°   经度 '+m.lon.toFixed(1)+'°',60,y);
-      x.textAlign='center';
-      x.fillStyle='#e85a3c';x.font='600 30px Georgia,serif';x.fillText('世界美食图鉴',sw/2,sh-58);
-      x.fillStyle='#c9a98e';x.font='18px -apple-system,sans-serif';x.fillText('WORLD FOOD ATLAS',sw/2,sh-28);
+      /* 页脚：分隔线 + 左中文品牌 / 右英文品牌 */
+      x.strokeStyle='rgba(232,163,61,.22)';x.lineWidth=1;
+      x.beginPath();x.moveTo(P,1352);x.lineTo(sw-P,1352);x.stroke();
+      x.fillStyle='#e8a33d';x.font='600 27px '+SERIF;
+      x.fillText('世界美食图鉴',P,1398);
+      x.textAlign='right';
+      x.fillStyle='#8f7f68';x.font='500 20px '+SANS;
+      x.fillText('WORLD FOOD ATLAS',sw-P,1397);
+      x.textAlign='left';
       onDone(c.toDataURL('image/jpeg',0.92));
     }
+    drawBg();
     if(m.img&&IMG_OK[idx]===true){
       var im=new Image();
       im.onload=function(){
-        var ph=360,py=y;
-        var s=Math.max(sw/im.width,ph/im.height),dw=im.width*s,dh=im.height*s;
-        x.drawImage(im,(sw-dw)/2,py+(ph-dh)/2,dw,dh);
-        y=py+ph+40;drawText();
+        var s=Math.max(sw/im.width,HERO/im.height),dw=im.width*s,dh=im.height*s;
+        x.save();x.beginPath();x.rect(0,0,sw,HERO);x.clip();
+        x.drawImage(im,(sw-dw)/2,(HERO-dh)/2,dw,dh);
+        x.restore();
+        heroFade();drawText();
       };
-      im.onerror=function(){drawText();};
+      im.onerror=function(){drawPlaceholder();drawText();};
       im.src=m.img;
-    }else drawText();
+    }else{drawPlaceholder();drawText();}
   }
   function shareToXhs(idx){
     var m=FOODS[idx];
@@ -546,7 +625,7 @@
       var r=REGIONS[i];
       var b=document.createElement('button');
       var dot=document.createElement('span');
-      dot.className='dot';dot.style.background=r.color||'#f4ecd8';
+      dot.className='dot';dot.style.background=r.color||'#f5ebd8';
       b.appendChild(dot);
       b.appendChild(document.createTextNode(r.name));
       b.setAttribute('data-r',r.id);
@@ -607,7 +686,7 @@
       var grp=mkEl('div','grp');
       grp.setAttribute('data-r',reg.id);
       var h=mkEl('h4'),di=mkEl('i');
-      di.style.background=reg.color||'#f4ecd8';
+      di.style.background=reg.color||'#f5ebd8';
       h.appendChild(di);
       h.appendChild(document.createTextNode(reg.name));
       h.appendChild(mkEl('em',null,idxs.length+' 道'));
@@ -734,10 +813,10 @@
         m.core.scale.set(MK_CORE*(1+.06*pulse),MK_CORE*(1+.06*pulse),1);
         m.contour.scale.set(MK_CONTOUR,MK_CONTOUR,1);
         m.ring.scale.set(MK_RING,MK_RING,1);
-        m.halo.material.opacity=(.5+.16*pulse)*fade;
+        m.halo.material.opacity=(.42+.14*pulse)*fade;
         m.core.material.opacity=1*fade;
         m.contour.material.opacity=.6*fade;
-        m.ring.material.opacity=.5*fade;
+        m.ring.material.opacity=.46*fade;
       }
     }
     var sm=(selIdx>=0)?markers[selIdx]:null;
