@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>世界美食图鉴 · WORLD FOOD ATLAS</title>
+<link rel="icon" type="image/png" href="./assets/icon.png">
+<link rel="apple-touch-icon" href="./assets/icon.png">
 <style>
   /* ===== 配图位（复用 vibeknow/world-food-3d 的 35 道菜 webp）=====
      ① 菜品配图 ×35   assets/foods/<slug>.webp   512×512，主体居中留白
@@ -77,7 +79,7 @@
   .card .share:disabled{opacity:.6;cursor:default}
 
   /* 配图位：有图走 cover 铺满，无图走程序化占位（暗盘底 + 炉火余光 + 飞星 + 火候圆盘 + 文件名） */
-  .card .pic{position:relative;height:200px;margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
+  .card .pic{position:relative;height:280px;height:min(320px,42vh);margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
     background-image:
       radial-gradient(circle at 22% 18%,rgba(255,224,190,.5),rgba(255,224,190,0) 1.5%),
       radial-gradient(circle at 63% 76%,rgba(255,206,166,.34),rgba(255,206,166,0) 1.2%),
@@ -168,7 +170,7 @@
     .brand{font-size:16px}
     .card .name{font-size:17px}
     .card .story{font-size:13px}
-    .card .pic{height:112px}
+    .card .pic{height:180px;height:min(200px,26vh)}
     .listtitle{font-size:16px}
     .listscroll{padding-left:12px;padding-right:12px}
     .item .th{width:58px;height:40px;margin-right:9px}
