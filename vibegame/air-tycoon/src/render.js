@@ -10,7 +10,7 @@
  * 基调换成「夜色地球 + 暖金航线」——真实航司的航线图语言：
  *   · 地球保持真实贴图 + 冷蓝染色（不与 defcon 的暗青撞色）
  *   · 城市光点按**开发度等级**显大小与亮度（等级即玩家经营成果的可视化）
- *   · 已通航城市套**暖金定位环**（你的网络）；未通航城市只有暗白光点（待开拓）
+ *   · 已通航城市套**橙黄定位环**（你的网络）；未通航城市只有冰青光点（待开拓）
  *   · 航线画成**大圆弧**（真实航路不是平面直线，球面上是大圆）
  *   · 客机是沿弧线移动的**小亮点 + 尾迹线段**，密度体现航班频次
  *
@@ -44,25 +44,40 @@
   /* ── 色板（集中管理，避免散落各处各自为政）──
    * 「红涨绿跌」是中国股市惯例，但本作不是股票软件，不使用涨跌色，
    * 改用**航线所有权**配色：我的航线是暖金（争夺焦点），竞对是冷灰蓝（背景干扰）。
-   * 这是刻意的：玩家的注意力应该被自己的网络吸走，而不是去数竞对有多少条线。 */
+   * 这是刻意的：玩家的注意力应该被自己的网络吸走，而不是去数竞对有多少条线。
+   *
+   * ⚠ 城市光点的配色（2026-09-29 二次修订）：
+   *   地球贴图（Blue Marble）满屏只有四种色相 —— 深蓝海洋、土黄/褐陆地、橄榄绿植被、白冰盖。
+   *   ① **已通航城市 = 橙黄 0xffc76b**，与面板里「资金」（--amber）是同一个色值。
+   *      这个呼应是有意的：顶栏「橙色 = 我的钱」、地图「橙色 = 我的网络」，
+   *      玩家的航线本就是他最关心的资产，两处共用一支颜色，省掉一次学习成本。
+   *   ② **未通航城市 = 冰青 0x2fc4ff** 保持不变：橙（约 38°）与青（约 197°）在色环上
+   *      相隔约 160°，且地图上没有青色 —— 「待开拓的城」与「我的网络」一眼可分。
+   *   ③ 亮度必须压在 bloom 的高亮阈值之下（POST_BRIGHT_FS 用 luma 0.86 提取亮部）。
+   *      橙黄本身 luma 已达 0.80，若仍乘旧公式的 1.22 倍等级增益就会到 0.98，
+   *      点核被 bloom 拉成白点、橙黄色相反被烧掉 —— 这正是暖金版老配色翻过的车。
+   *      故本版把「已通航」的等级增益重标定为 0.792→1.0（见 syncCities 的 g 公式），
+   *      峰值 luma ≈ 0.80，既保住橙黄又不过曝。
+   *   暖金仍完整保留在航线/客机上（arcMine / planeMine），「金色 = 我的航路」不变。 */
   var PALETTE = {
-    homeHex:      0xffd27a,    // 基地城市：明亮暖金
-    mineHex:      0xffc247,    // 我的航点：暖金
-    rivalHex:     0x5a7d96,    // 竞对航点：暗钢蓝
-    virginHex:    0xb8cede,    // 未通航城市：中性冷白（有存在感但不抢眼，不能暗到像噪点）
-    arcMine:      0xffc247,    // 我的航线大圆弧
-    arcRival:     0x3f5d70,    // 竞对航线大圆弧（更暗，退到背景）
-    arcOpen:      0xfff0c0,    // 开航瞬间的弧线辉光（比常色更亮，越过 bloom 阈值）
-    planeMine:    0xfff2d0,    // 我的客机
-    planeRival:   0x9fb8c8,    // 竞对客机
+    homeHex:      0xffd488,    // 基地城市：更亮的橙黄（同色相更亮，配 1.25 倍尺寸与更亮的定位环）
+    mineHex:      0xffc76b,    // 已通航航点：橙黄 = 面板「资金」的 --amber
+    rivalHex:     0x7fa6c2,    // 竞对航点：钢蓝（未在 city 颜色路径使用）
+    virginHex:    0x2fc4ff,    // 未通航城市：冰青（地图上没有的色相；够饱和才能在蓝海上不被读成白点）
+    arcMine:      0xffcd5c,    // 我的航线大圆弧
+    arcRival:     0x5f8aa4,    // 竞对航线大圆弧（更冷更淡，退到背景）
+    arcOpen:      0xfff4d0,    // 开航瞬间的弧线辉光（比常色更亮，越过 bloom 阈值）
+    planeMine:    0xfff6da,    // 我的客机
+    planeRival:   0xb8cee0,    // 竞对客机
     level: [                   // 城市按开发度等级的配色（1→5 级，越亮越繁盛）
-      0x6f8494, 0x8fb0c0, 0xb8d4dc, 0xe8d9a8, 0xffd27a
+      0x93aabb, 0xaecbdc, 0xcfe6ee, 0xf2e3b4, 0xffd88a
     ]
   };
 
   var api = { ok: false };
   var renderer, scene, camera, globe, gridGroup;
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
+  var haloPoints;                         // 城市柔光光晕层（与 cityGeom 共用几何，只换贴图与倍数）
   var cityLevel, cityRinged;              // 每城当前等级 / 是否已通航（我的网络）
   var cityBaseSize;                       // 等级对应的基准尺寸（脉冲在此之上放大）
   var cityPulse, cityLastDev;             // 开发度上涨的辉光脉冲 + 上一帧 dev
@@ -95,17 +110,76 @@
 
   /* 城市定位环：外圈柔光 + 内圈实线。
    * 只描一圈细线的话，缩到 20 来像素会被纹理过滤吃掉、断成虚线；
-   * 先铺一道宽而淡的底、再压一道窄而实的线，任何尺寸下都是完整的一圈。 */
+   * 先铺一道宽而淡的底、再压一道窄而实的线，任何尺寸下都是完整的一圈。
+   * ⚠ 柔光底要「淡而窄」：早先 0.24/13px 的宽柔光叠上 bloom 后，
+   *   环会糊成一坨发光厚圈，像贴在球上的准星，故收成 0.16/9px。 */
   function ringTex() {
     var c = document.createElement('canvas');
     c.width = c.height = 128;
     var x = c.getContext('2d');
-    x.strokeStyle = 'rgba(255,255,255,0.24)';
-    x.lineWidth = 13;
+    x.strokeStyle = 'rgba(255,255,255,0.16)';
+    x.lineWidth = 9;
     x.beginPath(); x.arc(64, 64, 45, 0, Math.PI * 2); x.stroke();
-    x.strokeStyle = 'rgba(255,255,255,0.95)';
-    x.lineWidth = 4;
+    x.strokeStyle = 'rgba(255,255,255,0.9)';
+    x.lineWidth = 3.2;
     x.beginPath(); x.arc(64, 64, 45, 0, Math.PI * 2); x.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+
+  /* 城市符号：一枚干净的小圆点 —— 实心核 + 极短软边。
+   * 2026-09-28 精简：去掉四向刻度与外环装饰，回到最简的「点」。
+   * ⚠ 软边只铺到 28px（≈半个符号的 0.44）就收干净：宽柔光铺满整张贴图，
+   *   再叠 additive + bloom 会糊成一团白雾（实机踩过的坑）；小而快地收边才是「点」。
+   *   需要外圈柔光时不要放宽这里，而是用单独的低透明度光晕层（cityHaloTex）。 */
+  function cityMarkTex() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 28);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.55, 'rgba(255,255,255,1)');   // 平顶段 → 实心核
+    g.addColorStop(1, 'rgba(255,255,255,0)');      // 出核即收 → 极短软边
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+
+  /* 城市柔光光晕：叠在符号外围的一圈软光（对齐 world-food-atlas 的 haloTex）。
+   * 单独一层而不是并进「点」里：点核要保持小而利落，光晕要柔而铺得开，
+   * 两者尺寸/透明度都得分开调；并入同一张贴图就只剩一个固定的比例。 */
+  function cityHaloTex() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0,    'rgba(255,255,255,0.92)');
+    g.addColorStop(0.18, 'rgba(255,255,255,0.58)');
+    g.addColorStop(0.38, 'rgba(255,255,255,0.24)');
+    g.addColorStop(0.62, 'rgba(255,255,255,0.07)');
+    g.addColorStop(0.85, 'rgba(255,255,255,0.015)');
+    g.addColorStop(1,    'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(c);
+  }
+
+  /* 已通航外环：一根**柔化渐变**细环（对齐 world-food-atlas 的 ringLineTex）。
+   * 早先是硬边描线，缩到 30 来像素既发死、又像贴在球上的 UI 准星；
+   * 改成从环心向两侧羽化（.64→.70→.74 的窄带），小尺寸下自动融进光晕里，
+   * 读作「城市外面淡淡一圈」，而不是一根画上去的线。
+   * ⚠ 半径停在 .70（与旧描线的 45/64≈.703 基本一致），环的视觉直径不变。
+   * ⚠ 与 TEX.ring（开航波纹）分开：波纹要靠柔光底做扩散感，这里只要一圈细环。 */
+  function markRingTex() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0,    'rgba(255,255,255,0)');
+    g.addColorStop(0.60, 'rgba(255,255,255,0)');
+    g.addColorStop(0.64, 'rgba(255,255,255,0.45)');
+    g.addColorStop(0.70, 'rgba(255,255,255,1)');
+    g.addColorStop(0.74, 'rgba(255,255,255,0.45)');
+    g.addColorStop(0.78, 'rgba(255,255,255,0)');
+    g.addColorStop(1,    'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
 
@@ -162,8 +236,11 @@
 
   var TEX = {};
   function buildTextures() {
-    TEX.dot = radialTex('rgba(255,255,255,1)', 'rgba(255,255,255,0.85)', 'rgba(255,255,255,0)');
+    /* 城市标记：柔光光晕 + 亮核 + 已通航细环（形制对齐 world-food-atlas）。 */
+    TEX.halo = cityHaloTex();
+    TEX.dot = cityMarkTex();
     TEX.ring = ringTex();
+    TEX.markRing = markRingTex();     // 已通航外环用的柔化细环（与开航波纹分开）
     TEX.plane = planeTex();
     TEX.flash = radialTex('rgba(255,248,224,1)', 'rgba(255,206,120,0.6)', 'rgba(255,150,60,0)');
   }
@@ -185,19 +262,23 @@
 
   function buildGlobe() {
     var seg = quality ? 64 : 32;
+    /* ⚠ 基色保持纯白（原色）：早先用 0xcfe2f0 的冷蓝白「调和」贴图，等于给整颗球蒙了层蓝灰。
+     *   现在让 albedo 完全等于贴图本身，颜色交给贴图。 */
     var mat = new THREE.MeshStandardMaterial({
-      color: 0xa8c4d8, roughness: 0.96, metalness: 0.02
+      color: 0xffffff, roughness: 0.82, metalness: 0.06
     });
     globe = new THREE.Mesh(new THREE.SphereGeometry(R, seg, seg / 2), mat);
     scene.add(globe);
 
     loadGlobeTexture(mat, 0);
 
-    // 冷色壳：压暗 + 叠一层蓝，把真实贴图往「夜空中的星球」推
+    // 冷色壳：早先用来「压暗 + 叠蓝」，把贴图往夜空星球推。
+    // ⚠ 本次要求贴图回到原色 + 整体提亮，这层是主要的压暗来源之一，故从 0.12 降到 0.04 ——
+    //   只留一丝冷调，几乎不参与压暗；想彻底去蓝调就设成 0。
     var shell = new THREE.Mesh(
       new THREE.SphereGeometry(R * 1.0015, seg, seg / 2),
       new THREE.MeshBasicMaterial({
-        color: 0x081826, transparent: true, opacity: 0.22,
+        color: 0x123a58, transparent: true, opacity: 0.04,
         depthWrite: false, side: THREE.FrontSide
       })
     );
@@ -207,7 +288,7 @@
     gridGroup = new THREE.Group();
     var gR = R * 1.003;
     var gmat = new THREE.LineBasicMaterial({
-      color: 0x5f8fa8, transparent: true, opacity: 0.13
+      color: 0x86bad8, transparent: true, opacity: 0.2
     });
     var lats = [-60, -30, 0, 30, 60];
     lats.forEach(function (lat) {
@@ -239,7 +320,7 @@
     var src = GLOBE_TEX_SRC[attempt];
     function fallback() {
       if (attempt + 1 < GLOBE_TEX_SRC.length) { loadGlobeTexture(mat, attempt + 1); return; }
-      mat.color.setHex(0x6b8ca0);      // 纯色兜底：不白屏、不中断
+      mat.color.setHex(0x8fb4cc);      // 纯色兜底：不白屏、不中断
       mat.needsUpdate = true;
     }
     if (!src) { fallback(); return; }
@@ -248,7 +329,7 @@
         if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
         tex.anisotropy = quality ? 4 : 1;
         mat.map = tex;
-        mat.color.setHex(0xc8dced);
+        mat.color.setHex(0xffffff);    // 原色：贴图不再叠冷蓝
         mat.needsUpdate = true;
         api.texOk = true;              // 供冒烟断言「贴图真加载了」，而不是静默走纯色兜底
       }, undefined, fallback);
@@ -287,7 +368,7 @@
         'void main(){',
         '  float d = length(gl_PointCoord - vec2(0.5));',
         '  if (d > 0.5) discard;',
-        '  gl_FragColor = vec4(0.70, 0.80, 0.92, (1.0 - d * 2.0) * 0.85);',
+        '  gl_FragColor = vec4(0.84, 0.92, 1.0, (1.0 - d * 2.0) * 0.9);',
         '}'
       ].join('\n'),
       transparent: true, depthWrite: false
@@ -304,7 +385,7 @@
 
   function buildAtmosphere() {
     atmoMat = new THREE.ShaderMaterial({
-      uniforms: { uColor: { value: new THREE.Color(0x5ab4e8) }, uInt: { value: 1.0 } },
+      uniforms: { uColor: { value: new THREE.Color(0x86d8f8) }, uInt: { value: 1.0 } },
       vertexShader: [
         'varying vec3 vN; varying vec3 vP;',
         'void main(){',
@@ -340,13 +421,24 @@
    *
    * 与 defcon 的关键差异：这里的城市**不是阵营单位，是经济节点**。
    * 光点要表达三件事，且必须一眼可读：
-   *   ① 繁盛程度 —— 等级 1..5 → 尺寸与颜色（灰白 → 暖金）
-   *   ② 是否在我的网络里 —— 已通航的城多一圈暖金定位环
+   *   ① 繁盛程度 —— 等级 1..5 → 尺寸与亮度（同一色相上提亮）
+   *   ② 是否在我的网络里 —— 已通航的城多一圈橙黄定位环
    *   ③ 是否我的基地 —— 基地尺寸额外加成 + 最亮色
    *
    * 为什么把「等级」和「通航」分成尺寸与环两个通道：
-   * 若都用颜色表达，暖金既可能是「高等级」也可能是「已通航」，玩家分不清。
-   * 尺寸管发展度（连续信息，看大小），环管归属（离散信息，看有无），互不干扰。 */
+   * 若都用颜色表达，「亮」既可能是「高等级」也可能是「已通航」，玩家分不清。
+   * 尺寸管发展度（连续信息，看大小），环管归属（离散信息，看有无），互不干扰。
+   * 色相只承担一件事：把城市从地球贴图里拎出来（见 PALETTE 注释）。
+   *
+   * 视觉语言（2026-09-28 对齐 world-food-atlas 的「点 + 光晕 + 细环」）：
+   *   ① 柔光光晕（TEX.halo / cityHaloTex）—— 最外一层软光，跟着城市色走，
+   *      让每个点在暗夜球面上「晕」开一小圈，不再是硬贴上去的一粒白；
+   *   ② 实心小圆点（TEX.dot / cityMarkTex）—— 亮核，一眼认出是个「点」；
+   *   ③ 已通航细环（TEX.markRing / markRingTex）—— 柔化渐变的一圈，套在光晕之上。
+   * ⚠ 三层一律 depthTest:false：标记是屏幕空间 billboard，贴到球面边缘时外缘会落到
+   *   曲面「后方」被地球深度剪掉（＝光圈陷进地球）。改由 syncCities 逐帧背面剔除
+   *   兜底，与 world-food-atlas 的做法一致。
+   * 三个信息通道原样保留；装饰元素仍不做刻度、不做缺口。 */
 
   var CITY_VS = [
     'attribute float aSize;',
@@ -355,29 +447,41 @@
     'varying vec3 vColor;',
     'varying float vAlpha;',
     'uniform float uScale;',
+    'uniform float uSizeMul;',       // 层尺寸倍数：城市点/环为 1，光晕层放大
     'void main(){',
     '  vColor = aColor; vAlpha = aAlpha;',
     '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
-    '  gl_PointSize = aSize * uScale / max(0.001, -mv.z);',
+    '  gl_PointSize = aSize * uSizeMul * uScale / max(0.001, -mv.z);',
     '  gl_Position = projectionMatrix * mv;',
     '}'
   ].join('\n');
 
   var CITY_FS = [
     'uniform sampler2D uTex;',
+    'uniform float uAlphaMul;',      // 层透明度倍数：光晕层压低，点/环为 1
     'varying vec3 vColor;',
     'varying float vAlpha;',
     'void main(){',
     '  vec4 t = texture2D(uTex, gl_PointCoord);',
-    '  gl_FragColor = vec4(vColor, 1.0) * t * vAlpha;',
+    '  gl_FragColor = vec4(vColor, 1.0) * t * vAlpha * uAlphaMul;',
     '  if (gl_FragColor.a < 0.01) discard;',
     '}'
   ].join('\n');
 
-  var RING_MUL = 1.75;          // 定位环直径 / 光点直径
+  var RING_MUL = 1.5;           // 定位环直径 / 城市符号直径
+  /* ⚠ 符号精简成小圆点后，可见的点核只占符号的 ~0.24，环落在 0.35×RING_MUL：
+   *   1.5 → 0.53，点与环之间留出约 0.3 倍半径的空当，读作「点 + 一圈细环」。 */
+  /* 柔光光晕层（对齐 world-food-atlas 的 haloTex）：与城市共用几何，只把贴图换成软光、
+   *   尺寸倍数放大、整体透明度压低 —— 于是每个点外围都有一圈淡淡的柔光，
+   *   亮度自动跟随城市色（未通航冰青 / 已通航橙黄），不额外开信息通道。
+   * ⚠ HALO_ALPHA 压到 0.38：光晕峰值 × 色亮度 ≈ 0.3，落在 bloom 阈值 0.72 之下，
+   *   不会像早先的宽柔光那样被 bloom 拉成一团白雾。 */
+  var HALO_MUL = 1.6;           // 光晕层直径 / 城市符号直径
+  var HALO_ALPHA = 0.38;        // 光晕层整体透明度
 
   function buildCities(state) {
     var n = state.cities.length;
+    var ringRgb = hexToRgb(PALETTE.mineHex);
     cityPos = new Float32Array(n * 3);
     cityColor = new Float32Array(n * 3);
     citySize = new Float32Array(n);
@@ -401,8 +505,10 @@
 
       var rgb = hexToRgb(PALETTE.virginHex);
       cityColor[i * 3] = rgb[0]; cityColor[i * 3 + 1] = rgb[1]; cityColor[i * 3 + 2] = rgb[2];
-      // 环一律白色：让光点自己的颜色透出来作主分类信息（环已带色会过曝成实心团）
-      ringColor[i * 3] = 1; ringColor[i * 3 + 1] = 1; ringColor[i * 3 + 2] = 1;
+      /* 环取我的网络标记色（= 已通航城市点的橙黄），不再用纯白。
+       * 白环叠加 additive + bloom 会直接烧成高亮白圈，既刺眼又像 UI 准星；
+       * 橙黄与城市点同色系，读起来是「我的网络轮廓」而不是贴上去的标记。 */
+      ringColor[i * 3] = ringRgb[0]; ringColor[i * 3 + 1] = ringRgb[1]; ringColor[i * 3 + 2] = ringRgb[2];
 
       /* aSize 是「期望像素直径 × 距离」的系数；uScale = 画布高/2（见 syncPointScale）。
        *
@@ -434,12 +540,32 @@
     cityGeom.setAttribute('aAlpha', new THREE.BufferAttribute(cityAlpha, 1));
 
     var mat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: TEX.dot }, uScale: { value: 400 } },
+      uniforms: { uTex: { value: TEX.dot }, uScale: { value: 400 },
+                  uSizeMul: { value: 1 }, uAlphaMul: { value: 1 } },
       vertexShader: CITY_VS, fragmentShader: CITY_FS,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
     });
     cityPoints = new THREE.Points(cityGeom, mat);
     scene.add(cityPoints);
+
+    /* 柔光光晕：与城市共用几何 —— 位置、颜色、尺寸、透明度全跟着城市走，
+     * 只把材质换成软光贴图、尺寸倍数放大、整体透明度压低，故无需单独维护属性。
+     * renderOrder=-1：让光晕先画，点核再压在中间（加性混合下顺序不影响颜色，
+     * 但这样在观感调试时更符合「光晕在点后面」的直觉）。
+     * ⚠ depthTest:false（城市三层都关）：光晕比点大 1.6 倍，城市转到球体边缘时，
+     *   光晕外缘在 3D 空间落到地球曲面「后方」，被地球的深度缓冲剪掉 ——
+     *   看上去就是「光圈陷进地球里面」。关掉深度测试后改由 syncCities 的
+     *   背面剔除兜底（背对相机的城市 alpha 收 0，不会透穿地球）；
+     *   这也是 world-food-atlas 的做法：标记一律 depthTest:false + 朝相机判定。 */
+    var hmat = new THREE.ShaderMaterial({
+      uniforms: { uTex: { value: TEX.halo }, uScale: { value: 400 },
+                  uSizeMul: { value: HALO_MUL }, uAlphaMul: { value: HALO_ALPHA } },
+      vertexShader: CITY_VS, fragmentShader: CITY_FS,
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
+    });
+    haloPoints = new THREE.Points(cityGeom, hmat);
+    haloPoints.renderOrder = -1;
+    scene.add(haloPoints);
 
     ringGeom = new THREE.BufferGeometry();
     ringGeom.setAttribute('position', new THREE.BufferAttribute(ringPos, 3));
@@ -447,9 +573,10 @@
     ringGeom.setAttribute('aSize', new THREE.BufferAttribute(ringSize, 1));
     ringGeom.setAttribute('aAlpha', new THREE.BufferAttribute(ringAlpha, 1));
     var rmat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: TEX.ring }, uScale: { value: 400 } },
+      uniforms: { uTex: { value: TEX.markRing }, uScale: { value: 400 },
+                  uSizeMul: { value: 1 }, uAlphaMul: { value: 1 } },
       vertexShader: CITY_VS, fragmentShader: CITY_FS,
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending
+      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
     });
     ringPoints = new THREE.Points(ringGeom, rmat);
     scene.add(ringPoints);
@@ -459,6 +586,7 @@
   function syncPointScale() {
     var h = (renderer ? renderer.domElement.height : global.innerHeight) || 800;
     if (cityPoints) cityPoints.material.uniforms.uScale.value = h * 0.5;
+    if (haloPoints) haloPoints.material.uniforms.uScale.value = h * 0.5;
     if (ringPoints) ringPoints.material.uniforms.uScale.value = h * 0.5;
   }
 
@@ -478,11 +606,30 @@
   function syncCities(state, dt) {
     if (!cityGeom) return;
     var dirty = false, sizeDirty = false, colorDirty = false;
-    var rDirty = false, rSizeDirty = false;
+    var rDirty = false, rSizeDirty = false, aDirty = false;
     var decay = (dt > 0) ? dt / CITY_PULSE_SEC : 0;
+
+    /* 背面剔除（城市三层关掉 depthTest 后必须自己做）：
+     * 球面上某点「可见」的判据是 dot(法线, 相机方向) ≥ R/|相机| —— 相机越近，可见的球面盖越小。
+     * 城市法线就是它的位置方向。早先靠地球的深度遮挡背面城市，现在逐帧把背对相机的城市
+     * alpha 收回 0（点、光晕、环一起），免得透穿地球 —— 与 world-food-atlas 的 refreshMarkers
+     * 同路数。在可见边界两侧留 0.08 的软过渡，转球时城市不会在边缘「啪」地闪一下。 */
+    if (!_pn) { _pv = new THREE.Vector3(); _pn = new THREE.Vector3(); _cd = new THREE.Vector3(); }
+    var hasCam = !!(camera && camera.position.lengthSq() > 1e-6);
+    var camSil = 0;
+    if (hasCam) { _cd.copy(camera.position).normalize(); camSil = R / camera.position.length(); }
 
     for (var i = 0; i < state.cities.length; i++) {
       var c = state.cities[i];
+
+      // 朝向系数：可见边界（dot = camSil）处 0.5，边界内 0.08 淡入到 1，边界外淡出到 0
+      var face = 1;
+      if (hasCam) {
+        _pn.set(cityPos[i * 3], cityPos[i * 3 + 1], cityPos[i * 3 + 2]).normalize();
+        face = (_pn.dot(_cd) - camSil) / 0.08 + 0.5;
+        if (face < 0) face = 0; else if (face > 1) face = 1;
+      }
+      if (Math.abs(cityAlpha[i] - face) > 1e-3) { cityAlpha[i] = face; aDirty = true; }
 
       /* 开发度上涨 → 辉光脉冲。
        * 触发条件直接看「本帧 dev 比上一帧高」，不必让 sim 多投递一个事件：
@@ -511,20 +658,22 @@
       if (p > 0) s *= (1 + 0.45 * p);
       if (Math.abs(citySize[i] - s) > 1e-6) { citySize[i] = s; sizeDirty = true; }
 
-      // 颜色：基地 > 我的网络 > 未通航；已通航的城用等级色（发展可视），
-      // 未通航用中性灰白（待开拓的地图上不该有暖色诱惑）
+      /* 颜色：基地 > 已通航 > 未通航。已通航的城在橙黄上叠等级亮度（发展可视），
+       * 未通航统一冰青 —— 待开拓的地图上不该出现「我还没去过的城」的高亮橙黄。 */
       var col;
       if (c.isHome) col = PALETTE.homeHex;
       else if (connected) col = PALETTE.mineHex;
       else col = PALETTE.virginHex;
 
       var cr = hexToRgb(col);
-      /* 等级对「我的城市」施加亮度增益：1 级 ×0.78、5 级 ×1.22。
+      /* 等级对「我的城市」施加亮度增益：⚠ 上限 1.0 是硬约束，不是随便定的 ——
+       * 橙黄 0xffc76b 的 luma 已达 0.80，乘 1.0 仍在 bloom 阈值 0.86 之下；
+       * 沿用旧暖金公式（最高 1.22）会冲到 0.98，点核被 bloom 拉成白点、橙黄被烧掉。
        * 未通航城市不受等级影响 —— 它们本来就该是均匀的背景色，
        * 否则地图上会出现一堆高亮的「我还没去过的城」，误导玩家以为已经有网络覆盖。 */
       var g = 1;
-      if (c.isHome) g = 1.0 + (lv - 3) * 0.05;
-      else if (connected) g = 0.78 + lv * 0.088;
+      if (c.isHome) g = 0.96 + (lv - 3) * 0.02;
+      else if (connected) g = 0.74 + lv * 0.052;
       if (p > 0) g *= (1 + 1.6 * p);
 
       if (lvChanged || colorDirty || Math.abs(cityColor[i * 3] - cr[0] * g) > 1e-6) {
@@ -535,8 +684,10 @@
       }
 
       // 环：只有我的网络里的城才有环，且亮度随等级上升（大城更醒目）
-      var ra = connected ? (c.isHome ? 1.0 : (0.45 + lv * 0.10)) : 0;
+      // 上限压到 0.9/0.85：环本身已是橙黄，再叠满亮度会被 bloom 拉出一圈光边
+      var ra = connected ? (c.isHome ? 0.9 : (0.40 + lv * 0.09)) : 0;
       if (p > 0) ra = Math.min(1.4, ra * (1 + 1.5 * p));
+      ra *= face;                       // 背面城市连环一起收掉，否则环会透穿地球
       if (Math.abs(ringAlpha[i] - ra) > 1e-6) { ringAlpha[i] = ra; rDirty = true; }
       var rs = s * RING_MUL;
       if (Math.abs(ringSize[i] - rs) > 1e-6) { ringSize[i] = rs; rSizeDirty = true; }
@@ -544,6 +695,7 @@
 
     if (colorDirty) cityGeom.getAttribute('aColor').needsUpdate = true;
     if (sizeDirty) cityGeom.getAttribute('aSize').needsUpdate = true;
+    if (aDirty) cityGeom.getAttribute('aAlpha').needsUpdate = true;
     if (rDirty) ringGeom.getAttribute('aAlpha').needsUpdate = true;
     if (rSizeDirty) ringGeom.getAttribute('aSize').needsUpdate = true;
   }
@@ -915,12 +1067,17 @@
    *   upgrade    —— 城市升级：该城一次明亮的扩散环（「交通促进发展」的演出高潮）
    * 渲染层每帧 shift 清空队列（与 defcon 同一协议）。 */
 
+  /* ⚠ depthTest:false —— 扩散环比地球大得多（开航环直径 0.75 世界单位，球半径才 1.6）：
+   *   它的外缘在 3D 空间上落到球面「后方」，开着深度测试就会被地球的深度缓冲剪掉半圈，
+   *   看上去正是「光圈跑到地球底下去了」。这与城市三层是同一个坑（见 buildCities 注释），
+   *   这里的特效精灵当初漏了。关掉深度测试后，背对相机的光环改由 pumpFx 逐帧朝向剔除兜底，
+   *   否则球背面的环会透穿地球。 */
   function buildFxPool() {
     fxPool.length = 0;
     ringPool.length = 0;
     for (var i = 0; i < FX_POOL; i++) {
       var sp = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: TEX.flash, transparent: true, depthWrite: false,
+        map: TEX.flash, transparent: true, depthWrite: false, depthTest: false,
         blending: THREE.AdditiveBlending, opacity: 0
       }));
       sp.visible = false;
@@ -929,7 +1086,7 @@
     }
     for (var j = 0; j < RING_POOL; j++) {
       var m = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: TEX.ring, transparent: true, depthWrite: false,
+        map: TEX.ring, transparent: true, depthWrite: false, depthTest: false,
         blending: THREE.AdditiveBlending, opacity: 0
       }));
       m.visible = false;
@@ -978,6 +1135,13 @@
       if (arcGlow[k] <= 0) delete arcGlow[k];
     }
 
+    /* 背面剔除：特效精灵都关了 depthTest，必须自己判朝向，否则球背面的环/闪会透穿地球。
+     * 判据与 syncCities 逐字一致 —— 法线就是位置方向，可见边界 dot = R/|相机|。 */
+    if (!_cd) { _pv = new THREE.Vector3(); _pn = new THREE.Vector3(); _cd = new THREE.Vector3(); }
+    var hasCam = !!(camera && camera.position.lengthSq() > 1e-6);
+    var camSil = 0;
+    if (hasCam) { _cd.copy(camera.position).normalize(); camSil = R / camera.position.length(); }
+
     // 推进闪光
     for (var i = 0; i < fxPool.length; i++) {
       var f = fxPool[i];
@@ -986,9 +1150,11 @@
       var u = f.t / f.dur;
       if (u >= 1) { f.t = -1; f.sp.visible = false; continue; }
       var v = G.ll2v(f.lat, f.lon, R * (CITY_LIFT + 0.01));
+      var fa = faceAt(v, hasCam, camSil);
+      if (fa <= 0) { f.sp.visible = false; continue; }
       f.sp.position.set(v.x, v.y, v.z);
       f.sp.scale.setScalar(0.10 + u * 0.32);
-      f.sp.material.opacity = (1 - u) * 0.85;
+      f.sp.material.opacity = (1 - u) * 0.85 * fa;
       f.sp.visible = true;
     }
     // 推进扩散环
@@ -999,20 +1165,36 @@
       var u2 = rr.t / rr.dur;
       if (u2 >= 1) { rr.t = -1; rr.sp.visible = false; continue; }
       var v2 = G.ll2v(rr.lat, rr.lon, R * (CITY_LIFT + 0.012));
+      var fa2 = faceAt(v2, hasCam, camSil);
+      if (fa2 <= 0) { rr.sp.visible = false; continue; }
       rr.sp.position.set(v2.x, v2.y, v2.z);
       var sc = rr.scale0 + (rr.scale1 - rr.scale0) * (1 - Math.pow(1 - u2, 2.2));
       rr.sp.scale.setScalar(sc);
       // 先亮后灭：环扩散时逐渐透明，形成「涟漪」感
-      rr.sp.material.opacity = (1 - u2) * (1 - u2) * 0.9;
+      rr.sp.material.opacity = (1 - u2) * (1 - u2) * 0.9 * fa2;
       rr.sp.visible = true;
     }
+  }
+
+  /* 朝向系数：可见边界（dot = R/|相机|）处 0.5，往内 0.08 淡入到 1、往外淡出到 0。
+   * v 是球面上的点（长度≈R），故先归一化再与相机方向点乘。 */
+  function faceAt(v, hasCam, camSil) {
+    if (!hasCam) return 1;
+    var ln = Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+    if (ln < 1e-6) return 1;
+    var d = (v.x * _cd.x + v.y * _cd.y + v.z * _cd.z) / ln;
+    var face = (d - camSil) / 0.08 + 0.5;
+    return face < 0 ? 0 : (face > 1 ? 1 : face);
   }
 
   /* ───────────────────────── 后处理 bloom ─────────────────────────
    * 与 defcon 同一套（手写，不依赖 three 的 EffectComposer —— r149 的 examples
    * 不在 three.min.js 里，引进来要额外打包）。三段式：亮部提取 → 两轮可分离高斯 → 叠加。
-   * 阈值取 0.72：地球陆地亮度约 0.5~0.6，低了整个星球泛光画面糊掉；
-   * 城市光核 / 航线辉光 / 开航闪光都在 0.9 以上。 */
+   * 阈值取 0.86：**这是「过曝」的第二处闸门**。ACES 曲线把球面亮部（极地冰盖、沙漠）
+   *   滚降到 0.85~0.9，若阈值仍是 0.72，这些区域会被亮部提取 → 高斯模糊 → 叠加回来，
+   *   在已经接近满值的地表上再加一层 → 直接顶到 255、纹理糊成一片白（实测正是如此）。
+   *   抬到 0.86 后地表基本不参与泛光，而城市光核 / 航线辉光 / 开航闪光按设计都在 0.9 以上
+   *   （且 8bit 中间缓冲把它们钳在 1.0），该亮的地方照样发光。 */
 
   var POST_VS = [
     'varying vec2 vUv;',
@@ -1025,7 +1207,7 @@
     'void main(){',
     '  vec3 c = texture2D(tDiffuse, vUv).rgb;',
     '  float l = dot(c, vec3(0.299, 0.587, 0.114));',
-    '  float k = smoothstep(0.72, 1.0, l);',
+    '  float k = smoothstep(0.86, 1.0, l);',
     '  gl_FragColor = vec4(c * k, 1.0);',
     '}'
   ].join('\n');
@@ -1047,10 +1229,22 @@
     'uniform sampler2D tBloom;',
     'uniform float uStrength;',
     'varying vec2 vUv;',
+    /* 线性 → sRGB：与 three 的 outputEncoding = sRGBEncoding 同一套分段传输函数。
+     * ⚠ 这一句才是「又亮、又不过曝」的关键，也是本轮过曝的真正根因：
+     *   中间缓冲 rtScene 是**线性**的，而合成着色器此前直接把这些线性值当 8bit 输出
+     *   ——没有 gamma 编码。于是线性 0.15（地表陆地）只显示成 38/255，整球发暗；
+     *   唯一的「提亮」手段就只剩加大光照，而光照一加，冰盖（albedo≈1）必然顶成一片纯白。
+     *   补上编码后：陆地 0.15 → 0.42（108/255）看得见，冰盖 0.87 → 0.94 几乎不涨 ——
+     *   中调抬起来、亮部不溢出，正是 vibeknow/earth-3d 直出 canvas 时天然得到的曲线。 */
+    'vec3 lin2srgb(vec3 c){',
+    '  vec3 lo = c * 12.92;',
+    '  vec3 hi = 1.055 * pow(max(c, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;',
+    '  return mix(lo, hi, step(vec3(0.0031308), c));',
+    '}',
     'void main(){',
     '  vec3 c = texture2D(tScene, vUv).rgb;',
     '  vec3 b = texture2D(tBloom, vUv).rgb;',
-    '  gl_FragColor = vec4(c + b * uStrength, 1.0);',
+    '  gl_FragColor = vec4(lin2srgb(clamp(c + b * uStrength, 0.0, 1.0)), 1.0);',
     '}'
   ].join('\n');
 
@@ -1315,17 +1509,36 @@
     renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, quality ? 1.5 : 1));
     renderer.setSize(w, h, false);
     if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+    /* 曝光曲线：对齐 vibeknow/earth-3d 的原始配方 —— ACES 胶片曲线（含 1.08 曝光）。
+     * ⚠ 这是「过曝」的正解：没有它时，环境光一提亮，极地冰盖/沙漠这些本来就亮的贴图区域
+     *   直接顶到 255 被硬切（实测 p99=255、5.6% 画面过曝）；ACES 让高光滚降（roll-off），
+     *   亮部保持在 250 以下的同时中调反而更通透。
+     * 能力检测而非版本判断（基线 Chrome 61）。 */
+    if (THREE.ACESFilmicToneMapping !== undefined) {
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.15;
+    }
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x04080e);
+    scene.background = new THREE.Color(0x0d2942);
+    /* ⚠ 上面这行色值是在「合成不做 gamma 编码」的年代定的，现在合成补上了 sRGB 编码，
+     * 若还传原始 sRGB 值，天空会被再编码一次而变亮（0d2942 → 约 41718d）。
+     * 先转到线性，让它在编码后还原成原本的深空蓝。 */
+    if (scene.background.convertSRGBToLinear) scene.background.convertSRGBToLinear();
     camera = new THREE.PerspectiveCamera(52, w / h, 0.1, 5000);
     clock = new THREE.Clock();
 
-    scene.add(new THREE.AmbientLight(0x4a5c6c, 2.2));
-    var key = new THREE.DirectionalLight(0xe8f0f8, 1.7);
+    /* 光照：对齐 vibeknow/earth-3d 的原始配方 —— 冷而弱的环境光 + 一盏主导的**暖**主光，
+     * 昼夜交界由主光自然形成，而不是拿大面积环境光把整颗球「泛白」。
+     * ⚠ 上一版过曝的根因就在这里：环境光 0x9db8cc×4.0（又亮又中性）+ 主光 2.4 叠加后，
+     *   本来就亮的贴图区域（极地冰盖、沙漠）直接顶到 255 被硬切。
+     * earth-3d 原值：环境 0x223044×0.5、暖光 0xfff2d0×2.4（那边是点光，这里用平行光）。
+     * 三盏灯的强度是「ACES 已生效」前提下配的，想整体再加亮就抬 exposure（见 renderer 初始化）。 */
+    scene.add(new THREE.AmbientLight(0x223044, 2.6));
+    var key = new THREE.DirectionalLight(0xfff2d0, 3.0);
     key.position.set(4, 3, 5);
     scene.add(key);
-    var rim = new THREE.DirectionalLight(0x2f7faf, 0.8);
+    var rim = new THREE.DirectionalLight(0x4aa8d6, 0.8);
     rim.position.set(-5, -2, -4);
     scene.add(rim);
 

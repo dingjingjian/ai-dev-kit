@@ -391,7 +391,7 @@ async def run(pw):
         // 面板滚动体的可视高度内必须能看到它（允许需滚动一点，但不能整屏以外）
         return (cr.top - br.top) <= br.height + 40;
     }""")
-    # 面板不得侵犯顶栏（顶栏底边 = 44 + 46 附近）。实机曾用 max-height:72% 撞到 HUD。
+    # 面板不得侵犯顶栏（顶部仪表带通栏，底边含安全区）。实机曾用 max-height:72% 撞到 HUD。
     chain["panelNoTopClash"] = await page.evaluate("""() => {
         const p = document.getElementById('uPanel').getBoundingClientRect();
         const top = document.getElementById('top').getBoundingClientRect();

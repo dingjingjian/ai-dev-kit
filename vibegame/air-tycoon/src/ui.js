@@ -35,6 +35,7 @@
     lastQuarter: 0,           // 用于检测回合变化 → 弹季报
     reports: [],              // 待看季报队列
     modal: null,              // 'event' | 'report' | 'over' | 'invest' | null
+    scrollType: false,        // 新航线：下一次重绘后把③机型区滚进视野（一次性）
     toastT: 0
   };
   var el = {};
@@ -90,7 +91,7 @@
     var ALIAS = { uStage: 'stage', uLoader: 'loader', uFallback: 'fallback' };
     ['uCompany', 'uQuarter', 'uSpeed', 'uMute', 'uCash', 'uNet', 'uRank', 'uRoutes', 'uPlanes',
      'uDev', 'uTimer', 'uTimerBar', 'uCityCard', 'uHint', 'uToast', 'uLoader',
-     'uMine', 'uPanel', 'uPanelBody', 'uPanelTitle', 'uPanelClose',
+     'uMine', 'uPanel', 'uPanelBody', 'uPanelTitle', 'uPanelSub', 'uPanelClose',
      'uModal', 'uModalBody', 'uTabRoutes', 'uTabFleet', 'uTrade',
      'uFallback', 'uStage', 'uBtnRoutes', 'uBtnFleet', 'uBtnNew'
     ].forEach(function (k) { el[k] = $(ALIAS[k] || k); });
@@ -151,9 +152,10 @@
   }
 
   function buildStaticShell() {
-    // 底部操作条与面板容器由 HTML 提供；这里只确保类名初始态正确
+    // 底部 Tab 栏与面板容器由 HTML 提供；这里只确保类名初始态正确
     if (el.uPanel) el.uPanel.classList.remove('show');
     if (el.uModal) el.uModal.classList.remove('show');
+    syncTabs();
   }
 
   /* ───────────────────────── 画布交互 ───────────────────────── */
@@ -265,7 +267,11 @@
 
   function openPanel(name) {
     ui.panel = name;
+    /* 打开「新航线」时清掉可能残留的滚动标记：它是「这次点击」的一次性意图，
+     * 不该跨次生效（比如上次点完目的地就关面板，再打开时会莫名跳一下）。 */
+    if (name === 'newroute') ui.scrollType = false;
     if (el.uPanel) el.uPanel.classList.add('show');
+    syncTabs();
     pauseForPanel(true);
     dirty.panel = true;
     dirty.hud = true;
@@ -274,8 +280,25 @@
   function closePanel() {
     ui.panel = null;
     if (el.uPanel) el.uPanel.classList.remove('show');
+    syncTabs();
     pauseForPanel(false);
     dirty.hud = true;
+  }
+
+  /* 底部 Tab 栏的激活态：用 class 而不是 :target/属性选择器 ——
+     面板由 ui.js 的状态驱动（`ui.panel`），class 是它与 DOM 之间最短的桥。
+     ⚠ className 是拼的而不是 classList：本文件通篇用 className（Chrome 61 也支持
+       classList，但保持一处风格，避免两条路径产生不一致）。 */
+  function syncTabs() {
+    tabOn(el.uBtnRoutes, ui.panel === 'routes');
+    tabOn(el.uBtnFleet, ui.panel === 'fleet');
+    tabOn(el.uBtnNew, ui.panel === 'newroute');
+  }
+  function tabOn(btn, on) {
+    if (!btn) return;
+    var base = ' ' + btn.className.replace(/[\s]+/g, ' ') + ' ';
+    base = base.replace(' tab-on ', ' ').replace(/^\s+|\s+$/g, '');
+    btn.className = on ? (base + ' tab-on') : base;
   }
 
   function onPanelClick(e) {
@@ -299,6 +322,9 @@
       case 'pick-to':
         sfx('click');
         ui.newTo = t.getAttribute('data-city');
+        /* 选完目的地要立刻看到③机型区 —— 面板只留了一条滚动条后列表变长，
+         * 由 syncPanel 在重绘后滚到位（见那边的 scrollType 处理）。 */
+        ui.scrollType = true;
         dirty.panel = true;
         break;
       case 'pick-type':
@@ -615,29 +641,62 @@
   function syncPanel() {
     if (!ui.panel || !el.uPanelBody) return;
     var st = ui.state;
-    var html, title;
+    var html, title, sub;
 
+    /* 副标题：面板头部标题下的一行「上下文读数」。
+     * 为什么值得占一行：抽屉里三个面板的可操作内容都依赖当前处境
+     * （总利润 / 闲置机 / 出发地），把这些写进头部，玩家不必先滑一遍列表。 */
     if (ui.panel === 'routes') {
       title = '我的航线';
       html = renderRoutes(st);
+      if (!st.routes.length) { sub = '暂无航线'; }
+      else {
+        var sum = 0;
+        st.routes.forEach(function (r) { var d = S.settleRoute(st, r); if (d) sum += d.profit; });
+        sub = st.routes.length + ' 条 · 本季合计 ' + moneyFull(sum);
+      }
     } else if (ui.panel === 'fleet') {
       title = '机队管理';
       html = renderFleet(st);
+      var idleN = S.idlePlanes(st).length;
+      sub = st.planes.length + ' 架 · ' + (idleN ? idleN + ' 架闲置' : '全部在飞');
     } else {
       title = '开通新航线';
       html = renderNewRoute(st);
+      var fromC = AT.CITIES_BY_ID[ui.newFrom || st.homeCityId];
+      var toC = ui.newTo ? AT.CITIES_BY_ID[ui.newTo] : null;
+      sub = '从 ' + (fromC ? fromC.name : '—') + ' 出发' + (toC ? ' → ' + toC.name : '');
     }
-    /* 签名带上面板名：避免「换面板却撞上相同 HTML」时误跳过（如空航线 vs 空机队） */
-    var sig = ui.panel + '\u0000' + html;
-    if (sig === panelSig) return;
+    /* 签名带上面板名与副标题：避免「换面板却撞上相同 HTML」时误跳过
+     * （如空航线 vs 空机队），也保证副标题变化能被刷出来。 */
+    var sig = ui.panel + '\u0000' + sub + '\u0000' + html;
+    /* 内容没变就不重建 DOM（见上）。这种情况滚动标记也没有意义，一并清掉：
+     * 否则它会留到下一次无关的重绘里才生效（例如 1Hz 的季度刷新），变成「莫名跳一下」。 */
+    if (sig === panelSig) { ui.scrollType = false; return; }
     panelSig = sig;
     if (el.uPanelTitle) el.uPanelTitle.textContent = title;
+    if (el.uPanelSub) el.uPanelSub.textContent = sub;
     el.uPanelBody.innerHTML = html;
+
+    /* 选完目的地后把③机型区滚进视野。
+     * 为什么需要：面板只留了一条滚动条（不再给列表限高内部滚动），② 一长，
+     * ③ 就落在折线以下 —— 玩家点了目的地却看不到机型与开通按钮，
+     * 会以为「点了没反应」（这正是当初引入嵌套滚动条要解决的问题）。
+     * 用 rect 差值算位移，不依赖 offsetParent 是谁（offsetTop 在这里不可靠）。 */
+    if (ui.scrollType) {
+      ui.scrollType = false;
+      var tsec = el.uPanelBody.querySelector('.nw-type');
+      if (tsec) {
+        var br = el.uPanelBody.getBoundingClientRect();
+        var sr = tsec.getBoundingClientRect();
+        el.uPanelBody.scrollTop += (sr.top - br.top) - 6;
+      }
+    }
   }
 
   function renderRoutes(st) {
     if (!st.routes.length) {
-      return '<div class="empty">还没有航线。<br>点左下「新航线」开通第一条 —— ' +
+      return '<div class="empty">还没有航线。<br>点底部「新航线」开通第一条 —— ' +
         '飞机不飞就不赚钱，但也会亏持有成本。</div>';
     }
     var out = '<div class="rlist">';
@@ -864,10 +923,12 @@
         x.reach.forEach(function (p) {
           if (cheapest === null || p.price < cheapest.price) cheapest = p;
         });
+        /* 文案取短（2026-09-29 面板瘦身）：每个 chip 原来 3 行、其中「机队没有」与
+         * 机型细节在③区还会逐型再说一遍，这里只留「要买哪架、多少钱」——
+         * 12 行 × 省下的一行 ≈ 190px，面板短一截。 */
         tag = x.canBuy
-          ? '<i class="c-warn">机队没有，需现购 ' + h(cheapest.name) + ' ' + money(cheapest.price) + '</i>'
-          : '<i class="c-bad">现有资金买不到能飞的机型（最低 ' + h(cheapest.name) + ' ' +
-            money(cheapest.price) + '）</i>';
+          ? '<i class="c-warn">需现购 ' + h(cheapest.name) + ' ' + money(cheapest.price) + '</i>'
+          : '<i class="c-bad">' + h(cheapest.name) + ' ' + money(cheapest.price) + ' · 买不起</i>';
       } else if (!ok) {
         tag = '<i class="c-bad">超出现有机型航程</i>';
       }
@@ -875,7 +936,8 @@
         (x.tier < 2 ? '' : ' over') +
         '"' + (x.tier < 2 ? ' data-act="pick-to" data-city="' + x.c.id + '"' : ' disabled') +
         ' type="button">' +
-        h(x.c.name) + '<i>' + num(x.dist) + 'km · 需求指数 ' + x.pot.toFixed(1) + '</i>' +
+        '<span class="ci-name">' + h(x.c.name) + '</span>' +
+        '<span class="ci-meta">' + num(x.dist) + 'km · 需求 ' + x.pot.toFixed(1) + '</span>' +
         (tag || '') + '</button>';
     });
     out += '</div></div>';
@@ -899,7 +961,7 @@
        *   两者一起才够玩家做决策。 */
       var ideal = S.idealSeatsFor(st, fromId, ui.newTo);
       var needType = S.bestNeededType(st, selDist);
-      out += '<div class="nw-sec"><div class="rd-h">③ 机型（全线需约 ' + Math.round(ideal) +
+      out += '<div class="nw-sec nw-type"><div class="rd-h">③ 机型（全线需约 ' + Math.round(ideal) +
         ' 座 · 最省能飞 ' + h(AT.planeOf(needType).name) + '）</div><div class="chips">';
       /* 先算出「推荐机型」：在可飞机型里，选单机座位数最接近 `需要座位/3` 的一款。
        * 为什么是 /3：一条线要填满槽位大约需要 3 架（与 sim 的 idealSeatsFor

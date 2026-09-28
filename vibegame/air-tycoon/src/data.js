@@ -389,12 +389,13 @@
    *
    * ⚠ fuelPerKm 必读：这是「满载全经济布局下的巡航升/公里」，不是实际油耗。
    *   首版取值整体高估 1.23~1.46 倍，导致油费占收入虚高到 47%（短途线），
-   *   而真实支线线约 34~38%。修正依据：
-   *     云雀100  对标 E175/ARJ21  → 2.3 L/km（首版 3.1）
-   *     信风320  对标 A320neo     → 3.7 L/km（首版 5.4）
-   *     信风neo  对标 A320neo 改进 → 3.5 L/km（首版 4.6）
-   *     远洋330  对标 A330-900    → 6.5 L/km（首版 8.2）
-   *     极星777X 对标 777-9       → 8.0 L/km（首版 9.8）
+   *   而真实支线线约 34~38%。
+   *   修正依据（机型一律取真实型号，与下表 name 字段一致）：
+   *     巴航 E175      对标 E175/ARJ21  → 2.3 L/km（首版 3.1）
+   *     波音 737-800   对标 737-800     → 3.7 L/km（首版 5.4）
+   *     空客 A320neo   对标 A320neo     → 3.5 L/km（首版 4.6）
+   *     空客 A330-300  对标 A330-300    → 6.5 L/km（首版 8.2）
+   *     波音 777-9     对标 777-9       → 8.0 L/km（首版 9.8）
    *   换算方式：巡航燃油流量(kg/h) ÷ 航速(km/h) ÷ 航油密度(0.8 kg/L)。
    *   例：A320neo 巡航 2,500 kg/h ÷ 840 km/h ÷ 0.8 ≈ 3.7 L/km。
    *
@@ -402,11 +403,11 @@
    *   这是 2024~2025 年国内航煤综合采购价的合理水平（含税）。
    *   若日后调整油价，所有航线的利润率会同向漂移，需重跑 tools/calib-cost.js。 */
   AT.PLANES = [
-    { id: 'cRJ1',  name: '云雀 100',   tier: 1, price: 320,  seats: 76,  range: 2400,  speed: 780,  fuelPerKm: 2.3, premium: 0.06, upkeep: 26 },
-    { id: 'cNB1',  name: '信风 320',   tier: 2, price: 980,  seats: 174, range: 5600,  speed: 840,  fuelPerKm: 3.7, premium: 0.10, upkeep: 62 },
-    { id: 'cNB2',  name: '信风 320neo',tier: 2, price: 1180, seats: 180, range: 6300,  speed: 858,  fuelPerKm: 3.5, premium: 0.12, upkeep: 68 },
-    { id: 'cWB1',  name: '远洋 330',   tier: 3, price: 2350, seats: 288, range: 11700, speed: 880,  fuelPerKm: 6.5, premium: 0.18, upkeep: 128 },
-    { id: 'cWB2',  name: '极星 777X',  tier: 4, price: 3900, seats: 384, range: 15800, speed: 905,  fuelPerKm: 8.0, premium: 0.22, upkeep: 186 }
+    { id: 'cRJ1',  name: '巴航 E175',    tier: 1, price: 320,  seats: 76,  range: 2400,  speed: 780,  fuelPerKm: 2.3, premium: 0.06, upkeep: 26 },
+    { id: 'cNB1',  name: '波音 737-800', tier: 2, price: 980,  seats: 174, range: 5600,  speed: 840,  fuelPerKm: 3.7, premium: 0.10, upkeep: 62 },
+    { id: 'cNB2',  name: '空客 A320neo', tier: 2, price: 1180, seats: 180, range: 6300,  speed: 858,  fuelPerKm: 3.5, premium: 0.12, upkeep: 68 },
+    { id: 'cWB1',  name: '空客 A330-300',tier: 3, price: 2350, seats: 288, range: 11700, speed: 880,  fuelPerKm: 6.5, premium: 0.18, upkeep: 128 },
+    { id: 'cWB2',  name: '波音 777-9',   tier: 4, price: 3900, seats: 384, range: 15800, speed: 905,  fuelPerKm: 8.0, premium: 0.22, upkeep: 186 }
   ];
 
   /* ───────────────────────── 5. 事件卡（15 张，精简首版）─────────────────────────

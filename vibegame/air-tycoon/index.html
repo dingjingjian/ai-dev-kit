@@ -7,19 +7,37 @@
 <!-- 内联空图标：http 场景下抑制浏览器默认的 /favicon.ico 请求（404 会污染冒烟的错误计数） -->
 <link rel="icon" href="data:,">
 <style>
+  /* ══════════════════════════════════════════════════════════════════════
+     设计系统：深空航空仪表（Deep-Space Avionics）
+     —— 深空底 + 冷调细描线 + 等宽读数 + 琥珀色「可操作/金钱」。
+     三条原则（对应本次重做的四个痛点）：
+       ① 一切 HUD 都挂在同一条顶部仪表带上，不再有浮动小卡压住球体；
+       ② 描线一律冷青细线，金色只留给「钱」与「主操作」，避免满屏描金；
+       ③ 数值等宽 + 单位弱化，让「读数」和「文案」在视觉上分层。
+     ══════════════════════════════════════════════════════════════════════ */
   :root{
-    --bg:#04080e; --panel:rgba(8,16,24,.86); --line:rgba(255,194,71,.22);
-    --gold:#ffc247; --gold-dim:#a87a20; --sky:#7fd4e8; --good:#5ec98a; --bad:#e2604b;
-    --text:#cfe0ea; --text-dim:#7a94a4;
-    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+    --bg:#050c18;                                  /* 深空底（比旧版更冷，不再是「近黑发灰」） */
+    --line:rgba(112,182,242,.16);                  /* 细描线 */
+    --line2:rgba(112,182,242,.32);                 /* 强调描线（分区边界） */
+    --panel:rgba(9,21,38,.9);                      /* 面板底（近乎实色，毛玻璃只作增强） */
+    --panel2:rgba(10,23,41,.97);                   /* 抽屉/弹窗底 */
+    --ink:#e9f3ff; --ink2:#93aac4; --ink3:#5f7d99;
+    --cyan:#63d2ff; --cyan-dim:#2c6b8e;            /* 仪表读数色 */
+    --amber:#ffc76b; --amber-dim:#a97c2e;          /* 金钱与主操作 */
+    --good:#4fd99a; --bad:#ff7b6b;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"PingFang SC","Microsoft YaHei",monospace;
     --sans:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --dock-h:56px;                                 /* 底部 Tab 栏高度（不含安全区） */
+    /* 顶部安全距离（参考 vibeknow/world-food-atlas 的 --top-gap）：
+       在设备安全区之上再垫一段固定间隙，让仪表带整体下移、不与状态栏/刘海贴边，
+       顶部露出一小条球体，仪表带读起来是「浮」在深空里（与 #vig 的顶部冷光呼应）。
+       50px 与 world-food-atlas 取值一致；要更贴身就调小这个数。 */
+    --top-gap:50px;
     /* 安全区（Chrome 61 基线）：先落 0px，再由下一条覆盖。
        只引用容器注入的 --safe-area-inset-*（var 自带静态兜底，Chrome 61 也合法）；
-       env() 不写在这里 —— Chrome 61 不认 env()，会让 calc() 在计算期整体失效、顶栏掉位。
-       env() 放到下面 @supports 增强块里。 */
+       env() 不写在这里 —— Chrome 61 不认 env()，会让 calc() 在计算期整体失效。 */
     --safe-t:0px; --safe-b:0px;
     --safe-t:var(--safe-area-inset-top,0px); --safe-b:var(--safe-area-inset-bottom,0px);
-    --top-gap:44px;
   }
   @supports (padding-top:env(safe-area-inset-top,0px)){
     :root{
@@ -28,7 +46,7 @@
     }
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{height:100%;overflow:hidden;background:#02040a;color:var(--text);
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
     font-family:var(--sans);-webkit-font-smoothing:antialiased;
     -webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;
     overscroll-behavior:none}
@@ -39,104 +57,184 @@
 
   /* inset 简写 Chrome 87 才有，基线一律写 top/right/bottom/left 四个物理属性 */
   #stage{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
-  /* 暗角：把注意力收到球体上（渐变不做像素读取，file:// 下安全） */
+  /* 暗角 + 顶部冷光：把注意力收到球体上，同时让仪表带「浮」在深空里。
+     渐变不做像素读取，file:// 下安全。 */
   #vig{position:absolute;top:0;right:0;bottom:0;left:0;pointer-events:none;z-index:5;
-    background:radial-gradient(ellipse at center,transparent 42%,rgba(0,0,0,.55) 100%)}
+    background:radial-gradient(ellipse at 50% 46%,transparent 46%,rgba(2,8,18,.46) 100%),
+               linear-gradient(180deg,rgba(99,210,255,.05),transparent 24%)}
 
-  .hud{position:absolute;z-index:10;font-family:var(--mono);font-size:12px;line-height:1.5}
+  .hud{position:absolute;z-index:10;font-size:12px;line-height:1.5}
   /* 毛玻璃仅作增强：基线就是 --panel 的半透明实底，Chrome 61 忽略模糊也不影响可读性 */
   .panel{background:var(--panel)}
   @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
-    .panel{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+    .panel{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   }
 
-  /* ── 顶栏：公司名 + 回合 + 倍速 ── */
-  #top{top:calc(var(--top-gap) + var(--safe-t));left:10px;right:10px;
-    display:flex;align-items:center;border:1px solid var(--line);border-radius:8px;
-    padding:7px 10px;background:var(--panel)}
-  #uCompany{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--gold);
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1 1 auto;min-width:0}
-  #uQuarter{color:var(--text-dim);margin-left:8px;flex:0 0 auto}
-  #uSpeed{margin-left:10px;flex:0 0 auto;color:var(--gold);border:1px solid var(--line);
-    border-radius:5px;padding:2px 7px;cursor:pointer;background:transparent;
-    font-family:var(--mono);font-size:12px}
-  /* 静音键：与 uSpeed 同一套外观，靠 0.35 的透明度表达「关」的状态。
-     为什么用按钮而不是开关：HUD 上多一个 switch 会分散对经营的注意力，
-     而这个键一局最多按一两次，做成低调的小按钮即可。 */
-  #uMute{margin-left:6px;flex:0 0 auto;color:var(--gold);border:1px solid var(--line);
-    border-radius:5px;padding:2px 6px;cursor:pointer;background:transparent;
-    font-family:var(--mono);font-size:12px;line-height:1.35}
-  #uMute.off{opacity:.35}
+  /* ══ 顶部仪表带：单块通栏面板，不再拆成「浮条 + 浮卡」 ══
+     行 1：公司名 · 回合 · 倒计时 · 倍速 · 静音
+     行 2：五个读数格（资金/净资产/排名/航线/机队）
+     底边：回合进度轨（uTimerBar 的宽度即本季已过占比） */
+  #top{top:calc(var(--safe-t) + var(--top-gap));left:0;right:0;
+    background:linear-gradient(180deg,rgba(9,22,40,.97),rgba(6,15,28,.93));
+    border-bottom:1px solid var(--line2);overflow:hidden}
+  @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+    #top{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  }
+  .hd-r1{display:flex;align-items:center;padding:9px 12px 5px}
+  #uCompany{font-family:var(--sans);font-size:13px;font-weight:600;color:var(--ink);
+    letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    flex:1 1 auto;min-width:0}
+  /* 公司名前的小信号灯：给整条仪表带一个「设备已开机」的视觉锚点 */
+  #uCompany::before{content:'';display:inline-block;width:6px;height:6px;border-radius:50%;
+    background:var(--cyan);box-shadow:0 0 6px rgba(99,210,255,.9);margin-right:7px;
+    vertical-align:middle}
+  #uQuarter{color:var(--ink2);font-family:var(--mono);font-size:11px;letter-spacing:.04em;
+    margin-left:10px;flex:0 0 auto}
+  #uTimer{color:var(--cyan);font-family:var(--mono);font-size:11px;letter-spacing:.03em;
+    margin-left:9px;flex:0 0 auto;min-width:34px;text-align:right}
+  #uSpeed,#uMute{flex:0 0 auto;height:24px;border:1px solid var(--line2);border-radius:6px;
+    background:rgba(99,210,255,.06);color:var(--cyan);cursor:pointer;
+    font-family:var(--mono);font-size:11px;line-height:1;padding:0 7px}
+  #uSpeed{margin-left:9px;min-width:34px}
+  #uMute{margin-left:5px;width:28px;padding:0}
+  #uMute.off{opacity:.34}
+  #uSpeed:active,#uMute:active{background:rgba(99,210,255,.16)}
 
-  /* ── 左侧数据条 ── */
-  #stats{top:calc(var(--top-gap) + var(--safe-t) + 46px);left:10px;width:150px;
-    border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--panel)}
-  #stats .row{display:flex;justify-content:space-between;margin-top:5px}
-  #stats .row:first-child{margin-top:0}
-  #stats .k{color:var(--text-dim)}
-  #stats .v{color:var(--text);font-weight:600}
-  #uCash{color:var(--gold)}
+  /* 读数格：一格一指标，纵向「标签在上、数值在下」，格间一条冷细线分隔 */
+  .hd-r2{display:flex;align-items:stretch;padding:0 4px 9px}
+  .hd-r2 .row{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:flex-start;
+    padding:0 8px;border-left:1px solid var(--line)}
+  .hd-r2 .row:first-child{border-left:0;padding-left:12px}
+  .hd-r2 .row:last-child{padding-right:10px}
+  .hd-r2 .k{font-size:9px;color:var(--ink3);letter-spacing:.06em;line-height:1.6;white-space:nowrap}
+  .hd-r2 .v{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink);
+    line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #uCash{color:var(--amber)}
   #uNet{color:var(--good)}
-  #uRank{color:var(--sky)}
+  #uRank{color:var(--cyan)}
+  #uPlanes{font-size:11px}
+  /* ⚠ ui.js 用 className='v …' 覆写，故语义色必须比 #uCash 这些 id 规则更具体，
+     否则「资金转负」永远显示不出红色（旧版就踩了这个坑）。 */
+  .hd-r2 .v.c-good{color:var(--good)}
+  .hd-r2 .v.c-bad{color:var(--bad)}
+  .hd-r2 .v.c-warn{color:var(--amber)}
 
-  /* ── 底部提示 ──
-     位置要让开底部操作条与进度条（两者合计约 60px），否则会被压在下面看不见。 */
-  #uHint{bottom:calc(70px + var(--safe-b));left:0;right:0;text-align:center;
-    color:var(--text-dim);font-size:11px;pointer-events:none}
+  /* 回合进度轨：贴在仪表带底边，宽度 = 本季已过时间占比 */
+  #uTimerWrap{position:absolute;left:0;right:0;bottom:0;height:2px;
+    background:rgba(112,182,242,.12);overflow:hidden}
+  #uTimerBar{height:100%;width:0;
+    background:linear-gradient(90deg,var(--cyan-dim),var(--cyan));transition:width .12s linear}
 
-  /* ── 城市卡片（点城市后弹出）──
-     同样要让开底部操作条（约 60px），否则卡片底边会被按钮条盖住。 */
-  #uCityCard{display:none;bottom:calc(78px + var(--safe-b));left:10px;right:10px;
-    max-height:56%;overflow-y:auto;-webkit-overflow-scrolling:touch;
-    border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:var(--panel)}
+  /* ── 底部提示 ── 位置要让开 Tab 栏，否则会被压在下面看不见 */
+  #uHint{bottom:calc(62px + var(--safe-b));left:0;right:0;text-align:center;
+    color:var(--ink3);font-size:10px;letter-spacing:.02em;pointer-events:none}
+
+  /* ── 城市读数卡（点城市后弹出）──
+     做成「仪表面板」：左对齐读数行 + 冷细线分隔，贴在 Tab 栏之上。 */
+  #uCityCard{display:none;bottom:calc(86px + var(--safe-b));left:12px;right:12px;
+    max-height:50%;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid var(--line2);border-radius:12px;padding:12px 13px;
+    background:var(--panel2)}
   #uCityCard.show{display:block}
-  .cc-name{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--gold);margin-bottom:6px}
-  .cc-home{font-size:10px;font-weight:400;color:var(--bg);background:var(--gold);
-    border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle}
-  .cc-row{display:flex;justify-content:space-between;margin-top:3px;font-size:12px}
-  .cc-row span{color:var(--text-dim)}
-  .cc-row b{color:var(--text)}
+  .cc-name{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--ink);margin-bottom:8px}
+  .cc-home{font-size:10px;font-weight:600;color:#20160a;background:var(--amber);
+    border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle;letter-spacing:.04em}
+  .cc-row{display:flex;justify-content:space-between;align-items:baseline;
+    padding:5px 0;border-top:1px solid rgba(112,182,242,.08);font-size:12px}
+  .cc-row:first-of-type{border-top:0}
+  .cc-row span{color:var(--ink3)}
+  .cc-row b{color:var(--ink);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+  .cc-lines{display:flex;flex-wrap:wrap;margin-top:9px}
+  .cc-tag{font-size:10px;font-family:var(--mono);padding:3px 7px;margin:0 5px 5px 0;border-radius:5px;
+    background:rgba(99,210,255,.12);border:1px solid rgba(99,210,255,.24);color:var(--cyan)}
+  .cc-actions{margin-top:10px}
+  .cc-actions > .btn{width:100%;margin-right:0;padding:10px}
+  .cc-total{display:flex;justify-content:space-between;margin-top:5px;font-size:11px}
+  .cc-total > span{color:var(--ink3)}
+  .cc-total > b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums}
 
   /* ── toast ──
-     ⚠ 位置：右半区、顶栏下方的固定带。这个位置是实机试出来的：
-         · 放正中 → 直接压住抽屉面板的列表内容（「已开通航线」盖住目的地）；
-         · 放下方 → 面板升起后同样被压住，且和底部操作条抢位置；
-         · 放左侧 → 压住 #stats 数据卡。
-       右半区在这一带只有球体，没有任何 HUD 与交互元素，是最干净的落点。
-     ⚠ z-index 200 必须高于 .modal(190)：决策确认提示要能浮在模态之上，
-       否则「决策已生效」会被模态遮死，玩家以为点了没反应。 */
-  #uToast{position:absolute;z-index:200;right:10px;
-    top:calc(var(--top-gap) + var(--safe-t) + 50px);
-    max-width:56%;padding:8px 13px;border-radius:8px;background:rgba(8,16,24,.94);
-    border:1px solid var(--line);color:var(--text);font-family:var(--sans);font-size:12px;
-    opacity:0;pointer-events:none;transition:opacity .2s;text-align:right;line-height:1.5}
+     ⚠ 位置：右半区、仪表带下方的固定带（仪表带底边 ≈ safe-t + top-gap + 74px）。
+         · 放正中/下方 → 会压住抽屉面板内容；
+         · 放左侧 → 压住仪表带读数格。
+       右半区在这一带只有球体，是最干净的落点。
+     ⚠ z-index 200 必须高于 .modal(190)：决策确认提示要能浮在模态之上。 */
+  #uToast{position:absolute;z-index:200;right:12px;top:calc(var(--safe-t) + var(--top-gap) + 96px);
+    max-width:58%;padding:8px 13px;border-radius:9px;background:rgba(9,23,41,.96);
+    border:1px solid var(--line2);color:var(--ink);font-family:var(--sans);font-size:12px;
+    opacity:0;pointer-events:none;transition:opacity .2s;text-align:right;
+    line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.4)}
   #uToast.show{opacity:1}
   /* 语义色：ok/bad/warn 三态由 ui.js 的 toast(msg, kind) 传入 */
-  #uToast.ok{border-color:rgba(94,201,138,.6);color:#cfeede}
-  #uToast.bad{border-color:rgba(226,96,75,.6);color:#f3cfc9}
-  #uToast.warn{border-color:rgba(255,194,71,.6);color:#f3e2bd}
+  #uToast.ok{border-color:rgba(79,217,154,.6);color:#cdf3e2}
+  #uToast.bad{border-color:rgba(255,123,107,.6);color:#f8d6d1}
+  #uToast.warn{border-color:rgba(255,199,107,.6);color:#f6e6c6}
 
-  /* ── 加载与降级 ── */
-  #loader{position:absolute;z-index:300;top:0;right:0;bottom:0;left:0;display:flex;
-    align-items:center;justify-content:center;background:#02040a;color:var(--sky);
-    font-family:var(--mono);font-size:13px}
-  #loader.hide{display:none}
-  #fallback{display:none;position:absolute;z-index:290;left:16px;right:16px;top:50%;
-    transform:translateY(-50%);border:1px solid rgba(226,96,75,.5);border-radius:8px;
-    padding:14px;background:rgba(24,10,10,.9);text-align:center;font-size:12px;line-height:1.8}
-  #fallback.show{display:block}
-  #fallback b{display:block;color:var(--bad);font-size:14px;margin-bottom:6px}
-  #fallback span{color:var(--text-dim);display:block}
+  /* ── 底部 Tab 栏 ──
+     最小可点 56px 高、等分三格；图标在上、文字在下。
+     激活态用顶边 2px 琥珀指示条（不是整格变色），与仪表「指示灯」语言一致。
+     ⚠ z-index 110 必须高于抽屉面板(100)：面板升起时 Tab 栏要**留在上面** ——
+       否则面板一开就把三个入口整条盖住，玩家既看不到当前在哪个面板，
+       也没法直接切到另一个面板（旧版按 z-100/10 的层级就会这样）。 */
+  #uDock{z-index:110;bottom:0;left:0;right:0;height:calc(var(--dock-h) + var(--safe-b));
+    padding-bottom:var(--safe-b);display:flex;
+    border-top:1px solid var(--line2);
+    background:linear-gradient(180deg,rgba(7,17,31,.94),rgba(5,12,24,.99))}
+  @supports ((-webkit-backdrop-filter:blur(6px)) or (backdrop-filter:blur(6px))){
+    #uDock{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  }
+  .dk{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;border:0;border-left:1px solid var(--line);
+    background:transparent;color:var(--ink2);cursor:pointer;padding:0;
+    font-family:var(--sans);font-size:10px;letter-spacing:.04em}
+  .dk:first-child{border-left:0}
+  .dk-i{display:block;width:18px;height:18px;margin-bottom:3px;color:currentColor}
+  .dk-t{display:block;line-height:1}
+  .dk:active{background:rgba(99,210,255,.09)}
+  .dk-pri{color:var(--amber);background:rgba(255,199,107,.06)}
+  .dk-pri:active{background:rgba(255,199,107,.16)}
+  .dk.tab-on{color:var(--cyan)}
+  .dk.tab-on::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:var(--cyan);box-shadow:0 0 8px rgba(99,210,255,.7)}
+  .dk-pri.tab-on{color:var(--amber)}
+  .dk-pri.tab-on::after{background:var(--amber);box-shadow:0 0 8px rgba(255,199,107,.7)}
 
-  /* flex gap 降级（Chrome 61 无 gap）：只在支持时用 gap，否则右项 margin-left:auto */
-  #top{gap:0}
-  html:not(.supports-flex-gap) #stats .row > * + *{margin-left:8px}
-
-  /* ══════════════════════════════════════════════════════════════════════
-     第二部分：经营面板（Task #4）
-     三层结构 —— HUD（常驻）/ 抽屉（可开关）/ 模态（阻塞）。
-     全部类名与 src/ui.js 的输出一一对应，改 ui.js 的输出必须同步这里。
-     ══════════════════════════════════════════════════════════════════════ */
+  /* ── 抽屉面板：底部升起的仪表抽屉 ──
+     ⚠ 用 visibility 而非 display：display 切换会让面板里的 <input>/<button>
+       在 Chrome 61 上重新计算样式，开合有顿挫；visibility 可参与 transition。
+     ⚠⚠ pointer-events 必须与 visibility 成对：visibility 从 visible → hidden 时，
+       浏览器会让元素**保持可见直到过渡结束**，于是关闭动画的 0.16s 里
+       面板仍盖在 Tab 栏上方并吃掉点击（实机表现：「刚关掉面板马上点机队，没反应」）。
+       故未展开态直接 pointer-events:none，让点击穿透到下面的 Tab 栏。
+     ⚠⚠ max-height 64%：仪表带已占顶部约 78px，64% 给仪表带留出干净空间。
+     ⚠⚠ bottom 让出 Tab 栏高度：抽屉停在 Tab 栏上方（Tab 栏常驻可点，
+       见 #uDock 的 z-index 注释），所以面板自身不再负责底部安全区。 */
+  #uPanel{position:absolute;z-index:100;left:0;right:0;
+    bottom:calc(var(--dock-h) + var(--safe-b));max-height:64%;
+    display:flex;flex-direction:column;overflow:hidden;
+    border-top:1px solid var(--line2);border-radius:14px 14px 0 0;
+    background:linear-gradient(180deg,var(--panel2),rgba(7,17,31,.99));
+    visibility:hidden;opacity:0;pointer-events:none;
+    -webkit-transform:translateY(16px);transform:translateY(16px);
+    transition:opacity .16s ease-out,-webkit-transform .16s ease-out,transform .16s ease-out,visibility .16s}
+  #uPanel.show{visibility:visible;opacity:1;pointer-events:auto;
+    -webkit-transform:translateY(0);transform:translateY(0)}
+  /* 抓握条：纯装饰，告诉玩家「这是可以拉下来的抽屉」 */
+  #uPanel::before{content:'';position:absolute;top:6px;left:50%;width:36px;height:3px;
+    margin-left:-18px;border-radius:2px;background:rgba(112,182,242,.28)}
+  .pn-head{flex:0 0 auto;display:flex;align-items:center;padding:17px 13px 10px;
+    border-bottom:1px solid var(--line)}
+  .pn-tt{flex:1 1 auto;min-width:0}
+  #uPanelTitle{display:block;font-family:var(--sans);font-size:14px;font-weight:600;
+    color:var(--ink);letter-spacing:.03em}
+  .pn-sub{display:block;font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pn-x{flex:0 0 auto;width:28px;height:28px;border-radius:7px;cursor:pointer;
+    border:1px solid var(--line2);background:rgba(99,210,255,.05);color:var(--ink2);
+    font-size:12px;line-height:1;font-family:var(--sans)}
+  .pn-x:active{background:rgba(99,210,255,.16)}
+  .pn-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:12px 13px 16px}
 
   /* 屏幕阅读器占位：保留接口用的隐藏节点 */
   .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
@@ -145,211 +243,204 @@
   /* 语义色（ui.js 用 c-good / c-bad / c-warn 标注数值方向） */
   .c-good{color:var(--good)}
   .c-bad{color:var(--bad)}
-  .c-warn{color:var(--gold)}
+  .c-warn{color:var(--amber)}
 
-  /* ── 回合进度条 ──
-     位置：底部操作条之上。宽度=已过时间占比，故视觉上「条形向右长满」代表回合推进。 */
-  #uTimerWrap{bottom:calc(52px + var(--safe-b));left:10px;right:10px;height:3px;
-    border-radius:2px;background:rgba(255,255,255,.08);overflow:hidden;pointer-events:none}
-  #uTimerBar{height:100%;width:0;border-radius:2px;background:var(--gold);
-    transition:width .12s linear}
-  #uTimer{bottom:calc(58px + var(--safe-b));right:10px;color:var(--text-dim);font-size:10px;
-    pointer-events:none}
-
-  /* ── 底部操作条 ── */
-  #uDock{bottom:calc(8px + var(--safe-b));left:10px;right:10px;display:flex}
-  .dk{flex:1 1 0;min-width:0;margin-right:8px;padding:9px 4px;border-radius:7px;
-    border:1px solid var(--line);background:var(--panel);color:var(--text);
-    font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer}
-  .dk:last-child{margin-right:0}
-  .dk:active{background:rgba(255,194,71,.14)}
-  .dk-pri{background:rgba(255,194,71,.16);border-color:rgba(255,194,71,.5);color:var(--gold)}
-
-  /* ── 抽屉面板 ──
-     ⚠ 用 visibility 而非 display：display 切换会让面板里的 <input>/<button>
-       在 Chrome 61 上重新计算样式，开合有顿挫；visibility 可参与 transition。
-     ⚠ translateY(14px) 隐藏：不改高度，避免滚动体在动画中反复 reflow。
-     ⚠⚠ pointer-events 必须与 visibility 成对：
-       visibility 从 visible → hidden 时，浏览器会让元素**保持可见直到过渡结束**
-       （这是 visibility 作为可过渡属性的既定行为），于是关闭动画的 0.16s 里，
-       面板仍然盖在底部操作条上方并吃掉点击 —— 实机表现就是
-       「刚关掉面板马上点『机队』，没反应，得点第二下」。
-       故未展开态直接 pointer-events:none，让点击穿透到下面的 dock。
-     ⚠⚠ max-height 62% 是实机调出来的：初版 72% 在 390×844 上会把面板顶到
-       顶栏数据卡的位置，视觉上「面板压住了 HUD」。62% 给顶栏留出干净空间。 */
-  #uPanel{position:absolute;z-index:100;left:0;right:0;bottom:0;max-height:62%;
-    display:flex;flex-direction:column;
-    border-top:1px solid var(--line);border-radius:12px 12px 0 0;
-    background:var(--panel);visibility:hidden;opacity:0;pointer-events:none;
-    -webkit-transform:translateY(14px);transform:translateY(14px);
-    transition:opacity .16s ease-out,-webkit-transform .16s ease-out,transform .16s ease-out,visibility .16s}
-  #uPanel.show{visibility:visible;opacity:1;pointer-events:auto;
-    -webkit-transform:translateY(0);transform:translateY(0)}
-  .pn-head{flex:0 0 auto;display:flex;align-items:center;padding:11px 12px 9px;
-    border-bottom:1px solid var(--line)}
-  .pn-head > span{flex:1 1 auto;min-width:0;font-family:var(--sans);font-size:14px;
-    font-weight:600;color:var(--gold)}
-  .pn-x{flex:0 0 auto;width:28px;height:28px;border-radius:6px;cursor:pointer;
-    border:1px solid var(--line);background:transparent;color:var(--text-dim);
-    font-size:12px;line-height:1}
-  .pn-body{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
-    padding:10px 12px calc(14px + var(--safe-b))}
-
-  /* ── 航线卡片 ── */
+  /* ── 航线卡片：一条航线 = 一张「航班条」 ──
+     层级：航线名/利润（大字）→ 机型摘要（弱）→ 两条微米尺 → 约束提示（琥珀警示条）。
+     .sel = 展开详情；.loss = 亏损（左侧红指示条，而不是整卡变红）。 */
   .rlist{margin-bottom:2px}
-  .rcard{border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:8px;
-    background:rgba(255,255,255,.02);cursor:pointer}
-  .rcard.sel{background:rgba(255,194,71,.09);border-color:rgba(255,194,71,.55)}
-  .rcard.loss{border-left:3px solid var(--bad)}
+  .rcard{position:relative;border:1px solid var(--line);border-radius:10px;
+    padding:10px 11px 10px 13px;margin-bottom:9px;
+    background:rgba(99,210,255,.035);cursor:pointer}
+  .rcard::before{content:'';position:absolute;left:0;top:10px;bottom:10px;width:2px;
+    border-radius:2px;background:rgba(112,182,242,.22)}
+  .rcard.loss::before{background:var(--bad)}
+  .rcard.sel{background:rgba(255,199,107,.07);border-color:rgba(255,199,107,.45)}
+  .rcard.sel::before{background:var(--amber)}
   .rc-top{display:flex;align-items:baseline}
-  .rc-name{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:var(--text);
+  .rc-name{flex:1 1 auto;min-width:0;font-size:13px;font-weight:600;color:var(--ink);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .rc-profit{flex:0 0 auto;margin-left:8px;font-size:12px;font-weight:600}
-  .rc-sub{margin-top:3px;font-size:10px;color:var(--text-dim)}
-  .rc-bars{margin-top:6px}
-  .rc-hint{margin-top:6px;font-size:10px;color:var(--text-dim);
-    background:rgba(255,255,255,.04);border-radius:5px;padding:4px 7px}
-  .rc-hint.warn{color:var(--gold);background:rgba(255,194,71,.1)}
+  .rc-profit{flex:0 0 auto;margin-left:8px;font-family:var(--mono);font-size:13px;
+    font-weight:600;font-variant-numeric:tabular-nums}
+  .rc-sub{margin-top:4px;font-family:var(--mono);font-size:10px;color:var(--ink3)}
+  .rc-bars{margin-top:7px}
+  .rc-hint{margin-top:7px;font-size:10px;line-height:1.5;color:var(--ink2);
+    background:rgba(112,182,242,.07);border-left:2px solid rgba(112,182,242,.35);
+    border-radius:0 5px 5px 0;padding:5px 8px}
+  .rc-hint.warn{color:#f6e6c6;background:rgba(255,199,107,.1);border-left-color:var(--amber)}
 
-  /* 细条（客座率 / 槽位）*/
-  .brow{display:flex;align-items:center;margin-top:4px;font-size:10px}
-  .bl{flex:0 0 auto;width:40px;color:var(--text-dim)}
-  .bt{flex:1 1 auto;min-width:0;height:4px;border-radius:2px;margin:0 6px;
-    background:rgba(255,255,255,.1);overflow:hidden}
-  .bt > i{display:block;height:100%;border-radius:2px;background:var(--sky)}
-  .bv{flex:0 0 auto;color:var(--text);font-variant-numeric:tabular-nums}
+  /* 微米尺（客座率 / 槽位）：标签固定列宽，保证两张尺的轨道左端对齐 */
+  .brow{display:flex;align-items:center;margin-top:5px;font-size:10px}
+  .bl{flex:0 0 auto;width:44px;color:var(--ink3)}
+  .bt{flex:1 1 auto;min-width:0;height:4px;border-radius:2px;margin:0 8px;
+    background:rgba(112,182,242,.14);overflow:hidden}
+  .bt > i{display:block;height:100%;border-radius:2px;
+    background:linear-gradient(90deg,var(--cyan-dim),var(--cyan))}
+  .bv{flex:0 0 auto;color:var(--ink2);font-family:var(--mono);font-variant-numeric:tabular-nums}
 
   /* ── 航线详情（展开区）── */
-  .rdetail{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,194,71,.28)}
-  .rd-sec{margin-bottom:11px}
+  .rdetail{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(112,182,242,.24)}
+  .rd-sec{margin-bottom:13px}
   .rd-sec:last-child{margin-bottom:0}
-  .rd-h{font-size:10px;color:var(--gold);margin-bottom:6px;letter-spacing:.02em}
+  .rd-h{font-size:10px;color:var(--cyan);margin-bottom:8px;letter-spacing:.06em}
+  /* 小破折号前缀：让每个分区标题像仪表带上的分区标签 */
+  .rd-h::before{content:'';display:inline-block;width:8px;height:1px;background:var(--cyan);
+    vertical-align:middle;margin-right:6px}
   .rd-btns{display:flex;flex-wrap:wrap}
-  .rd-note{font-size:10px;color:var(--text-dim);margin-top:6px;line-height:1.6}
-  .rd-cost{border-top:1px solid rgba(255,255,255,.07);padding-top:5px}
+  .rd-note{font-size:10px;color:var(--ink3);margin-top:7px;line-height:1.7}
+  .rd-cost{border-top:1px solid rgba(112,182,242,.1);padding-top:6px}
 
-  /* ── 档位 chip（频次 / 票价 / 城市选择）──
-     .on = 当前选中；.over = 超出上限（仍可点，sim 会夹取并给 reason）； */
-  .chip{flex:0 0 auto;margin:0 6px 6px 0;padding:6px 9px;border-radius:6px;cursor:pointer;
-    border:1px solid var(--line);background:transparent;color:var(--text);
-    font-family:var(--sans);font-size:12px;text-align:center}
-  .chip:active{background:rgba(255,194,71,.12)}
-  .chip > i{display:block;font-style:normal;font-size:9px;color:var(--text-dim);margin-top:2px}
+  /* ── 档位 chip（频次 / 票价 / 城市 / 机型）──
+     .on = 当前选中；.over = 超出上限（仍可点，sim 会夹取并给 reason）；
+     [disabled] = 根本不可选（航程不足 / 买不起）。 */
+  .chips{display:flex;flex-wrap:wrap}
+  .chip{flex:0 0 auto;margin:0 7px 7px 0;padding:7px 10px;border-radius:7px;cursor:pointer;
+    border:1px solid var(--line);background:rgba(112,182,242,.04);color:var(--ink);
+    font-family:var(--sans);font-size:12px;line-height:1.25;text-align:center;
+    font-variant-numeric:tabular-nums}
+  .chip:active{background:rgba(99,210,255,.12)}
+  .chip > i{display:block;font-style:normal;font-size:9px;color:var(--ink3);margin-top:3px}
   /* 机型 chip 的两行小字：规格行（em）+ 库存行（i）。前者中性、后者带语义色。 */
-  .chip > em{display:block;font-style:normal;font-size:9px;color:var(--text-dim);margin-top:2px}
+  .chip > em{display:block;font-style:normal;font-size:9px;color:var(--ink3);margin-top:3px}
   .chip > i.c-good{color:var(--good)}
-  .chip > i.c-warn{color:var(--gold)}
+  .chip > i.c-warn{color:var(--amber)}
   /* 「推荐」角标：贴在机型名右侧的小胶囊，只做一个，不喧哗 */
   .rec-tag{display:inline-block;font-size:8px;font-weight:600;line-height:1;
     padding:2px 4px;margin-left:5px;border-radius:3px;vertical-align:middle;
-    background:rgba(127,212,232,.2);color:var(--sky)}
-  .chip.on{background:rgba(255,194,71,.18);border-color:rgba(255,194,71,.6);color:var(--gold)}
+    background:rgba(99,210,255,.18);color:var(--cyan)}
+  .chip.on{background:rgba(255,199,107,.16);border-color:rgba(255,199,107,.55);color:var(--amber)}
   /* 选中态只把「非语义色」的小字染金，语义色的库存行（c-good/c-warn）保持不变 */
-  .chip.on > i:not([class]){color:var(--gold-dim)}
-  .chip.over{border-color:rgba(226,96,75,.45);color:var(--text-dim);cursor:pointer}
+  .chip.on > i:not([class]){color:var(--amber-dim)}
+  .chip.on > em{color:var(--amber-dim)}
+  .chip.over{border-color:rgba(255,123,107,.4);color:var(--ink3);cursor:pointer}
   .chip.over > i{color:var(--bad)}
-  .chip[disabled]{opacity:.42;cursor:default}
-  .chip-wide{flex:1 0 46%;min-width:0;text-align:left}
-  .chips{display:flex;flex-wrap:wrap}
-  /* ⚠ 目的地列表有 20+ 个城市，全部平铺会把第③区（机型）推到好几屏之外 ——
-     实机表现：玩家选完目的地后看不到机型选项，以为面板坏了。
-     故给列表限高 + 内部滚动（约 5 行），让「选目的地 → 选机型 → 开通」
-     三步在一屏内可达。滚动条用细的，不抢视觉。 */
-  #uPanelBody .nw-sec .chips{max-height:186px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  #uPanelBody .nw-sec .chips::-webkit-scrollbar{width:3px}
-  #uPanelBody .nw-sec .chips::-webkit-scrollbar-thumb{background:rgba(255,194,71,.28);border-radius:2px}
-  .nw-sec{margin-bottom:12px}
-  .nw-actions{margin-top:2px}
-  .nw-actions > .btn{width:100%;padding:11px 10px;font-size:13px}
+  .chip[disabled]{opacity:.4;cursor:default}
+  .chip-wide{flex:1 0 47%;min-width:0;text-align:left;padding:8px 10px}
+  /* ⚠ 曾经给 ①②③ 三块 .chips 各加了一条 max-height:200px + overflow-y:auto，
+     于是「面板自己一条滚动条 + 每块列表各一条」——实机上是 2~4 条滚动条并排，
+     又难操作又难看（2026-09-29 玩家反馈）。
+     现在**只保留 .pn-body 一条滚动条**，所有区块自然铺开：
+       面板变长后③机型区落到折线以下的问题，改由「选完目的地自动滚到机型区」解决
+       （见 ui.js syncPanel 的 scrollType）。
+     ⚠ 不要再给这里的 .chips 加 overflow —— 嵌套滚动在移动端是双重手势陷阱。 */
+  .nw-sec{margin-bottom:14px}
+  /* ③ 机型区：与上方 ② 的二十来行长列表之间拉一条分隔线。
+     面板只剩一条滚动条之后两区在滚动中容易糊成一片，这条线是「上一步 / 下一步」的分界
+     （同时是 ui.js 自动滚动的落点，见 syncPanel 的 scrollType）。 */
+  .nw-type{margin-top:18px;padding-top:14px;border-top:1px solid rgba(112,182,242,.12)}
+  /* ② 目的地 chip：城名与「距离 · 需求」同行，条件行（需现购 / 航程不足）另起一行。
+     原来三行（城名 / 距离·需求 / 条件），现在两行 —— 二十来座城就是省下约 190px，
+     面板短一截、滚动少一截。 */
+  .chip-wide .ci-name{margin-right:6px}
+  .chip-wide .ci-meta{font-size:9px;color:var(--ink3);font-variant-numeric:tabular-nums}
+  .chip-wide.on .ci-meta{color:var(--amber-dim)}
+  .nw-actions{margin-top:4px}
+  .nw-actions > .btn{width:100%;padding:12px 10px;font-size:13px}
 
   /* ── 通用按钮 ── */
-  .btn{flex:0 0 auto;margin:0 6px 6px 0;padding:7px 11px;border-radius:6px;cursor:pointer;
-    border:1px solid var(--line);background:transparent;color:var(--text);
+  .btn{flex:0 0 auto;margin:0 7px 7px 0;padding:8px 12px;border-radius:7px;cursor:pointer;
+    border:1px solid var(--line);background:rgba(112,182,242,.05);color:var(--ink);
     font-family:var(--sans);font-size:12px}
-  .btn:active{background:rgba(255,194,71,.12)}
-  .btn > i{font-style:normal;font-size:9px;color:var(--text-dim);margin-left:5px}
-  .btn-pri{width:100%;margin-right:0;padding:11px 12px;font-size:13px;font-weight:600;
-    background:rgba(255,194,71,.18);border-color:rgba(255,194,71,.55);color:var(--gold)}
-  .btn-sm{padding:4px 9px;font-size:11px;margin:0}
-  .btn-danger{border-color:rgba(226,96,75,.5);color:var(--bad)}
-  .btn.dis{opacity:.45;color:var(--text-dim)}
+  .btn:active{background:rgba(99,210,255,.14)}
+  .btn > i{font-style:normal;font-size:9px;color:var(--ink3);margin-left:5px}
+  .btn-pri{width:100%;margin-right:0;padding:12px;font-size:13px;font-weight:600;
+    background:linear-gradient(180deg,rgba(255,199,107,.22),rgba(255,199,107,.12));
+    border-color:rgba(255,199,107,.6);color:#ffdfa8}
+  .btn-sm{padding:5px 10px;font-size:11px;margin:0;border-radius:6px}
+  .btn-danger{border-color:rgba(255,123,107,.45);color:var(--bad)}
+  .btn.dis{opacity:.42;color:var(--ink3)}
 
-  /* ── 城市卡片内的补充样式（.cc-* 基础已在前面定义）── */
-  .cc-lines{display:flex;flex-wrap:wrap;margin-top:6px}
-  .cc-tag{font-size:10px;padding:2px 6px;margin:0 5px 4px 0;border-radius:4px;
-    background:rgba(127,212,232,.14);color:var(--sky)}
-  .cc-actions{margin-top:8px}
-  .cc-actions > .btn{width:100%;margin-right:0;padding:8px 10px}
-  .cc-total{display:flex;justify-content:space-between;margin-top:4px;font-size:11px}
-  .cc-total > span{color:var(--text-dim)}
-  .cc-total > b{color:var(--text)}
+  .empty{padding:22px 8px;text-align:center;font-size:12px;line-height:1.9;color:var(--ink3)}
 
-  .empty{padding:16px 6px;text-align:center;font-size:12px;line-height:1.8;color:var(--text-dim)}
-
-  /* ── 机队面板 ── */
-  .fsec{margin-bottom:14px}
-  .warn-sec .rd-h{color:var(--gold)}
-  .flist{border-top:1px solid rgba(255,255,255,.07)}
-  .frow{display:flex;justify-content:space-between;align-items:center;
-    padding:7px 2px;border-bottom:1px solid rgba(255,255,255,.05);font-size:11px}
+  /* ── 机队面板 ──
+     frow 用「网格行」而不是两端对齐：左列机型/注册号，右列状态或操作。 */
+  .fsec{margin-bottom:16px}
+  .warn-sec .rd-h{color:var(--amber)}
+  .flist{border-top:1px solid rgba(112,182,242,.1)}
+  .frow{display:flex;align-items:center;justify-content:space-between;
+    padding:9px 2px;border-bottom:1px solid rgba(112,182,242,.07);font-size:11px}
   .frow > span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap}
+    text-overflow:ellipsis;white-space:nowrap;color:var(--ink2)}
   .fbtns{flex:0 0 auto;margin-left:8px}
-  .fstate{flex:0 0 auto;margin-left:8px;color:var(--text-dim);font-size:10px}
+  .fstate{flex:0 0 auto;margin-left:8px;color:var(--ink3);font-size:10px;
+    font-family:var(--mono);max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .fstate i{font-style:normal}
-  .plist{border-top:1px solid rgba(255,255,255,.07)}
-  .prow{display:flex;align-items:center;padding:8px 2px;
-    border-bottom:1px solid rgba(255,255,255,.05)}
-  .prow.no{opacity:.55}
+  .plist{border-top:1px solid rgba(112,182,242,.1)}
+  .prow{display:flex;align-items:center;padding:10px 2px;
+    border-bottom:1px solid rgba(112,182,242,.07)}
+  .prow.no{opacity:.5}
   .pinfo{flex:1 1 auto;min-width:0}
-  .pinfo > b{display:block;font-size:12px;color:var(--text)}
-  .pinfo > span{display:block;font-size:10px;color:var(--text-dim);margin-top:2px}
+  .pinfo > b{display:block;font-size:12px;color:var(--ink)}
+  .pinfo > span{display:block;font-family:var(--mono);font-size:10px;color:var(--ink3);margin-top:3px}
   .pact{flex:0 0 auto;margin-left:8px;display:flex;align-items:center}
-  .price{font-size:12px;color:var(--gold);margin-right:7px;font-variant-numeric:tabular-nums}
+  .price{font-family:var(--mono);font-size:12px;color:var(--amber);margin-right:8px;
+    font-variant-numeric:tabular-nums}
 
-  /* ── 模态层 ──
-     ⚠ z-index 200：必须压住城市卡片(z-10)、抽屉(z-100)、toast 之下即可。
-       ui.js 的 toast 是 z-200 固定值，故模态取 190 让 toast 仍能浮在最上
-       （否则「决策已生效」这类确认提示会被模态遮死）。 */
+  /* ── 模态层（事件卡 / 季报 / 终局）──
+     ⚠ z-index 190：ui.js 的 toast 是 200，必须能浮在模态之上，
+       否则「决策已生效」这类确认提示会被模态遮死。 */
   .modal{position:absolute;top:0;right:0;bottom:0;left:0;z-index:190;display:none;
-    align-items:center;justify-content:center;padding:18px 14px;
-    background:rgba(2,4,10,.72)}
+    align-items:center;justify-content:center;padding:20px 16px;
+    background:rgba(3,9,18,.74)}
   .modal.show{display:flex}
   .md-box{width:100%;max-height:100%;overflow-y:auto;-webkit-overflow-scrolling:touch;
-    border:1px solid rgba(255,194,71,.42);border-radius:10px;padding:15px 15px 13px;
-    background:rgba(8,16,24,.97)}
-  .md-kind{font-size:10px;color:var(--gold);letter-spacing:.06em;margin-bottom:5px}
-  .md-title{font-family:var(--sans);font-size:16px;font-weight:600;color:var(--text);
-    line-height:1.4}
-  .md-desc{margin-top:7px;font-size:12px;line-height:1.75;color:var(--text-dim)}
-  .md-opts{margin-top:12px}
-  .mopt{display:block;width:100%;margin-bottom:7px;padding:9px 11px;border-radius:7px;
-    cursor:pointer;text-align:left;border:1px solid var(--line);background:transparent;
-    font-family:var(--sans)}
-  .mopt:active{background:rgba(255,194,71,.14)}
-  .mo-label{display:block;font-size:12px;color:var(--text)}
-  .mo-tag{display:block;font-size:10px;color:var(--gold);margin-top:3px}
-  .mo-note{display:block;font-size:10px;color:var(--text-dim);margin-top:2px}
-  .md-foot{margin-top:8px;font-size:10px;color:var(--text-dim);text-align:center}
+    border:1px solid var(--line2);border-radius:14px;padding:17px 16px 15px;
+    background:linear-gradient(180deg,rgba(12,26,45,.99),rgba(8,18,33,.99));
+    box-shadow:0 18px 48px rgba(0,0,0,.55)}
+  .md-kind{font-family:var(--mono);font-size:10px;color:var(--amber);letter-spacing:.12em;
+    margin-bottom:8px}
+  .md-title{font-family:var(--sans);font-size:17px;font-weight:600;color:var(--ink);line-height:1.4}
+  .md-desc{margin-top:9px;font-size:12px;line-height:1.8;color:var(--ink2)}
+  .md-opts{margin-top:14px}
+  /* 事件选项：整行可点，效果标签独占一行、用琥珀色区分于选项文案 */
+  .mopt{display:block;width:100%;margin-bottom:8px;padding:11px 13px;border-radius:10px;
+    cursor:pointer;text-align:left;border:1px solid var(--line);
+    background:rgba(112,182,242,.045);font-family:var(--sans)}
+  .mopt:active{background:rgba(255,199,107,.12);border-color:rgba(255,199,107,.45)}
+  .mo-label{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
+  .mo-tag{display:block;font-family:var(--mono);font-size:10px;color:var(--amber);margin-top:4px}
+  .mo-note{display:block;font-size:10px;color:var(--ink3);margin-top:3px;line-height:1.6}
+  .md-foot{margin-top:10px;font-size:10px;color:var(--ink3);text-align:center;font-family:var(--mono)}
 
-  .md-kv{margin-top:10px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px}
-  .md-kv > div{display:flex;justify-content:space-between;padding:4px 0;font-size:12px}
-  .md-kv > div > span{color:var(--text-dim)}
-  .md-kv > div > b{color:var(--text);font-variant-numeric:tabular-nums;
-    text-align:right;margin-left:10px}
+  /* 季报 / 终局：账本报表面 —— 细线分行，等宽数字右对齐，合计行用琥珀顶边强调 */
+  .md-kv{margin-top:12px;border-top:1px solid rgba(112,182,242,.14);padding-top:2px}
+  .md-kv > div{display:flex;justify-content:space-between;align-items:baseline;
+    padding:6px 0;border-bottom:1px solid rgba(112,182,242,.07);font-size:12px}
+  .md-kv > div > span{color:var(--ink3)}
+  .md-kv > div > b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums;
+    text-align:right;margin-left:10px;font-weight:600}
   .md-kv > div > b > i{font-style:normal;font-size:10px;margin-left:4px}
-  .md-total{margin-top:5px;padding-top:6px;border-top:1px dashed rgba(255,194,71,.3)}
-  .md-total > span{color:var(--gold)}
-  .md-total > b{font-size:14px}
-  .md-notes{margin-top:9px;font-size:11px;line-height:1.75;color:var(--text-dim)}
-  .md-actions{margin-top:13px}
+  .md-total{margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,199,107,.5)}
+  .md-total > span{color:var(--amber)}
+  .md-total > b{font-size:15px}
+  .md-notes{margin-top:11px;font-size:11px;line-height:1.8;color:var(--ink2);
+    background:rgba(112,182,242,.05);border-radius:8px;padding:9px 11px}
+  .md-actions{margin-top:15px}
   .md-actions > .btn{width:100%;margin-right:0}
+
+  /* ── 加载与降级 ── */
+  #loader{position:absolute;z-index:300;top:0;right:0;bottom:0;left:0;display:flex;
+    align-items:center;justify-content:center;background:var(--bg);color:var(--cyan);
+    font-family:var(--mono);font-size:12px;letter-spacing:.08em}
+  #loader.hide{display:none}
+  #fallback{display:none;position:absolute;z-index:290;left:16px;right:16px;top:50%;
+    transform:translateY(-50%);border:1px solid rgba(255,123,107,.45);border-radius:12px;
+    padding:16px;background:rgba(38,18,20,.94);text-align:center;font-size:12px;line-height:1.9}
+  #fallback.show{display:block}
+  #fallback b{display:block;color:var(--bad);font-size:14px;margin-bottom:7px}
+  #fallback span{color:var(--ink2);display:block}
+
+  /* flex gap 降级（Chrome 61 无 gap）：本项目所有行距都用 margin，
+     这里保留一条兜底规则，供未来若引入 gap 时有落点。 */
+  html:not(.supports-flex-gap) .hd-r2 .row > * + *{margin-top:2px}
 
   /* 面板内滚动条（桌面端可见，移动端不显示；Chrome 61 支持 ::-webkit-scrollbar）*/
   .pn-body::-webkit-scrollbar,
-  .md-box::-webkit-scrollbar{width:4px}
+  .md-box::-webkit-scrollbar,
+  #uCityCard::-webkit-scrollbar{width:4px}
   .pn-body::-webkit-scrollbar-thumb,
-  .md-box::-webkit-scrollbar-thumb{background:rgba(255,194,71,.3);border-radius:2px}
+  .md-box::-webkit-scrollbar-thumb,
+  #uCityCard::-webkit-scrollbar-thumb{background:rgba(112,182,242,.32);border-radius:2px}
 </style>
 </head>
 <body>
@@ -358,44 +449,54 @@
   <canvas id="stage"></canvas>
   <div id="vig"></div>
 
+  <!-- 顶部仪表带：行 1 是公司/时间/控制，行 2 是五个读数格，底边是回合进度轨 -->
   <div id="top" class="hud">
-    <span id="uCompany">航空公司</span>
-    <span id="uQuarter">Q0 / 60</span>
-    <button id="uSpeed" type="button">1×</button>
-    <button id="uMute" type="button" title="声音开关" aria-label="声音开关">♪</button>
-  </div>
-
-  <div id="stats" class="hud">
-    <div class="row"><span class="k">资金</span><span class="v" id="uCash">—</span></div>
-    <div class="row"><span class="k">净资产</span><span class="v" id="uNet">—</span></div>
-    <div class="row"><span class="k">排名</span><span class="v" id="uRank">—</span></div>
-    <div class="row"><span class="k">航线</span><span class="v" id="uRoutes">0</span></div>
-    <div class="row"><span class="k">机队</span><span class="v" id="uPlanes">0</span></div>
+    <div class="hd-r1">
+      <span id="uCompany">航空公司</span>
+      <span id="uQuarter">Q0 / 60</span>
+      <span id="uTimer">—</span>
+      <button id="uSpeed" type="button">1×</button>
+      <button id="uMute" type="button" title="声音开关" aria-label="声音开关">♪</button>
+    </div>
+    <div id="stats" class="hd-r2">
+      <div class="row"><span class="k">资金</span><span class="v" id="uCash">—</span></div>
+      <div class="row"><span class="k">净资产</span><span class="v" id="uNet">—</span></div>
+      <div class="row"><span class="k">排名</span><span class="v" id="uRank">—</span></div>
+      <div class="row"><span class="k">航线</span><span class="v" id="uRoutes">0</span></div>
+      <div class="row"><span class="k">机队</span><span class="v" id="uPlanes">0</span></div>
+    </div>
+    <div id="uTimerWrap"><div id="uTimerBar"></div></div>
   </div>
 
   <div id="uCityCard" class="hud panel"></div>
 
-  <!-- 回合进度条：贴在底部操作条上方，宽度=本季已过时间占比。
-       uTimer 是右侧秒数读数，uTimerBar 是被 JS 改 width 的填充块。 -->
-  <div id="uTimerWrap" class="hud">
-    <div id="uTimerBar"></div>
-  </div>
-
   <div id="uHint" class="hud">拖动旋转 · 双指缩放 · 点击城市查看</div>
 
-  <!-- 底部操作条：三个抽屉入口。固定在最底部，拇指可及。 -->
+  <!-- 底部 Tab 栏：三个抽屉入口。固定在最底部，拇指可及。
+       图标为内联 SVG（无外部资源），文字在下；激活态由 ui.js 加 .tab-on。 -->
   <div id="uDock" class="hud">
-    <button id="uBtnRoutes" class="dk" type="button">我的航线</button>
-    <button id="uBtnFleet" class="dk" type="button">机队</button>
-    <button id="uBtnNew" class="dk dk-pri" type="button">新航线</button>
+    <button id="uBtnRoutes" class="dk" type="button">
+      <svg class="dk-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="5.2" cy="17.4" r="2.2"></circle><circle cx="18.8" cy="6.6" r="2.2"></circle><path d="M7.1 15.8C9.4 11.2 14.6 9.4 16.9 8.3"></path></svg>
+      <span class="dk-t">航线</span>
+    </button>
+    <button id="uBtnFleet" class="dk" type="button">
+      <svg class="dk-i" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.4c.9 0 1.5 1 1.5 2.2v3.7l6.7 3.9v2.1l-6.7-2v4.3l1.9 1.5v1.7L12 18.7l-3.4 1.1v-1.7l1.9-1.5v-4.3l-6.7 2v-2.1l6.7-3.9V4.6c0-1.2.6-2.2 1.5-2.2z"></path></svg>
+      <span class="dk-t">机队</span>
+    </button>
+    <button id="uBtnNew" class="dk dk-pri" type="button">
+      <svg class="dk-i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.4"></circle><path d="M12 8v8M8 12h8"></path></svg>
+      <span class="dk-t">新航线</span>
+    </button>
   </div>
-  <div id="uTimer" class="hud">—</div>
 
   <!-- 抽屉面板：从底部升起，可开可关，**打开时暂停**回合计时（ui.js 的 pauseForPanel）。
-       结构固定为 头部（标题+关闭） / 滚动体（uPanelBody，内容由 ui.js 填）。 -->
+       结构固定为 头部（标题+副标题+关闭） / 滚动体（uPanelBody，内容由 ui.js 填）。 -->
   <div id="uPanel" class="panel">
     <div class="pn-head">
-      <span id="uPanelTitle">面板</span>
+      <div class="pn-tt">
+        <span id="uPanelTitle">面板</span>
+        <span id="uPanelSub" class="pn-sub"></span>
+      </div>
       <button id="uPanelClose" class="pn-x" type="button" aria-label="关闭">✕</button>
     </div>
     <div id="uPanelBody" class="pn-body"></div>
