@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>诺奖图鉴 · NOBEL ATLAS</title>
+<style>
+  /* ===== 资源位 =====
+     ① 条目配图 ×62   assets/illus/<slug>.webp   512×512，主体居中留白
+         路径写在 data.js 的 img 字段；缺图或加载失败时回退到程序化占位，
+         不出现空白块，也不改变卡片尺寸（见 app.js 的 IMG_OK 预检）。
+     ② 地球贴图       assets/earth.jpg / clouds.png   复用 earth-3d 系列
+     ③ Three.js       assets/three.min.js              复用 earth-3d 系列 */
+  :root{
+    /* 深夜蓝 · 奖章金 —— 诺奖之夜的配色：斯德哥尔摩市政厅蓝厅的深靛蓝底，
+       配诺贝尔奖章的金。冷底 + 暖金，与 world-food-atlas（焦糖黑暖琥珀）、
+       world-heroines-atlas（深紫红曙光）实质区分。 */
+    --bg:#070b16;
+    --bg-2:#0d1424;
+    --panel:rgba(16,24,42,.86);
+    --line:rgba(226,236,250,.14);
+    --line-2:rgba(217,178,106,.34);
+    --txt:#eaf0fa;
+    --mut:#94a3bd;
+    --acc:#d9b26a;
+    --dawn:#f2f6fe;
+    --gold:#d9b26a;
+    --gold-2:#eed49a;
+    --ink:#08101f;
+    --serif:Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    --top-gap:50px;
+    --sat:0px;
+    --sab:0px;
+  }
+  @supports (top:env(safe-area-inset-top)){
+    :root{--sat:env(safe-area-inset-top,0px);--sab:env(safe-area-inset-bottom,0px)}
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;touch-action:manipulation;background:var(--bg);color:var(--txt);font-family:var(--sans);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent}
+  #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
+
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:center;padding:calc(var(--top-gap) + var(--sat)) 12px 8px;z-index:10;pointer-events:none}
+  .brand{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2px;color:var(--dawn);text-shadow:0 0 12px rgba(217,178,106,.42);text-align:center}
+  .brand .sub{display:block;font-size:10px;font-weight:400;letter-spacing:3px;color:var(--acc);margin-top:2px;font-family:var(--sans)}
+  .gear{position:absolute;right:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .gear svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
+
+  /* 维度切换：成果 / 人物（决定下方筛选条与清单的含义） */
+  .dims{position:fixed;left:50%;bottom:calc(var(--sab) + 68px);transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;z-index:10;pointer-events:auto;-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
+  .dims button{border:none;background:transparent;color:var(--mut);font-size:12.5px;font-weight:500;padding:6px 16px;border-radius:999px;cursor:pointer;letter-spacing:1px;white-space:nowrap;transition:color .18s,background .18s,transform .15s}
+  .dims button:active{transform:scale(.94)}
+  .dims button.on{background:linear-gradient(135deg,#b8863a,#eed49a);color:var(--ink);font-weight:600;box-shadow:0 2px 10px rgba(217,178,106,.32)}
+
+  .tabs{position:fixed;left:50%;bottom:calc(var(--sab) + 14px);transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;-webkit-backdrop-filter:blur(14px) saturate(1.35);backdrop-filter:blur(14px) saturate(1.35);box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);z-index:10;pointer-events:auto;max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;user-select:none;-webkit-user-select:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tabs.scrollable{-webkit-mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(90deg,transparent,#000 26px,#000 calc(100% - 26px),transparent)}
+  .tabs button{flex:0 0 auto;margin:0 2px;border:none;background:transparent;color:var(--mut);font-size:13px;font-weight:500;padding:8px 14px;border-radius:999px;cursor:pointer;transition:color .18s,background .18s,transform .18s;white-space:nowrap;scroll-snap-align:center}
+  .tabs button:active{transform:scale(.93)}
+  .tabs button.on{background:linear-gradient(135deg,rgba(217,178,106,.92),rgba(238,212,154,.92));color:var(--ink);box-shadow:0 2px 10px rgba(217,178,106,.32)}
+  .tabs button:hover{color:var(--txt)}
+  .tabs button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 6px rgba(255,255,255,.25);transition:box-shadow .18s}
+  .tabs button.on .dot{box-shadow:0 0 0 2px rgba(8,16,31,.34)}
+
+  .card{position:fixed;left:50%;bottom:calc(var(--sab) + 118px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;max-height:calc(100vh - var(--sab) - 136px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  .card .close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;line-height:1}
+  .card .civ{font-size:11px;color:var(--acc);letter-spacing:2px;font-family:var(--sans)}
+  .card .name{font-family:var(--serif);font-size:19px;font-weight:600;color:var(--dawn);margin-top:2px;letter-spacing:1px;padding-right:32px}
+  /* 奖项行：成果＝获奖年份 + 得主；人物＝奖项年份 + 生卒年 */
+  .card .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .card .meta span{font-size:11px;color:var(--gold-2);background:rgba(217,178,106,.12);border:1px solid rgba(217,178,106,.3);border-radius:6px;padding:2px 8px;letter-spacing:.5px}
+  .card .story{font-size:13.5px;color:var(--txt);margin-top:10px;line-height:1.72;font-family:var(--serif)}
+  /* 落点行：成果＝「今天用在哪」；人物＝「留下了什么」 */
+  .card .extra{font-size:12px;color:var(--mut);margin-top:8px;line-height:1.62}
+  .card .extra b{color:var(--gold-2);font-weight:500;margin-right:4px}
+  .card .tags{display:flex;flex-wrap:wrap;margin-top:10px}
+  .card .tags span{font-size:11px;color:var(--acc);background:rgba(217,178,106,.1);border:1px solid rgba(217,178,106,.28);border-radius:6px;padding:3px 9px;margin:0 6px 6px 0}
+  .card .loc{font-size:11px;color:var(--mut);margin-top:8px;font-variant-numeric:tabular-nums}
+  .card .share{margin-top:12px;width:100%;padding:10px;border:none;border-radius:10px;background:linear-gradient(135deg,#b8863a,#eed49a);color:var(--ink);font-size:14px;font-weight:600;cursor:pointer;letter-spacing:1px;transition:transform .15s}
+  .card .share:active{transform:scale(.98)}
+  .card .share:disabled{opacity:.6;cursor:default}
+
+  /* 配图位：有图走 cover 铺满，无图走程序化占位（深夜蓝底 + 奖章圆盘 + 星芒 + 文件名） */
+  .card .pic{position:relative;height:280px;height:min(320px,42vh);margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
+    background-image:
+      radial-gradient(circle at 24% 20%,rgba(255,248,230,.42),rgba(255,248,230,0) 1.5%),
+      radial-gradient(circle at 70% 74%,rgba(226,232,248,.28),rgba(226,232,248,0) 1.2%),
+      radial-gradient(circle at 86% 34%,rgba(255,244,220,.3),rgba(255,244,220,0) 1.3%),
+      radial-gradient(112% 86% at 50% 118%,rgba(217,178,106,.22),rgba(217,178,106,0) 64%),
+      linear-gradient(158deg,#111c33,#070b16 62%,#0d1526);
+    box-shadow:inset 0 0 0 1px var(--line),inset 0 -22px 40px rgba(0,0,0,.34)}
+  .card .pic.has{background-size:cover;background-position:center}
+  .card .pic.has .ph{display:none}
+  .card .pic .ph{position:absolute;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .card .pic .ph i{width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 34% 30%,#fff8e6,#eed49a 58%,#b8863a 100%);box-shadow:0 0 18px rgba(238,212,154,.45)}
+  .card .pic .ph span{font-size:10.5px;color:var(--mut);letter-spacing:1.5px;margin-top:9px}
+  .card .pic .ph em{font-style:normal;font-size:10px;color:rgba(148,163,189,.55);margin-top:3px;font-variant-numeric:tabular-nums}
+
+  /* 抽屉：顶部同样保留安全区（--sat），再加一段与顶部标题同高的 --top-gap */
+  .sheet{position:fixed;top:0;right:0;bottom:0;width:86vw;width:min(300px,86vw);background:var(--panel);border-left:1px solid var(--line);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);z-index:20;transform:translateX(100%);transition:transform .28s;padding:14px 18px;overflow-y:auto;padding-top:calc(var(--sat) + var(--top-gap));padding-bottom:calc(var(--sab) + 22px)}
+  .sheet.show{transform:translateX(0)}
+  .sheet h3{font-size:12px;color:var(--mut);letter-spacing:1.5px;margin:18px 0 10px;text-transform:uppercase}
+  .sheet h3:first-child{margin-top:8px}
+  .row{display:flex;align-items:center;justify-content:space-between;margin:12px 0}
+  .row label{font-size:14px}
+  .sw{position:relative;width:42px;height:24px;border-radius:12px;background:rgba(255,255,255,.12);cursor:pointer;transition:.2s;flex-shrink:0}
+  .sw.on{background:var(--acc)}
+  .sw i{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .sw.on i{left:21px}
+  .sheet .close{position:absolute;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);cursor:pointer;font-size:16px}
+  .sheet .note{font-size:11.5px;color:var(--mut);line-height:1.7;margin:4px 0 0}
+  .scrim{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(0,0,0,.44);z-index:19;opacity:0;transition:opacity .28s;pointer-events:none}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet button.act{flex:1;font-size:13px;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:9px 0;cursor:pointer}
+  .sheet button.act.gold{background:linear-gradient(135deg,#b8863a,#eed49a);border:none;color:var(--ink)}
+  .now{font-size:13px;color:var(--txt);font-variant-numeric:tabular-nums;letter-spacing:.5px}
+  .now b{color:var(--acc);font-weight:600}
+  .now em{display:block;font-style:normal;font-size:11.5px;color:var(--mut);line-height:1.85}
+
+  .tip{position:fixed;left:50%;top:calc(var(--top-gap) + var(--sat) + 104px);transform:translateX(-50%);font-size:12px;color:var(--mut);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:6px 14px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:8;opacity:0;transition:opacity .4s;pointer-events:none;white-space:nowrap}
+  .tip.show{opacity:1}
+
+  /* 标记名牌：圆点 + 描边取该分类的颜色 */
+  .tag{position:absolute;transform:translate(-50%,-140%);font-size:11.5px;color:var(--dawn);background:rgba(7,11,22,.76);border:1px solid var(--line-2);border-radius:10px;padding:3px 9px;white-space:nowrap;pointer-events:none;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);transition:opacity .25s;z-index:5}
+  .tag i{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .tag.on{color:var(--gold-2);border-color:var(--acc);background:rgba(16,24,42,.94);box-shadow:0 2px 10px rgba(217,178,106,.28)}
+
+  /* 密集区（屏幕上挤在一处的标记）：名牌成列外挂，由引线连回自己的光点；
+     列首的数字徽标说明这一处压着几项。逻辑见 app.js 的 updateTags。 */
+  #leaders{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:4}
+  .cnum{position:absolute;transform:translate(-50%,-50%);font-size:10.5px;line-height:16px;color:var(--gold-2);background:rgba(7,11,22,.84);border:1px solid var(--line-2);border-radius:9px;padding:0 6px;white-space:nowrap;pointer-events:none;font-variant-numeric:tabular-nums;transition:opacity .25s;z-index:5}
+
+  /* ===== 清单：当前维度的完整名录（左上按钮开合，点任意一行飞到该标记并展开卡片）===== */
+  .listbtn{position:absolute;left:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .listbtn svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
+  .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(5,8,16,.95);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
+  .listwrap.show{opacity:1;visibility:visible;pointer-events:auto}
+  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;align-items:center;padding:calc(var(--sat) + var(--top-gap)) 56px 10px 16px;border-bottom:1px solid var(--line)}
+  .listtitle{font-family:var(--serif);font-size:17px;color:var(--dawn);letter-spacing:1.5px}
+  .listtitle span{display:block;font-family:var(--sans);font-size:11px;font-weight:400;color:var(--mut);letter-spacing:1px;margin-top:3px}
+  .listtitle i{font-style:normal;color:var(--acc)}
+  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
+  .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:2px 14px calc(var(--sab) + 26px)}
+  .grp{margin-top:6px}
+  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:10px 2px 8px;background:linear-gradient(180deg,rgba(5,8,16,.97) 66%,rgba(5,8,16,0))}
+  .grp h4 i{width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0}
+  .grp h4 em{font-style:normal;font-size:11px;font-weight:400;color:var(--mut);margin-left:auto;letter-spacing:.5px}
+  .item{display:flex;align-items:center;width:100%;text-align:left;font-family:var(--sans);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer;transition:background .18s,border-color .18s,transform .15s,opacity .2s}
+  .item:active{transform:scale(.985)}
+  .item.on{border-color:var(--acc);background:rgba(217,178,106,.12);box-shadow:0 0 0 1px rgba(217,178,106,.28)}
+  .item.dim{opacity:.42}
+  .item .th{position:relative;flex:0 0 auto;width:66px;height:44px;margin-right:11px;border-radius:8px;overflow:hidden;background-color:var(--bg-2);background-image:linear-gradient(158deg,#111c33,#070b16 62%,#0d1526);box-shadow:inset 0 0 0 1px var(--line)}
+  .item .th img{display:block;width:100%;height:100%;object-fit:cover}
+  .item .th b{display:none;position:absolute;top:0;right:0;bottom:0;left:0;background:radial-gradient(circle at 50% 48%,rgba(238,212,154,.8),rgba(238,212,154,0) 40%)}
+  .item .th.bad b{display:block}
+  .item .tx{min-width:0;flex:1 1 auto}
+  .item .nm{font-family:var(--serif);font-size:15px;color:var(--dawn);letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item.on .nm{color:var(--gold-2)}
+  .item .mt{font-size:11px;color:var(--mut);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .mt .k{color:var(--gold-2)}
+
+  #loader{position:fixed;top:0;right:0;bottom:0;left:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:100;transition:opacity .6s}
+  #loader.hide{opacity:0;pointer-events:none}
+  .lt{font-family:var(--serif);font-size:22px;color:var(--dawn);letter-spacing:3px;margin-bottom:10px;text-shadow:0 0 14px rgba(217,178,106,.42)}
+  .spin{width:42px;height:42px;border:3px solid rgba(217,178,106,.2);border-top-color:var(--acc);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #loader p{margin-top:14px;font-size:13px;color:var(--mut)}
+  #fallback{position:fixed;top:0;right:0;bottom:0;left:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:200;text-align:center;padding:30px}
+  #fallback.show{display:flex}
+  #fallback h2{color:var(--acc);margin-bottom:10px}
+  #fallback p{color:var(--mut);max-width:420px;line-height:1.6}
+
+  @media (max-width:640px){
+    .tabs{width:calc(100vw - 20px);max-width:calc(100vw - 20px);padding:5px}
+    .tabs button{font-size:13px;padding:7px 11px}
+    .tabs button .dot{width:7px;height:7px;margin-right:5px}
+    .dims button{font-size:12.5px;padding:6px 14px}
+    .tag{font-size:12.5px;padding:3px 9px}
+    .brand{font-size:16px}
+    .card{max-height:calc(100vh - var(--sab) - 130px)}
+    .card .name{font-size:17px}
+    .card .story{font-size:13px}
+    .card .pic{height:170px;height:min(190px,24vh)}
+    .listtitle{font-size:16px}
+    .listscroll{padding-left:12px;padding-right:12px}
+    .item .th{width:58px;height:40px;margin-right:9px}
+  }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<canvas id="leaders"></canvas>
+
+<div class="top">
+  <div class="brand">诺奖图鉴<span class="sub">NOBEL ATLAS</span></div>
+  <div class="listbtn" id="listBtn" role="button" tabindex="0" aria-label="完整名录">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.6h9.4M4 11h9.4M4 16.4h6.4"/><circle cx="17.6" cy="6.2" r="2.2"/><circle cx="17.6" cy="16.4" r="2.2"/><path d="M17.6 8.4v5.8"/></svg>
+  </div>
+  <div class="gear" id="gear">
+    <svg viewBox="0 0 24 24" fill="none" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><circle cx="11" cy="7" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="16" cy="12" r="2"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="8" cy="17" r="2"/></svg>
+  </div>
+</div>
+
+<div class="dims" id="dims"></div>
+<div class="tabs" id="tabs"></div>
+
+<div class="tip" id="tip">拖动旋转地球 · 点亮点读一项走进日常的诺奖</div>
+
+<div class="card" id="card">
+  <button class="close" id="cClose" aria-label="关闭">×</button>
+  <div class="civ" id="cCiv"></div>
+  <div class="name" id="cName"></div>
+  <div class="meta" id="cMeta"></div>
+  <div class="pic" id="cPic"><div class="ph"><i></i><span>配图待生成</span><em id="cPicFile"></em></div></div>
+  <div class="story" id="cStory"></div>
+  <div class="extra" id="cExtra"></div>
+  <div class="tags" id="cTags"></div>
+  <div class="loc" id="cLoc"></div>
+  <button class="share" id="cShare">分享到小红书</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="sheet" id="sheet">
+  <button class="close" id="sClose" aria-label="关闭">×</button>
+  <h3>此刻 · 北京时间</h3>
+  <div class="now" id="nowInfo">—</div>
+  <h3>显示</h3>
+  <div class="row"><label>自动旋转</label><div class="sw on" id="swSpin"><i></i></div></div>
+  <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
+  <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
+  <div class="row"><label>标记标签</label><div class="sw on" id="swLabel"><i></i></div></div>
+  <h3>视角</h3>
+  <div style="display:flex;margin-top:4px">
+    <button class="act" id="bReset" style="margin-right:8px">重置视角</button>
+    <button class="act gold" id="bTop">俯视</button>
+  </div>
+  <h3>关于</h3>
+  <p class="note">两个维度：<b>成果</b>看「生活中的诺奖」——那些已走进日常的获奖发现；<b>人物</b>看「诺奖背后的那些人」。奖项年份与得主按官方公布整理，经济学的奖项由瑞典央行设立，1969 年首次颁发。</p>
+</div>
+
+<div class="listwrap" id="listWrap" aria-hidden="true" aria-label="完整名录">
+  <div class="listbar">
+    <div class="listtitle">成果清单<span><i id="listCnt">30 项</i> · 按分类分列 · 点任意一行飞过去</span></div>
+    <button class="lclose" id="lClose" aria-label="关闭清单">×</button>
+  </div>
+  <div class="listscroll" id="listScroll"></div>
+</div>
+
+<div id="loader">
+  <div class="lt">诺奖图鉴</div>
+  <div class="spin"></div>
+  <p>正在点亮奖章…</p>
+</div>
+<div id="fallback"><h2>无法启动 3D 场景</h2><p>当前浏览器不支持 WebGL，请使用最新版 Chrome / Edge / Firefox / Safari。</p></div>
+
+<script src="./assets/three.min.js"></script>
+<script src="./assets/data.js"></script>
+<script src="./assets/app.js"></script>
+</body>
+</html>
