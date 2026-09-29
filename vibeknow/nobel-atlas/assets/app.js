@@ -1,4 +1,16 @@
 (function(){
+  /* no-select / no-drag guard: CSS user-select covers WebKit+Blink, this covers
+     older engines and Firefox image dragging. Elements marked .sel opt back in. */
+  try{
+    var blockSel=function(e){
+      var t=e.target,n;
+      if(!t||!t.closest)return e.preventDefault();
+      for(n=t;n&&n.nodeType===1;n=n.parentNode){if(n.classList&&n.classList.contains('sel'))return}
+      e.preventDefault();
+    };
+    document.addEventListener('selectstart',blockSel,false);
+    document.addEventListener('dragstart',blockSel,false);
+  }catch(e){}
   var cv=document.getElementById('stage');
   var gl=null;try{gl=cv.getContext('webgl2')||cv.getContext('webgl')}catch(e){}
   if(!gl||typeof THREE==='undefined'){document.getElementById('fallback').classList.add('show');document.getElementById('loader').classList.add('hide');return;}
