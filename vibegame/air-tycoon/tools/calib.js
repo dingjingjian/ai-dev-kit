@@ -34,7 +34,7 @@ var AT = global.AT, S = AT.sim, C = AT.CONFIG;
 function probeRoute(overrides, home, a, b, ty, cnt, opts) {
   var saved = {};
   Object.keys(overrides || {}).forEach(function (k) { saved[k] = C[k]; C[k] = overrides[k]; });
-  var st = S.create({ seed: 7, homeCityId: home });
+  var st = S.create({ seed: 7, homeCityId: home, freeNetwork: true });   // 标定任意城市对 → 关掉连通性约束
   S.advance(st, 9);
   st.cash = 1e9; st.debt = 0;          // 标定假设：不受资金约束（只看航线本身赚不赚）
   var have = st.planes.filter(function (p) { return p.type === ty && !p.routeKey; }).length;

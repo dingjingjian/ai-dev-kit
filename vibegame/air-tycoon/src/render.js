@@ -10,7 +10,8 @@
  * 基调换成「夜色地球 + 暖金航线」——真实航司的航线图语言：
  *   · 地球保持真实贴图 + 冷蓝染色（不与 defcon 的暗青撞色）
  *   · 城市光点按**开发度等级**显大小与亮度（等级即玩家经营成果的可视化）
- *   · 已通航城市套**橙黄定位环**（你的网络）；未通航城市只有冰青光点（待开拓）
+ *   · 已通航城市套**橙黄定位环**（你的网络）；竞对独飞的城套**紫罗兰细环**；
+ *     既无我的航线也无竞对航线的城，只有冰青光点（待开拓）
  *   · 航线画成**大圆弧**（真实航路不是平面直线，球面上是大圆）
  *   · 客机是沿弧线移动的**小亮点 + 尾迹线段**，密度体现航班频次
  *
@@ -43,8 +44,22 @@
 
   /* ── 色板（集中管理，避免散落各处各自为政）──
    * 「红涨绿跌」是中国股市惯例，但本作不是股票软件，不使用涨跌色，
-   * 改用**航线所有权**配色：我的航线是暖金（争夺焦点），竞对是冷灰蓝（背景干扰）。
-   * 这是刻意的：玩家的注意力应该被自己的网络吸走，而不是去数竞对有多少条线。
+   * 改用**航线所有权**配色。
+   *
+   * ⚠ 2026-09-30 改版（用户：「公司的航线按照公司的颜色来」）：
+   *   旧版是「暖金 = 我 / 紫罗兰 = 竞对」的两色制 —— 能分出「我的」与「对手的」，
+   *   但分不出**是哪个对手**，五家竞对在地图上糊成一支紫色。
+   *   现在：航线与客机一律取**该航司的识别色**（玩家 = state.airlineColor，
+   *   竞对 = rival.color，两者同源于 data.js §2.5 的六色板）。
+   *   城市光点/城市环仍保留旧的两色制（暖金=我的网络 / 紫罗兰=有人竞对通航），
+   *   因为那是「归属桶」而不是「具体哪一家」，六色化只会让地图信息过载。
+   *
+   * ⚠ 双方都必须醒目，靠**色相**区分，而不是靠「把竞对压暗」来区分（2026-09-29 三次修订）。
+   *   早先把竞对设成低饱和冷灰蓝（0x5f8aa4）、客机也调成近白的淡蓝，意图是
+   *   「让玩家的注意力被自己的网络吸走，而不是去数竞对有多少条线」。这条意图与
+   *   「一眼分出谁是我的线」**直接矛盾 —— 看不到的东西无从区分**。玩家在决定往哪扩张时，
+   *   恰恰最需要看清竞对已经铺到哪了。故两边亮度都拉到能看清；
+   *   「谁是主角」改由抬升量（我的线飞得更高）表达，不再用「谁更看不见」表达。
    *
    * ⚠ 城市光点的配色（2026-09-29 二次修订）：
    *   地球贴图（Blue Marble）满屏只有四种色相 —— 深蓝海洋、土黄/褐陆地、橄榄绿植被、白冰盖。
@@ -53,22 +68,31 @@
    *      玩家的航线本就是他最关心的资产，两处共用一支颜色，省掉一次学习成本。
    *   ② **未通航城市 = 冰青 0x2fc4ff** 保持不变：橙（约 38°）与青（约 197°）在色环上
    *      相隔约 160°，且地图上没有青色 —— 「待开拓的城」与「我的网络」一眼可分。
-   *   ③ 亮度必须压在 bloom 的高亮阈值之下（POST_BRIGHT_FS 用 luma 0.86 提取亮部）。
+   *   ③ **竞对独飞的城**（我不通航、但至少一家竞对有航线）—— 光点仍是冰青，
+   *      只多套一圈**紫罗兰细环**（rivalHex，与竞对弧线同一支色）。这一圈是玩家唯一能
+   *      「看出竞对铺到哪了」的通道（竞对航线不进任何面板），所以它必须看得清 ——
+   *      不再像早先那样压暗。与我的橙黄环同尺寸、亮度相近，靠色相区分归属。
+   *   ④ 亮度必须压在 bloom 的高亮阈值之下（POST_BRIGHT_FS 用 luma 0.86 提取亮部）。
    *      橙黄本身 luma 已达 0.80，若仍乘旧公式的 1.22 倍等级增益就会到 0.98，
    *      点核被 bloom 拉成白点、橙黄色相反被烧掉 —— 这正是暖金版老配色翻过的车。
    *      故本版把「已通航」的等级增益重标定为 0.792→1.0（见 syncCities 的 g 公式），
    *      峰值 luma ≈ 0.80，既保住橙黄又不过曝。
-   *   暖金仍完整保留在航线/客机上（arcMine / planeMine），「金色 = 我的航路」不变。 */
+   *
+   * ── 归属色的分工（2026-09-30 修订后）──
+   *   航司识别色（六色板）  = **航线与客机**：我的线用我选的航司色，竞对各自一色。
+   *   暖金 / 橙黄（0xffc76b 系）= **我的城市**：我通航的城市点与环。
+   *   紫罗兰（0xb48cff 系）   = **竞对的城市**：仅竞对通航的城市环（不区分到具体哪家）。
+   *   冰青（0x2fc4ff）        = **无人通航**（不属于任何人，是「待开拓」而非「归属」）。 */
   var PALETTE = {
     homeHex:      0xffd488,    // 基地城市：更亮的橙黄（同色相更亮，配 1.25 倍尺寸与更亮的定位环）
     mineHex:      0xffc76b,    // 已通航航点：橙黄 = 面板「资金」的 --amber
-    rivalHex:     0x7fa6c2,    // 竞对航点：钢蓝（未在 city 颜色路径使用）
+    rivalHex:     0xb48cff,    // 仅竞对通航的城市：紫罗兰细环（不区分是哪一家，见注释 ③）
     virginHex:    0x2fc4ff,    // 未通航城市：冰青（地图上没有的色相；够饱和才能在蓝海上不被读成白点）
-    arcMine:      0xffcd5c,    // 我的航线大圆弧
-    arcRival:     0x5f8aa4,    // 竞对航线大圆弧（更冷更淡，退到背景）
-    arcOpen:      0xfff4d0,    // 开航瞬间的弧线辉光（比常色更亮，越过 bloom 阈值）
-    planeMine:    0xfff6da,    // 我的客机
-    planeRival:   0xb8cee0,    // 竞对客机
+    arcMine:      0xffcd5c,    // **缺省回落**：没选航司的旧路径（工具/测试）才用它，暖金
+    arcRival:     0xb48cff,    // **缺省回落**：竞对无 color 字段时（旧路径）才用它，紫罗兰
+    arcOpen:      0xfff4d0,    // 开航瞬间的弧线辉光（比任何归属色都亮，越过 bloom 阈值）
+    planeMine:    0xfff6da,    // 缺省回落：我的客机（暖白）
+    planeRival:   0xd9c6ff,    // 缺省回落：竞对客机（提亮版紫罗兰）
     level: [                   // 城市按开发度等级的配色（1→5 级，越亮越繁盛）
       0x93aabb, 0xaecbdc, 0xcfe6ee, 0xf2e3b4, 0xffd88a
     ]
@@ -79,6 +103,7 @@
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
   var haloPoints;                         // 城市柔光光晕层（与 cityGeom 共用几何，只换贴图与倍数）
   var cityLevel, cityRinged;              // 每城当前等级 / 是否已通航（我的网络）
+  var cityRingTone;                       // 每城当前环色：0=我的网络(橙黄) 1=仅竞对(紫罗兰) -1=无环
   var cityBaseSize;                       // 等级对应的基准尺寸（脉冲在此之上放大）
   var cityPulse, cityLastDev;             // 开发度上涨的辉光脉冲 + 上一帧 dev
   var ringPoints, ringGeom, ringPos, ringColor, ringSize, ringAlpha;
@@ -253,6 +278,34 @@
             parseInt(h.substr(4, 2), 16) / 255];
   }
 
+  /* ── 航司识别色 → 渲染用色（2026-09-30）──
+   * data.js §2.5 的 color 是 CSS 字符串（'#E24B4A'），而色板其余项是 0x 数字，
+   * 故这里统一收口：字符串与数字都吃，解析不出来返回 null（调用方回落到旧色板）。
+   *
+   * ⚠ tint（向白插值 0..1）不是装饰，是**可读性刚需**：
+   *   航司色取自地区色，都是深饱和色（绿 0x1D9E75 的 luma 只有 0.45），
+   *   而航线是 1px、additive 混合的细线，压在深蓝海面上会糊得几乎看不见。
+   *   按 tint 提亮后色相不变、亮度够 —— 提亮量与 bloom 阈值无关（这些色的
+   *   luma 提亮后仍在 0.7 以下，不会像橙黄那样被 bloom 烧成白点）。 */
+  function ownerRgb(color, tint) {
+    var c = null;
+    if (typeof color === 'string' && color.charAt(0) === '#') {
+      var n = parseInt(color.substr(1), 16);
+      if (!isNaN(n) && color.length === 7) c = hexToRgb(n);
+    } else if (typeof color === 'number' && !isNaN(color)) {
+      c = hexToRgb(color);
+    }
+    if (!c || isNaN(c[0])) return null;
+    var k = tint || 0;
+    return [c[0] + (1 - c[0]) * k, c[1] + (1 - c[1]) * k, c[2] + (1 - c[2]) * k];
+  }
+  /* 取某公司的航线/客机色：有航司识别色就用它，没有就回落旧色板 */
+  function toneRgb(color, fallbackHex, tint) {
+    return ownerRgb(color, tint) || ownerRgb(fallbackHex, tint);
+  }
+  var ARC_TINT = 0.30;      // 航线提亮量（细线要更亮才看得清）
+  var PLANE_TINT = 0.55;    // 客机提亮量（小点比线更吃亏，提得更多）
+
   function v3(lat, lon, r) {
     var v = G.ll2v(lat, lon, r);
     return new THREE.Vector3(v.x, v.y, v.z);
@@ -420,15 +473,19 @@
   /* ───────────────────────── 城市光点 ─────────────────────────
    *
    * 与 defcon 的关键差异：这里的城市**不是阵营单位，是经济节点**。
-   * 光点要表达三件事，且必须一眼可读：
+   * 光点要表达四件事，且必须一眼可读：
    *   ① 繁盛程度 —— 等级 1..5 → 尺寸与亮度（同一色相上提亮）
    *   ② 是否在我的网络里 —— 已通航的城多一圈橙黄定位环
-   *   ③ 是否我的基地 —— 基地尺寸额外加成 + 最亮色
+   *   ③ 是否已被竞对占领（我不通航）—— 套一圈紫罗兰细环（与竞对弧线同色，要看得清）
+   *   ④ 是否我的基地 —— 基地尺寸额外加成 + 最亮色
    *
-   * 为什么把「等级」和「通航」分成尺寸与环两个通道：
+   * 为什么把「等级」和「归属」分成尺寸与环两个通道：
    * 若都用颜色表达，「亮」既可能是「高等级」也可能是「已通航」，玩家分不清。
    * 尺寸管发展度（连续信息，看大小），环管归属（离散信息，看有无），互不干扰。
+   * 归属再分两档色相：**橙黄环 = 我的网络**、**紫罗兰环 = 只有竞对** —— 两档都要看得清，
+   * 区分归属的是色相而不是亮度（把对手画暗等于不画，见色板注释的三次修订）。
    * 色相只承担一件事：把城市从地球贴图里拎出来（见 PALETTE 注释）。
+   * ⚠ 竞对环只在「我未通航」时才画 —— 同一座城两种环叠在一起会互相抵消，也读不出优先级。
    *
    * 视觉语言（2026-09-28 对齐 world-food-atlas 的「点 + 光晕 + 细环」）：
    *   ① 柔光光晕（TEX.halo / cityHaloTex）—— 最外一层软光，跟着城市色走，
@@ -488,6 +545,7 @@
     cityAlpha = new Float32Array(n);
     cityLevel = new Float32Array(n);
     cityRinged = new Float32Array(n);
+    cityRingTone = new Float32Array(n);
     cityBaseSize = new Float32Array(n);
     cityPulse = new Float32Array(n);
     cityLastDev = new Float32Array(n);
@@ -505,9 +563,12 @@
 
       var rgb = hexToRgb(PALETTE.virginHex);
       cityColor[i * 3] = rgb[0]; cityColor[i * 3 + 1] = rgb[1]; cityColor[i * 3 + 2] = rgb[2];
-      /* 环取我的网络标记色（= 已通航城市点的橙黄），不再用纯白。
+      /* 环取「归属」色，不再是纯白。两档：
+       *   · 我的网络 → 橙黄（暖）
+       *   · 仅竞对   → 紫罗兰（PALETTE.rivalHex，与竞对弧线同一支色）
        * 白环叠加 additive + bloom 会直接烧成高亮白圈，既刺眼又像 UI 准星；
-       * 橙黄与城市点同色系，读起来是「我的网络轮廓」而不是贴上去的标记。 */
+       * 暖/紫两档色相在深蓝海洋上拉得很开，读起来是「谁的网络轮廓」而不是贴上去的标记。
+       * ⚠ 实际颜色由 syncCities 按 status 逐帧改（城市可能从「仅竞对」变成「我的」）。 */
       ringColor[i * 3] = ringRgb[0]; ringColor[i * 3 + 1] = ringRgb[1]; ringColor[i * 3 + 2] = ringRgb[2];
 
       /* aSize 是「期望像素直径 × 距离」的系数；uScale = 画布高/2（见 syncPointScale）。
@@ -531,6 +592,9 @@
       ringAlpha[i] = 0;
       cityLevel[i] = c.level;
       cityLastDev[i] = c.dev;
+      /* -1 = 尚未判定过环色。用 -1 而不是 0（0 是「我的网络」），
+       * 保证首帧 syncCities 一定写一遍环色，不必依赖 buildCities 里填的默认值。 */
+      cityRingTone[i] = -1;
     });
 
     cityGeom = new THREE.BufferGeometry();
@@ -601,12 +665,30 @@
     return false;
   }
 
+  /* 判断某城是否「仅被竞对通航」（我不通航，但至少一家存活竞对有航线）。
+   * 与 cityConnected 对称，只是查 state.rivals[].routes。
+   * ⚠ 调用处一律写成 `!connected && cityRivaled(...)`（短路在前）：
+   *   我自己的城优先，不必再扫一遍竞对，省掉一半比较。
+   * 代价量级与 cityConnected 相同（24 城 × 6 家 × ~15 条 ≈ 2160 次/帧），可忽略；
+   * 换来的是「竞对刚开线、冷环立刻出现」。 */
+  function cityRivaled(state, cityId) {
+    for (var i = 0; i < state.rivals.length; i++) {
+      var rv = state.rivals[i];
+      if (!rv.alive) continue;                       // 已退市的竞对不算占位
+      for (var j = 0; j < rv.routes.length; j++) {
+        var r = rv.routes[j];
+        if (r.a === cityId || r.b === cityId) return true;
+      }
+    }
+    return false;
+  }
+
   var CITY_PULSE_SEC = 0.6;
 
   function syncCities(state, dt) {
     if (!cityGeom) return;
     var dirty = false, sizeDirty = false, colorDirty = false;
-    var rDirty = false, rSizeDirty = false, aDirty = false;
+    var rDirty = false, rSizeDirty = false, rColorDirty = false, aDirty = false;
     var decay = (dt > 0) ? dt / CITY_PULSE_SEC : 0;
 
     /* 背面剔除（城市三层关掉 depthTest 后必须自己做）：
@@ -649,7 +731,21 @@
       cityLevel[i] = lv;
 
       var connected = cityConnected(state, c.id);
-      var ringed = connected ? 1 : 0;
+      /* 环的归属：0 = 我的网络（橙黄）、1 = 仅竞对（紫罗兰）、-1 = 无环。
+       * ⚠ 「仅竞对」必须排除我已通航的城：同一座城叠两种环既互相抵消，也读不出优先级。
+       * 竞对航线在面板里看不到，这圈紫环是玩家唯一能「看出竞对铺到哪了」的通道 ——
+       * 因此它与我的橙黄环同尺寸、亮度相近，只靠**色相**归属，不靠「谁更暗」。 */
+      var tone;
+      if (connected) tone = 0;
+      else tone = cityRivaled(state, c.id) ? 1 : -1;
+      if (cityRingTone[i] !== tone) {
+        cityRingTone[i] = tone;
+        // 无环时色值无所谓（alpha=0），仍写回我的橙黄，保持缓冲内容确定
+        var rc = hexToRgb(tone === 1 ? PALETTE.rivalHex : PALETTE.mineHex);
+        ringColor[i * 3] = rc[0]; ringColor[i * 3 + 1] = rc[1]; ringColor[i * 3 + 2] = rc[2];
+        rColorDirty = true;
+      }
+      var ringed = tone >= 0 ? 1 : 0;
       if (cityRinged[i] !== ringed) { cityRinged[i] = ringed; rDirty = true; }
 
       // 尺寸：等级 1..5 → 0.72 / 0.88 / 1.0 / 1.16 / 1.34 倍基准；基地额外 1.25 倍
@@ -683,9 +779,14 @@
         colorDirty = true;
       }
 
-      // 环：只有我的网络里的城才有环，且亮度随等级上升（大城更醒目）
-      // 上限压到 0.9/0.85：环本身已是橙黄，再叠满亮度会被 bloom 拉出一圈光边
-      var ra = connected ? (c.isHome ? 0.9 : (0.40 + lv * 0.09)) : 0;
+      /* 环透明度：两档都要求「看得清」，归属靠**色相**区分，不再靠亮度压差。
+       * 我的环随等级上升（大城更醒目）；竞对环给固定 0.65，与我的最低档（0.49）同量级 ——
+       * 玩家在决定往哪扩张之前，必须看清竞对已经铺到哪了（见色板注释的三次修订）。
+       * 上限压到 0.9/0.85：环是加性混合，再叠满亮度会被 bloom 拉出一圈光边。
+       * 竞对环有效 luma ≈ 0.65 × 0.647 ≈ 0.42，仍远在阈值 0.86 之下。 */
+      var ra = 0;
+      if (tone === 0) ra = c.isHome ? 0.9 : (0.40 + lv * 0.09);
+      else if (tone === 1) ra = 0.65;
       if (p > 0) ra = Math.min(1.4, ra * (1 + 1.5 * p));
       ra *= face;                       // 背面城市连环一起收掉，否则环会透穿地球
       if (Math.abs(ringAlpha[i] - ra) > 1e-6) { ringAlpha[i] = ra; rDirty = true; }
@@ -697,6 +798,7 @@
     if (sizeDirty) cityGeom.getAttribute('aSize').needsUpdate = true;
     if (aDirty) cityGeom.getAttribute('aAlpha').needsUpdate = true;
     if (rDirty) ringGeom.getAttribute('aAlpha').needsUpdate = true;
+    if (rColorDirty) ringGeom.getAttribute('aColor').needsUpdate = true;
     if (rSizeDirty) ringGeom.getAttribute('aSize').needsUpdate = true;
   }
 
@@ -793,7 +895,8 @@
     // ① 我的航线（含刚开通的 fx 高亮）
     for (i = 0; i < state.routes.length; i++) {
       r = state.routes[i];
-      wanted.push({ key: r.key, a: r.a, b: r.b, owner: 'mine', glow: !!arcGlow[r.key] });
+      wanted.push({ key: r.key, a: r.a, b: r.b, owner: 'mine', glow: !!arcGlow[r.key],
+                    color: state.airlineColor });
     }
     // ② 竞对航线（只画前若干条，避免把屏幕塞满）
     var rivalShown = 0;
@@ -805,7 +908,8 @@
         var key = rr.key || AT.routeKey(rr.a, rr.b);
         if (arcSet[key] !== undefined) continue;      // 与我的航线重合：我的优先，跳过
         if (rivalShown >= 40) break;
-        wanted.push({ key: key, a: rr.a, b: rr.b, owner: 'rival', glow: false });
+        wanted.push({ key: key, a: rr.a, b: rr.b, owner: 'rival', glow: false,
+                      color: rv.color });
         rivalShown++;
       }
     }
@@ -830,12 +934,18 @@
       seen[w.key] = 1;
       var c = AT.CITIES_BY_ID[w.a], c2 = AT.CITIES_BY_ID[w.b];
       if (!c || !c2) { clearArc(i); arcSlots[i] = null; continue; }
-      var col = w.owner === 'mine'
-        ? (w.glow ? PALETTE.arcOpen : PALETTE.arcMine)
-        : PALETTE.arcRival;
-      // 我的航线抬得更高（视觉上前景），竞对贴地（退后景）
+      var col;
+      if (w.glow) {
+        /* 开航瞬间：先闪一道比任何归属色都亮的暖白，随后落回该航司的识别色 */
+        col = hexToRgb(PALETTE.arcOpen);
+      } else if (w.owner === 'mine') {
+        col = toneRgb(w.color, PALETTE.arcMine, ARC_TINT);
+      } else {
+        col = toneRgb(w.color, PALETTE.arcRival, ARC_TINT);
+      }
+      // 我的航线抬得更高 —— 这是「谁是主角」的空间线索（主次不再靠压暗竞对来表达）
       var lift = w.owner === 'mine' ? 0.035 : 0.018;
-      writeArc(i, c, c2, hexToRgb(col), lift);
+      writeArc(i, c, c2, col, lift);
       arcSlots[i] = { key: w.key, a: w.a, b: w.b };
       arcSet[w.key] = i;
     }
@@ -923,7 +1033,9 @@
         planeList.push({
           key: r.key, a: r.a, b: r.b,
           phase: j / cnt, speed: spd,
-          color: PALETTE.planeMine
+          /* 客机与它飞的航线同色（2026-09-30）：客机是「骑在这条线上」的亮点，
+           * 若线与点在颜色上分家，读者会以为是两套信息。 */
+          c: toneRgb(state.airlineColor, PALETTE.planeMine, PLANE_TINT)
         });
       }
     }
@@ -943,7 +1055,7 @@
         planeList.push({
           key: key, a: rr.a, b: rr.b,
           phase: (i * 0.23 + j * 0.11) % 1, speed: 0.8,
-          color: PALETTE.planeRival
+          c: toneRgb(rv.color, PALETTE.planeRival, PLANE_TINT)
         });
       }
     }
@@ -1039,7 +1151,7 @@
       planeDummy.updateMatrix();
       planeMesh.setMatrixAt(i, planeDummy.matrix);
 
-      col = _color.setHex(p.color);
+      col = _color.setRGB(p.c[0], p.c[1], p.c[2]);
       col.multiplyScalar(0.85 + 0.5 * Math.sin(t * Math.PI));   // 中段更亮（贴近弧线最高点）
       planeMesh.setColorAt(i, col);
       planeHidden[i] = false;                                    // 标记为「在用」

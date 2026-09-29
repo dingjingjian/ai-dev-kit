@@ -37,6 +37,11 @@ SETUP = r"""
   const S = window.AT.sim;
   const log = [];
   st.cash = 5e9; st.debt = 0;
+  /* 本用例量的是**客机机头朝向的准确度**，与「新航线须与网络相连」的玩法规则无关，
+   * 而它要的三条线刻意分散在地球各处（C09-C13、C17-C09 都不与基地相连）——
+   * 故显式关掉连通性约束（sim.create 的 freeNetwork 开关）。
+   * 连通性规则本身由 tests/headless.js 的「网络连通性」一节断言。 */
+  st.freeNetwork = true;
   let guard = 0;
   while (st.phase === 'briefing' && guard++ < 40) S.advance(st, 1);
   log.push('phase → ' + st.phase);
@@ -190,6 +195,10 @@ async def run(pw):
     page.on("pageerror", lambda e: errs.append("PAGEERROR: " + str(e)))
 
     await page.goto((ROOT / "index.html").as_uri(), wait_until="load")
+    # 开局选航司（用户 2026-09-29）：不先选一家则不会 boot ——
+    # 渲染层不初始化，下面找不到飞机 InstancedMesh。点第一张进入游戏。
+    await page.wait_for_timeout(900)
+    await page.click("#uSelectList .al-card")
     await page.wait_for_timeout(4000)
 
     inst = await page.evaluate(INSTALL)

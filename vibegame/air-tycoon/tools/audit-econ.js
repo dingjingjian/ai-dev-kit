@@ -37,7 +37,9 @@ function rpad(s, n) { s = String(s); while (s.length < n) s = s + ' '; return s;
 function n2(x) { return (x == null || isNaN(x)) ? '—' : x.toFixed(1); }
 
 function stateAt(home) {
-  var st = S.create({ seed: 11, homeCityId: home });
+  /* freeNetwork：本工具要测的是**任意城市对**的成本收益（含大量与基地无关的洲际线），
+   * 故必须关掉「新航线须与现有网络相连」的规则 —— 那是玩法约束，不是经济规律。 */
+  var st = S.create({ seed: 11, homeCityId: home, freeNetwork: true });
   S.advance(st, 9);
   st.cash = 1e9; st.debt = 0;
   return st;
@@ -64,7 +66,7 @@ function optimalConfig(state, aId, bId) {
     var perMax = Math.min(C.maxPerDayPerPlane, S.maxPerDayFor(p.id, dist));
     for (var n = 1; n <= 6; n++) {
       for (var per = 1; per <= perMax; per++) {
-        var st = S.create({ seed: 11, homeCityId: 'C01' });
+        var st = S.create({ seed: 11, homeCityId: 'C01', freeNetwork: true });
         S.advance(st, 9);
         st.cash = 1e9; st.debt = 0;
         var have = st.planes.filter(function (x) {

@@ -13,4 +13,6 @@ Thumbs.db
 
 # 本地临时脚本与中间产物
 _scratch/
-docs/shots/*.tmp.png
+
+# 测试/校验脚本产出的截图（可由 tests/smoke-render.py、tests/verify-heading.py 重新生成，不入库）
+docs/shots/

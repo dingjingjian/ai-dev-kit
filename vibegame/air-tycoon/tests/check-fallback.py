@@ -92,6 +92,18 @@ async def run(pw, tmp):
         };
     """)
     await page.goto(url, wait_until="load")
+    # 开局选航司（用户 2026-09-29）：降级状态下覆盖层也必须能显示与点选 ——
+    # 它是纯 DOM/CSS（display:flex + classList 切换），不依赖任何现代 API。
+    await page.wait_for_timeout(900)
+    selA = await page.evaluate("""() => {
+        const w = document.getElementById('uSelect');
+        const b = document.getElementById('uSelectList');
+        return { shown: !!(w && w.classList.contains('show')),
+                 cards: b ? b.querySelectorAll('.al-card').length : 0 };
+    }""")
+    ok(selA["shown"], "降级状态下「选航司」覆盖层仍显示", selA)
+    ok(selA["cards"] == 6, "降级状态下六家航司仍渲染", selA)
+    await page.click("#uSelectList .al-card")   # 第一张：中国东方航空（基地 C01）
     await page.wait_for_timeout(4500)
 
     out["degraded"] = await page.evaluate("""() => {

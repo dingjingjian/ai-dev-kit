@@ -6,11 +6,18 @@
  *
  * 设定口径（用户 2026-09-14 定稿）：
  *   - **不设国家**。地图上只有城市与地区，没有国界、没有军队、没有政治实体。
- *     玩家的身份是一家**虚拟航空公司**，公司名开局自定义。
+ *     玩家的身份是一家航空公司，开局从 §2.5 的六家航司中**选一家**（用户 2026-09-29 拍板）。
  *   - 城市名用**真实城市名**（用户拍板）—— 城市是经营对象，不是打击对象，
  *     用真名能让玩家一眼看出「上海 → 东京」这条线该不该开，上手成本最低。
  *   - 地区（region）只作**经济地理聚类**用：同地区航线短、需求稳；
  *     跨地区航线贵、需求高。地区名是地理概念（东亚、西欧），不是政治实体。
+ *
+ * ⚠ 航司命名口径变更（用户 2026-09-29 拍板）：**使用真实航司名**。
+ *   首版沿用「不影射真实航司」的虚构名（见 sim.js 的 RIVAL_NAMES），
+ *   但用户在加入「开局选航司」玩法时明确要求用真实航司名（辨识度高、原型直观），
+ *   故 §2.5 的六家航司取真实公司名，作为「玩家可选航司」。
+ *   注意二者并存：有真实航司池时竞对直接复用未选中的五家（见 sim.js create），
+ *   只有**无航司参数**的旧调用路径才回落到虚构的 RIVAL_NAMES。
  *
  * ⚠ 与 defcon 的分野：defcon 的红线是「不出现真实城市/国家名」（核打击题材）；
  *   本作题材是民航经营，打击对象是竞争对手而非城市，用真名不构成合规风险，
@@ -318,8 +325,104 @@
     { code: 'EUR',    name: '西欧',     demandMul: 1.15, costMul: 1.20, hubBonus: 1.08, color: '#1D9E75' },
     { code: 'NAMER',  name: '北美',     demandMul: 1.16, costMul: 1.12, hubBonus: 1.10, color: '#378ADD' },
     { code: 'MIDEAST',name: '中东',     demandMul: 1.05, costMul: 0.92, hubBonus: 1.14, color: '#7F77DD' },
-    { code: 'OTHER',  name: '其他地区', demandMul: 0.92, costMul: 0.94, hubBonus: 1.00, color: '#888780' }
+    /* 第 6 个地区是「五大区域之外」的兜底聚类：悉尼 / 约翰内斯堡 / 圣保罗 / 内罗毕
+     * —— 四城纬度全在南半球（-1° ~ -34°）。命名为「南半球」而不是「其他地区」：
+     * 「其他」是个占位词，玩家读到会以为没做完（用户 2026-09-30 指出的正是这一点）。
+     * ⚠ 代号仍是 OTHER（代码与存档口径不变），只换显示名。 */
+    { code: 'OTHER',  name: '南半球',   demandMul: 0.92, costMul: 0.94, hubBonus: 1.00, color: '#888780' }
   ];
+
+  /* ───────────────────────── 2.5 航空公司（6 家，开局选 1 家）─────────────────────────
+   * 用户 2026-09-29 拍板的玩法：**开局先选航空公司**，选定即定下基地与专属技能。
+   * 六家航司各占一个地区（与 §2 的 6 个 region 一一对应），基地是该地区的枢纽城市 ——
+   * 于是「选哪家」同时决定了开局的地理位置与战略路线（东向/西向/中转……）。
+   *
+   * ⚠ 未选中的五家**直接变成 AI 竞对**（见 sim.js create）：它们的母城就是各自基地，
+   *   正好构成「一地区一家」的全球竞争格局，与旧的 hubPool 选法殊途同归但更有辨识度。
+   *
+   * 字段：
+   *   iata        —— 现实 IATA 二字码（选航司页右上角水印，纯展示）
+   *   region      —— 所属地区（同时是其「本地区」，特色技能按它判定）
+   *   baseCityId  —— 基地城市（必须落在 region 内，且是 hub）
+   *   baseCode    —— 基地机场的现实 IATA 三字码（选航司页 HUB 行展示，纯展示）
+   *   prototype   —— 现实原型说明（给玩家看的「这家像谁」）
+   *   trait       —— 特色技能，字段见 AT.normalizeTrait 的默认值（纯被动，无操作）
+   *
+   * ⚠ color 的口径：它是**选航司页的识别色**（2026-09-30 起也是地图上该航司航线与客机的颜色，
+   *   见 render.js 的色板注释），取自所属地区色（§2 的 REGIONS[].color），
+   *   不是航司真实品牌色 —— 因为按品牌色会有四家都是红的（东航/英航/阿联酋/澳航），
+   *   六家根本无法区分。地区取色才能保证六色互不撞车。仅有 qf 因「南半球」的
+   *   地区色是中性灰（灰在深底上像禁用态），改用 rose 补全色相环缺口。
+   */
+  AT.AIRLINES = [
+    /* ── 东亚：超大机队的规模经济 ── */
+    { id: 'al_mu', iata: 'MU', name: '中国东方航空', region: 'EASIA', baseCityId: 'C01', baseCode: 'PVG', color: '#E24B4A',
+      prototype: '东亚大型全服务网络航司',
+      trait: { id: 'scale', name: '规模经济',
+        desc: '超大机队摊薄固定成本：全机队持有成本 −20%。',
+        ownershipMul: 0.80 } },
+
+    /* ── 东南亚：高端服务与品牌溢价 ── */
+    { id: 'al_sq', iata: 'SQ', name: '新加坡航空', region: 'SEASIA', baseCityId: 'C05', baseCode: 'SIN', color: '#EF9F27',
+      prototype: '高端服务型枢纽航司',
+      trait: { id: 'service', name: '服务品牌',
+        desc: '顶级服务口碑：起始声誉 65（默认 50），声誉对需求与票价的影响翻倍。',
+        repStart: 65, repEffectMul: 2.0 } },
+
+    /* ── 西欧：成熟枢纽的时刻优势 ── */
+    { id: 'al_ba', iata: 'BA', name: '英国航空', region: 'EUR', baseCityId: 'C09', baseCode: 'LHR', color: '#1D9E75',
+      prototype: '欧洲老牌跨洋枢纽航司',
+      trait: { id: 'alliance', name: '联盟网络',
+        desc: '老牌枢纽的时刻优先权：所有航线的时刻槽位 +15%。',
+        slotMul: 1.15 } },
+
+    /* ── 北美：雄厚资本与融资能力 ── */
+    { id: 'al_ua', iata: 'UA', name: '联合航空', region: 'NAMER', baseCityId: 'C15', baseCode: 'ORD', color: '#378ADD',
+      prototype: '北美规模网络航司',
+      trait: { id: 'capital', name: '雄厚资本',
+        desc: '资本市场融资便利：起始资金 +50%，贷款额度 +50%。',
+        startCashMul: 1.5, loanLimitMul: 1.5 } },
+
+    /* ── 中东：东西方十字路口的中转枢纽 ── */
+    { id: 'al_ek', iata: 'EK', name: '阿联酋航空', region: 'MIDEAST', baseCityId: 'C17', baseCode: 'DXB', color: '#7F77DD',
+      prototype: '中东超级中转航司',
+      trait: { id: 'transit', name: '中转枢纽',
+        desc: '连接东西方的中转网络：航线两端分属不同地区、且一端在基地地区时，需求 +25%。',
+        crossRegionDemand: 1.25 } },
+
+    /* ── 南半球（大洋洲 / 非洲 / 南美）：本土市场的区域深耕 ── */
+    { id: 'al_qf', iata: 'QF', name: '澳洲航空', region: 'OTHER', baseCityId: 'C21', baseCode: 'SYD', color: '#E05284',
+      prototype: '大洋洲区域霸主',
+      trait: { id: 'regional', name: '区域深耕',
+        desc: '南半球本土壁垒：本区城市的开发度增长 +40%。',
+        devGrowthMul: 1.40 } }
+  ];
+
+  /* 特色技能的默认值（中性）。
+   * sim 的每一处技能读取都经 AT.normalizeTrait —— 这样「没有技能」与
+   * 「技能字段缺省」走同一条路径，旧的无航司调用路径行为完全不变。
+   * ⚠ 所有乘数类字段默认 1（不是 0）；repStart 默认 50（声誉中性值）。 */
+  AT.NEUTRAL_TRAIT = {
+    id: 'none', name: '无特殊技能', desc: '—',
+    ownershipMul: 1,      // 机队持有成本乘数
+    slotMul: 1,           // 航线时刻槽位乘数
+    crossRegionDemand: 1, // 「一端在基地地区、另一端在外部地区」航线的需求乘数
+    devGrowthMul: 1,      // 基地地区城市开发度增长乘数
+    startCashMul: 1,      // 起始资金乘数
+    loanLimitMul: 1,      // 贷款额度乘数
+    repStart: 50,         // 起始声誉
+    repEffectMul: 1       // 声誉对需求/票价的影响倍率
+  };
+
+  AT.normalizeTrait = function (t) {
+    var out = {};
+    var keys = Object.keys(AT.NEUTRAL_TRAIT);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      out[k] = (t && t[k] != null) ? t[k] : AT.NEUTRAL_TRAIT[k];
+    }
+    return out;
+  };
 
   /* ───────────────────────── 3. 城市（24 座，精简首版）─────────────────────────
    * 首版刻意收到 24 座（用户选了「精简首版，先验证玩法」）：
@@ -364,7 +467,7 @@
     { id: 'C19', region: 'MIDEAST',name: '开罗',   lat: 30.04, lon: 31.24,  pop: 21.3, dev0: 60, wealth: 0.78, hub: false },
     { id: 'C20', region: 'MIDEAST',name: '孟买',   lat: 19.08, lon: 72.88,  pop: 20.7, dev0: 64, wealth: 0.82, hub: false },
 
-    /* ── 其他地区 OTHER（大洋洲 / 非洲 / 南美）── */
+    /* ── 南半球 OTHER（大洋洲 / 非洲 / 南美）：四城纬度全为负 ── */
     { id: 'C21', region: 'OTHER',  name: '悉尼',   lat: -33.87,lon: 151.21, pop: 5.3,  dev0: 84, wealth: 1.32, hub: true  },
     { id: 'C22', region: 'OTHER',  name: '约翰内斯堡',lat:-26.20,lon: 28.05,pop: 6.0,  dev0: 62, wealth: 0.86, hub: false },
     { id: 'C23', region: 'OTHER',  name: '圣保罗', lat: -23.55,lon: -46.63, pop: 22.4, dev0: 70, wealth: 0.88, hub: true  },
@@ -534,6 +637,9 @@
 
   AT.REGIONS_BY_CODE = {};
   AT.REGIONS.forEach(function (r) { AT.REGIONS_BY_CODE[r.code] = r; });
+
+  AT.AIRLINES_BY_ID = {};
+  AT.AIRLINES.forEach(function (a) { AT.AIRLINES_BY_ID[a.id] = a; });
 
   AT.EVENTS_BY_ID = {};
   AT.EVENTS.forEach(function (e) { AT.EVENTS_BY_ID[e.id] = e; });

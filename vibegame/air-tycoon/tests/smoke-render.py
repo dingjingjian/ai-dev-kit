@@ -44,9 +44,34 @@ async def run(pw):
 
     url = (ROOT / "index.html").as_uri()
     await page.goto(url, wait_until="load")
-    await page.wait_for_timeout(4000)
+    await page.wait_for_timeout(1200)
 
     out = {}
+
+    # ── 0. 开局选航司（用户 2026-09-29）──
+    # ⚠ 这是新增的**必经入口**：不点卡则游戏永不开始（gameRunning 恒 false）。
+    #   故先断言覆盖层与六家航司都渲染出来，再点第一张进入游戏。
+    #   第一张是中国东方航空（基地 C01）—— 与首版默认基地一致，
+    #   故后续所有断言的数值口径（示范航线、排序等）与改动前保持不变。
+    out["select"] = await page.evaluate("""() => {
+        const w = document.getElementById('uSelect');
+        const b = document.getElementById('uSelectList');
+        return {
+          shown: !!(w && w.classList.contains('show')),
+          cards: b ? b.querySelectorAll('.al-card').length : 0,
+          names: b ? Array.prototype.map.call(b.querySelectorAll('.al-name'),
+                                             function (e) { return e.textContent.trim(); }) : [],
+          gameRunning: !!(window.AT && window.AT.game && window.AT.game.running)
+        };
+    }""")
+    await page.click("#uSelectList .al-card")
+    await page.wait_for_timeout(4000)
+    out["selectAfter"] = await page.evaluate("""() => ({
+        shown: document.getElementById('uSelect').classList.contains('show'),
+        running: !!(window.AT && window.AT.game && window.AT.game.running),
+        airline: window.AT.game.state ? window.AT.game.state.airlineName : null,
+        homeCity: window.AT.game.state ? window.AT.game.state.homeCityId : null
+    })""")
 
     # ── 1. 基础状态 ──
     out["core"] = await page.evaluate("""() => {
@@ -596,7 +621,7 @@ async def main():
     print("=" * 62)
     print("air-tycoon 渲染层实机冒烟")
     print("=" * 62)
-    for k in ("core", "render", "pixels", "after", "click", "chain"):
+    for k in ("select", "selectAfter", "core", "render", "pixels", "after", "click", "chain"):
         print("\n[" + k + "]")
         for kk, vv in out[k].items():
             print("   " + str(kk).ljust(18) + " = " + str(vv))
@@ -614,10 +639,16 @@ async def main():
 
     c = out["core"]
     ch = out.get("chain", {})
+    sel = out.get("select") or {}
+    sela = out.get("selectAfter") or {}
     # 渲染层红线
     base_ok = (c["hasAT"] and c["renderOk"] and c["gameRunning"]
                and not c["fallbackShown"] and c["appOverflow"] <= 0
                and not out["errors"])
+    # 开局选航司红线（本次新增的必经入口）
+    sel_ok = bool(sel.get("shown") and sel.get("cards") == 6
+                  and not sel.get("gameRunning")
+                  and not sela.get("shown") and sela.get("running") and sela.get("airline"))
     # UI 链红线（每一条都是「玩家能不能真的操作」的硬指标）
     ui_checks = [
         ("dock 条可见", ch.get("dockVisible")),
@@ -656,12 +687,18 @@ async def main():
             all_ui = False
         print("   " + mark + " " + name)
 
-    ok = base_ok and all_ui
+    print("\n[开局选航司验收]")
+    print("   " + ("✓" if sel_ok else "✗") +
+          " 覆盖层显示 6 家航司 → 点选后收起并开局")
+
+    ok = base_ok and all_ui and sel_ok
     print("\n结论：" + ("通过 ✅" if ok else "有问题 ❌"))
     if not base_ok:
         print("   （渲染层未达标）")
     if not all_ui:
         print("   （UI 操作链有断点，见上表 ✗ 项）")
+    if not sel_ok:
+        print("   （开局选航司入口有问题）")
     return 0 if ok else 1
 
 

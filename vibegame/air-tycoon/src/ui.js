@@ -158,6 +158,54 @@
     syncTabs();
   }
 
+  /* ───────────────────────── 开局选航司（用户 2026-09-29 拍板）─────────────────────────
+   *
+   * ⚠ 它必须在 **boot 之前** 运行 —— 此时 ui.state 还是 null、init 也还没跑，
+   *   所以这个函数**只读 data.js 的 AT.AIRLINES**，绝不碰 ui.state / el 缓存
+   *   （el 由 init→cacheEls 填充，这里用 $() 直接查）。
+   *
+   * 交互：点击一张卡片 → 收起覆盖层 → 回调 onPick(airlineId)（由启动脚本去 boot）。
+   * 返回 true 表示选择界面已呈现；返回 false 时调用方应退回默认开局
+   * （#uSelect 缺失 / 没有航司数据 —— 不能让玩家卡在白屏上）。 */
+  function showAirlineSelect(onPick) {
+    var wrap = $('uSelect'), box = $('uSelectList');
+    var list = (AT.AIRLINES || []);
+    if (!wrap || !box || !list.length) return false;
+
+    /* 卡片（用户 2026-09-30 二次反馈「简洁但不简陋」）：IATA 二字码作为大号低透明度
+     * 水印贴在卡右上角（装饰性，故 aria-hidden），航司名用识别色 —— 设计感来自
+     * 字号层级与留白，而非边框图形。识别色 --ac 由内联样式注入，animation-delay 错峰入场。 */
+    var html = '';
+    list.forEach(function (a, i) {
+      var base = AT.CITIES_BY_ID[a.baseCityId] || {};
+      var reg = AT.REGIONS_BY_CODE[a.region] || {};
+      var tr = AT.normalizeTrait(a.trait);
+      html += '<button class="al-card" type="button" data-act="pick-airline" data-val="' + h(a.id) +
+        '" style="--ac:' + h(a.color || '#63d2ff') + ';animation-delay:' + (i * 60) + 'ms">' +
+        '<span class="al-iata" aria-hidden="true">' + h(a.iata || '') + '</span>' +
+        '<div class="al-name">' + h(a.name) + '</div>' +
+        '<div class="al-pos">' + h(a.prototype || reg.name || '') + '</div>' +
+        '<div class="al-route"><span class="al-hub">HUB</span><b>' + h(base.name || '—') + '</b>' +
+        '<span class="al-code">' + h(a.baseCode || base.id || a.baseCityId) + '</span>' +
+        '<span class="al-leader" aria-hidden="true"></span>' +
+        '<span class="al-region">' + h(reg.name || '') + '</span></div>' +
+        '<div class="al-skill">' + h(tr.name) + '</div>' +
+        '<div class="al-desc">' + h(tr.desc) + '</div>' +
+        '</button>';
+    });
+    box.innerHTML = html;
+    wrap.classList.add('show');
+
+    box.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-act="pick-airline"]') : null;
+      if (!t) return;
+      var id = t.getAttribute('data-val');
+      wrap.classList.remove('show');
+      if (onPick) onPick(id);
+    }, false);
+    return true;
+  }
+
   /* ───────────────────────── 画布交互 ───────────────────────── */
 
   /* 点城市 → 飞过去 + 弹卡片；长按/拖动已由 render 处理，这里只区分「点」与「拖」。
@@ -224,8 +272,13 @@
         html += '<span class="cc-tag">' + h(on ? on.name : other) + '</span>';
       });
       html += '</div>';
-    } else {
+    } else if (S.networkCityIds(st)[c.id]) {
+      /* 「从这里开新航线」只在**本城已在我的网络里**时才给（2026-09-30 用户拍板）：
+       * 旧版对任何城市都给这个按钮，于是玩家能在一座与自己的网络毫无关系的城市上
+       * 直接开出一条线 —— 凭空冒出来的航线。基地是网络的根，故基地永远给按钮。 */
       html += '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
+    } else {
+      html += '<div class="cc-lines"><i class="c-warn">未与你的网络连通 · 新航线只能从基地或已通航城市延伸出去</i></div>';
     }
     el.uCityCard.innerHTML = html;
     el.uCityCard.classList.add('show');
@@ -446,7 +499,9 @@
     var st = ui.state;
     if (!ui.newTo) return { ok: false, reason: '请选择目的地' };
     if (!ui.newType) return { ok: false, reason: '请选择机型' };
-    var from = ui.newFrom || st.homeCityId;
+    /* 出发地要落在我的网络里（与 renderNewRoute 同一口径；sim 仍会再校验一次） */
+    var net = S.networkCityIds(st);
+    var from = (ui.newFrom && net[ui.newFrom]) ? ui.newFrom : st.homeCityId;
 
     var idle = S.idlePlanes(st).filter(function (p) { return p.type === ui.newType; }).length;
     if (!idle) {
@@ -816,7 +871,14 @@
 
   function renderFleet(st) {
     var idle = S.idlePlanes(st);
-    var out = '';
+    /* 顶部：公司信息 + 特色技能。玩家的航司身份与技能常驻可见 ——
+     * 技能是被动生效的，若不显式展示，玩家感觉不到它存在（静默失效的另一种形态）。 */
+    var home = AT.CITIES_BY_ID[st.homeCityId] || {};
+    var tr = S.traitOf(st);
+    var out = '<div class="fsec"><div class="rd-h">航空公司</div>' +
+      '<div class="frow"><span>' + h(st.companyName || '—') + '</span>' +
+      '<span class="fstate">基地 · ' + h(home.name || '—') + '</span></div>' +
+      '<div class="rd-note">特色技能「' + h(tr.name) + '」：' + h(tr.desc) + '</div></div>';
     if (idle.length) {
       out += '<div class="fsec warn-sec"><div class="rd-h">闲置飞机 ' + idle.length + ' 架 —— 不飞也在亏持有成本</div>' +
         '<div class="flist">';
@@ -857,7 +919,12 @@
   }
 
   function renderNewRoute(st) {
-    var fromId = ui.newFrom || st.homeCityId;
+    /* 出发城市必须是**我的网络里**的城市（2026-09-30）：ui.newFrom 可能已经是失效值
+     * （网络收缩 —— 玩家关掉了那条线，或它本来就没连上），此时回落到基地。
+     * 这一段是 UI 侧的自愈，真正的规则仍在 sim.openRoute（唯一真源）。 */
+    var net = S.networkCityIds(st);
+    if (!ui.newFrom || !net[ui.newFrom]) ui.newFrom = st.homeCityId;
+    var fromId = ui.newFrom;
     var from = AT.CITIES_BY_ID[fromId];
     var out = '<div class="nw-sec"><div class="rd-h">① 出发城市</div><div class="chips">';
     // 出发地：基地 + 已通航城市（未通航城市不能作为起点 —— 网络是连通的）
@@ -1168,6 +1235,9 @@
     onResize: onResize,
     toast: toast,
     money: money,
+    /* 开局选航司：**必须在 init/boot 之前**调用（此时 ui.state 仍为 null），
+     * 故它只读 data.js，不碰 ui.state。启动脚本见 index.html 末尾。 */
+    showAirlineSelect: showAirlineSelect,
     openPanel: openPanel,
     closePanel: closePanel,
     /* 音效入口暴露给测试打桩：测试里替换 ui._sfx = fn 即可断言

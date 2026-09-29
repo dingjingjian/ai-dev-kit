@@ -39,7 +39,7 @@ var CASES = [
 function probe(ov, cs) {
   var saved = {};
   Object.keys(ov || {}).forEach(function (k) { saved[k] = C[k]; C[k] = ov[k]; });
-  var st = S.create({ seed: 7, homeCityId: cs.home });
+  var st = S.create({ seed: 7, homeCityId: cs.home, freeNetwork: true });   // 标定任意城市对 → 关掉连通性约束
   S.advance(st, 9);
   st.cash = 1e9; st.debt = 0;
   S.buyPlane(st, cs.ty, cs.n);

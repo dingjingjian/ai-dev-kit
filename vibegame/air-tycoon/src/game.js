@@ -44,7 +44,11 @@
   };
 
   /* 开局：建 state → 初始化渲染 → 起主循环。
-   * opts: { seed, homeCityId, companyName, autoPlayer } */
+   * opts: { seed, airlineId, homeCityId, companyName, autoPlayer }
+   *   airlineId 由「开局选航司」界面传入（见 index.html 启动脚本），
+   *   opts 原样透传给 S.create —— sim 侧负责按它决定基地/资金/技能/竞对。
+   * ⚠ boot 必须在用户手势（点选航司）中调用：下面的 A.unlock() 依赖手势，
+   *   否则 AudioContext 解锁失败、首次 play() 会被自动播放策略静默拦下。 */
   function boot(opts) {
     game.state = S.create(opts || {});
 

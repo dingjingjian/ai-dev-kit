@@ -119,6 +119,24 @@ async def check_runtime(tmp):
         page.on("requestfailed", lambda r: fails.append(r.url.split("/")[-1] or r.url))
 
         await page.goto((tmp / "index.html").as_uri(), wait_until="load")
+        # ── 0. 开局选航司（用户 2026-09-29）：提交包也必须先选一家才会开局 ──
+        #   覆盖层是纯 DOM/CSS，不依赖任何现代 API，故 file:// 下同样要能渲染。
+        await page.wait_for_timeout(900)
+        sel = await page.evaluate("""() => {
+            const w = document.getElementById('uSelect');
+            const b = document.getElementById('uSelectList');
+            return {
+              shown: !!(w && w.classList.contains('show')),
+              cards: b ? b.querySelectorAll('.al-card').length : 0,
+              running: !!(window.AT && window.AT.game && window.AT.game.running)
+            };
+        }""")
+        ok(sel["shown"], "开局显示「选航司」覆盖层", sel)
+        ok(sel["cards"] == 6, "六家航司都渲染出来", sel)
+        ok(not sel["running"], "未选航司前游戏尚未开局（符合预期）", sel)
+        # 点第一张（中国东方航空，基地 C01）：与首版默认基地一致，
+        # 后续断言（示范航线、排序口径）与改动前保持一致。
+        await page.click("#uSelectList .al-card")
         # ⚠ briefing 阶段 8 秒（CONFIG.briefingSeconds），之后 game.js 的
         #   phaseBefore==='briefing' 钩子才会 seedFirstRoute 给一条示范航线。
         #   等 4.5 秒就断言「有航线」必然失败 —— 那是我的时机错，不是产品 bug。
@@ -151,6 +169,8 @@ async def check_runtime(tmp):
               texOk: !!(A.render && A.render.texOk),
               bloomOk: !!(A.render && A.render.bloomOk),
               gameRunning: !!g.running,
+              airline: g.state ? g.state.airlineName : null,
+              homeCity: g.state ? g.state.homeCityId : null,
               phase: g.state ? g.state.phase : null,
               quarter: g.state ? g.state.quarter : null,
               routes: g.state ? g.state.routes.length : null,
@@ -177,6 +197,8 @@ async def check_runtime(tmp):
         ok(st["texOk"], "**地球贴图真的加载了**（texOk —— 证明内联 data URI 在 file:// 下可用）")
         ok(st["gameRunning"], "主循环在跑")
         ok(st["phase"] == "operating", "简报结束、进入运营阶段", st["phase"])
+        ok(st["airline"], "所选航司已生效（state.airlineName 非空）", st["airline"])
+        ok(st["homeCity"] == "C01", "航司基地即玩家基地（东方航空 → C01）", st["homeCity"])
         ok(st["cityCount"] == 24, "24 座城市数据就位", st["cityCount"])
         # 开局示范航线由 game.js 的 briefing→operating 钩子给出（见 seedFirstRoute）。
         # 它的意义是「让玩家一进场就看到航线弧与客机」，不是预设玩法，故断言它存在。

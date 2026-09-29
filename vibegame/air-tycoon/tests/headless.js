@@ -120,6 +120,68 @@ var dupEv = {}; var dupE = 0;
 AT.EVENTS.forEach(function (e) { if (dupEv[e.id]) dupE++; dupEv[e.id] = 1; });
 ok(dupE === 0, '事件卡 id 无重复');
 
+/* ── 航空公司（开局选航司，用户 2026-09-29）── */
+section('航空公司');
+ok(AT.AIRLINES.length === 6, '航司数 = 6', '实际 ' + AT.AIRLINES.length);
+var badAl = AT.AIRLINES.filter(function (a) {
+  return !a.id || !a.name || !a.region || !a.baseCityId || !AT.CITIES_BY_ID[a.baseCityId] ||
+    !AT.REGIONS_BY_CODE[a.region] || !a.trait || !a.trait.name || !a.trait.desc;
+});
+ok(badAl.length === 0, '航司字段完整且基地/地区引用有效',
+  badAl.map(function (a) { return a.id; }).join(','));
+var dupAl = {}; var dupAlN = 0;
+AT.AIRLINES.forEach(function (a) { if (dupAl[a.id]) dupAlN++; dupAl[a.id] = 1; });
+ok(dupAlN === 0, '航司 id 无重复');
+/* 六家航司各占一个大洲：地区互不重复，且铺满全部 6 个地区 */
+var alReg = {}, alRegN = 0;
+AT.AIRLINES.forEach(function (a) { if (!alReg[a.region]) alRegN++; alReg[a.region] = 1; });
+ok(alRegN === 6 && alRegN === AT.REGIONS.length,
+  '六家航司分属 6 个不同地区（各洲一家）', '覆盖 ' + alRegN + ' 个');
+ok(AT.AIRLINES.every(function (a) { return AT.AIRLINES_BY_ID[a.id] === a; }),
+  'AT.AIRLINES_BY_ID 与 AT.AIRLINES 一一对应');
+/* 中性技能：缺省时全部乘数为 1、声誉 50 —— 保证旧调用路径数值不漂移 */
+var nt = AT.NEUTRAL_TRAIT;
+ok(nt.ownershipMul === 1 && nt.slotMul === 1 && nt.crossRegionDemand === 1 &&
+  nt.devGrowthMul === 1 && nt.startCashMul === 1 && nt.loanLimitMul === 1 &&
+  nt.repStart === 50 && nt.repEffectMul === 1,
+  '中性技能：全部乘数为 1、起始声誉 50');
+
+/* sim 层：选了航司 → 基地/公司名/资金/声誉/竞对全部跟着变 */
+var alUA = AT.AIRLINES_BY_ID['al_ua'];        // 联合航空：起始资金 +50%、贷款额度 +50%
+var stUA = S.create({ seed: 7, airlineId: 'al_ua' });
+ok(stUA.homeCityId === alUA.baseCityId, '基地 = 所选航司的基地',
+  stUA.homeCityId + ' vs ' + alUA.baseCityId);
+ok(stUA.airlineId === 'al_ua' && stUA.companyName === alUA.name,
+  'airlineId 与公司名随航司设置');
+ok(stUA.homeRegion === alUA.region, 'homeRegion 随基地城市地区设置');
+ok(stUA.cash === Math.round(C.startCash * 1.5), '「雄厚资本」起始资金 +50%', String(stUA.cash));
+ok(stUA.loanLimit === Math.round(C.loanLimit * 1.5), '「雄厚资本」贷款额度 +50%',
+  String(stUA.loanLimit));
+ok(S.traitOf(stUA).id === 'capital', 'S.traitOf 读出该航司技能');
+
+var stSQ = S.create({ seed: 7, airlineId: 'al_sq' });   // 新加坡航空：起始声誉 65
+ok(stSQ.reputation === 65, '「服务品牌」起始声誉 65（默认 50）', String(stSQ.reputation));
+
+/* 未选中的 5 家航司成为 AI 竞对，且玩家不在其中 */
+var stRiv = S.create({ seed: 7, airlineId: 'al_mu' });
+ok(stRiv.rivals.length === 5, '未选中的 5 家航司成为竞对', String(stRiv.rivals.length));
+ok(stRiv.rivals.every(function (r) { return r.airlineId && r.airlineId !== 'al_mu'; }),
+  '竞对里没有玩家所选的那家');
+ok(stRiv.rivals.every(function (r) {
+  var a = AT.AIRLINES_BY_ID[r.airlineId];
+  return a && r.homeCityId === a.baseCityId && r.name === a.name;
+}), '竞对基地/名称与对应航司一致');
+
+/* 向后兼容：不传 airlineId → 与首版完全一致 */
+var stOld = S.create({ seed: 7 });
+ok(stOld.airlineId === null && stOld.homeCityId === 'C01' &&
+  stOld.cash === C.startCash && stOld.reputation === 50 &&
+  stOld.loanLimit === C.loanLimit,
+  '不传 airlineId：基地 C01 / 资金 800 / 声誉 50 / 贷款默认',
+  JSON.stringify({ home: stOld.homeCityId, cash: stOld.cash,
+                   rep: stOld.reputation, loan: stOld.loanLimit }));
+ok(S.traitOf(stOld).id === 'none', '不传 airlineId：中性技能（无任何加成）');
+
 /* ── 地理层 ── */
 section('地理层');
 function ST() { return S.create({ seed: 1, homeCityId: 'C01' }); }
@@ -679,6 +741,83 @@ ok(capC === 1 || perPlaneC * capC <= ceilingC,
   'perPlane ' + perPlaneC + ' × cap ' + capC + ' vs 天花板 ' + ceilingC);
 ok(perPlaneC * (capC + 1) > ceilingC, '再多一架就超出时刻天花板（拒绝的根据）',
   'perPlane ' + perPlaneC + ' × ' + (capC + 1) + ' vs 天花板 ' + ceilingC);
+
+/* ── 网络连通性层（2026-09-30 用户拍板）──
+ * 规则：新航线的两端**至少一端**必须是基地或已通航城市 ——
+ *      一家航司的网络只能从母城长出去，不能凭空在任意两城之间开线。
+ * 这条规则写在 sim.openRoute（玩家）与 pickRivalRoute（竞对）两处，此处分别断言。 */
+section('网络连通性');
+var stN = ST();
+S.advance(stN, 9);
+stN.cash = 1e9; stN.debt = 0;
+
+/* ① 开局网络 = {基地}：从基地开线 → 允许 */
+var tyN = AT.PLANES.filter(function (p) { return p.range >= S.routeDistance(stN, 'C01', 'C02'); })
+  .sort(function (x, y) { return x.price - y.price; })[0].id;
+stN.planes.length = 0;
+S.buyPlane(stN, tyN, 3);
+deliverAll(stN);
+var oN1 = S.openRoute(stN, 'C01', 'C02', tyN, 1);
+ok(oN1.ok, '① 从基地开线允许（基地恒在网络里）', oN1.reason);
+
+/* ② 两端都不在网络里 → 拒绝（这是旧版城市卡能凭空开线的漏洞）
+ *    ⚠ 用航程最长的机型：tyN 是按 C01-C02（1067km）挑的最便宜机型，
+ *      飞不了 C09-C13（5570km）。若用 tyN，即便连通性校验被删掉，
+ *      失败原因也会是「航程不足」而让这条断言变成假阳性。 */
+var tyLong = AT.PLANES.slice().sort(function (x, y) { return y.range - x.range; })[0].id;
+var oN2 = S.openRoute(stN, 'C09', 'C13', tyLong, 1);
+ok(!oN2.ok && /相连|连通/.test(oN2.reason || ''),
+  '② 凭空开线被拒：两端都不是基地/已通航城市', oN2.reason);
+
+/* ③ 从已通航城市（C02）继续延伸 → 允许（网络是长出来的） */
+var tyN2 = AT.PLANES.filter(function (p) { return p.range >= S.routeDistance(stN, 'C02', 'C04'); })
+  .sort(function (x, y) { return x.price - y.price; })[0].id;
+S.buyPlane(stN, tyN2, 1);
+deliverAll(stN);
+var oN3 = S.openRoute(stN, 'C02', 'C04', tyN2, 1);
+ok(oN3.ok, '③ 从已通航城市延伸允许（C02 已在网络里）', oN3.reason);
+
+/* ④ 网络集合的内容：基地 + 各线两端；未通航的城市不在其中 */
+var netN = S.networkCityIds(stN);
+ok(netN.C01 && netN.C02 && netN.C04 && !netN.C09,
+  '④ networkCityIds = 基地 ∪ 航线两端', JSON.stringify(Object.keys(netN)));
+
+/* ⑤ 关掉约束（calib/audit 工具路径）→ 可以凭空开线：
+ *    这是给「测量任意城市对经济性」的工具留的口子，必须仍然可达。
+ *    （机型沿用 ② 的 tyLong，同一个城市对，只有 freeNetwork 一个变量不同。） */
+var stF2 = ST();
+S.advance(stF2, 9);
+stF2.cash = 1e9; stF2.debt = 0;
+stF2.freeNetwork = true;
+S.buyPlane(stF2, tyLong, 2);
+deliverAll(stF2);
+var oN4 = S.openRoute(stF2, 'C09', 'C13', tyLong, 1);
+ok(oN4.ok, '⑤ freeNetwork 关掉约束后仍可任意开线（工具用）', oN4.reason);
+
+/* ⑥ 竞对同规则：跑满一局后，逐家校验「每条线的至少一端 ∈ 该家自己的网络」。
+ *    ⚠ 按数组顺序增量校验 —— 竞对的线是逐条追加的，第 k 条只需在第 k-1 条时的
+ *    网络里（这正是规则的定义），所以顺序遍历就是正确判据。 */
+var stRN = S.create({ seed: 9, airlineId: 'al_mu', autoPlayer: true });
+var gN = 0;
+while (stRN.phase !== 'over' && gN < 200000) {
+  if (stRN.card) S.chooseEvent(stRN, 0);
+  S.tick(stRN, S.TICK); gN++;
+}
+var badRiv = 0, totRiv = 0, noColor = 0;
+stRN.rivals.forEach(function (r) {
+  var net = {}; net[r.homeCityId] = 1;
+  if (!r.color) noColor++;
+  r.routes.forEach(function (rk) {
+    totRiv++;
+    if (!net[rk.a] && !net[rk.b]) badRiv++;
+    net[rk.a] = 1; net[rk.b] = 1;
+  });
+});
+ok(totRiv > 0, '⑥ 竞对确实开了航线（样本非空）', '合计 ' + totRiv + ' 条');
+ok(badRiv === 0, '⑥ 竞对的每条线都从自己母城长出来（无凭空线）',
+  '违规 ' + badRiv + ' / 合计 ' + totRiv);
+ok(noColor === 0, '⑥ 竞对都带航司识别色（render.js 按它对航线/客机着色）',
+  '缺色 ' + noColor + ' 家');
 
 /* ── 汇总 ── */
 console.log('\n' + '═'.repeat(74));

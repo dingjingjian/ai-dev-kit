@@ -43,15 +43,28 @@
 
   /* opts:
    *   seed          —— 随机种子（不传则用默认，便于复现）
-   *   companyName   —— 玩家公司名（开局自定义；不传则用默认值）
-   *   homeCityId    —— 基地城市 id（玩家在 Setup 界面选的「虚拟公司总部」）
+   *   airlineId     —— 玩家选中的航空公司（见 data.js §2.5）。传了它即：
+   *                    基地/公司名/起始资金/声誉/特色技能/竞对池全部由该航司决定，
+   *                    且**未选中的五家航司直接成为 AI 竞对**。
+   *   companyName   —— 玩家公司名（不传则用所选航司名，再退到默认名）
+   *   homeCityId    —— 基地城市 id（**显式传入时优先级最高**，便于测试与工具脚本）
    *   autoPlayer    —— 玩家席位交给 AI 托管（无头测试 / 无人值守演示）
    *   rivalCount    —— 竞对数量（默认 CONFIG.rivals）
-   */
+   *   freeNetwork   —— **关掉「新航线必须与现有网络相连」的约束**（见 openRoute）。
+   *                    只给 calibrate / audit 这类「测量任意城市对经济性」的工具用；
+   *                    正常建局一律不传，即受约束。
+   *
+   * ⚠ 向后兼容：**不传 airlineId** 的旧调用路径（headless / balance / audit 等工具）
+   *   行为与首版完全一致 —— 基地 C01、起始资金 800 万、中性技能、虚构竞对名。
+   *   所有技能乘数在缺省时都是 1（见 data.js 的 AT.NEUTRAL_TRAIT），不会漂移数值。 */
   function create(opts) {
     opts = opts || {};
     var seed = (opts.seed != null) ? opts.seed : 20260914;
-    var homeId = opts.homeCityId || 'C01';
+    var airline = opts.airlineId ? (AT.AIRLINES_BY_ID[opts.airlineId] || null) : null;
+    var trait = AT.normalizeTrait(airline && airline.trait);
+    var homeId = opts.homeCityId || (airline ? airline.baseCityId : 'C01');
+    var homeCityDef = AT.CITIES_BY_ID[homeId];
+    var homeRegion = homeCityDef ? homeCityDef.region : 'EASIA';
 
     var state = {
       seed: seed,
@@ -65,8 +78,18 @@
        *   paused 是「玩家正在操作，先别催」（抽屉面板）。两者都冻结回合计时。 */
       paused: false,
       autoPlayer: !!opts.autoPlayer,
-      companyName: opts.companyName || '环球航空',
+      /* 网络连通性约束开关：默认 false = **受约束**（见 openRoute）。
+       * 只有标定/审计工具会把它设成 true。 */
+      freeNetwork: !!opts.freeNetwork,
+      companyName: opts.companyName || (airline ? airline.name : '环球航空'),
+      airlineId: airline ? airline.id : null,
+      airlineName: airline ? airline.name : null,
+      /* 航司识别色（'#RRGGBB'）：地图上「我的航线 / 我的客机」按它着色（render.js）。
+       * 旧路径（不传 airlineId）没有航司 → null，渲染层回落到暖金色。 */
+      airlineColor: airline ? (airline.color || null) : null,
       homeCityId: homeId,
+      homeRegion: homeRegion,   // 基地所在地区（特色技能按它判定，见 trait）
+      trait: trait,             // 已归一化的特色技能（defaults 见 AT.NEUTRAL_TRAIT）
       /* 全局修正器：事件卡的持续效果挂在这里，每回合递减。
        * 分开存是为了让 UI 能直接显示「当前生效的几项影响」，玩家看得见因果。 */
       mods: [],                 // { type, mult, turns, region?, note }
@@ -120,28 +143,53 @@
      * 它们会抢热门航线、发起价格战；玩家无法消灭它们，只能超越。 */
     var nRiv = (opts.rivalCount != null) ? opts.rivalCount : (CONFIG.rivals || 5);
     var rivals = [];
-    /* 母城挑选：从**非玩家基地**的枢纽城里，按人口×富裕度排序取前 nRiv 个，
-     * 且尽量分散到不同地区 —— 五家竞对挤在同一地区会让全球网络缺乏张力。 */
-    var hubPool = state.cities.filter(function (c) { return c.hub && !c.isHome; })
-      .sort(function (a, b) { return (b.pop * b.wealth) - (a.pop * a.wealth); });
-    var usedRegions = {};
-    for (var hi = 0; hi < hubPool.length && rivals.length < nRiv; hi++) {
-      var hc = hubPool[hi];
-      // 优先选尚未被占用的地区，凑不齐再放宽
-      if (usedRegions[hc.region] && rivals.length < nRiv - 1) continue;
-      usedRegions[hc.region] = 1;
-      rivals.push({
-        id: 'R' + (rivals.length + 1),
-        name: RIVAL_NAMES[rivals.length % RIVAL_NAMES.length],
-        homeCityId: hc.id,
-        cash: (CONFIG.rivalStartCash && CONFIG.rivalStartCash[rivals.length]) || 1000,
-        aggression: (CONFIG.rivalAggression && CONFIG.rivalAggression[rivals.length]) || 0.55,
-        fleet: [],
-        routes: [],
-        scale: 0,                 // 综合规模（终局排名用）
-        alive: true,
-        lastAction: null
+    if (airline) {
+      /* 有航司池：**未选中的五家航司就是竞对**（用户 2026-09-29 拍板）。
+       * 六家航司一地区一家，故五家竞对天然分散在五个不同地区 ——
+       * 母城就是它们各自的基地，玩家一眼能认出「谁在哪」。
+       * ⚠ 顺序按 AT.AIRLINES 原序（去掉玩家所选的那家），
+       *   这样 rivalStartCash / rivalAggression 的下标分配是可复现的。 */
+      AT.AIRLINES.forEach(function (a) {
+        if (a.id === airline.id || rivals.length >= nRiv) return;
+        rivals.push({
+          id: 'R' + (rivals.length + 1),
+          name: a.name,
+          airlineId: a.id,
+          homeCityId: a.baseCityId,
+          color: a.color,
+          cash: (CONFIG.rivalStartCash && CONFIG.rivalStartCash[rivals.length]) || 1000,
+          aggression: (CONFIG.rivalAggression && CONFIG.rivalAggression[rivals.length]) || 0.55,
+          fleet: [],
+          routes: [],
+          scale: 0,
+          alive: true,
+          lastAction: null
+        });
       });
+    } else {
+      /* 旧路径（无航司参数）：从**非玩家基地**的枢纽城里按人口×富裕度取前 nRiv 个，
+       * 且尽量分散到不同地区 —— 五家竞对挤在同一地区会让全球网络缺乏张力。 */
+      var hubPool = state.cities.filter(function (c) { return c.hub && !c.isHome; })
+        .sort(function (a, b) { return (b.pop * b.wealth) - (a.pop * a.wealth); });
+      var usedRegions = {};
+      for (var hi = 0; hi < hubPool.length && rivals.length < nRiv; hi++) {
+        var hc = hubPool[hi];
+        // 优先选尚未被占用的地区，凑不齐再放宽
+        if (usedRegions[hc.region] && rivals.length < nRiv - 1) continue;
+        usedRegions[hc.region] = 1;
+        rivals.push({
+          id: 'R' + (rivals.length + 1),
+          name: RIVAL_NAMES[rivals.length % RIVAL_NAMES.length],
+          homeCityId: hc.id,
+          cash: (CONFIG.rivalStartCash && CONFIG.rivalStartCash[rivals.length]) || 1000,
+          aggression: (CONFIG.rivalAggression && CONFIG.rivalAggression[rivals.length]) || 0.55,
+          fleet: [],
+          routes: [],
+          scale: 0,                 // 综合规模（终局排名用）
+          alive: true,
+          lastAction: null
+        });
+      }
     }
     // 竞对开局机队（按资金能负担的机型给）
     rivals.forEach(function (r) {
@@ -158,16 +206,22 @@
     }
 
     // 玩家初始资金（开局自带 2 架飞机的价值不计入现金）
-    state.cash = CONFIG.startCash || 800;
+    /* 起始资源受航司技能影响（如联合航空的「雄厚资本」起始资金 +50%）；
+     * 无航司参数时 trait 全为中性 → 800 万，与首版一致。 */
+    state.cash = Math.round((CONFIG.startCash || 800) * trait.startCashMul);
     state.debt = 0;
     state.equityLoss = 0;         // 接受注资带来的股权稀释累计
-    state.reputation = 50;        // 品牌声誉 0..100，影响需求与票价承受力
+    state.reputation = trait.repStart;   // 品牌声誉 0..100，影响需求与票价承受力
+    /* 贷款额度也受技能影响（如「雄厚资本」+50%）——
+     * 存到 state 上，sim 各处（购机/开线可负担判定）统一读它，不再直接读 CONFIG。 */
+    state.loanLimit = Math.round((CONFIG.loanLimit || 4000) * trait.loanLimitMul);
 
     // 首位事件卡：开局第 4 回合之后才可能出现，给玩家喘息时间熟悉操作
     state.nextEventAt = 4 + Math.floor(state.rng() * 3);
 
     log(state, '公司「' + state.companyName + '」成立于 ' + cityName(state, homeId) +
-              '，机队 ' + nStart + ' 架，启动资金 ' + state.cash + ' 万元');
+              '，机队 ' + nStart + ' 架，启动资金 ' + state.cash + ' 万元' +
+              (airline ? '，特色技能「' + trait.name + '」' : ''));
 
     return state;
   }
@@ -244,6 +298,21 @@
     return state.cash - state.debt + fleetValue(state);
   }
 
+  /* 特色技能读取（定义见 data.js §2.5）。建局时已归一化并挂在 state.trait 上，
+   * 恒非空；此处仍保留兜底，以防手工构造的 state（测试/工具）缺该字段。
+   * 所有乘数缺省为 1，故无航司的旧路径行为完全不变。 */
+  function traitOf(state) {
+    return (state && state.trait) || AT.NEUTRAL_TRAIT || {};
+  }
+
+  /* 贷款额度（受航司技能「雄厚资本」影响，见建局时写入的 state.loanLimit）。
+   * 集中一处读取 —— 购机、开线可负担判定等四处原本各读 CONFIG.loanLimit，
+   * 分散读会导致技能生效不一致。 */
+  function loanLimitOf(state) {
+    if (state && state.loanLimit != null) return state.loanLimit;
+    return CONFIG.loanLimit || 4000;
+  }
+
   /* ───────────────────────── 4. 需求模型（飞轮的第一半）─────────────────────────
 
    * 一条航线的季度客流 = 人口渗透率天花板 × 修正器
@@ -289,8 +358,10 @@
     /* 飞轮加成：城市因通航而累积的 bonus（dev 超过初值的部分转化而来） */
     var bonusF = 1 + (ca.bonus + cb.bonus) / 2;
 
-    /* 声誉：50 为中性，每偏离 1 点影响 0.5% 需求 */
-    var repF = 1 + (state.reputation - 50) * 0.005;
+    /* 声誉：50 为中性，每偏离 1 点影响 0.5% 需求。
+     * 技能 repEffectMul（如新加坡航空的「服务品牌」）放大这一项的斜率。 */
+    var tr = traitOf(state);
+    var repF = 1 + (state.reputation - 50) * 0.005 * tr.repEffectMul;
 
     /* 长途折减：把距离换算成 0.80~1.00 的温和系数（不重复表达「短途高频」） */
     var dist = G.distKm(ca, cb);
@@ -325,6 +396,16 @@
       lvF * bonusF * repF * distAdj * wealthF;
 
     demand *= modMul(state, 'demand_all', null, ca, cb);
+
+    /* 特色技能「中转枢纽」（阿联酋航空）：航线两端**分属不同地区**、
+     * 且其中一端在本航司基地地区时，视为「经基地中转连接两大洲」→ 需求加成。
+     * ⚠ 用「恰好一端在本地区」判定（inA !== inB），故本地区内部的支线不受影响 ——
+     *   这正好表达「枢纽靠跨洲中转赚钱，而不是靠本地短途」。 */
+    if (tr.crossRegionDemand !== 1) {
+      var inA = ca.region === state.homeRegion;
+      var inB = cb.region === state.homeRegion;
+      if (inA !== inB) demand *= tr.crossRegionDemand;
+    }
     return Math.max(0, demand);
   }
 
@@ -452,6 +533,12 @@
     var exp = CONFIG.slotCrowdExp == null ? 0.85 : CONFIG.slotCrowdExp;
     /* 拥挤度越高，可分配槽位越少 */
     var slots = base * Math.pow(1 - c, exp);
+
+    /* 特色技能「联盟网络」（英国航空）：老牌枢纽的时刻优先权 → 槽位 +15%。
+     * ⚠ 乘在**扣减竞对占位之前** —— 技能提升的是「这条线可分配给我的时刻总量」，
+     *   竞对占位再从中扣除，语义才自洽（否则会凭空多出时刻）。 */
+    var slotMul = traitOf(state).slotMul;
+    if (slotMul !== 1) slots *= slotMul;
 
     /* ⚠ 扣除竞对已占用的时刻（2026-09-14 补）——
      * 这是让「竞争」真正有意义的最后一环。
@@ -672,7 +759,7 @@
     var wealthAdj = 1 + (((ca.wealth + cb.wealth) / 2) - 1.15) * 0.45;
     wealthAdj = Math.max(0.75, Math.min(1.3, wealthAdj));
     var farePerKm = (CONFIG.ticketPerKm || 0.78) * distFareFactor * wealthAdj
-      * (1 + (state.reputation - 50) * 0.004);
+      * (1 + (state.reputation - 50) * 0.004 * traitOf(state).repEffectMul);
     /* 商务舱：premium 比例的座位卖 firstClassMul 倍价，其余卖基础价 */
     var avgFareAdj = farePerKm * dist *
       ((1 - T.premium) + T.premium * (CONFIG.firstClassMul || 2.1));
@@ -865,7 +952,8 @@
      *     取 4.5%/季 ≈ 18%/年，接近真实航司「折旧+租赁利息+保险」的综合负担，
      *     也使「买贵机飞薄线」真正变成一个会亏钱的决策。 */
     var ownershipRatePerQ = (CONFIG.ownershipPerQuarter == null ? 0.045 : CONFIG.ownershipPerQuarter);
-    var ownership = nPlanes * T.price * ownershipRatePerQ;
+    /* 特色技能「规模经济」（中国东方航空）：持有成本 ×0.80 —— 超大机队摊薄固定成本。 */
+    var ownership = nPlanes * T.price * ownershipRatePerQ * traitOf(state).ownershipMul;
 
     var cost = fuel + landing + crew + maint + ownership;
 
@@ -941,6 +1029,8 @@
           (1 + tier * 0.11) *                      // 机型项
           /* 枢纽城市发展上限更高（大城更容易吃到网络红利），小城增长更快（追赶效应） */
           (c.hub ? 1.0 : 1.24);
+        /* 特色技能「区域深耕」（澳洲航空）：基地所在地区城市的开发度增长 +40%。 */
+        if (c.region === state.homeRegion) growth *= traitOf(state).devGrowthMul;
         c.dev = Math.min(100, c.dev + growth);
       } else {
         /* 无航线：开发度自然衰减 —— 不经营就退化，这是玩家的机会也是压力 */
@@ -1542,18 +1632,41 @@
     return 'cRJ1';
   }
 
-  /* 竞对抢航线：在「两端都不是自己母城、玩家未开通」的城市对里，
-   * 取潜在需求最高的一条。这样竞对会自然地占据热门干线，
-   * 玩家必须去挖掘次级城市 —— 而那些城市正是「待发展」的，符合主题。 */
+  /* ── 网络连通性（玩家与竞对共用同一条规则）──
+   *
+   * 玩家当前网络的**城市集合**：基地 + 所有已开航线的两端。
+   *
+   * 用途（2026-09-30 用户拍板的新规则）：**新航线必须接在现有网络上**，
+   * 不能凭空在任意两城之间开线 —— 一家航司的网络是从母城长出来的，
+   * 这是「枢纽辐射」的真实形态，也是玩家扩张节奏的自然约束。
+   *
+   * ⚠ 单基地 + 每线两端入网 ⇒ 网络**恒为连通图**（每加一条线都挂到已有节点上），
+   *   所以「一端在集合里」这一条判据就足够，不需要做并查集。
+   * ⚠ 用对象当 set（Chrome 61 可用；不需要 Set 的遍历语义）。 */
+  function networkCityIds(state) {
+    var set = {};
+    set[state.homeCityId] = 1;
+    state.routes.forEach(function (r) { set[r.a] = 1; set[r.b] = 1; });
+    return set;
+  }
+
+  /* 竞对选新航线：从「玩家还没开、但需求最高」的城市对里挑一条。
+   * ⚠ 2026-09-30 起与玩家同规则：**新线必须接到它自己的网络上**
+   * （母城 + 它已有航线的两端）。AI 与玩家同一套规则，才谈得上公平；
+   * 也让地图上每条竞对网络都真的是一棵从母城长出来的枢纽网。 */
   function pickRivalRoute(state, r) {
     var best = null, bestD = -1;
     var cities = state.cities;
+    var net = { };
+    net[r.homeCityId] = 1;
+    r.routes.forEach(function (rk) { net[rk.a] = 1; net[rk.b] = 1; });
     /* 只用枢纽 + 母城作为候选端点，避免竞对去开两条小城之间的线（那不合理） */
     for (var i = 0; i < cities.length; i++) {
       for (var j = i + 1; j < cities.length; j++) {
         var a = cities[i], b = cities[j];
         if (!a.hub && a.id !== r.homeCityId) continue;
         if (!b.hub && b.id !== r.homeCityId) continue;
+        if (!net[a.id] && !net[b.id]) continue;      // 两端都不在网络里 → 凭空开线，禁止
         var key = AT.routeKey(a.id, b.id);
         var taken = false;
         for (var k = 0; k < r.routes.length; k++) if (r.routes[k].key === key) { taken = true; break; }
@@ -1845,13 +1958,26 @@
   /* ───────────────────────── 10. 玩家指令 ───────────────────────── */
 
   /* 开通航线：玩家指定两端城市与投放的飞机。
-   * 校验：飞机闲置、机型航程足够、没有重复航线、距离不为零。
+   * 校验：阶段、重复、距离、航程、**网络连通性**、闲置飞机数。
    * 返回 { ok, route } 或 { ok:false, reason }（UI 据此给出人话提示）。 */
   function openRoute(state, aId, bId, typeId, planeCount, firstPlaneId) {
     if (state.phase !== 'operating') return { ok: false, reason: '尚未开始运营' };
     if (aId === bId) return { ok: false, reason: '出发地与目的地不能相同' };
     var key = AT.routeKey(aId, bId);
     if (findRouteByKey(state, key)) return { ok: false, reason: '该航线已开通' };
+
+    /* ── 网络连通性（2026-09-30 用户拍板）──
+     * 新航线**至少一端**必须是基地或已通航城市，否则就是「凭空开线」。
+     * 为什么必须有这条：单基地起步的航司，网络只能从母城长出去；
+     * 玩家若不慎把「出发城市」选到一座孤立城市（旧版城市卡上任何城都能
+     * 「从这里开新航线」），就能凭空造出一条与自己的网络毫无关系的线 ——
+     * 那既不符合航空业的基本形态，也让「基地选在哪」这个开局决策失去意义。 */
+    if (!state.freeNetwork) {
+      var net = networkCityIds(state);
+      if (!net[aId] && !net[bId]) {
+        return { ok: false, reason: '新航线必须与现有网络相连：出发地或目的地至少要有一端是基地或已通航城市' };
+      }
+    }
 
     var dist = routeDistance(state, aId, bId);
     if (dist <= 0) return { ok: false, reason: '航线距离无效' };
@@ -1962,9 +2088,9 @@
     count = Math.max(1, count || 1);
     var T = AT.planeOf(typeId);
     var total = T.price * count;
-    if (state.cash + (CONFIG.loanLimit || 0) - state.debt < total) {
+    if (state.cash + loanLimitOf(state) - state.debt < total) {
       return { ok: false, reason: '资金不足（需 ' + total + ' 万元，现金 ' + Math.round(state.cash) +
-                                  '，可贷额度 ' + Math.round((CONFIG.loanLimit || 0) - state.debt) + '）' };
+                                  '，可贷额度 ' + Math.round(loanLimitOf(state) - state.debt) + '）' };
     }
     /* 现金不够就自动用贷款补足 —— 让玩家不必先手动借钱再买机（少一步操作） */
     if (state.cash < total) {
@@ -2028,7 +2154,7 @@
     });
     var cost = T2.price * n;
     var net = cost - tradeIn;
-    var available = state.cash + (CONFIG.loanLimit || 0) - state.debt;
+    var available = state.cash + loanLimitOf(state) - state.debt;
     if (net > available) {
       return { ok: false, reason: '资金不足（需补 ' + Math.round(net) + ' 万元，可用 ' +
         Math.round(available) + ' 万元）', need: Math.round(net) };
@@ -2063,7 +2189,7 @@
   /* 贷款 / 还款 */
   function borrow(state, amount) {
     amount = Math.max(0, Math.round(amount || 0));
-    var limit = (CONFIG.loanLimit || 4000);
+    var limit = loanLimitOf(state);
     if (state.debt + amount > limit) return { ok: false, reason: '超出贷款额度上限（' + limit + ' 万元）' };
     state.debt += amount;
     state.cash += amount;
@@ -2182,7 +2308,7 @@
     /* 玩家机队里「能马上用」的机型（含未交付的，因为可以等） */
     var ownedTypes = {};
     state.planes.forEach(function (p) { ownedTypes[p.type] = true; });
-    var affordable = state.cash + (CONFIG.loanLimit || 0) - state.debt;
+    var affordable = state.cash + loanLimitOf(state) - state.debt;
 
     var feasible = null, feasibleScore = -1;   // 档 1：现有机队能飞
     var buyable = null, buyableScore = -1;     // 档 2：需购入机型但买得起
@@ -2446,7 +2572,9 @@
     findRouteByKey: findRouteByKey, routeDistance: routeDistance,
     planesOnRoute: planesOnRoute, idlePlanes: idlePlanes,
     totalSeats: totalSeats, fleetValue: fleetValue, netWorth: netWorth,
+    traitOf: traitOf, loanLimitOf: loanLimitOf,
     routePotential: routePotential, routeFlights: routeFlights,
+    networkCityIds: networkCityIds,
     maxPerDayFor: maxPerDayFor, tierOf: tierOf, routeSlots: routeSlots,
     maxPlanesForRoute: maxPlanesForRoute,
     settleRoute: settleRoute, costMul: costMul, modMul: modMul,
