@@ -798,6 +798,24 @@ body {
   color: var(--faint);
   margin-top: 18px;
 }
+
+/* ---------- 分享按钮（§3.3 postNote 发布笔记） ---------- */
+.share-wrap { margin-top: 18px; text-align: center; }
+.share-btn {
+  display: inline-block;
+  border: none;
+  border-radius: 14px;
+  padding: 13px 30px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--m2-grad);
+  color: var(--m-ink);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.08s ease;
+}
+.share-btn:active { transform: scale(0.97); }
 </style>
 </head>
 <body>
@@ -860,6 +878,7 @@ body {
   </section>
 
   <div class="footer-note">点日历上的圆点可改历史</div>
+  <div class="share-wrap"><button class="share-btn" id="btnShare">分享我的心情报告</button></div>
 </div>
 
 <div class="overlay" id="overlay"></div>

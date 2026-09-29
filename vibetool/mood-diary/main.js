@@ -951,6 +951,256 @@
     renderAll();
   });
 
+  /* ---------- 分享分析报告（§3.3 postNote 发布笔记） ----------
+   * 在首页底部点「分享我的心情报告」→ Canvas 把近半年数据绘成一张分析报告图
+   * → 调用 window.xhs.miniTool.postNote 唤起笔记发布页（标题 + 正文 + 图片）。
+   * 容器外（普通浏览器）无 postNote → toast 提示在小红书 App 内使用。
+   * 无记录 → toast 提示先记几天再来分享。 */
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* 近半年所有记录的心情天数（索引 1-6），供分享报告用 */
+  function allCounts() {
+    var counts = [0, 0, 0, 0, 0, 0, 0];
+    for (var key in records) {
+      if (records.hasOwnProperty(key)) counts[records[key].m]++;
+    }
+    return counts;
+  }
+
+  /* Canvas 绘制分析报告图（750×1100 竖图），返回 data:image/png;base64 */
+  function drawReportImage() {
+    var W = 750, H = 1100;
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+
+    /* 跟随当前主题配色（读取 CSS 变量，报告图随用户设置的皮肤变化） */
+    var cs = getComputedStyle(document.documentElement);
+    function cv(n) { return cs.getPropertyValue(n).trim(); }
+    var C = {
+      bg: cv('--bg'), card: cv('--card'), card2: cv('--card-2'),
+      border: cv('--border'), text: cv('--text'), muted: cv('--muted'),
+      faint: cv('--faint'), cell: cv('--cell'),
+      m1: cv('--m1'), m2: cv('--m2'), m3: cv('--m3'), m4: cv('--m4'), m5: cv('--m5'), m6: cv('--m6')
+    };
+    var MC = [null, C.m1, C.m2, C.m3, C.m4, C.m5, C.m6];
+    var MN = [null, '兴奋', '开心', '平静', '一般', '难过', '愤怒'];
+    var FONT = '-apple-system, "PingFang SC", "Helvetica Neue", sans-serif';
+
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    /* 标题区（渐变背景，跟随主题） */
+    var grad = ctx.createLinearGradient(0, 0, W, 140);
+    grad.addColorStop(0, C.card2);
+    grad.addColorStop(1, C.bg);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 140);
+
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 36px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('心情日记 · 半年度报告', W / 2, 62);
+
+    var now = new Date();
+    var dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
+    ctx.fillStyle = C.muted;
+    ctx.font = '20px ' + FONT;
+    ctx.fillText('截至 ' + dateStr + ' · 共 ' + countRecords() + ' 天记录', W / 2, 100);
+
+    /* 统计数字区（4 个横排） */
+    var ms = monthStats();
+    var streak = goodStreak();
+    var rateStr = ms.total === 0 ? '—' : Math.round(ms.happy * 100 / ms.total) + '%';
+    var stats = [
+      { num: streak + '天', label: '连续好心情', color: C.m2 },
+      { num: rateStr, label: '好心情率', color: C.m2 },
+      { num: ms.total + '天', label: '本月记录', color: C.text },
+      { num: ms.sad + '天', label: '本月低落', color: ms.sad > 0 ? C.m6 : C.text }
+    ];
+    var statY = 180;
+    var statW = W / 4;
+    for (var i = 0; i < 4; i++) {
+      var cx = statW * i + statW / 2;
+      ctx.fillStyle = stats[i].color;
+      ctx.font = 'bold 38px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText(stats[i].num, cx, statY + 30);
+      ctx.fillStyle = C.muted;
+      ctx.font = '17px ' + FONT;
+      ctx.fillText(stats[i].label, cx, statY + 58);
+    }
+
+    ctx.strokeStyle = C.border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, 280);
+    ctx.lineTo(W - 40, 280);
+    ctx.stroke();
+
+    /* 心情比例条（近半年） */
+    var counts = allCounts();
+    var total = sumCounts(counts);
+    var barY = 310, barH = 36, barX = 40, barW = W - 80;
+    ctx.fillStyle = C.card;
+    roundRectPath(ctx, barX, barY, barW, barH, 10);
+    ctx.fill();
+    if (total > 0) {
+      var segX = barX;
+      for (var mi = 1; mi <= 6; mi++) {
+        if (!counts[mi]) continue;
+        var segW = barW * counts[mi] / total;
+        ctx.fillStyle = MC[mi];
+        ctx.fillRect(segX, barY, segW, barH);
+        segX += segW;
+      }
+    } else {
+      ctx.fillStyle = C.faint;
+      ctx.font = '15px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无记录', W / 2, barY + 24);
+    }
+
+    /* 图例（3 列 × 2 行） */
+    var legY = barY + barH + 28;
+    var legX = 40;
+    var colW = (W - 80) / 3;
+    ctx.textBaseline = 'middle';
+    for (var mi2 = 1; mi2 <= 6; mi2++) {
+      var col = (mi2 - 1) % 3;
+      var row = Math.floor((mi2 - 1) / 3);
+      var lx = legX + col * colW;
+      var ly = legY + row * 38;
+      ctx.fillStyle = MC[mi2];
+      roundRectPath(ctx, lx, ly, 16, 16, 4);
+      ctx.fill();
+      ctx.fillStyle = C.text;
+      ctx.font = '17px ' + FONT;
+      ctx.textAlign = 'left';
+      var pct = total > 0 ? Math.round(counts[mi2] * 100 / total) : 0;
+      ctx.fillText(MN[mi2] + ' ' + counts[mi2] + '天·' + pct + '%', lx + 24, ly + 8);
+    }
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.strokeStyle = C.border;
+    ctx.beginPath();
+    ctx.moveTo(40, 470);
+    ctx.lineTo(W - 40, 470);
+    ctx.stroke();
+
+    /* 热力图标题 */
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 22px ' + FONT;
+    ctx.textAlign = 'left';
+    ctx.fillText('心情日历 · 近 26 周', 40, 510);
+
+    /* 热力图 */
+    var hmY = 528;
+    var cellSize = 22, cellGap = 3, cellStep = cellSize + cellGap;
+    var labelW = 36;
+    var hmX = labelW + 10;
+    var dayLabels = ['一', '', '三', '', '五', '', '日'];
+    ctx.fillStyle = C.muted;
+    ctx.font = '14px ' + FONT;
+    ctx.textAlign = 'right';
+    for (var d = 0; d < 7; d++) {
+      ctx.fillText(dayLabels[d], labelW, hmY + d * cellStep + cellSize - 5);
+    }
+    var today = new Date();
+    var tKey = todayKey();
+    var monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    var start = new Date(monday);
+    start.setDate(monday.getDate() - (WEEKS - 1) * 7);
+    for (var w = 0; w < WEEKS; w++) {
+      var colStart = new Date(start);
+      colStart.setDate(start.getDate() + w * 7);
+      for (var dd = 0; dd < 7; dd++) {
+        var date = new Date(colStart);
+        date.setDate(colStart.getDate() + dd);
+        var key = dateKey(date);
+        var future = date.getTime() > today.getTime();
+        var st = dayState(key);
+        var cx2 = hmX + w * cellStep;
+        var cy2 = hmY + dd * cellStep;
+        ctx.fillStyle = future ? C.bg : (st > 0 ? MC[st] : C.cell);
+        roundRectPath(ctx, cx2, cy2, cellSize, cellSize, 4);
+        ctx.fill();
+      }
+    }
+
+    /* 水印 */
+    ctx.fillStyle = C.faint;
+    ctx.font = '15px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.fillText('心情日记 · 今天你开心了吗？', W / 2, H - 36);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function buildReportText() {
+    var ms = monthStats();
+    var streak = goodStreak();
+    var counts = allCounts();
+    var total = countRecords();
+    var rate = ms.total === 0 ? 0 : Math.round(ms.happy * 100 / ms.total);
+    var lines = [];
+    lines.push('近半年用6种颜色记了' + total + '天心情。');
+    lines.push('连续好心情' + streak + '天，本月好心情率' + rate + '%，本月低落' + ms.sad + '天。');
+    lines.push('兴奋' + counts[1] + '天 · 开心' + counts[2] + '天 · 平静' + counts[3] + '天 · 一般' + counts[4] + '天 · 难过' + counts[5] + '天 · 愤怒' + counts[6] + '天。');
+    lines.push('——用心记每一天，颜色会告诉你答案。');
+    return lines.join('\n');
+  }
+
+  function shareReport() {
+    var n = countRecords();
+    if (n === 0) { toast('暂无记录，先记几天再来分享'); return; }
+    var miniTool = window.xhs && window.xhs.miniTool;
+    if (!miniTool || typeof miniTool.postNote !== 'function') {
+      toast('请在小红书 App 内打开后使用');
+      return;
+    }
+    toast('正在生成报告…');
+    var dataUrl;
+    try {
+      dataUrl = drawReportImage();
+    } catch (e) {
+      toast('报告生成失败');
+      return;
+    }
+    var title = '心情日记·半年度报告';
+    var content = buildReportText();
+    var done = false;
+    var timer = setTimeout(function () {
+      if (!done) toast('分享超时，请重试');
+    }, 3000);
+    try {
+      miniTool.postNote({
+        title: title,
+        content: content,
+        pageType: 'photo_publish',
+        mediaInfo: { image_resources: [{ url: dataUrl }] },
+        success: function () { done = true; clearTimeout(timer); toast('已唤起发布页'); },
+        fail: function () { done = true; clearTimeout(timer); toast('分享失败，请稍后再试'); }
+      });
+    } catch (e) {
+      done = true;
+      clearTimeout(timer);
+      toast('分享失败，请稍后再试');
+    }
+  }
+  $('btnShare').addEventListener('click', shareReport);
+
   /* ---------- 视口高度兜底 ---------- */
   function setAppHeight() {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');

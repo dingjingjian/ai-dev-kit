@@ -697,6 +697,24 @@ body {
   color: var(--faint);
   margin-top: 20px;
 }
+
+/* ---------- 分享按钮（§3.3 postNote 发布笔记） ---------- */
+.share-wrap { margin-top: 18px; text-align: center; }
+.share-btn {
+  display: inline-block;
+  border: none;
+  border-radius: 12px;
+  padding: 13px 30px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  background: var(--ok-grad);
+  color: var(--ok-ink);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  transition: transform 0.08s ease;
+}
+.share-btn:active { transform: scale(0.97); }
 </style>
 </head>
 <body>
@@ -752,6 +770,7 @@ body {
   </div>
 
   <div class="footer-note">数据仅保存在本机浏览器 · 点格子可修改历史</div>
+  <div class="share-wrap"><button class="share-btn" id="btnShare">分享我的下班报告</button></div>
 </div>
 
 <div class="overlay" id="overlay"></div>

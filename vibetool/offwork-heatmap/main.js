@@ -882,6 +882,252 @@
     renderAll();
   });
 
+  /* ---------- 分享分析报告（§3.3 postNote 发布笔记） ----------
+   * 在首页底部点「分享我的下班报告」→ Canvas 把近半年数据绘成一张分析报告图
+   * → 调用 window.xhs.miniTool.postNote 唤起笔记发布页（标题 + 正文 + 图片）。
+   * 容器外（普通浏览器）无 postNote → toast 提示在小红书 App 内使用。
+   * 无记录 → toast 提示先记几天再来分享。 */
+  function roundRectPath(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* 近半年准时 / 加班天数，供分享报告用 */
+  function allStats() {
+    var ontime = 0, total = 0;
+    for (var key in records) {
+      if (!records.hasOwnProperty(key)) continue;
+      total++;
+      if (records[key].ok) ontime++;
+    }
+    return { ontime: ontime, overtime: total - ontime, total: total };
+  }
+
+  /* Canvas 绘制分析报告图（750×1100 竖图），返回 data:image/png;base64 */
+  function drawReportImage() {
+    var W = 750, H = 1100;
+    var canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    var ctx = canvas.getContext('2d');
+
+    /* 跟随当前主题配色（读取 CSS 变量，报告图随用户设置的皮肤变化） */
+    var cs = getComputedStyle(document.documentElement);
+    function cv(n) { return cs.getPropertyValue(n).trim(); }
+    var C = {
+      bg: cv('--bg'), card: cv('--card'), card2: cv('--card-2'),
+      border: cv('--border'), text: cv('--text'), muted: cv('--muted'),
+      faint: cv('--faint'), cell: cv('--cell'),
+      green: cv('--green'), red: cv('--red')
+    };
+    var FONT = '-apple-system, "PingFang SC", "Helvetica Neue", sans-serif';
+
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    /* 标题区（渐变背景，跟随主题） */
+    var grad = ctx.createLinearGradient(0, 0, W, 140);
+    grad.addColorStop(0, C.card2);
+    grad.addColorStop(1, C.bg);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, W, 140);
+
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 36px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('下班打卡 · 半年度报告', W / 2, 62);
+
+    var now = new Date();
+    var dateStr = now.getFullYear() + '年' + (now.getMonth() + 1) + '月' + now.getDate() + '日';
+    ctx.fillStyle = C.muted;
+    ctx.font = '20px ' + FONT;
+    ctx.fillText('截至 ' + dateStr + ' · 共 ' + countRecords() + ' 天打卡', W / 2, 100);
+
+    /* 统计数字区（4 个横排） */
+    var ms = monthStats();
+    var streak = ontimeStreak();
+    var rateStr = ms.rate === null ? '—' : ms.rate + '%';
+    var totalMonth = ms.ontime + ms.overtime;
+    var stats = [
+      { num: streak + '天', label: '连续准时下班', color: C.green },
+      { num: rateStr, label: '本月准时率', color: (ms.rate !== null && ms.rate < 50 ? C.red : C.green) },
+      { num: totalMonth + '天', label: '本月打卡', color: C.text },
+      { num: ms.overtime + '天', label: '本月加班', color: ms.overtime > 0 ? C.red : C.text }
+    ];
+    var statY = 180;
+    var statW = W / 4;
+    for (var i = 0; i < 4; i++) {
+      var cx = statW * i + statW / 2;
+      ctx.fillStyle = stats[i].color;
+      ctx.font = 'bold 38px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText(stats[i].num, cx, statY + 30);
+      ctx.fillStyle = C.muted;
+      ctx.font = '17px ' + FONT;
+      ctx.fillText(stats[i].label, cx, statY + 58);
+    }
+
+    ctx.strokeStyle = C.border;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(40, 280);
+    ctx.lineTo(W - 40, 280);
+    ctx.stroke();
+
+    /* 准时 / 加班比例条（近半年） */
+    var all = allStats();
+    var barY = 310, barH = 36, barX = 40, barW = W - 80;
+    ctx.fillStyle = C.card;
+    roundRectPath(ctx, barX, barY, barW, barH, 10);
+    ctx.fill();
+    if (all.total > 0) {
+      var okW = barW * all.ontime / all.total;
+      ctx.fillStyle = C.green;
+      ctx.fillRect(barX, barY, okW, barH);
+      ctx.fillStyle = C.red;
+      ctx.fillRect(barX + okW, barY, barW - okW, barH);
+    } else {
+      ctx.fillStyle = C.faint;
+      ctx.font = '15px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.fillText('暂无记录', W / 2, barY + 24);
+    }
+
+    /* 图例 */
+    var legY = barY + barH + 28;
+    ctx.textBaseline = 'middle';
+    var legItems = [
+      { color: C.green, name: '准时下班', n: all.ontime, total: all.total },
+      { color: C.red, name: '加班', n: all.overtime, total: all.total },
+      { color: C.cell, name: '未打卡', n: 0, total: all.total }
+    ];
+    for (var li = 0; li < 3; li++) {
+      var lx = 40 + li * ((W - 80) / 3);
+      var ly = legY;
+      ctx.fillStyle = legItems[li].color;
+      roundRectPath(ctx, lx, ly, 16, 16, 4);
+      ctx.fill();
+      ctx.fillStyle = C.text;
+      ctx.font = '17px ' + FONT;
+      ctx.textAlign = 'left';
+      var pct = legItems[li].total > 0 ? Math.round(legItems[li].n * 100 / legItems[li].total) : 0;
+      ctx.fillText(legItems[li].name + ' ' + legItems[li].n + '天·' + pct + '%', lx + 24, ly + 8);
+    }
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.strokeStyle = C.border;
+    ctx.beginPath();
+    ctx.moveTo(40, 420);
+    ctx.lineTo(W - 40, 420);
+    ctx.stroke();
+
+    /* 热力图标题 */
+    ctx.fillStyle = C.text;
+    ctx.font = 'bold 22px ' + FONT;
+    ctx.textAlign = 'left';
+    ctx.fillText('打卡热力图 · 近 26 周', 40, 460);
+
+    /* 热力图 */
+    var hmY = 478;
+    var cellSize = 22, cellGap = 3, cellStep = cellSize + cellGap;
+    var labelW = 36;
+    var hmX = labelW + 10;
+    var dayLabels = ['一', '', '三', '', '五', '', '日'];
+    ctx.fillStyle = C.muted;
+    ctx.font = '14px ' + FONT;
+    ctx.textAlign = 'right';
+    for (var d = 0; d < 7; d++) {
+      ctx.fillText(dayLabels[d], labelW, hmY + d * cellStep + cellSize - 5);
+    }
+    var today = new Date();
+    var tKey = todayKey();
+    var monday = new Date(today);
+    monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    var start = new Date(monday);
+    start.setDate(monday.getDate() - (WEEKS - 1) * 7);
+    for (var w = 0; w < WEEKS; w++) {
+      var colStart = new Date(start);
+      colStart.setDate(start.getDate() + w * 7);
+      for (var dd = 0; dd < 7; dd++) {
+        var date = new Date(colStart);
+        date.setDate(colStart.getDate() + dd);
+        var key = dateKey(date);
+        var future = date.getTime() > today.getTime();
+        var st = dayState(key);
+        var cx2 = hmX + w * cellStep;
+        var cy2 = hmY + dd * cellStep;
+        ctx.fillStyle = future ? C.bg : (st === 1 ? C.green : (st === 2 ? C.red : C.cell));
+        roundRectPath(ctx, cx2, cy2, cellSize, cellSize, 4);
+        ctx.fill();
+      }
+    }
+
+    /* 水印 */
+    ctx.fillStyle = C.faint;
+    ctx.font = '15px ' + FONT;
+    ctx.textAlign = 'center';
+    ctx.fillText('今天我准时下班了吗？', W / 2, H - 36);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function buildReportText() {
+    var ms = monthStats();
+    var streak = ontimeStreak();
+    var all = allStats();
+    var rate = ms.rate === null ? 0 : ms.rate;
+    var lines = [];
+    lines.push('近半年打卡' + all.total + '天，准时' + all.ontime + '天，加班' + all.overtime + '天。');
+    lines.push('本月准时率' + rate + '%，连续准时下班' + streak + '天。');
+    lines.push('——只问一句今天准不准时，半年后自有答案。');
+    return lines.join('\n');
+  }
+
+  function shareReport() {
+    var n = countRecords();
+    if (n === 0) { toast('暂无记录，先打几天卡再来分享'); return; }
+    var miniTool = window.xhs && window.xhs.miniTool;
+    if (!miniTool || typeof miniTool.postNote !== 'function') {
+      toast('请在小红书 App 内打开后使用');
+      return;
+    }
+    toast('正在生成报告…');
+    var dataUrl;
+    try {
+      dataUrl = drawReportImage();
+    } catch (e) {
+      toast('报告生成失败');
+      return;
+    }
+    var title = '下班打卡·半年度报告';
+    var content = buildReportText();
+    var done = false;
+    var timer = setTimeout(function () {
+      if (!done) toast('分享超时，请重试');
+    }, 3000);
+    try {
+      miniTool.postNote({
+        title: title,
+        content: content,
+        pageType: 'photo_publish',
+        mediaInfo: { image_resources: [{ url: dataUrl }] },
+        success: function () { done = true; clearTimeout(timer); toast('已唤起发布页'); },
+        fail: function () { done = true; clearTimeout(timer); toast('分享失败，请稍后再试'); }
+      });
+    } catch (e) {
+      done = true;
+      clearTimeout(timer);
+      toast('分享失败，请稍后再试');
+    }
+  }
+  $('btnShare').addEventListener('click', shareReport);
+
   /* ---------- 视口高度兜底 ---------- */
   function setAppHeight() {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
