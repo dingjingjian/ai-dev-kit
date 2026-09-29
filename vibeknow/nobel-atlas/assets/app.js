@@ -161,11 +161,20 @@
     [0,'rgba(3,6,13,0)'],[.46,'rgba(3,6,13,0)'],[.56,'rgba(3,6,13,.3)'],
     [.68,'rgba(3,6,13,.44)'],[.8,'rgba(3,6,13,.2)'],[.92,'rgba(3,6,13,.04)'],[1,'rgba(3,6,13,0)']
   ]);
-  var ringLineTex=radialStops([
-    [0,'rgba(255,255,255,0)'],[.6,'rgba(255,255,255,0)'],[.64,'rgba(255,255,255,.45)'],
-    [.7,'rgba(255,255,255,1)'],[.74,'rgba(255,255,255,.45)'],[.78,'rgba(255,255,255,0)'],[1,'rgba(255,255,255,0)']
-  ]);
-  var MK_HALO=0.24,MK_CORE=0.085,MK_CONTOUR=0.13,MK_RING=0.24,MK_RING_SEL=0.3;
+  /* 外圈：canvas 直绘的虚线圆环。radialStops 只能画径向渐变的实线环，
+     带角度的虚线段必须画出来；配合 SpriteMaterial.rotation 每帧转一点，
+     就是缓慢自转的「扫描环」（见 refreshMarkers）。ping 选中涟漪共用这张纹理。 */
+  function makeRingTex(){
+    var s=128,c=document.createElement('canvas');c.width=c.height=s;var x=c.getContext('2d');
+    x.strokeStyle='rgba(255,255,255,1)';x.lineWidth=7;
+    x.setLineDash([13,8]);
+    x.beginPath();x.arc(64,64,45,0,Math.PI*2);x.stroke();
+    return new THREE.CanvasTexture(c);
+  }
+  var ringTex=makeRingTex();
+  /* 光点整体收小到约 7 折（原 0.24/0.085/0.13/0.24/0.3）：点击判定球不随之缩小，
+     手指可点范围不受影响。 */
+  var MK_HALO=0.17,MK_CORE=0.06,MK_CONTOUR=0.095,MK_RING=0.17,MK_RING_SEL=0.21;
   var REF_DIST=9.7;
   /* 色彩管理：本文件带的 three 仍是 legacy 模式（ColorManagement.legacyMode=true）。
      这种模式下 new Color('#hex') 给材质时颜色被当作线性值，再经 outputEncoding=sRGB 回写，
@@ -208,7 +217,7 @@
       halo.scale.set(MK_HALO,MK_HALO,1);
       var core=new THREE.Sprite(new THREE.SpriteMaterial({map:coreTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cCore.clone(),opacity:1}));
       core.scale.set(MK_CORE,MK_CORE,1);
-      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cRing.clone(),opacity:.42}));
+      var ring=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:cRing.clone(),opacity:.42}));
       ring.scale.set(MK_RING,MK_RING,1);
       var hit=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,10),new THREE.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false,depthTest:false}));
       contour.renderOrder=10;halo.renderOrder=11;ring.renderOrder=12;core.renderOrder=13;
@@ -219,7 +228,7 @@
     }
   }
   buildMarkers();
-  var ping=new THREE.Sprite(new THREE.SpriteMaterial({map:ringLineTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:DAWN_COL.clone(),opacity:0}));
+  var ping=new THREE.Sprite(new THREE.SpriteMaterial({map:ringTex,transparent:true,depthWrite:false,depthTest:false,toneMapped:false,color:DAWN_COL.clone(),opacity:0}));
   ping.visible=false;ping.renderOrder=14;markerGroup.add(ping);
 
   /* ===== 星空点（复用 moon-myths 的程序化星点）===== */
@@ -289,7 +298,10 @@
   function fitR(){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(4,2.0*R/Math.tan(hFov/2));}
   var theta=0.6,phi=1.15,radius=fitR();
   var thetaG=theta,phiG=phi,radiusG=radius,userZoomed=false;
-  var R_MIN=2.2,R_MAX=26;
+  /* R_MIN 放宽到 1.75（原 2.2）：地表上方最近 0.15，密集簇（美国东北部 / 伦敦）
+     能被拉得很开；大气光晕峰值半径的投影仍在视野外，光晕纹理中心区全透明，最近距离不糊屏。
+     相机近平面 0.1 < 0.15，云层 / 地表 / 标记点都不会被裁切。 */
+  var R_MIN=1.75,R_MAX=26;
   var PAN_CARD=0.14,panG=0,pan=0;
   function camPos(){var sp=Math.sin(phi);
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
@@ -342,7 +354,10 @@
     var dx=e.clientX-lx,dy=e.clientY-ly;
     if(Math.abs(dx)+Math.abs(dy)>2)moved=true;
     lx=e.clientX;ly=e.clientY;
-    thetaG-=dx*0.005;phiG-=dy*0.005;phiG=Math.max(0.08,Math.min(Math.PI-0.08,phiG));
+    /* 灵敏度随缩放自适应：旋转角增量 ∝ 当前距离 / 默认距离（下限 0.08）。
+       拉得越近，同样的手指滑动转过的角度越小——贴近看细节时地球不会一蹭就转飞。 */
+    var rotK=Math.max(0.08,Math.min(1,radius/fitR()));
+    thetaG-=dx*0.005*rotK;phiG-=dy*0.005*rotK;phiG=Math.max(0.08,Math.min(Math.PI-0.08,phiG));
   });
   cv.addEventListener('wheel',function(e){e.preventDefault();radiusG*=1+Math.sign(e.deltaY)*0.08;radiusG=Math.max(R_MIN,Math.min(R_MAX,radiusG));userZoomed=true;},{passive:false});
   cv.addEventListener('touchstart',function(e){if(e.touches.length===2){stopDrag();pinch=tdist(e.touches);}},{passive:true});
@@ -407,30 +422,42 @@
   var picFileEl=document.getElementById('cPicFile');
   var metaEl=document.getElementById('cMeta');
   var extraEl=document.getElementById('cExtra');
+  /* ===== 配图来源：只有成果维度出图 =====
+   * 成果 30 张（assets/illus/<成果 slug>.webp，横向 2:1）；人物不出图，
+   * 按 pair 复用对应成果的图——所以调整配对不需要重出图，图也少一半。
+   * 表在启动时建一次（slides 以成果维度的 slug 为键），两个维度共用。 */
+  var WORK_IMG={};
+  (function(){
+    var w=DIMENSIONS[0].items;
+    for(var i=0;i<w.length;i++)if(w[i].img)WORK_IMG[w[i].slug]=w[i].img;
+  })();
+  function itemImg(m){return m.img||WORK_IMG[m.pair]||'';}
   var IMG_OK={};
-  /* 配图预检：数据声明路径 + 预检 + 程序化占位；切换维度时对新维度的条目重跑一遍 */
+  /* 配图预检：数据声明路径（或配对成果的路径）+ 预检 + 程序化占位；切换维度时对新维度的条目重跑一遍 */
   function precheckImages(){
     IMG_OK={};
     var i;
     for(i=0;i<ACTS.length;i++)(function(k){
-      var m=ACTS[k];
-      if(!m.img){IMG_OK[k]=false;return;}
+      var m=ACTS[k],src=itemImg(m);
+      if(!src){IMG_OK[k]=false;return;}
       IMG_OK[k]=null;
       var im=new Image();
       im.onload=function(){IMG_OK[k]=true;if(selIdx===k)showCard(k);};
       im.onerror=function(){IMG_OK[k]=false;};
-      im.src=m.img;
+      im.src=src;
     })(i);
     setTimeout(function(){
-      for(var k=0;k<ACTS.length;k++)if(ACTS[k].img&&IMG_OK[k]===null){IMG_OK[k]=false;if(selIdx===k)showCard(k);}
+      for(var k=0;k<ACTS.length;k++)if(itemImg(ACTS[k])&&IMG_OK[k]===null){IMG_OK[k]=false;if(selIdx===k)showCard(k);}
     },2600);
   }
   precheckImages();
   function applyPic(m,i){
-    var ok=!!(m.img&&IMG_OK[i]===true);
+    var src=itemImg(m);
+    var ok=!!(src&&IMG_OK[i]===true);
     picEl.className=ok?'pic has':'pic';
-    if(ok)picEl.style.backgroundImage="url('"+m.img+"')";else picEl.style.backgroundImage='';
-    picFileEl.textContent=m.slug?m.slug+'.webp':'';
+    if(ok)picEl.style.backgroundImage="url('"+src+"')";else picEl.style.backgroundImage='';
+    /* 占位时标注的是「实际用哪张图」：人物条目显示其成果图文件名 */
+    picFileEl.textContent=src?src.split('/').pop():'';
   }
   function catName(id){for(var i=0;i<CATS.length;i++)if(CATS[i].id===id)return CATS[i].name;return '';}
   function showCard(i){
@@ -518,7 +545,7 @@
       x.fillStyle='#94a3bd';x.font='500 28px '+SANS;
       x.fillText('配图待生成',sw/2,cy+190);
       x.fillStyle='rgba(126,139,163,.75)';x.font='400 22px '+SANS;
-      x.fillText(m.slug?m.slug+'.webp':'',sw/2,cy+228);
+      x.fillText(heroSrc?heroSrc.split('/').pop():'',sw/2,cy+228);
       x.textAlign='left';
       heroFade();
     }
@@ -583,7 +610,8 @@
       onDone(c.toDataURL('image/jpeg',0.92));
     }
     drawBg();
-    if(m.img&&IMG_OK[idx]===true){
+    var heroSrc=itemImg(m);
+    if(heroSrc&&IMG_OK[idx]===true){
       var im=new Image();
       im.onload=function(){
         var s=Math.max(sw/im.width,HERO/im.height),dw=im.width*s,dh=im.height*s;
@@ -593,7 +621,7 @@
         heroFade();drawText();
       };
       im.onerror=function(){drawPlaceholder();drawText();};
-      im.src=m.img;
+      im.src=heroSrc;
     }else{drawPlaceholder();drawText();}
   }
   function shareToXhs(idx){
@@ -634,6 +662,11 @@
     tabsEl.innerHTML='';
     for(var i=0;i<CATS.length;i++){
       var r=CATS[i];
+      if(r.id!=='all'){
+        var n=0;
+        for(var t=0;t<ACTS.length;t++)if(ACTS[t].cat===r.id)n++;
+        if(!n)continue;   /* 没有条目的奖项不出标签（成果维度暂无文学 / 经济学） */
+      }
       var b=document.createElement('button');
       var dot=document.createElement('span');
       dot.className='dot';dot.style.background=r.color||'#f2f6fe';
@@ -707,11 +740,12 @@
         var it=document.createElement('button');
         it.type='button';it.className='item';
         var th=mkEl('div','th');
-        if(m.img){
+        var tsrc=itemImg(m);
+        if(tsrc){
           var im=document.createElement('img');
           im.alt='';
           (function(cell,img){img.onerror=function(){img.style.display='none';cell.className='th bad';};})(th,im);
-          im.src=m.img;
+          im.src=tsrc;
           th.appendChild(im);
         }else th.className='th bad';
         th.appendChild(mkEl('b'));
@@ -757,26 +791,66 @@
   buildTabs();
   buildList();
 
-  /* ===== 维度切换：成果 / 人物 =====
+  /* ===== 维度切换：成果 / 人物（移进卡片顶部，地图底部不再占位）=====
    * 切维度 = 换一套 CATS / ACTS，再按顺序重建：分类色表 → 标记点 → 名牌池 → 筛选条 → 清单 → 配图预检。
-   * 选中态、筛选态与相机都回到该维度的默认位置；界面上三处文案（清单标题、清单单位、落点标签）随之更新。 */
-  var dimsEl=document.getElementById('dims');
+   * 从地图上切（传参为空）：关卡片、回该维度默认视角；
+   * 从卡片内切（fromCard=true）：卡片不关，优先跳到当前条目的跨维度配对（pair 字段，
+   * 成果↔人物一一对应）；没有配对就找同奖项、奖项年份最接近的一条；再没有回开场落点。 */
+  /* 两处切换器：卡片顶部（fromCard=true：切完落到配对条目、卡片不关）与清单顶部
+     （fromCard=false：切完清单留在原地，相机回该维度开场落点）。 */
+  var dimSwHosts=[
+    {el:document.getElementById('dimSw'),fromCard:true},
+    {el:document.getElementById('dimSwList'),fromCard:false}
+  ];
   function buildDims(){
-    dimsEl.innerHTML='';
-    for(var i=0;i<DIMENSIONS.length;i++){
-      var d=DIMENSIONS[i];
-      var b=document.createElement('button');
-      b.appendChild(document.createTextNode(d.tabName));
-      b.setAttribute('data-d',d.id);
-      b.title=d.name+' · '+d.sub;
-      if(d.id===DIM.id)b.classList.add('on');
-      b.addEventListener('click',(function(id){return function(){switchDim(id);};})(d.id));
-      dimsEl.appendChild(b);
+    for(var s=0;s<dimSwHosts.length;s++){
+      var host=dimSwHosts[s];
+      if(!host.el)continue;
+      host.el.innerHTML='';
+      for(var i=0;i<DIMENSIONS.length;i++){
+        var d=DIMENSIONS[i];
+        var b=document.createElement('button');
+        b.appendChild(document.createTextNode(d.tabName));
+        b.setAttribute('data-d',d.id);
+        b.title=d.name+' · '+d.sub;
+        if(d.id===DIM.id)b.classList.add('on');
+        b.addEventListener('click',(function(id,fc){return function(){switchDim(id,fc);};})(d.id,host.fromCard));
+        host.el.appendChild(b);
+      }
     }
   }
-  function switchDim(id){
+  /* 新维度里离开场落点最近的条目 */
+  function homeIdx(){
+    var best=0,bd=1e9;
+    for(var i=0;i<ACTS.length;i++){
+      var d=Math.pow(ACTS[i].lat-DIM.home.lat,2)+Math.pow((ACTS[i].lon-DIM.home.lon)*0.7,2);
+      if(d<bd){bd=d;best=i;}
+    }
+    return best;
+  }
+  /* 跨维度配对落点：pair 精确匹配（X 射线↔伦琴）→ 同奖项最近年份 → -1（交给调用方退回开场落点）。
+     注意必须在 CATS/ACTS 还没换之前调用（cur 是旧维度里的条目）。 */
+  function twinIdx(cur){
+    if(cur&&cur.pair){
+      for(var i=0;i<ACTS.length;i++)if(ACTS[i].slug===cur.pair)return i;
+    }
+    var best=-1,bd=1e9,cat=cur?cur.cat:'',yr=cur?parseInt((cur.meta&&cur.meta[0])||'',10):NaN;
+    if(!isNaN(yr)){
+      for(i=0;i<ACTS.length;i++){
+        var it=ACTS[i];
+        if(it.cat!==cat)continue;
+        var iy=parseInt((it.meta&&it.meta[0])||'',10);
+        if(isNaN(iy))continue;
+        var d=Math.abs(iy-yr);
+        if(d<bd){bd=d;best=i;}
+      }
+    }
+    return best;
+  }
+  function switchDim(id,fromCard){
     if(id===DIM.id)return;
-    var i,btns=dimsEl.querySelectorAll('button');
+    var cur=(fromCard&&selIdx>=0)?ACTS[selIdx]:null;   /* 先抓旧维度的当前条目，ACTS 马上要换 */
+    var i;
     for(i=0;i<DIMENSIONS.length;i++)if(DIMENSIONS[i].id===id)DIM=DIMENSIONS[i];
     CATS=DIM.cats;ACTS=DIM.items;
     curCat='all';
@@ -787,11 +861,20 @@
     buildTabs();
     buildList();
     precheckImages();
-    hideCard();
     HOME_LAT=DIM.home.lat;HOME_LON=DIM.home.lon;
-    aimLatLon(HOME_LAT,HOME_LON);
-    radiusG=fitR();
-    for(i=0;i<btns.length;i++)btns[i].classList.toggle('on',btns[i].getAttribute('data-d')===DIM.id);
+    if(fromCard){
+      var ti=twinIdx(cur);
+      selectMarker(ti>=0?ti:homeIdx());
+    }else{
+      hideCard();
+      aimLatLon(HOME_LAT,HOME_LON);
+      radiusG=fitR();
+    }
+    for(i=0;i<dimSwHosts.length;i++){
+      if(!dimSwHosts[i].el)continue;
+      var bs=dimSwHosts[i].el.querySelectorAll('button');
+      for(var q=0;q<bs.length;q++)bs[q].classList.toggle('on',bs[q].getAttribute('data-d')===DIM.id);
+    }
     var tp=document.getElementById('tip');
     tp.textContent=DIM.tip;
     tp.classList.add('show');
@@ -800,7 +883,8 @@
   buildDims();
 
   /* ===== 设置 ===== */
-  var autoSpin=true,showStars=true,showClouds=true,showLabel=true;
+  /* 自动旋转默认关：默认视角是静态的，想看转动的再去设置里开 */
+  var autoSpin=false,showStars=true,showClouds=true,showLabel=true;
   function bind(id,fn){var el=document.getElementById(id);el.addEventListener('click',function(){el.classList.toggle('on');fn(el.classList.contains('on'));});}
   bind('swSpin',function(v){autoSpin=v;});
   bind('swStars',function(v){showStars=v;stars.visible=v;sky.visible=v;});
@@ -817,7 +901,7 @@
   /* ===== 标记点显隐、呼吸与脉冲 ===== */
   var _v=new THREE.Vector3(),_n=new THREE.Vector3(),_d=new THREE.Vector3();
   function refreshMarkers(t){
-    var mkScale=Math.max(0.6,Math.min(2.2,radius/REF_DIST));
+    var mkScale=Math.max(0.45,Math.min(2.2,radius/REF_DIST));
     for(var i=0;i<markers.length;i++){
       var m=markers[i];
       m.grp.scale.setScalar(mkScale);
@@ -837,13 +921,15 @@
       m.fade=fade;
       if(!show)continue;
       var pulse=0.5+0.5*Math.sin(t*2.4+i*0.7);
+      /* 外圈动效：虚线环缓慢自转，选中态转快一倍；相位随序号错开，全场不齐步走 */
+      m.ring.material.rotation=t*(sel?1.3:0.55)+i*0.7;
       if(sel){
         m.halo.material.color.copy(GOLD_COL);
         m.core.material.color.copy(GOLD_COL);
         m.ring.material.color.copy(GOLD_COL);
-        m.halo.scale.set(0.3*(1+.08*pulse),0.3*(1+.08*pulse),1);
-        m.core.scale.set(0.115,0.115,1);
-        m.contour.scale.set(0.26,0.26,1);
+        m.halo.scale.set(0.21*(1+.08*pulse),0.21*(1+.08*pulse),1);
+        m.core.scale.set(0.08,0.08,1);
+        m.contour.scale.set(0.185,0.185,1);
         m.ring.scale.set(MK_RING_SEL,MK_RING_SEL,1);
         m.halo.material.opacity=(.62+.14*pulse)*fade;
         m.core.material.opacity=1*fade;
@@ -853,10 +939,10 @@
         m.halo.material.color.copy(DIM_COL);
         m.core.material.color.copy(DIM_COL);
         m.ring.material.color.copy(DIM_COL);
-        m.halo.scale.set(0.14,0.14,1);
-        m.core.scale.set(0.05,0.05,1);
-        m.contour.scale.set(0.13,0.13,1);
-        m.ring.scale.set(0.14,0.14,1);
+        m.halo.scale.set(0.10,0.10,1);
+        m.core.scale.set(0.036,0.036,1);
+        m.contour.scale.set(0.095,0.095,1);
+        m.ring.scale.set(0.10,0.10,1);
         m.halo.material.opacity=.26*fade;
         m.core.material.opacity=.7*fade;
         m.contour.material.opacity=.4*fade;
@@ -886,16 +972,27 @@
     }else ping.visible=false;
   }
 
-  /* ===== 标签投影：所有朝向镜头的标记都挂名牌（切换维度时重建）=====
+  /* ===== 标签投影：名牌按需出现，密集区成列外挂（切换维度时重建）=====
+   * 密度全按缩放走（防堆叠）：默认视角一条名牌都不挂（只留光点看分布），额度随拉近从 0 增长，
+   * 成簇判定距离随拉近收紧；密集处成列外挂，超出列上限的成员由列首「N 项」徽标代表。
    * 密集区在球面上只差几个像素：成果维度的美国东北部 7 项（石溪 / 默里山 / 霍姆德尔 / 纽约 /
    * 约克镇高地 / 费城 / 普林斯顿）挤在十来个像素里，伦敦 3 项（青霉素 / CT / 光纤通信）也一样；
    * 人物维度的「纽约 + 哈特福德」与「芝加哥」两处同理。
-   * 原来的规则是「谁挤不过谁就整条隐藏」——于是密集区只剩一条名牌，想挑其余几条也没有入口。
-   * 现在改成屏幕空间的「成列外挂」：彼此太近的名牌在光点上方叠成一列（上方放不下则挂下方），
-   * 每条用细引线连回自己的光点；挤了 3 项以上的地方，列首旁再挂一个数字徽标说明压着几项。
+   * 挤在一起的改成屏幕空间的「成列外挂」：彼此太近的名牌在光点上方叠成一列
+   * （上方放不下则挂下方），每条用细引线连回自己的光点；挤了 3 项以上的地方，
+   * 列首旁再挂一个数字徽标说明压着几项。
    * 判定全在屏幕空间做，所以转动、拉近拉远都自然跟随；名牌本身可点，密集处照样点得准。 */
   var tagPool=[],tagCand=[],badgePool=[];
-  var CLUSTER_PX=30,TAG_PITCH_GAP=9,LEAD_MIN=14,BADGE_MIN=3;
+  /* CLUSTER_PX 是判定「挤在一处」的屏幕距离；窄屏用更小的值，让本可分开的点各自挂名牌。
+     COL_MAX 是密集处一列最多挂几行名牌（手机只留两行，其余交给「N 项」徽标），
+     —— 窄屏纵向空间紧，长列会把半屏糊住。 */
+  var CLUSTER_PX=30,CLUSTER_PX_SMALL=22,COL_MAX=3,COL_MAX_SMALL=2;
+  var TAG_PITCH_GAP=9,LEAD_MIN=14,BADGE_MIN=3;
+  /* 名牌总额度从 0 起算：默认视角一条都不挂，只留光点——那是「看分布」的状态；
+     拉近后才开始逐条出现，额度 ≈ 系数 ×(z-1)^1.3（z = fitR()/radius，默认视角 z=1）：
+     手机拉近 1.25×→2 条、1.7×→6 条、2.2×→18 条，拉到最近等于不限量。
+     嫌多/嫌少就调这两个系数。选中项与「筛了某一类」不受这条曲线限制。 */
+  var LABEL_GROW=20,LABEL_GROW_SMALL=14;
   var leadCv=document.getElementById('leaders');
   var leadCtx=leadCv?leadCv.getContext('2d'):null,leadDpr=1,leadDirty=false;
   function sizeLeaders(){
@@ -931,6 +1028,8 @@
       d.style.background=cs;
       el.style.borderColor=cs.replace('rgb(','rgba(').replace(')',',.5)');
       el.appendChild(d);
+      /* 名牌一律完整写「地点·名称」：宽屏窄屏同一套文案，不缩写、不截断
+         （密度靠额度与成簇外挂控制，不靠砍字）。 */
       el.appendChild(document.createTextNode(ACTS[i].place+'·'+ACTS[i].name));
       (function(idx){
         el.addEventListener('click',function(){
@@ -946,11 +1045,13 @@
   /* 同一处的名牌候选位置：成列外挂，列首离光点留一段引线的长度，往上下哪边放得下挂哪边。
      纵向一律以「簇的位置」为准（不是各自的点）：簇内各点本就相差可达 CLUSTER_PX，
      各自为政会让行距忽宽忽窄、极端时互相压掉一格。横向仍取各自的 x，引线才指向自己的点。 */
-  function tagSlots(c,t,g){
+  function tagSlots(c,t,g,maxRows){
     var out=[],k,idx,y0;
     if(g&&g.n>=2){
+      /* 只给前 maxRows 行发槽位：排不上的成员不挂名牌，由列首的「N 项」徽标代表 */
+      var rows=Math.min(g.n,maxRows);
       y0=(g.dir<0)?(g.y-34-t.h):(g.y+26);
-      for(k=0;k<g.n;k++){
+      for(k=0;k<rows;k++){
         idx=(c.k+k)%g.n;
         out.push({x:clampX(c.x-t.w/2,t.w),y:y0+(g.dir<0?-idx:idx)*g.pitch,w:t.w,h:t.h});
       }
@@ -960,24 +1061,68 @@
     return out;
   }
   var clusTop={};
+  /* 可视范围判定：顶部控件、底部筛选条、已展开的卡片都会挡住名牌，
+     被挡住的点降级（排在候选末尾，额度不够就先不给它），屏幕外的点直接不挂。
+     每帧重建一次矩形（2~3 个元素量级，开销可忽略），不写死像素值，UI 改了也不用同步。 */
+  var occRects=[];
+  function collectOcc(){
+    occRects.length=0;
+    var sel=['.top','.tabs'];
+    for(var i=0;i<sel.length;i++){
+      var e=document.querySelector(sel[i]);
+      if(!e)continue;
+      var r=e.getBoundingClientRect();
+      if(r.width&&r.height)occRects.push([r.left-8,r.top-8,r.right+8,r.bottom+8]);
+    }
+    if(cardEl.classList.contains('show')){
+      var rc=cardEl.getBoundingClientRect();
+      occRects.push([rc.left-8,rc.top-8,rc.right+8,rc.bottom+8]);
+    }
+  }
+  function occluded(x,y){
+    for(var i=0;i<occRects.length;i++){
+      var r=occRects[i];
+      if(x>r[0]&&x<r[2]&&y>r[1]&&y<r[3])return 1;
+    }
+    return 0;
+  }
   function updateTags(){
-    var i,j,k,show=showLabel;
+    var i,j,k,show=showLabel&&!listOpen;   /* 名录浮层开着时整屏被盖住，不必再排名牌 */
+    collectOcc();
+    /* 名牌密度全部跟着缩放走，三件事一起随 z 变（z = fitR()/radius，默认视角 z=1，越近越大）：
+       · 额度 budget：默认只挂最靠中心的一小撮，拉近按 z^1.6 增长到不限量；
+       · 成簇距离 cpx：拉近后本可分开的点不再抱团（30 → 下限 14，窄屏 22 → 11）；
+       · 窄屏再用更短的文案、每列最多两行兜底。 */
+    var small=W<=640;
+    var z=Math.max(0.35,fitR()/radius);
+    var budget=Math.round((small?LABEL_GROW_SMALL:LABEL_GROW)*Math.pow(Math.max(0,z-1),1.3));
+    if(curCat!=='all')budget=Math.max(budget,12);   /* 筛了某一类：这一类应当看得见名牌 */
+    if(selIdx>=0)budget++;                          /* 选中项永远保留自己的名牌 */
+    var cpx=Math.max(small?11:14,(small?CLUSTER_PX_SMALL:CLUSTER_PX)/z);
+    var colMax=small?COL_MAX_SMALL:COL_MAX;
     tagCand.length=0;
     if(show){
       for(i=0;i<markers.length;i++){
         var m=markers[i];
         if(!m.front||m.dim||!m.core.visible)continue;
         _v.setFromMatrixPosition(m.grp.matrixWorld);_v.project(camera);
-        tagCand.push({i:i,x:(_v.x*0.5+0.5)*W,y:(-_v.y*0.5+0.5)*H,f:m.fade,sel:m.sel,cl:-1,k:0});
+        var px=(_v.x*0.5+0.5)*W,py=(-_v.y*0.5+0.5)*H;
+        if(px<-20||px>W+20||py<-20||py>H+20)continue;   /* 屏幕外：挂了也看不见，不占额度 */
+        tagCand.push({i:i,x:px,y:py,f:m.fade,sel:m.sel,occ:occluded(px,py),cl:-1,k:0});
       }
-      tagCand.sort(function(a,b){return (b.sel?1:0)-(a.sel?1:0)||(b.f-a.f);});
+      /* 优先级：选中项 → 露在外面的（未被 UI 遮挡）→ 屏幕可见度高的（越靠镜头中心越优先）；
+         额度用完剩下的这一帧就不挂名牌。 */
+      tagCand.sort(function(a,b){
+        return (b.sel?1:0)-(a.sel?1:0)||(a.occ-b.occ)||(b.f-a.f);
+      });
+      if(tagCand.length>budget)tagCand.length=budget;
     }
     /* 屏幕上挨得太近的算作「同一处」；簇首是优先级最高的那条，点光点时也优先选它 */
     var clus=[];
     for(i=0;i<tagCand.length;i++){
       var c=tagCand[i],g=-1;
       for(j=0;j<clus.length;j++){
-        if(Math.abs(c.x-clus[j].x)<CLUSTER_PX&&Math.abs(c.y-clus[j].y)<CLUSTER_PX){g=j;break;}
+        if(Math.abs(c.x-clus[j].x)<cpx&&Math.abs(c.y-clus[j].y)<cpx){g=j;break;}
       }
       if(g<0){clus.push({x:c.x,y:c.y,n:0,dir:-1,pitch:28,fade:1,placed:0,top:c.i});g=clus.length-1;}
       c.cl=g;c.k=clus[g].n++;
@@ -1009,7 +1154,7 @@
       var c2=tagCand[i],t=tagPool[c2.i],el=t.el;
       measure(t);
       var gc=(c2.cl>=0)?clus[c2.cl]:null;
-      var slots=tagSlots(c2,t,gc),put=null;
+      var slots=tagSlots(c2,t,gc,colMax),put=null;
       for(k=0;k<slots.length;k++){                       /* 首选自己那一格，挤了就顺延到别格 */
         var b=slots[k],bw=b.w+6,bh=b.h+6,rx=b.x-3,ry=b.y-3,ok=true;
         for(j=0;j<placed.length;j++){

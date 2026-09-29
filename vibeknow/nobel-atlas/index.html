@@ -6,9 +6,10 @@
 <title>诺奖图鉴 · NOBEL ATLAS</title>
 <style>
   /* ===== 资源位 =====
-     ① 条目配图 ×62   assets/illus/<slug>.webp   512×512，主体居中留白
-         路径写在 data.js 的 img 字段；缺图或加载失败时回退到程序化占位，
-         不出现空白块，也不改变卡片尺寸（见 app.js 的 IMG_OK 预检）。
+     ① 成果配图 ×50   assets/illus/<成果 slug>.webp   横向 2:1（建议 720×360），主体居中留白
+         路径写在 data.js 的 img 字段；人物维度不出图——人物条目按 pair 复用成果图
+         （见 app.js 的 itemImg）。缺图或加载失败时回退到程序化占位，
+         不出现空白块，也不改变卡片尺寸（IMG_OK 预检）。
      ② 地球贴图       assets/earth.jpg / clouds.png   复用 earth-3d 系列
      ③ Three.js       assets/three.min.js              复用 earth-3d 系列 */
   :root{
@@ -46,11 +47,10 @@
   .gear{position:absolute;right:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   .gear svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
 
-  /* 维度切换：成果 / 人物（决定下方筛选条与清单的含义） */
-  .dims{position:fixed;left:50%;bottom:calc(var(--sab) + 68px);transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px;z-index:10;pointer-events:auto;-webkit-backdrop-filter:blur(14px) saturate(1.3);backdrop-filter:blur(14px) saturate(1.3);box-shadow:0 8px 26px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)}
-  .dims button{border:none;background:transparent;color:var(--mut);font-size:12.5px;font-weight:500;padding:6px 16px;border-radius:999px;cursor:pointer;letter-spacing:1px;white-space:nowrap;transition:color .18s,background .18s,transform .15s}
-  .dims button:active{transform:scale(.94)}
-  .dims button.on{background:linear-gradient(135deg,#b8863a,#eed49a);color:var(--ink);font-weight:600;box-shadow:0 2px 10px rgba(217,178,106,.32)}
+  /* 维度切换（成果 / 人物）：收进卡片顶部，地图底部只留分类筛选条 */
+  .dimsw{display:inline-flex;background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:999px;padding:3px;margin-bottom:10px}
+  .dimsw button{border:none;background:transparent;color:var(--mut);font-size:11px;font-weight:500;padding:4px 14px;border-radius:999px;cursor:pointer;letter-spacing:1px;transition:color .18s,background .18s}
+  .dimsw button.on{background:linear-gradient(135deg,#b8863a,#eed49a);color:var(--ink);font-weight:600}
 
   .tabs{position:fixed;left:50%;bottom:calc(var(--sab) + 14px);transform:translateX(-50%);display:flex;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px;-webkit-backdrop-filter:blur(14px) saturate(1.35);backdrop-filter:blur(14px) saturate(1.35);box-shadow:0 10px 34px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07);z-index:10;pointer-events:auto;max-width:calc(100vw - 20px);overflow-x:auto;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-x;user-select:none;-webkit-user-select:none}
   .tabs::-webkit-scrollbar{display:none}
@@ -62,7 +62,9 @@
   .tabs button .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;vertical-align:middle;box-shadow:0 0 6px rgba(255,255,255,.25);transition:box-shadow .18s}
   .tabs button.on .dot{box-shadow:0 0 0 2px rgba(8,16,31,.34)}
 
-  .card{position:fixed;left:50%;bottom:calc(var(--sab) + 118px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;max-height:calc(100vh - var(--sab) - 136px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* 卡片高度：顶部停在列表 / 设置按钮下方（top-gap+按钮 36px，再留 8px），
+     不遮顶部按钮；底部贴住分类筛选条（原维度切换器已移入卡片）。 */
+  .card{position:fixed;left:50%;bottom:calc(var(--sab) + 66px);transform:translate(-50%,24px);width:calc(100vw - 28px);width:min(440px,calc(100vw - 28px));background:var(--panel);border:1px solid var(--line-2);border-radius:16px;padding:16px 18px 14px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);z-index:9;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;max-height:calc(100vh - var(--sab) - var(--sat) - 160px);overflow-y:auto;-webkit-overflow-scrolling:touch}
   .card.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
   .card .close{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--mut);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;line-height:1}
   .card .civ{font-size:11px;color:var(--acc);letter-spacing:2px;font-family:var(--sans)}
@@ -82,7 +84,7 @@
   .card .share:disabled{opacity:.6;cursor:default}
 
   /* 配图位：有图走 cover 铺满，无图走程序化占位（深夜蓝底 + 奖章圆盘 + 星芒 + 文件名） */
-  .card .pic{position:relative;height:280px;height:min(320px,42vh);margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
+  .card .pic{position:relative;height:200px;height:min(220px,26vh);margin:12px 0 0;border-radius:10px;overflow:hidden;background-color:var(--bg-2);
     background-image:
       radial-gradient(circle at 24% 20%,rgba(255,248,230,.42),rgba(255,248,230,0) 1.5%),
       radial-gradient(circle at 70% 74%,rgba(226,232,248,.28),rgba(226,232,248,0) 1.2%),
@@ -136,17 +138,21 @@
   .listbtn svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
   .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(5,8,16,.95);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
   .listwrap.show{opacity:1;visibility:visible;pointer-events:auto}
-  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;align-items:center;padding:calc(var(--sat) + var(--top-gap)) 56px 10px 16px;border-bottom:1px solid var(--line)}
+  /* 清单是整屏浮层，顶部只需让开安全区，不再沿用地图那 50px 的标题位——否则顶上会空一条 */
+  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:flex-start;padding:calc(var(--sat) + 12px) 56px 12px 16px;border-bottom:1px solid var(--line)}
+  .listbar .dimsw{margin:10px 0 0}
   .listtitle{font-family:var(--serif);font-size:17px;color:var(--dawn);letter-spacing:1.5px}
   .listtitle span{display:block;font-family:var(--sans);font-size:11px;font-weight:400;color:var(--mut);letter-spacing:1px;margin-top:3px}
   .listtitle i{font-style:normal;color:var(--acc)}
-  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
-  .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:2px 14px calc(var(--sab) + 26px)}
-  .grp{margin-top:6px}
-  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:10px 2px 8px;background:linear-gradient(180deg,rgba(5,8,16,.97) 66%,rgba(5,8,16,0))}
+  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + 14px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
+  /* 横向内边距交给每行自己（.item / .grp h4），这样吸顶的分类头能左右通铺，
+     滚过去的内容不会从分类头两侧透出来（原来那 14px 边距看着就是「缝」）。 */
+  .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:0 0 calc(var(--sab) + 26px)}
+  .grp{margin-top:0}
+  .grp h4{position:sticky;top:0;z-index:2;display:flex;align-items:center;font-size:12px;font-weight:600;color:var(--txt);letter-spacing:1.5px;margin:0;padding:12px 16px 8px;background:linear-gradient(180deg,rgba(5,8,16,1) 68%,rgba(5,8,16,0))}
   .grp h4 i{width:8px;height:8px;border-radius:50%;margin-right:8px;flex-shrink:0}
   .grp h4 em{font-style:normal;font-size:11px;font-weight:400;color:var(--mut);margin-left:auto;letter-spacing:.5px}
-  .item{display:flex;align-items:center;width:100%;text-align:left;font-family:var(--sans);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer;transition:background .18s,border-color .18s,transform .15s,opacity .2s}
+  .item{display:flex;align-items:center;width:calc(100% - 28px);text-align:left;font-family:var(--sans);background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:8px;margin:0 14px 8px;cursor:pointer;transition:background .18s,border-color .18s,transform .15s,opacity .2s}
   .item:active{transform:scale(.985)}
   .item.on{border-color:var(--acc);background:rgba(217,178,106,.12);box-shadow:0 0 0 1px rgba(217,178,106,.28)}
   .item.dim{opacity:.42}
@@ -178,12 +184,13 @@
     .dims button{font-size:12.5px;padding:6px 14px}
     .tag{font-size:12.5px;padding:3px 9px}
     .brand{font-size:16px}
-    .card{max-height:calc(100vh - var(--sab) - 130px)}
+    .card{max-height:calc(100vh - var(--sab) - var(--sat) - 160px)}
     .card .name{font-size:17px}
     .card .story{font-size:13px}
-    .card .pic{height:170px;height:min(190px,24vh)}
+    .card .pic{height:130px;height:min(146px,17vh)}
     .listtitle{font-size:16px}
-    .listscroll{padding-left:12px;padding-right:12px}
+    .item{width:calc(100% - 24px);margin:0 12px 8px}
+    .grp h4{padding:12px 12px 8px}
     .item .th{width:58px;height:40px;margin-right:9px}
   }
 </style>
@@ -202,13 +209,13 @@
   </div>
 </div>
 
-<div class="dims" id="dims"></div>
 <div class="tabs" id="tabs"></div>
 
 <div class="tip" id="tip">拖动旋转地球 · 点亮点读一项走进日常的诺奖</div>
 
 <div class="card" id="card">
   <button class="close" id="cClose" aria-label="关闭">×</button>
+  <div class="dimsw" id="dimSw"></div>
   <div class="civ" id="cCiv"></div>
   <div class="name" id="cName"></div>
   <div class="meta" id="cMeta"></div>
@@ -226,7 +233,7 @@
   <h3>此刻 · 北京时间</h3>
   <div class="now" id="nowInfo">—</div>
   <h3>显示</h3>
-  <div class="row"><label>自动旋转</label><div class="sw on" id="swSpin"><i></i></div></div>
+  <div class="row"><label>自动旋转</label><div class="sw" id="swSpin"><i></i></div></div>
   <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
   <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
   <div class="row"><label>标记标签</label><div class="sw on" id="swLabel"><i></i></div></div>
@@ -241,7 +248,8 @@
 
 <div class="listwrap" id="listWrap" aria-hidden="true" aria-label="完整名录">
   <div class="listbar">
-    <div class="listtitle">成果清单<span><i id="listCnt">30 项</i> · 按分类分列 · 点任意一行飞过去</span></div>
+    <div class="listtitle">成果清单<span><i id="listCnt">50 项</i> · 按分类分列 · 点任意一行飞过去</span></div>
+    <div class="dimsw" id="dimSwList"></div>
     <button class="lclose" id="lClose" aria-label="关闭清单">×</button>
   </div>
   <div class="listscroll" id="listScroll"></div>
