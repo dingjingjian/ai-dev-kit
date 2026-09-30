@@ -47,7 +47,16 @@
   #stage{position:fixed;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block;touch-action:none}
 
   .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:center;justify-content:center;padding:calc(var(--top-gap) + var(--sat)) 12px 8px;z-index:10;pointer-events:none}
-  .brand{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2px;color:var(--dawn);text-shadow:0 0 12px rgba(217,178,106,.42);text-align:center}
+  /* 标题带的可读性底衬：地球拉近后，亮面地形 / 云层会顶到标题后面，纯白字压上去就糊了。
+     铺一层与页面底色（--bg #070b16）同源的竖向渐变——顶端最实、往下淡出，
+     在球面背景上相当于一块「渐变阴影」，在深色空处又与底色重合、看不出来。
+     高度比 .top 盒子多 20px，让淡出段落在标题文字下方（否则「NOBEL ATLAS」那行正好压在渐变中段）。
+     负 z-index 是必须的：伪元素是绝对定位，会盖住 .brand 这种 static 文本；
+     放进 .top 自己的层叠上下文最底层，才落在标题文字和两个圆形按钮之下。 */
+  .top::before{content:"";position:absolute;left:0;right:0;top:0;height:calc(100% + 20px);z-index:-1;pointer-events:none;
+    background:linear-gradient(180deg,rgba(7,11,22,.92),rgba(7,11,22,.88) 78%,rgba(7,11,22,0))}
+  /* 金色辉光之外再压一道极近的深色描边：亮地形上字形边缘靠它咬住，不至于和金晕一起化开 */
+  .brand{font-family:var(--serif);font-size:18px;font-weight:600;letter-spacing:2px;color:var(--dawn);text-shadow:0 1px 3px rgba(4,7,14,.9),0 0 12px rgba(217,178,106,.42);text-align:center}
   .brand .sub{display:block;font-size:10px;font-weight:400;letter-spacing:3px;color:var(--acc);margin-top:2px;font-family:var(--sans)}
   .gear{position:absolute;right:12px;top:calc(var(--top-gap) + var(--sat));width:36px;height:36px;border-radius:50%;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:auto;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   .gear svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}

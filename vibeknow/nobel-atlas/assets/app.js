@@ -206,8 +206,13 @@
     for(var i=0;i<CATS.length;i++)REG_COL[CATS[i].id]=new THREE.Color(CATS[i].color||'#f2f6fe');
   }
   rebuildRegColors();
-  /* 当前筛选分类 id */
-  var curCat='all';
+  /* 当前筛选分类 id / 该类条目数（名牌额度按它放开：筛了某一类就把这一类的名牌全给出来） */
+  var curCat='all',curCatN=0;
+  function catCount(id){
+    var n=0;
+    for(var i=0;i<ACTS.length;i++)if(ACTS[i].cat===id)n++;
+    return n;
+  }
   var markers=[];
   function clearMarkers(){
     for(var i=0;i<markers.length;i++)markerGroup.remove(markers[i].grp);
@@ -319,16 +324,76 @@
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
     camera.lookAt(0,-pan*radius,0);
   }
-  /* 开场视角正对的点：由当前维度的 DIM.home 给出（成果维度对维尔茨堡的 X 射线，人物维度对宁波的屠呦呦） */
+  /* 落点：起手由「此刻的太阳直射方向」给出（aimSun），不再用维度自带的 DIM.home 开场；
+     HOME_LAT / HOME_LON 仍保留——切维度的兜底落点、名录跳转前的就近选点还按它算 */
   var HOME_LAT=DIM.home.lat,HOME_LON=DIM.home.lon;
   var _aim=new THREE.Vector3();
-  function aimLatLon(lat,lon){
-    _aim.copy(ll2v(lat,lon,1));
+  /* 把镜头转到「世界方向 v 正对屏幕中心」（v 由球心指向该点，长度无所谓） */
+  function aimWorld(v){
+    var len=v.length()||1;
+    phiG=Math.acos(Math.max(-1,Math.min(1,v.y/len)));
+    thetaG=shortAngle(theta,Math.atan2(v.x,v.z));
+  }
+  /* 地球本地坐标（与 ll2v / 标记点同一套）→ 世界方向 → 镜头正对它 */
+  function aimLocal(v){
+    _aim.copy(v);
     mainTilt.updateMatrixWorld(true);
     _aim.applyMatrix4(mainSpin.matrixWorld);
-    var len=_aim.length()||1;
-    phiG=Math.acos(Math.max(-1,Math.min(1,_aim.y/len)));
-    thetaG=shortAngle(theta,Math.atan2(_aim.x,_aim.z));
+    aimWorld(_aim);
+  }
+  function aimLatLon(lat,lon){aimLocal(ll2v(lat,lon,1));}
+  /* 开场视角：正对此刻阳光直射的那一点。
+     _sunV 是太阳所在的世界方向（astroUpdate 里按真实北京时间算），地球球心在原点，
+     所以「世界方向 = _sunV」的球面点就是被照亮的半球正中——镜头正对过去，
+     开场看到的就是地球亮面，而不是随便一个经纬度。
+     注意：太阳光是世界空间固定的，地球自转（自动旋转）时亮面会跟着挪，届时以光照为准。 */
+  function aimSun(){
+    astroUpdate();
+    aimWorld(_sunV);
+  }
+
+  /* ===== 分类定位：把某一类整体框进画面 =====
+   * 只「转镜头」是不够的：CATS 里的 lat/lon 只是给筛选条用的粗方位，跟条目真实分布无关，
+   * 放大视角下转过去往往是一片空海；而且原地不动的话，最外围的条目还在画面外，等于找不到内容。
+   * 所以两步一起做：① 按该类条目的球面质心对准（均值方向，不是手写方位）；
+   * ② 按「最外围那一条的角半径」反解相机距离，两个下限取大者——
+   *    · 投影下限：球心到相机 d 处，与视线夹角 θ 的点投影出来的视角 β 满足
+   *      tanβ = R·sinθ /(d − R·cosθ)，要求 β ≤ 可用半视场 × FIT_MARGIN，反解得
+   *      d = R·(cosθ + sinθ/tanβ)——保证整类都落在画面里，且尽量填满（FIT_MARGIN 越大越近）；
+   *    · 可见度下限：标记点显不显示看的是 facing（标记法线朝镜头多少，refreshMarkers 里
+   *      facing<0.16 直接不画、0.16~0.4 之间淡入），而 facing 随相机拉近而变小——
+   *      拉得越近，能「看清」的球面越小。要求最外围那条 facing ≥ FIT_FACE，反解得
+   *      d ≥ R·(1−FIT_FACE²)/(cosθmax − FIT_FACE)。
+   *    跨度太大的分类（cosθmax ≤ FIT_FACE，本身就绕到球背面）这一项发散，自动退回整球视角——
+   *    那时候「一屏看全这类」本来就无解，退回最远的合理距离才是不骗人的做法。
+   * 距离再夹到 [R_MIN 与 0.3×fitR 的较大者, fitR()]：最多拉到整球（再远没意义），也不会拉到贴脸。 */
+  var FIT_MARGIN=0.85;      /* 投影留白：0.85 = 最外围那条落在半个视场的 85% 处 */
+  var FIT_FACE=0.25;        /* 可见度下限：最外围那条的 facing 至少这么大（0.16 是硬性隐藏线） */
+  var _fSum=new THREE.Vector3(),_fP=new THREE.Vector3();
+  function frameCat(id){
+    var i,v=_fSum.set(0,0,0),n=0;
+    for(i=0;i<ACTS.length;i++)if(ACTS[i].cat===id){v.add(ll2v(ACTS[i].lat,ACTS[i].lon,1));n++;}
+    if(!n)return;
+    v.normalize();
+    var cosMin=1;
+    for(i=0;i<ACTS.length;i++){
+      if(ACTS[i].cat!==id)continue;
+      _fP.copy(ll2v(ACTS[i].lat,ACTS[i].lon,1)).normalize();
+      var dp=_fP.dot(v);
+      if(dp<cosMin)cosMin=dp;
+    }
+    var th=Math.acos(Math.max(-1,Math.min(1,cosMin)));      /* 该类最外围一条的角半径 */
+    th=Math.min(th,Math.PI/2-0.02);                         /* 跨到背面就无解，压到刚过 90° 之前 */
+    var vFov=camera.fov*Math.PI/180;
+    var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);
+    var beta=Math.min(vFov,hFov)/2*FIT_MARGIN;               /* 真正可用的半视场 */
+    var dProj=R*(Math.cos(th)+Math.sin(th)/Math.tan(beta));
+    var den=Math.cos(th)-FIT_FACE, dFace;
+    dFace=(den>1e-3)?R*(1-FIT_FACE*FIT_FACE)/den:Infinity;   /* 跨度太大时这一项发散 → 自然退回 fitR */
+    var d=Math.max(dProj,dFace);
+    radiusG=Math.max(Math.max(R_MIN,fitR()*0.3),Math.min(fitR(),d));
+    userZoomed=true;                                         /* 视角已按用户意图定过，别被 resize / 卡片复位拉回整球 */
+    aimLocal(v);
   }
 
   /* ===== 手势：单指旋转 / 双指缩放，区分点击与拖动 ===== */
@@ -435,7 +500,7 @@
   var metaEl=document.getElementById('cMeta');
   var extraEl=document.getElementById('cExtra');
   /* ===== 配图来源：只有成果维度出图 =====
-   * 成果 30 张（assets/illus/<成果 slug>.webp，横向 2:1）；人物不出图，
+   * 成果 50 张（assets/illus/<成果 slug>.webp，横向 2:1）；人物不出图，
    * 按 pair 复用对应成果的图——所以调整配对不需要重出图，图也少一半。
    * 表在启动时建一次（slides 以成果维度的 slug 为键），两个维度共用。 */
   var WORK_IMG={};
@@ -674,11 +739,8 @@
     tabsEl.innerHTML='';
     for(var i=0;i<CATS.length;i++){
       var r=CATS[i];
-      if(r.id!=='all'){
-        var n=0;
-        for(var t=0;t<ACTS.length;t++)if(ACTS[t].cat===r.id)n++;
-        if(!n)continue;   /* 没有条目的奖项不出标签（成果维度暂无文学 / 经济学） */
-      }
+      /* 没有条目的奖项不出标签（成果维度暂无文学 / 经济学） */
+      if(r.id!=='all'&&!catCount(r.id))continue;
       var b=document.createElement('button');
       var dot=document.createElement('span');
       dot.className='dot';dot.style.background=r.color||'#f2f6fe';
@@ -686,15 +748,18 @@
       b.appendChild(document.createTextNode(r.name));
       b.setAttribute('data-r',r.id);
       if(r.id===curCat)b.classList.add('on');
-      b.addEventListener('click',function(rid,rlat,rlon,btn){return function(){
+      b.addEventListener('click',function(rid,btn){return function(){
         if(dDragged){dDragged=false;return;}
         curCat=rid;
+        curCatN=catCount(rid);
         var btns=tabsEl.querySelectorAll('button');
         for(var k=0;k<btns.length;k++)btns[k].classList.toggle('on',btns[k].getAttribute('data-r')===rid);
         try{btn.scrollIntoView({behavior:'smooth',inline:'center',block:'nearest'});}catch(_){btn.scrollIntoView(true);}
-        if(rid!=='all')aimLatLon(rlat,rlon);
         clearSelection();
-      };}(r.id,r.lat,r.lon,b));
+        /* 点分类 = 定位：把这一类整体框进画面（质心对准 + 按最外围反解距离）。
+           「全部」是纯筛选、不动镜头——用户可能只是想把筛选撤掉，不该被抢走当前视角。 */
+        if(rid!=='all')frameCat(rid);
+      };}(r.id,b));
       tabsEl.appendChild(b);
     }
     tabsEl.scrollLeft=0;
@@ -865,7 +930,7 @@
     var i;
     for(i=0;i<DIMENSIONS.length;i++)if(DIMENSIONS[i].id===id)DIM=DIMENSIONS[i];
     CATS=DIM.cats;ACTS=DIM.items;
-    curCat='all';
+    curCat='all';curCatN=0;
     selIdx=-1;userZoomed=false;
     rebuildRegColors();
     buildMarkers();
@@ -902,7 +967,7 @@
   bind('swStars',function(v){showStars=v;stars.visible=v;sky.visible=v;});
   bind('swClouds',function(v){showClouds=v;clouds.visible=v;});
   bind('swLabel',function(v){showLabel=v;});
-  document.getElementById('bReset').addEventListener('click',function(){aimLatLon(HOME_LAT,HOME_LON);radiusG=fitR();userZoomed=false;clearSelection();});
+  document.getElementById('bReset').addEventListener('click',function(){aimSun();radiusG=fitR();userZoomed=false;clearSelection();});
   document.getElementById('bTop').addEventListener('click',function(){phiG=0.02;});
   var sheet=document.getElementById('sheet'),scrim=document.getElementById('scrim');
   function openSheet(v){sheet.classList.toggle('show',v);scrim.classList.toggle('show',v);}
@@ -985,10 +1050,10 @@
   }
 
   /* ===== 标签投影：名牌按需出现，密集区成列外挂（切换维度时重建）=====
-   * 密度全按缩放走（防堆叠）：默认视角一条名牌都不挂（只留光点看分布），额度随拉近从 0 增长，
+   * 密度全按缩放走（防堆叠）：默认视角一条名牌都不挂（只留光点看分布），拉近到 1.5 倍才开始出现，
    * 成簇判定距离随拉近收紧；密集处成列外挂，超出列上限的成员由列首「N 项」徽标代表。
-   * 密集区在球面上只差几个像素：成果维度的美国东北部 7 项（石溪 / 默里山 / 霍姆德尔 / 纽约 /
-   * 约克镇高地 / 费城 / 普林斯顿）挤在十来个像素里，伦敦 3 项（青霉素 / CT / 光纤通信）也一样；
+   * 密集区在球面上只差几个像素：成果维度的美国东北部 6 项（石溪 / 默里山 / 霍姆德尔 / 纽约 /
+   * 费城 / 普林斯顿）挤在十来个像素里，伦敦 3 项（青霉素 / CT / 光纤通信）也一样；
    * 人物维度的「纽约 + 哈特福德」与「芝加哥」两处同理。
    * 挤在一起的改成屏幕空间的「成列外挂」：彼此太近的名牌在光点上方叠成一列
    * （上方放不下则挂下方），每条用细引线连回自己的光点；挤了 3 项以上的地方，
@@ -1000,11 +1065,16 @@
      —— 窄屏纵向空间紧，长列会把半屏糊住。 */
   var CLUSTER_PX=30,CLUSTER_PX_SMALL=22,COL_MAX=3,COL_MAX_SMALL=2;
   var TAG_PITCH_GAP=9,LEAD_MIN=14,BADGE_MIN=3;
+  /* 单条名牌的备选阶梯长度：默认位置之外，上下各再试 TAG_LADDER 格（每格 = 名牌高 + 行距） */
+  var TAG_LADDER=4;
   /* 名牌总额度从 0 起算：默认视角一条都不挂，只留光点——那是「看分布」的状态；
-     拉近后才开始逐条出现，额度 ≈ 系数 ×(z-1)^1.3（z = fitR()/radius，默认视角 z=1）：
-     手机拉近 1.25×→2 条、1.7×→6 条、2.2×→18 条，拉到最近等于不限量。
-     嫌多/嫌少就调这两个系数。选中项与「筛了某一类」不受这条曲线限制。 */
-  var LABEL_GROW=20,LABEL_GROW_SMALL=14;
+     且要拉近到 LABEL_Z_MIN 倍（z = fitR()/radius，默认视角 z=1）才开始逐条出现，
+     再往近了按超出量增长：额度 ≈ 系数 ×(z-LABEL_Z_MIN)^1.3，拉到最近等于不限量。
+     系数按「拉到 2.4× 时的密度与门槛前那版一致」标定，所以改的只是「多近才冒名牌」，
+     近距离的观感不变。手机：1.5×→0 条、1.7×→3 条、2.2×→16 条。
+     嫌露得太早 / 太晚就调 LABEL_Z_MIN，嫌多 / 嫌少就调这两个系数。
+     选中项与「筛了某一类」不受这条门槛限制。 */
+  var LABEL_GROW=36,LABEL_GROW_SMALL=25,LABEL_Z_MIN=1.5;
   var leadCv=document.getElementById('leaders');
   var leadCtx=leadCv?leadCv.getContext('2d'):null,leadDpr=1,leadDirty=false;
   function sizeLeaders(){
@@ -1069,7 +1139,16 @@
       }
       return out;
     }
-    out.push({x:clampX(c.x-t.w/2,t.w),y:c.y-t.h*1.4,w:t.w,h:t.h});
+    /* 没成簇的单条也给一串备选：默认位置被挤掉 / 压在标题带、筛选条底下时，
+       沿纵向一格一格上下试，找到空位为止。给一个槽位就完事的话，名牌宽（写全「地点·名称」）
+       而附近刚好有别的名牌，这条就彻底不挂了——「点看得见、却认不出是谁」正是最难用的情况。
+       引线本来就在名牌离光点超过 LEAD_MIN 时自动牵，所以挪得再远也还指着自己的点。 */
+    y0=c.y-t.h*1.4;
+    out.push({x:clampX(c.x-t.w/2,t.w),y:y0,w:t.w,h:t.h});
+    for(k=1;k<=TAG_LADDER;k++){
+      out.push({x:clampX(c.x-t.w/2,t.w),y:y0+k*(t.h+TAG_PITCH_GAP),w:t.w,h:t.h});
+      out.push({x:clampX(c.x-t.w/2,t.w),y:y0-k*(t.h+TAG_PITCH_GAP),w:t.w,h:t.h});
+    }
     return out;
   }
   var clusTop={};
@@ -1102,13 +1181,13 @@
     var i,j,k,show=showLabel&&!listOpen;   /* 名录浮层开着时整屏被盖住，不必再排名牌 */
     collectOcc();
     /* 名牌密度全部跟着缩放走，三件事一起随 z 变（z = fitR()/radius，默认视角 z=1，越近越大）：
-       · 额度 budget：默认只挂最靠中心的一小撮，拉近按 z^1.6 增长到不限量；
+       · 额度 budget：默认一条不挂，要拉近到 LABEL_Z_MIN 倍才冒头，再按超出量增长到不限量；
        · 成簇距离 cpx：拉近后本可分开的点不再抱团（30 → 下限 14，窄屏 22 → 11）；
        · 窄屏再用更短的文案、每列最多两行兜底。 */
     var small=W<=640;
     var z=Math.max(0.35,fitR()/radius);
-    var budget=Math.round((small?LABEL_GROW_SMALL:LABEL_GROW)*Math.pow(Math.max(0,z-1),1.3));
-    if(curCat!=='all')budget=Math.max(budget,12);   /* 筛了某一类：这一类应当看得见名牌 */
+    var budget=Math.round((small?LABEL_GROW_SMALL:LABEL_GROW)*Math.pow(Math.max(0,z-LABEL_Z_MIN),1.3));
+    if(curCat!=='all')budget=Math.max(budget,curCatN||12);   /* 筛了某一类：这一类的名牌全给出来，否则「定位过去了却认不出是谁」 */
     if(selIdx>=0)budget++;                          /* 选中项永远保留自己的名牌 */
     var cpx=Math.max(small?11:14,(small?CLUSTER_PX_SMALL:CLUSTER_PX)/z);
     var colMax=small?COL_MAX_SMALL:COL_MAX;
@@ -1169,7 +1248,11 @@
       var slots=tagSlots(c2,t,gc,colMax),put=null;
       for(k=0;k<slots.length;k++){                       /* 首选自己那一格，挤了就顺延到别格 */
         var b=slots[k],bw=b.w+6,bh=b.h+6,rx=b.x-3,ry=b.y-3,ok=true;
-        for(j=0;j<placed.length;j++){
+        /* 竖直方向出屏的、压在标题带 / 筛选条 / 卡片底下的格子直接作废：
+           挂在那里等于没挂，还会把别的名牌挤走——顺延到阶梯上的下一格。 */
+        if(b.y<2||b.y+b.h>H-2)ok=false;
+        else if(occluded(b.x+b.w/2,b.y+b.h/2))ok=false;
+        for(j=0;ok&&j<placed.length;j++){
           var p=placed[j];
           if(rx<p.x+p.w&&p.x<rx+bw&&ry<p.y+p.h&&p.y<ry+bh){ok=false;break;}
         }
@@ -1233,7 +1316,7 @@
   var eSpin=0.3;
   var EARTH_SPIN=0.06;
   mainSpin.rotation.y=eSpin;
-  aimLatLon(HOME_LAT,HOME_LON);
+  aimSun();                 /* 开场正对此刻的阳光直射点 */
   theta=thetaG;phi=phiG;
   function animate(){
     if(!running)return;
