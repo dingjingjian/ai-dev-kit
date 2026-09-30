@@ -12,19 +12,19 @@
 
 | 脚本 | 用途 |
 |------|------|
-| `build.mjs` | 构建 |
-| `pack.mjs` | 打包为小红书小工具 zip |
-| `verify.mjs` / `runtime-test.mjs` | 校验与运行期测试 |
-| `zip-check.mjs` | zip 结构检查 |
+| `node ../../tools/build.mjs` | 构建到 `dist/` |
+| `node ../../tools/build.mjs --pack` | 打包为小红书小工具 zip（真源 `build.config.json`） |
+| `tests/verify.mjs` / `tests/runtime-test.mjs` | 校验与运行期测试 |
+| `tests/zip-check.mjs` | zip 结构检查 |
 
-产物在 `dist/`，截图在 `screenshots/`。脚本一律使用相对路径，禁止硬编码绝对路径。
+产物在 `dist/`。脚本一律使用相对路径，禁止硬编码绝对路径。
 
 ## 物料状态
 
 | 项 | 状态 |
 |----|------|
-| zip | `molecule-minitool.zip` |
-| 小红书笔记 | 未写 |
+| zip | `molecule-minitool.zip`（`node ../../tools/build.mjs --pack` 重建） |
+| 小红书笔记 | 已有（`xiaohongshu/`） |
 
 ## 分类判定
 

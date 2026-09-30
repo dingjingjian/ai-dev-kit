@@ -40,6 +40,28 @@ release/
 **/clips/
 **/docs/video/
 
+# 截图与预览痕迹（可由脚本重建，见 CONVENTIONS.md 第五节）
+**/_shots/
+**/.shots/
+**/_preview_*.png
+**/_preview_*.jpg
+**/shot-*.png
+**/screenshot-*.png
+**/docs/shots/
+# 项目根独立截图目录（构建/验证脚本产出的成品图，可由脚本重建）
+# 注意：xiaohongshu/screenshots/ 与 promo-screenshots/ 是交付物料，须入库，不在此列
+vibeknow/molecule/screenshots/
+# 探针 / 调试输出的无扩展名与 .txt 痕迹
+**/_*.txt
+**/_*_log.txt
+
+# 项目工程中间目录（脚本须在 tools/ 或 tests/，见 CONVENTIONS.md 第三节）
+**/_dev/_shots/
+
+# 项目工作目录：人工放入的原始输入（原图 / 参考照 / 旧版图），不入库
+# 见 CONVENTIONS.md 第三节「外部工作输入」
+**/.work/
+
 # xhs-video: 源码/配置/README 要入库，只忽略工作目录与产物
 # 技能真源见 .skill/demo-video-recorder/；项目实例由各项目的 caption_config.json 驱动
 **/xhs-video/.work/

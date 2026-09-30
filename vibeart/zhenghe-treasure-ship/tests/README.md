@@ -46,7 +46,7 @@ node params_test.js
 ## 3. 产物层（Node，零依赖）
 
 ```bash
-node ../build.mjs && node ../verify-minitool.mjs ../dist && node ../pack.mjs
+（在项目根）node ../../tools/build.mjs --pack   # 构建 + 打包 + 校验一条命令
 ```
 
 验的是**打包产物合规**（**21 项**）：包结构 / 引用路径 / 端能力 / 脚本形态 /

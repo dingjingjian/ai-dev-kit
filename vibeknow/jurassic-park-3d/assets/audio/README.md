@@ -3,7 +3,7 @@
 | 文件 | 进 zip？ | 说明 |
 |------|---------|------|
 | `bgm.js` | ✅ | **运行时数据**：音频的 base64（`window.JP3D_BGM`）。`index.html` 在 `app.js` 之前引入，由 `app.js` 用 Web Audio 解码播放 |
-| `bgm.mp3` | ❌ | **构建输入**：由 `tools/make-bgm.mjs` 从原始曲目截取 + 重编码而来（126s · 64kbps 单声道 · 22.05kHz · 985 KB）。`pack.mjs` 已排除它 |
+| `bgm.mp3` | ❌ | **构建输入**：由 `tools/make-bgm.mjs` 从原始曲目截取 + 重编码而来（126s · 64kbps 单声道 · 22.05kHz · 985 KB）。构建配置已排除它 |
 
 ## 为什么音频要藏在 `.js` 里
 
@@ -42,7 +42,7 @@ node tools/analyze-bgm.mjs "新的原始文件.mp3" --top 10
 # ② 按它给的推荐重切 + 重编码 + 生成 base64（自动核对 1 MiB 门禁）
 node tools/make-bgm.mjs "新的原始文件.mp3" --a 64 --b 197 --kbps 56
 # ③ 把交叠秒数抄进 app.js 的 BGM_XFADE，重新打包
-node pack.mjs
+（在项目根）node ../../tools/build.mjs --pack
 ```
 
 `app.js` 不用改：它只认 `assets/audio/bgm.js` 里的 base64。

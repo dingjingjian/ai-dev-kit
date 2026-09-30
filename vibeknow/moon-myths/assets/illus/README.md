@@ -31,7 +31,7 @@
 
 ```bash
 ffmpeg -i in.png -vf scale=1080:360 -q:v 78 -y assets/illus/<slug>.webp
-node pack.mjs   # 放图后重新打包
+（在项目根）node ../../tools/build.mjs --pack   # 放图后重新打包
 ```
 
 统一风格前缀、逐条提示词、红线与验收标准见 [`../../docs/配图提示词.md`](../../docs/配图提示词.md)。

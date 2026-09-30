@@ -567,7 +567,7 @@ const PATTERNS = [
  }
 ];
 
-// 色卡与 _dev/patterns.py 的 PAL 必须一致：任意两色 RGB 距离 >= 60（改后跑 check.py pal）
+// 色卡与 tools/patterns.py 的 PAL 必须一致：任意两色 RGB 距离 >= 60（改后跑 check.py pal）
 const PALETTE = [
   {code:'w',name:'月白',hex:'#F5EFE2'},{code:'e',name:'银灰',hex:'#A8A292'},
   {code:'k',name:'墨黑',hex:'#221E1B'},{code:'m',name:'栗棕',hex:'#6E3D1F'},

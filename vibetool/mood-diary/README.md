@@ -23,7 +23,7 @@
 ## 使用
 
 - **浏览器**：直接打开 `index.html` 即可（手机端优先，桌面端居中 480px 竖屏）。
-- **小红书小工具**：运行 `_dev/build_zip.py` 打包成 `mood-diary.zip`（`index.html` 在 zip 根目录）后上传。
+- **小红书小工具**：运行 `tools/build.mjs` 打包成 `mood-diary.zip`（`index.html` 在 zip 根目录）后上传。
 
 ## 文件结构
 
@@ -31,11 +31,11 @@
 mood-diary/
 ├── index.html              # 页面结构 + 样式（脚本外置以满足容器 CSP）
 ├── main.js                 # 全部交互逻辑（经典脚本，ES2017）
-├── icon.png                # 应用图标 2048×2048（_dev/make_icon.py 生成）
-├── mood-diary.zip          # 打包产物（_dev/build_zip.py 生成）
-├── _dev/
-│   ├── build_zip.py        # 前置校验 + 打包 zip
+├── icon.png                # 应用图标 2048×2048（tools/make_icon.py 生成）
+├── mood-diary.zip          # 打包产物（`node ../../tools/build.mjs --pack` 生成）
+├── tools/                  # 构建脚本
 │   └── make_icon.py        # 生成应用图标
+├── tests/                  # 验证脚本
 ├── xiaohongshu/            # 小红书参赛素材
 │   └── 小红书文案.md
 └── README.md
@@ -46,16 +46,16 @@ mood-diary/
 | 项 | 说明 |
 |----|------|
 | 源码 | `index.html`（内联 CSS）+ `main.js`（交互逻辑，经典脚本） |
-| 打包 | `_dev/build_zip.py`，前置校验（11 项合规检查）+ 打包 zip（产物 `mood-diary.zip`） |
-| 图标 | `_dev/make_icon.py` 生成 `icon.png`（2048×2048，需 Pillow） |
-| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `build_zip.py` 刷新 `dist/` 与 zip，不要手改 `dist/` |
+| 打包 | 统一入口 `build.mjs`，前置校验（11 项合规检查）+ 打包 zip（产物 `mood-diary.zip`） |
+| 图标 | `tools/make_icon.py` 生成 `icon.png`（2048×2048，需 Pillow） |
+| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `node ../../tools/build.mjs --pack` 刷新 `dist/` 与 zip，不要手改 `dist/` |
 | Python 环境 | 用仓库 `xhs-venv` 虚拟环境（含 Pillow）：`C:/Users/ASUS/xhs-venv/Scripts/python.exe` |
 
 ## 构建命令
 
 ```bash
-python _dev/make_icon.py    # 生成 / 刷新应用图标（需 Pillow）
-python _dev/build_zip.py    # 前置校验 + 打包 zip
+python tools/make_icon.py    # 生成 / 刷新应用图标（需 Pillow）
+node ../../tools/build.mjs --pack    # 前置校验 + 打包 zip
 ```
 
 ## 应用上架信息

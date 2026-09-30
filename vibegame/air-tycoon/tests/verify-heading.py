@@ -196,9 +196,11 @@ async def run(pw):
 
     await page.goto((ROOT / "index.html").as_uri(), wait_until="load")
     # 开局选航司（用户 2026-09-29）：不先选一家则不会 boot ——
-    # 渲染层不初始化，下面找不到飞机 InstancedMesh。点第一张进入游戏。
+    # 渲染层不初始化，下面找不到飞机 InstancedMesh。2026-09-30 起为两步式：
+    # 点宫格换预览、点「确认开航」才建局。
     await page.wait_for_timeout(900)
     await page.click("#uSelectList .al-card")
+    await page.click("#uSelGo")
     await page.wait_for_timeout(4000)
 
     inst = await page.evaluate(INSTALL)

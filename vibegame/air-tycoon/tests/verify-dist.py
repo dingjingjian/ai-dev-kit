@@ -134,9 +134,10 @@ async def check_runtime(tmp):
         ok(sel["shown"], "开局显示「选航司」覆盖层", sel)
         ok(sel["cards"] == 6, "六家航司都渲染出来", sel)
         ok(not sel["running"], "未选航司前游戏尚未开局（符合预期）", sel)
-        # 点第一张（中国东方航空，基地 C01）：与首版默认基地一致，
-        # 后续断言（示范航线、排序口径）与改动前保持一致。
+        # 点第一张（中国国际航空，基地北京 C02）再点「确认开航」：2026-09-30 起为两步式
+        # （宫格点选 → 预览 → 确认提交）。
         await page.click("#uSelectList .al-card")
+        await page.click("#uSelGo")
         # ⚠ briefing 阶段 8 秒（CONFIG.briefingSeconds），之后 game.js 的
         #   phaseBefore==='briefing' 钩子才会 seedFirstRoute 给一条示范航线。
         #   等 4.5 秒就断言「有航线」必然失败 —— 那是我的时机错，不是产品 bug。
@@ -198,7 +199,7 @@ async def check_runtime(tmp):
         ok(st["gameRunning"], "主循环在跑")
         ok(st["phase"] == "operating", "简报结束、进入运营阶段", st["phase"])
         ok(st["airline"], "所选航司已生效（state.airlineName 非空）", st["airline"])
-        ok(st["homeCity"] == "C01", "航司基地即玩家基地（东方航空 → C01）", st["homeCity"])
+        ok(st["homeCity"] == "C02", "航司基地即玩家基地（国航 → 北京 C02）", st["homeCity"])
         ok(st["cityCount"] == 24, "24 座城市数据就位", st["cityCount"])
         # 开局示范航线由 game.js 的 briefing→operating 钩子给出（见 seedFirstRoute）。
         # 它的意义是「让玩家一进场就看到航线弧与客机」，不是预设玩法，故断言它存在。

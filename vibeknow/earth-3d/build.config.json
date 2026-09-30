@@ -1,0 +1,28 @@
+{
+  "name": "earth-3d",
+  "entry": "index.html",
+  "include": [
+    "index.html",
+    "assets"
+  ],
+  "allowedExt": [
+    ".html",
+    ".js",
+    ".css",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".woff",
+    ".woff2"
+  ],
+  "maxZipBytes": 10485760,
+  "guards": [
+    "entry-exists",
+    "entry-at-root",
+    "size-budget"
+  ]
+}

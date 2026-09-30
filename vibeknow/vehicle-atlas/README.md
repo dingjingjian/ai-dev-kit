@@ -36,19 +36,19 @@
 
 ## 配图协议（图片由图像生成 agent 接手）
 
-1. **规格**：条目图 `assets/img/<条目 id>.webp` 640×360；分类封面 `assets/img/cover-<分类 key>.webp` 960×540。尺寸、体积、构图与禁用项的细则统一写在 [`_dev/image-spec.md`](_dev/image-spec.md)（唯一真源，生成时自动嵌入施工图）：页面按 `object-fit: cover` 裁切，条目图进卡片约 2.39:1、封面约 3.44:1。
-2. **提示词施工图**：逐张提示词见 [`_dev/IMAGE_PROMPTS.md`](_dev/IMAGE_PROMPTS.md)（另有机器可读的 [`_dev/image-prompts.json`](_dev/image-prompts.json)）。该清单由 `python _dev/gen_image_prompts.py` **从 `main.js` 自动派生**，数据只维护一遍，不会出现「页面一套、清单又一套」。
+1. **规格**：条目图 `assets/img/<条目 id>.webp` 640×360；分类封面 `assets/img/cover-<分类 key>.webp` 960×540。尺寸、体积、构图与禁用项的细则统一写在 [`tools/image-spec.md`](tools/image-spec.md)（唯一真源，生成时自动嵌入施工图）：页面按 `object-fit: cover` 裁切，条目图进卡片约 2.39:1、封面约 3.44:1。
+2. **提示词施工图**：逐张提示词见 [`tools/IMAGE_PROMPTS.md`](tools/IMAGE_PROMPTS.md)（另有机器可读的 [`tools/image-prompts.json`](tools/image-prompts.json)）。该清单由 `python tools/gen_image_prompts.py` **从 `main.js` 自动派生**，数据只维护一遍，不会出现「页面一套、清单又一套」。
 3. **拼接口径**：完整提示词 = `main.js` 里的 `IMG_STYLE`（统一风格串）+ 空格 + 条目的 `subject`（主体描述）。详情页展示的也正是这条拼好的提示词。
 4. **型号只用于生图**：`subject` 会写**具体型号**（中国有代表型号的优先用中国原型）以提高造型准确度，但这些型号**不进入页面**、也**不得出现在画面里**；`IMG_STYLE` 统一要求 `no visible branding, badges, model names, lettering, logos or watermarks`，画面内不得出现品牌名、文字、字母、logo、水印与人物。
 5. **投入即生效**：图片按名放入 `assets/img/` 即可，页面无任何改动；后缀回退链为 `webp → jpg → jpeg → png`，全部找不到才显示占位块。
-6. **体积**：条目图 ≤45 KB、封面 ≤90 KB、全部配图合计 ≤1.8 MB（zip 建议 ≤2 MB）。`build_zip.py` 会在打包时统计并提示。
+6. **体积**：条目图 ≤45 KB、封面 ≤90 KB、全部配图合计 ≤1.8 MB（zip 建议 ≤2 MB）。统一构建入口会在打包时统计并提示。
 
 ## 工程约定
 
 | 项 | 说明 |
 |----|------|
 | 源码 | `index.html`（内联 CSS）+ `main.js`（数据 + 渲染逻辑，经典脚本） |
-| 数据真源 | `main.js` 的 `CATS`（分类）、`VEHICLES`（条目）、`IMG_STYLE`（配图风格串）；配图交付要求见 `_dev/image-spec.md`；提示词清单由脚本派生 |
+| 数据真源 | `main.js` 的 `CATS`（分类）、`VEHICLES`（条目）、`IMG_STYLE`（配图风格串）；配图交付要求见 `tools/image-spec.md`；提示词清单由脚本派生 |
 | 条目字段 | `id / cat / name / en / era / tag / intro / specs[[k,v]] / feats[] / subject`；图片路径由 `id` 与 `cat` 推出，不额外存路径 |
 | `era` 字段 | 时间跨度，形如 `"1804 年 — 20 世纪中"`。卡片取「—」前的起始段，详情页显示全文 |
 | 分类 tab | 短名 2 字（`CATS[].tabZh`）+ `flex-wrap` 换行，**禁止**在吸顶栏里做横向滚动容器（低端 Android 上吸顶栏会渲染残缺，且右侧 tab 点不到）；`tabKey` 相同的分类共用一个 tab（当前四类各占一个，合并逻辑为将来细分预留） |
@@ -57,20 +57,20 @@
 | 间距基线 | Chrome <84 无 flex gap（基线 Chrome 61），横向间距一律用子项 `margin`（见 `index.html` 的「Flex 间距基线」块） |
 | 懒加载 | `IntersectionObserver`（Chrome 51+）就近加载图片，无该 API 时降级为立即加载；顶栏毛玻璃用 `@supports` 作增强层，基线为不透明底 |
 | 主题色 | 进入详情页时按分类把 `--accent / --accent-soft` 写到根元素，返回列表时移除 |
-| 自检 | `_dev/shot_check.py`：16 项渲染断言（分组与每类条目数 / tab 单行 / 占位块文案 / 图片框高度 / 时代徽标 / 详情区块 / 提示词拼接 / 返回原位 / 分类筛选 / 无 JS 报错） |
-| 打包 | `_dev/build_zip.py`，18 项前置校验 + **只收录被 `main.js` 引用的配图**（历史遗留图不进包）+ 打包 zip（产物 `vehicle-atlas.zip`） |
+| 自检 | `tests/shot_check.py`：16 项渲染断言（分组与每类条目数 / tab 单行 / 占位块文案 / 图片框高度 / 时代徽标 / 详情区块 / 提示词拼接 / 返回原位 / 分类筛选 / 无 JS 报错） |
+| 打包 | 统一入口 `build.mjs`，18 项前置校验 + **只收录被 `main.js` 引用的配图**（历史遗留图不进包）+ 打包 zip（产物 `vehicle-atlas.zip`） |
 | 体积 | 源码 zip 约 25 KB（仅 `index.html` + `main.js`），配图就位后随图片增长，仍远低于 2 MB 建议值 |
-| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `gen_image_prompts.py` 与 `build_zip.py` 刷新清单 / `dist/` / zip，不要手改 `dist/` |
-| 历史素材 | 改版前的「具体型号版」配图归档在 `_dev/_legacy_img/`（含 `raw/` 原始 PNG），不参与打包，确认无用后可整目录删除 |
+| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `gen_image_prompts.py` 与 `tools/build.mjs --pack` 刷新清单 / `dist/` / zip，不要手改 `dist/` |
+| 历史素材 | 改版前的「具体型号版」配图归档在 `_legacy_img/`（含 `raw/` 原始 PNG），不参与打包，确认无用后可整目录删除 |
 
 ## 构建命令
 
 ```bash
-python _dev/gen_image_prompts.py   # 从 main.js 派生 _dev/IMAGE_PROMPTS.md + image-prompts.json
-python _dev/shot_check.py          # 渲染自检（16 项）+ 截图到 _dev/_shots/
-python _dev/process_images.py      # 把 _dev/raw_img/*.png 批量转成 assets/img/*.webp（尺寸 / 体积达标）
-python _dev/build_zip.py           # 前置校验 + 配图盘点 + 打包 zip
-python _dev/make_icon.py           # 生成 icon.png（2048×2048）
+python tools/gen_image_prompts.py   # 从 main.js 派生 tools/IMAGE_PROMPTS.md + image-prompts.json
+python tests/shot_check.py          # 渲染自检（16 项）+ 截图到 .work/shots/
+python tools/process_images.py      # 把 .work/raw_img/*.png 批量转成 assets/img/*.webp（尺寸 / 体积达标）
+node ../../tools/build.mjs --pack           # 前置校验 + 配图盘点 + 打包 zip
+python tools/make_icon.py           # 生成 icon.png（2048×2048）
 
 # 规范审计（skill 自带脚本，任选其一，本仓库两者均可用）
 node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs ./dist
@@ -97,4 +97,4 @@ python ../../.skill/minitool-zip-builder/scripts/audit_artifact.py ./vehicle-atl
 
 > 兼容性状态：已在 Chromium（桌面内核）390×844 视口完成渲染自检；**Chrome 61 / Android 8.1 真机兼容性未实测**，交付前须按 `.skill/minitool-zip-builder/references/` 的 JS / CSS 自检清单在目标内核复核。
 >
-> 配图状态：53 张已就位（4 张分类封面 + 49 张条目图），合计约 565 KB，打包 zip 约 601 KB。页面无占位块残留；主体过高的竖高条目（热气球 / 运载火箭 / 可重复使用运载器等）与 4 张封面在卡片裁切下仍需按 `_dev/image-spec.md` 逐张复核构图。
+> 配图状态：53 张已就位（4 张分类封面 + 49 张条目图），合计约 565 KB，打包 zip 约 601 KB。页面无占位块残留；主体过高的竖高条目（热气球 / 运载火箭 / 可重复使用运载器等）与 4 张封面在卡片裁切下仍需按 `tools/image-spec.md` 逐张复核构图。

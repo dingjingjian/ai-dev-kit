@@ -103,7 +103,8 @@ async def run(pw, tmp):
     }""")
     ok(selA["shown"], "降级状态下「选航司」覆盖层仍显示", selA)
     ok(selA["cards"] == 6, "降级状态下六家航司仍渲染", selA)
-    await page.click("#uSelectList .al-card")   # 第一张：中国东方航空（基地 C01）
+    await page.click("#uSelectList .al-card")   # 第一张：中国国际航空（基地北京 C02）
+    await page.click("#uSelGo")                 # 2026-09-30 起两步式：宫格点选后须确认
     await page.wait_for_timeout(4500)
 
     out["degraded"] = await page.evaluate("""() => {

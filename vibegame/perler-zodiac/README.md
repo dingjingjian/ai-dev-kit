@@ -26,25 +26,25 @@
 
 | 项 | 说明 |
 |----|------|
-| 唯一真源 | `_dev/build.py`，**不要直接改 `index.html` / `main.js`** |
-| 图案稿 | `_dev/patterns.py` → 生成 `patterns.json` + `preview.png` |
+| 唯一真源 | `tools/build.py`，**不要直接改 `index.html` / `main.js`** |
+| 图案稿 | `tools/patterns.py` → 生成 `patterns.json` + `preview.png` |
 | 构建产物 | `index.html` + `main.js` |
-| 打包 | `_dev/build_zip.py`，前置校验 + 打包 zip（产物 `perler-zodiac.zip`） |
-| 体检 | `_dev/check.py` —— 色卡 RGB 距离 / 图案像素网格与行宽 |
-| 冒烟测试 | `_dev/smoke_test.js`（jsdom），覆盖拼图闭环 + 导出图纸闭环 |
-| 截图自检 | `_dev/_shot_export.py`（Playwright + Edge），导出面板与打印视图目视校验 |
-| 容器分支自检 | `_dev/_shot_container.py`，注入 mock `window.xhs.miniTool` 验证容器内/浏览器两条导出路径 |
+| 打包 | 统一入口 `build.mjs`，前置校验 + 打包 zip（产物 `perler-zodiac.zip`） |
+| 体检 | `tests/check.py` —— 色卡 RGB 距离 / 图案像素网格与行宽 |
+| 冒烟测试 | `tests/smoke_test.js`（jsdom），覆盖拼图闭环 + 导出图纸闭环 |
+| 截图自检 | 手动跑 Playwright + Edge，导出面板与打印视图目视校验 |
+| 容器分支自检 | 手动注入 mock `window.xhs.miniTool` 验证容器内/浏览器两条导出路径 |
 | 设定 | [`设定文档.md`](设定文档.md) |
 
 ## 构建命令
 
 ```bash
-python _dev/patterns.py     # 图案数据 + 预览图
-python _dev/check.py pal    # 色卡体检：任意两色 RGB 距离需 >= 60
-python _dev/check.py 寅虎   # 打印像素网格与行宽序列
-python _dev/build.py        # 生成 index.html / main.js
-python _dev/build_zip.py    # 前置校验 + 打包 zip（同时生成 dist/ 供冒烟用）
-cd _dev && npm i && node smoke_test.js   # 运行时冒烟
+python tools/patterns.py     # 图案数据 + 预览图
+python tests/check.py pal    # 色卡体检：任意两色 RGB 距离需 >= 60
+python tests/check.py 寅虎   # 打印像素网格与行宽序列
+python tools/build.py        # 生成 index.html / main.js
+node ../../tools/build.mjs --pack    # 前置校验 + 打包 zip（同时生成 dist/ 供冒烟用）
+cd tests && node smoke_test.js   # 运行时冒烟
 ```
 
 > Python 需带 Pillow（预览图渲染）。本机可用 `C:\Users\ASUS\.workbuddy\binaries\python\envs\default\Scripts\python.exe`（已装 Pillow + Playwright）。
@@ -63,7 +63,7 @@ cd _dev && npm i && node smoke_test.js   # 运行时冒烟
 |----|------|
 | zip | `perler-zodiac.zip`（28.0 KB，远小于 2MB 建议值） |
 | 图标 | `icon.png`（1:1，2048×2048） |
-| 图案预览 | `_dev/preview.png`（12 生肖总览） |
+| 图案预览 | `tools/preview.png`（12 生肖总览） |
 | 小红书笔记 | `xiaohongshu/小红书笔记-十二生肖拼豆坊.md` + 配图 `p1`~`p5`（3:4） |
 
 ## 分类判定

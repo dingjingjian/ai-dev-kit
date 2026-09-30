@@ -85,4 +85,4 @@ cues 必须按成片实测量：
 - 成片最后 ~1.5s 是基因页顶部的自然定格收尾（`?demo` 非 loop 模式的终点），非卡死。
 - 解说为 edge-tts（zh-CN-XiaoxiaoNeural，联网合成）；离线环境跑 `--no-voice` 只出字幕。
 - 根目录 `cat-globe-3d.zip` 是加 `?demo` 之前打包的分发包，未随本次改动重打包；
-  要分发含演示模式的版本需重跑 `node pack.mjs` + 审计。
+  要分发含演示模式的版本需重跑 （在项目根）`node ../../tools/build.mjs --pack` + 审计。

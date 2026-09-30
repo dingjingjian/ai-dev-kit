@@ -160,7 +160,7 @@ Chrome 61 基线（不用可选链、不用 `??`）；触摸事件优先。
 | 几何层 | `blender --background --factory-startup --python blender/headless_check.py`（19 项） | ✅ 19/19 |
 | 参数层 | `node tests/params_test.js`（25 项） | ✅ 25/25 |
 | 产物层 | `node build.mjs && node verify-minitool.mjs dist`（21 项） | ✅ 21/21 |
-| 打包 | `node pack.mjs` → `zhenghe-treasure-ship.zip` | ⬜ 待重打（现有 zip 是占位页版本） |
+| 打包 | `node ../../tools/build.mjs --pack` → `zhenghe-treasure-ship.zip` | ⬜ 待重打（现有 zip 是占位页版本） |
 | 图标 | `icon.png` | ⬜ |
 
 > 三层自检的分工见 `tests/README.md`。产物层的 21 项会在阶段 4 落地后重跑 ——
@@ -202,7 +202,7 @@ Chrome 61 基线（不用可选链、不用 `??`）；触摸事件优先。
 | 体积超预算 | 无法上传 | 阶段 4 优先选 C；无贴图；提供低模降级 |
 | 史料口径反复 | 模型返工 | 模型常量已集中在一张表；口径未定处文档均已声明为「示意 / 推测」 |
 | 竖屏下船身过长 | 构图难看 | 默认侧 45° 视角 + 自动缩放适配；提供「船艏/全船/船艉」预设机位 |
-| 改参数后 HTML 端静默失效 | 页面空白无报错 | 补 `tests/headless_view.js`；几何断言已在 Blender 侧兜住 |
+| 改参数后 HTML 端静默失效 | 页面空白无报错 | 跑 `tests/verify-minitool.mjs` 做几何 / 加载断言；参数真源在 Blender 侧已兜住 |
 
 ## 五、已确认的环境事实
 

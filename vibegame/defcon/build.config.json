@@ -1,0 +1,33 @@
+{
+  "name": "defcon",
+  "entry": "dist/index.html",
+  "include": [
+    "dist"
+  ],
+  "allowedExt": [
+    ".html",
+    ".js",
+    ".css",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".woff",
+    ".woff2"
+  ],
+  "maxZipBytes": 10485760,
+  "guards": [
+    "entry-exists",
+    "entry-at-root",
+    "size-budget"
+  ],
+  "zip": "defcon.zip",
+  "prebuild": "tools/build_dist.py",
+  "prebuildArgs": [
+    "--no-pack"
+  ],
+  "zipRoot": "dist"
+}

@@ -29,7 +29,7 @@ WebGL 渲染的 3D 地球，把课本上的地理概念变成能转、能看、�
 
 | 项 | 状态 |
 |----|------|
-| zip | `earth-3d.zip`（`node pack.mjs` 生成） |
+| zip | `earth-3d.zip`（`node ../../tools/build.mjs --pack` 生成） |
 | 图标 | `icon-a.png` |
 | 宣传图 | `promo-screenshots/`、`xiaohongshu/` |
 

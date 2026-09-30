@@ -418,69 +418,182 @@
   .md-actions{margin-top:15px}
   .md-actions > .btn{width:100%;margin-right:0}
 
-  /* ── 开局选航司覆盖层（用户 2026-09-29 拍板；2026-09-30 按反馈做减法）──
-     在 boot **之前**显示：玩家先选一家航司，选定后才建局开局。
+  /* ── 开局选航司覆盖层（用户 2026-09-29 拍板；2026-09-30 四改：登机牌 + 离港板）──
+     设计隐喻只有一个：**值机屏 + 登机牌**。上段是所选航司的「登机牌」
+     （实色 IATA 徽标 + HUB 栏 + 撕线打孔 + 技能栏 + 条码票根），
+     下段是「离港板」式的航司行列表 —— 行是数据（出发板），不是营销卡；
+     编辑式左对齐排版，去掉居中堆叠 / 眉标胶囊 / 居中分隔线这类套路。
+     两步式（inspect→commit）不变：点行只换登机牌，「确认开航」才建局。
      z-index 250：压在 HUD(10)/模态(190)/toast(200) 之上，
      但仍在 loader(300)/fallback(290) 之下 —— 它自己不负责报错态。
-     ⚠ 简版口径（用户 2026-09-30）：**不加装饰性图形**——没有粗色条、色带渐变、
-     徽签边框、撕裂咬口、菱形/机型符号；识别色只落在两处等宽小字上（IATA 码、地区名），
-     其余全靠字号/字重/细线分层，与 .rcard 同一语言。 */
+     识别色 --ac / --ac-soft（12% 透明底，Chrome 61 无 color-mix，由 JS 算好）内联注入；
+     --sel-ac 是「当前选中航司色」的页面级联动（节标签色随点选变化，ui.js 维护）。
+     ⚠ .sel 底色必须纯 #050c18：登机牌撕线的「打孔」用同色圆伪装，渐变底会对不上孔位；
+     顶部冷光改走 background-image 固定层（不随滚动）。 */
   .sel{position:absolute;top:0;right:0;bottom:0;left:0;z-index:250;display:none;
-    flex-direction:column;padding:calc(var(--safe-t) + 30px) 16px calc(var(--safe-b) + 12px);
+    flex-direction:column;padding:calc(var(--safe-t) + 20px) 18px calc(var(--safe-b) + 12px);
     /* ⚠ 必须全不透明：底下躺着 #top 仪表带（白字），哪怕 1.5% 的透出也会在深空底上
-       显成重影（实测踩过）。开局时遮罩后只有空画布，没有值得透出的内容。 */
-    background:linear-gradient(180deg,#050c18,#030912)}
+       显成重影（实测踩过）。 */
+    background:#050c18;
+    background-image:radial-gradient(560px 300px at 50% -80px,
+      rgba(99,210,255,.09),rgba(99,210,255,0) 72%);
+    overflow:hidden}
   .sel.show{display:flex;animation:selIn .26s ease-out both}
-  .sel-hd{flex:0 0 auto;text-align:center;padding:0 4px 15px}
-  .sel-eyebrow{display:block;font-family:var(--mono);font-size:10px;color:var(--cyan);
-    letter-spacing:.34em;text-indent:.34em;opacity:.85}
-  .sel-title{display:block;margin-top:9px;font-size:20px;font-weight:700;color:var(--ink);
-    letter-spacing:.1em;text-indent:.1em}
-  .sel-sub{display:block;margin-top:9px;font-size:11px;line-height:1.8;color:var(--ink2)}
-  /* 列表：全页唯一滚动条（不在卡片内部再套滚动，与 .pn-body 同一约定）。 */
-  .sel-list{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:2px 2px 6px}
-  .sel-list::-webkit-scrollbar{width:4px}
-  .sel-list::-webkit-scrollbar-thumb{background:rgba(112,182,242,.32);border-radius:2px}
-  .sel-ft{flex:0 0 auto;text-align:center;font-family:var(--mono);font-size:10px;
-    color:var(--ink3);letter-spacing:.16em;padding-top:9px}
-  /* 航司卡：与 .rcard 同底的细线卡，整卡可点。
-     设计感来源（用户 2026-09-30 二次反馈「简洁但不简陋」）——**不加任何边框/渐变/图形**：
-       · 字号对比：航司名 15px/600 → 城市名 13px/600 → 正文 10.5px，主次一眼分明；
-       · 间距：内距 14~16px，信息之间留呼吸（「简陋」感一半来自拥挤）；
-       · 唯一视觉锚点：IATA 二字码做成大号低透明度水印（识别色的记号，不抢阅读）。
-     识别色 --ac 只落在「航司名 + 水印」两处，与 V3 把颜色塞进角落小字的做法不同。 */
-  .al-card{position:relative;display:block;width:100%;margin:0 0 12px;
-    padding:14px 16px 15px;border-radius:10px;overflow:hidden;
-    cursor:pointer;text-align:left;border:1px solid var(--line);
-    background:rgba(99,210,255,.035);
-    font-family:var(--sans);color:var(--ink);
-    animation:alIn .4s ease-out both;
-    transition:border-color .12s ease,-webkit-transform .12s ease,transform .12s ease}
-  .al-card:active{border-color:var(--ac);-webkit-transform:scale(.988);transform:scale(.988)}
-  /* 水印：脱离文档流贴在右上角，压到 14% 不透明度 —— 只是「这家的记号」，不与正文抢读 */
-  .al-iata{position:absolute;top:4px;right:13px;pointer-events:none;
-    font-family:var(--mono);font-size:30px;font-weight:300;line-height:1;
-    letter-spacing:.02em;color:var(--ac);opacity:.14}
-  .al-name{padding-right:62px;font-size:15px;font-weight:600;letter-spacing:.02em;
-    color:var(--ac);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .al-pos{margin-top:5px;font-size:10px;color:var(--ink3);letter-spacing:.03em}
-  /* HUB 行：上边一条细实线分区，城市名 13px/600 与 9px 的标签/代码拉开层级，
-     点线引导到右端地区名。 */
-  .al-route{display:flex;align-items:center;margin-top:12px;padding-top:12px;
-    border-top:1px solid var(--line);font-size:11px}
-  .al-hub{flex:0 0 auto;font-family:var(--mono);font-size:9px;color:var(--ink3);letter-spacing:.14em}
-  .al-route b{flex:0 0 auto;margin-left:8px;font-size:13px;font-weight:600;color:var(--ink)}
-  .al-code{flex:0 0 auto;margin-left:6px;font-family:var(--mono);font-size:9px;color:var(--ink3)}
-  .al-leader{flex:1 1 auto;height:0;border-top:1px dotted rgba(112,182,242,.3);margin:0 8px}
-  .al-region{flex:0 0 auto;font-family:var(--mono);font-size:10px;color:var(--ink3);letter-spacing:.06em}
-  .al-skill{margin-top:10px;font-size:12px;font-weight:600;color:var(--ink);letter-spacing:.02em}
-  /* min-height = 两行：描述有一行也有两行（实测 156px vs 174px 卡高），
-     统一预留两行让六张卡等高 —— 卡底对齐形成节奏，比参差更「设计」。 */
-  .al-desc{margin-top:4px;min-height:36px;font-size:10.5px;line-height:1.7;color:var(--ink2)}
 
-  /* 入场：覆盖层淡入；卡片自下而上错峰滑入（delay 由 ui.js 按序号内联注入） */
+  /* 页眉：机场标牌式左对齐 —— 小字标 + 细线拉到右缘，主标题不居中 */
+  .sel-hd{flex:0 0 auto;padding:2px 2px 0}
+  .sel-brand{display:flex;align-items:center;font-family:var(--mono);font-size:10px;
+    letter-spacing:.24em;color:var(--cyan)}
+  .sel-brand b{font-weight:700}
+  .sel-brand span{margin-left:10px;color:var(--ink3);letter-spacing:.12em}
+  .sel-brand::after{content:'';flex:1 1 auto;height:1px;margin-left:14px;
+    background:linear-gradient(90deg,var(--line2),transparent)}
+  .sel-title{display:block;margin-top:13px;font-size:25px;font-weight:700;color:var(--ink);
+    letter-spacing:.06em}
+  .sel-sub{display:block;margin-top:6px;font-size:11.5px;line-height:1.65;color:var(--ink2)}
+
+  /* 中段（登机牌 + 离港板）：纵向 flex 分区 —— 登机牌与节标签常驻不动，
+     只有离港板列表自身滚动（2026-09-30 五改）。原先整段滚动，矮屏往下滑
+     选后排航司时会把顶部的登机牌滚出视口，看不到点选的预览更新；
+     滚动收进列表后，预览卡在任何滚动位置都可见。 */
+  .sel-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+    padding:14px 2px 10px}
+  #uSelPreview{flex:0 0 auto}
+
+  /* 登机牌：所选航司的详情「票面」。结构 = 头（徽标+名称） / HUB 栏 /
+     撕线（两侧打孔） / SKILL 栏 / 条码票根。左缘一条识别色竖条是唯一装饰。 */
+  .bp{position:relative;overflow:hidden;border:1px solid var(--line2);border-radius:10px;
+    padding:14px 16px 12px;
+    background:linear-gradient(180deg,rgba(112,182,242,.08),rgba(112,182,242,.02));
+    animation:pvIn .22s ease-out both}
+  .bp::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ac)}
+  .bp-head{display:flex;align-items:center}
+  .bp-code{flex:0 0 auto;width:46px;height:46px;border-radius:9px;text-align:center;
+    font-family:var(--mono);font-size:17px;font-weight:700;line-height:46px;letter-spacing:.02em;
+    color:#fff;background:var(--ac);box-shadow:0 3px 10px -3px var(--ac-soft,rgba(99,210,255,.4))}
+  .bp-id{flex:1 1 auto;min-width:0;margin-left:12px}
+  .bp-name{display:block;font-size:17px;font-weight:700;color:var(--ink);letter-spacing:.02em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bp-proto{display:block;margin-top:3px;font-size:10.5px;color:var(--ink3);letter-spacing:.03em}
+  .bp-region{flex:0 0 auto;margin-left:8px;font-family:var(--mono);font-size:10px;
+    color:var(--ac);letter-spacing:.08em}
+  /* 栏：mono 小标签轨（HUB / SKILL）+ 内容，标签宽 46px 对齐整张票面 */
+  .bp-line{display:flex;align-items:baseline;margin-top:12px}
+  .bp-line i{flex:0 0 auto;width:46px;font-style:normal;font-family:var(--mono);
+    font-size:9px;color:var(--ink3);letter-spacing:.16em}
+  .bp-line b{font-size:14px;font-weight:600;color:var(--ink)}
+  .bp-line u{text-decoration:none;margin-left:auto;font-family:var(--mono);font-size:10px;
+    color:var(--ink3)}
+  .bp-skillname{font-size:13.5px;color:var(--ac)}
+  .bp-skillname svg{width:13px;height:13px;margin-right:5px;vertical-align:-2px;opacity:.95}
+  /* ⚠ min-height 预留两行：六家技能 desc 有 1 行也有 2 行，若随内容伸缩，
+     每次点选航司整张票面高度都会变，把下方节标签与列表顶得一跳。
+     钉死为最长 desc 的行数后，票面高度恒定（2026-10-01 五改）。 */
+  .bp-desc{display:block;margin:5px 0 0 46px;min-height:3.4em;
+    font-size:11px;line-height:1.7;color:var(--ink2)}
+  /* 撕线：贯通票面的虚线 + 两侧「打孔」（同 #050c18 圆形，半枚咬进票边） */
+  .bp-tear{position:relative;height:0;margin:13px -16px;
+    border-top:1px dashed rgba(112,182,242,.28)}
+  .bp-tear::before,.bp-tear::after{content:'';position:absolute;top:-6px;width:12px;height:12px;
+    border-radius:50%;background:#050c18}
+  .bp-tear::before{left:-6px}
+  .bp-tear::after{right:-6px}
+  /* 条码票根：三层错周期 repeating-gradient 叠出「疏密不一」的条码，右缘航班号 */
+  .bp-foot{display:flex;align-items:center;margin-top:11px}
+  .bp-bars{flex:1 1 auto;height:22px;opacity:.5;
+    background:repeating-linear-gradient(90deg,var(--ac) 0 1px,transparent 1px 4px),
+      repeating-linear-gradient(90deg,var(--ac) 0 2px,transparent 2px 9px),
+      repeating-linear-gradient(90deg,var(--ac) 0 1px,transparent 1px 6px)}
+  .bp-flt{flex:0 0 auto;margin-left:10px;font-family:var(--mono);font-size:9px;
+    color:var(--ink3);letter-spacing:.12em}
+
+  /* 离港板节标签：识别色小竖标 + 板名 + 英文角标 + 淡出细线；
+     竖标颜色 = --sel-ac（当前选中航司色，随点选变化）。 */
+  .sel-lab{display:flex;align-items:baseline;flex:0 0 auto;margin-top:16px;padding-left:9px;
+    border-left:2px solid var(--sel-ac,#63d2ff)}
+  .sel-lab b{flex:0 0 auto;font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:.04em}
+  .sel-lab span{margin-left:9px;font-family:var(--mono);font-size:9px;color:var(--ink3);
+    letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sel-lab::after{content:'';flex:1 1 auto;height:1px;margin-left:12px;
+    background:linear-gradient(90deg,var(--line),transparent)}
+
+  /* 离港板：六行航司数据行（非宫格卡片）。行 = 实色 IATA 码块 + 名称/技能 +
+     基地行 + 选中圆标。选中态 → 识别色左条 + 同色低透明底 + 描边（行距用 margin）。
+     列表是中段唯一的滚动区（min-height:0 + overflow-y:auto），矮屏才出滚动条。 */
+  .sel-list{margin-top:10px;flex:1 1 auto;min-height:0;overflow-y:auto;
+    -webkit-overflow-scrolling:touch}
+  .sel-list::-webkit-scrollbar{width:4px}
+  .sel-list::-webkit-scrollbar-thumb{background:rgba(99,210,255,.26);border-radius:2px}
+  .al-card{position:relative;display:flex;align-items:center;width:100%;
+    margin:0 0 8px;padding:9px 12px 9px 10px;border-radius:9px;cursor:pointer;text-align:left;
+    border:1px solid var(--line);background:rgba(9,21,38,.45);
+    font-family:var(--sans);color:var(--ink);overflow:hidden;
+    animation:alIn .38s ease-out both;
+    transition:border-color .14s ease,background .14s ease,
+      -webkit-transform .12s ease,transform .12s ease}
+  /* 左缘识别条：未选中隐藏，选中浮现 —— 与登机牌左条同一语言 */
+  .al-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:var(--ac);opacity:0;transition:opacity .14s ease}
+  .al-card:active{-webkit-transform:scale(.985);transform:scale(.985)}
+  .al-card.on{border-color:var(--ac);background:var(--ac-soft,rgba(99,210,255,.1))}
+  .al-card.on::before{opacity:1}
+  .al-code{flex:0 0 auto;width:36px;height:36px;border-radius:7px;text-align:center;
+    font-family:var(--mono);font-size:13px;font-weight:700;line-height:36px;letter-spacing:.02em;
+    color:#fff;background:var(--ac)}
+  .al-main{flex:1 1 auto;min-width:0;margin-left:11px}
+  .al-l1{display:flex;align-items:baseline}
+  .al-name{font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:.01em;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .al-trait{flex:0 0 auto;margin-left:8px;font-size:11px;font-weight:600;color:var(--ac)}
+  .al-l2{display:block;margin-top:2px;font-family:var(--mono);font-size:9.5px;color:var(--ink3);
+    letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* 选中圆标：空心圈 → 实色对勾 */
+  .al-mark{flex:0 0 auto;width:18px;height:18px;margin-left:10px;border-radius:50%;
+    border:1px solid var(--line2);position:relative}
+  .al-card.on .al-mark{border-color:var(--ac);background:var(--ac)}
+  .al-card.on .al-mark::after{content:'';position:absolute;left:5px;top:2px;width:5px;height:9px;
+    border-right:2px solid #fff;border-bottom:2px solid #fff;
+    -webkit-transform:rotate(45deg);transform:rotate(45deg)}
+
+  /* CTA：确认开航 —— 金色只留给主操作，全页唯一按钮级金色；右侧小箭头指「起飞」 */
+  .sel-cta{flex:0 0 auto;padding-top:12px}
+  .sel-go{position:relative;display:block;width:100%;padding:13px;border-radius:9px;cursor:pointer;
+    border:1px solid rgba(255,199,107,.58);font-family:var(--sans);font-size:14.5px;
+    font-weight:600;letter-spacing:.06em;color:#ffe3b0;
+    background:linear-gradient(180deg,rgba(255,199,107,.2),rgba(255,199,107,.1))}
+  .sel-go::after{content:'';position:absolute;right:18px;top:50%;width:8px;height:8px;
+    margin-top:-4px;border-top:2px solid #ffe3b0;border-right:2px solid #ffe3b0;
+    -webkit-transform:rotate(45deg);transform:rotate(45deg);opacity:.8}
+  .sel-go:active{background:rgba(255,199,107,.28)}
+  .sel-ft{margin-top:8px;text-align:center;font-family:var(--mono);font-size:9.5px;
+    color:var(--ink3);letter-spacing:.14em}
+
+  /* 矮屏（≤640px，如 360×640 基线机）：压缩页眉与登机牌（条码属纯装饰，直接让位），
+     给离港板多换两行可视高度。 */
+  @media (max-height:640px){
+    .sel-title{margin-top:9px;font-size:21px}
+    .sel-sub{margin-top:4px;font-size:11px;line-height:1.55}
+    .sel-main{padding-top:10px}
+    .bp{padding:10px 14px 9px}
+    .bp-tear{margin:10px -14px}
+    .bp-desc{font-size:10.5px;line-height:1.6;min-height:3.2em}
+    .bp-foot{display:none}
+    .sel-lab{margin-top:12px}
+  }
+  /* 超矮视口（手机横屏）：登机牌整卡让位，先保住列表与「确认开航」可用；
+     行内本身的名称/技能/基地信息足够支撑选择。 */
+  @media (max-height:480px){
+    #uSelPreview{display:none}
+    .sel-sub{display:none}
+    .sel-lab{margin-top:8px}
+  }
+
+  /* 入场：覆盖层淡入；登机牌淡入（无位移，见 pvIn 注）；离港板各行错峰滑入（delay 由 ui.js 按序号内联注入） */
   @keyframes selIn{from{opacity:0}to{opacity:1}}
-  @keyframes alIn{from{opacity:0;-webkit-transform:translateY(12px);transform:translateY(12px)}
+  /* 登机牌切选动画：只做交叉淡入，不做位移 —— renderPreview 每次点选都重建票面，
+     若带 translateY 会整卡上下蹦（用户 2026-10-01 反馈的「跳动」之一）。 */
+  @keyframes pvIn{from{opacity:0}to{opacity:1}}
+  @keyframes alIn{from{opacity:0;-webkit-transform:translateY(10px);transform:translateY(10px)}
     to{opacity:1;-webkit-transform:translateY(0);transform:translateY(0)}}
 
   /* ── 加载与降级 ── */
@@ -577,16 +690,26 @@
        否则「决策已生效」这类确认会被模态遮死、玩家以为点了没反应。 -->
   <div id="uToast"></div>
 
-  <!-- 开局选航司覆盖层（用户 2026-09-29 拍板）：boot 之前显示，
-       点选后收起并由启动脚本建局。卡片内容由 ui.js 的 showAirlineSelect 填入。 -->
+  <!-- 开局选航司覆盖层（用户 2026-09-29 拍板；2026-09-30 四改：登机牌 + 离港板）：
+       boot 之前显示。两步式（inspect→commit）：下方离港板点行 → 上方登机牌即时更新 →
+       「确认开航」才建局。页眉与节标签为编辑式左对齐（机场标牌语言）。
+       #uSelect / #uSelectList / .al-card 是既有实机测试的锚点（smoke-render / verify-dist /
+       verify-heading / check-fallback），改 id 前先同步这四个脚本。 -->
   <div id="uSelect" class="sel">
     <div class="sel-hd">
-      <span class="sel-eyebrow">AIR TYCOON · 离港准备</span>
+      <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 开局</span></div>
       <span class="sel-title">选择你的航空公司</span>
-      <span class="sel-sub">六家航司各据一个大洲，基地与特色技能各不相同。<br>你没选的五家，就是本局的对手。</span>
+      <span class="sel-sub">六家航司各据一洲，基地与特色技能各不相同 —— 选择即开局。</span>
     </div>
-    <div id="uSelectList" class="sel-list"></div>
-    <div class="sel-ft">选定即开航 · 本局不可更换航司</div>
+    <div class="sel-main">
+      <div id="uSelPreview"></div>
+      <div class="sel-lab"><b>离港航司</b><span>DEPARTURES · 没选的五家即本局对手</span></div>
+      <div id="uSelectList" class="sel-list"></div>
+    </div>
+    <div class="sel-cta">
+      <button id="uSelGo" class="sel-go" type="button">确认开航</button>
+      <div class="sel-ft">选定即开航 · 本局不可更换航司</div>
+    </div>
   </div>
 
   <!-- 兼容占位：ui.js 里 cacheEls 会取这几个 id。

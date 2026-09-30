@@ -18,7 +18,7 @@
 | 脚本 | 用途 |
 |------|------|
 | `build.mjs` | 构建 |
-| `pack.mjs` | 打包为小红书小工具 zip |
+| `node ../../tools/build.mjs --pack` | 打包为小红书小工具 zip |
 | `verify-minitool.mjs` | 产物校验 |
 
 脚本一律使用相对路径，禁止硬编码绝对路径（参考根目录 `TRACKS.md` 维护约定）。

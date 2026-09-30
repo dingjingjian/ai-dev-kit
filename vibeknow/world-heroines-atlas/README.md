@@ -63,7 +63,7 @@
 
 | 项 | 状态 |
 |----|------|
-| zip | `world-heroines-atlas.zip`（`node pack.mjs` 生成，1.77 MB） |
+| zip | `world-heroines-atlas.zip`（`node ../../tools/build.mjs --pack` 生成，1.77 MB） |
 | 女英雄配图 ×28 | 28 张已就位（`assets/illus/<slug>.webp`，规格与提示词见 [`docs/配图提示词.md`](docs/配图提示词.md)） |
 | 图标 | 待补 |
 | 宣传图 | 待补 |

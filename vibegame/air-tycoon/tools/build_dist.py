@@ -16,6 +16,7 @@ air-tycoon 提交包同步与打包（不进提交包）
 用法：
   python tools/build_dist.py          # 同步 dist + 重打 air-tycoon.zip + 列出产物体积
   python tools/build_dist.py --check  # 只校验 dist 是否与源一致，不写盘
+  python tools/build_dist.py --no-pack  # 只同步 dist，不打包（由统一入口 tools/build.mjs 打包）
 """
 import hashlib
 import pathlib
@@ -86,6 +87,7 @@ def pack(files):
 
 def main():
     check_only = "--check" in sys.argv
+    no_pack = "--no-pack" in sys.argv
     files = build()
     changed, missing, orphans = sync(files, check_only)
 
@@ -104,6 +106,10 @@ def main():
         ok = not (changed or missing or orphans)
         print("\n%s" % ("dist 已与源一致 ✓" if ok else "dist 与源不一致 ✗（去掉 --check 重新生成）"))
         return 0 if ok else 1
+
+    if no_pack:
+        print("\ndist 已同步（--no-pack：打包交由 tools/build.mjs 统一入口）")
+        return 0
 
     size = pack(files)
     print("\n已重打 %s：%d 项，%.1f KB（上限 10 MiB）" % (ZIP.name, len(files), size / 1024))

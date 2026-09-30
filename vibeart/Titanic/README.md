@@ -69,3 +69,10 @@ Principled BSDF、舷孔与窗列的高度带、救生艇数量与左右对称�
 2. **Blender 5.x 中文界面下节点名与插槽名都被本地化** —— 节点叫「原理化 BSDF」、插槽叫
    「基础色」，按 `nodes.get("Principled BSDF")` / `inputs["Base Color"]` 取会静默拿到
    `None`，结果是整船渲染成白模。改为按 `bl_idname` 与 socket `identifier` 取。
+
+## 验证
+
+当前项目**无自动验证**。产出是 Blender 无头脚本生成的几何与 GLB，正确性依赖人工比对
+参考图（`docs/` 下的乐高 10294 参考照）与四机位预览渲染；`blender/headless_check.py`
+的 62 项几何审计是构建期自查，非可回归的自动化测试。改动 `build_ship.py` 的尺度或
+形制参数后，请重跑建模脚本并目视比对预览图。

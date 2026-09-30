@@ -1,0 +1,30 @@
+{
+  "name": "china-rail-atlas",
+  "entry": "index.html",
+  "include": [
+    "README.md",
+    "index.html",
+    "main.js",
+    "assets"
+  ],
+  "allowedExt": [
+    ".html",
+    ".js",
+    ".css",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".woff",
+    ".woff2"
+  ],
+  "maxZipBytes": 2097152,
+  "guards": [
+    "entry-exists",
+    "entry-at-root",
+    "size-budget"
+  ]
+}

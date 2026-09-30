@@ -102,6 +102,7 @@
     _sunV.copy(ll2v(dec,lon,1)).normalize();
     sunLight.position.copy(_sunV).multiplyScalar(SUN_DIST);
     fillLight.position.copy(_sunV).multiplyScalar(-SUN_DIST);
+    if(nightMat)nightMat.uniforms.uSun.value.copy(_sunV);   /* 夜面灯光跟着太阳走 */
   }
   var nowEl=document.getElementById('nowInfo'),nowStr='',nowAt=-1;
   function pad2(n){return (n<10?'0':'')+n;}
@@ -156,6 +157,44 @@
   }));
   atmo.scale.set(4.8,4.8,1);
   mainTilt.add(atmo);
+
+  /* ===== 夜面城市灯光 =====
+   * 黑大理石夜景贴图（assets/earth-night.jpg：只留暖金色灯光、背景全黑）单独贴一层球壳，
+   * 用加色混合叠在地表之上，且只在该点背向太阳时出现（法线 · 太阳方向 < 0）——
+   * 白昼那半边干干净净，过了晨昏线才柔和亮起，于是转到哪一面看到的就是那里的夜色灯火。
+   * 太阳方向是世界空间的量（astroUpdate 每帧写进 uSun），球壳挂在内层 mainSpin 上，
+   * 灯光因此随地球自转一起走；renderOrder 排在云层之前，云是飘在灯光上方的。
+   * 贴图按「显示值」做成暖金色，ShaderMaterial 又是原始取样、不做 sRGB 解码，
+   * 所以这里不用 convertSRGBToLinear，uTint 只做一点点偏色校正。 */
+  var nightMat=new THREE.ShaderMaterial({
+    uniforms:{
+      uMap:{value:null},
+      uSun:{value:new THREE.Vector3(0,0,1)},
+      uTint:{value:new THREE.Color(0xfff2e0)},
+      uGain:{value:1.6}
+    },
+    vertexShader:
+      'varying vec2 vUv;varying vec3 vN;'+
+      'void main(){'+
+      '  vUv=uv;'+
+      '  vN=normalize(mat3(modelMatrix)*normal);'+   /* 世界空间法线；外壳只有旋转、没有缩放 */
+      '  gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);'+
+      '}',
+    fragmentShader:
+      'uniform sampler2D uMap;uniform vec3 uSun;uniform vec3 uTint;uniform float uGain;'+
+      'varying vec2 vUv;varying vec3 vN;'+
+      'void main(){'+
+      '  float d=dot(normalize(vN),normalize(uSun));'+
+      '  float night=smoothstep(0.08,-0.26,d);'+      /* 晨昏线附近渐亮，不是一刀切 */
+      '  if(night<=0.003)discard;'+
+      '  vec3 c=texture2D(uMap,vUv).rgb;'+
+      '  float lum=max(max(c.r,c.g),c.b);'+
+      '  gl_FragColor=vec4(uTint*(lum*uGain*night),1.0);'+
+      '}',
+    transparent:true,blending:THREE.AdditiveBlending,depthWrite:false
+  });
+  var nightMesh=new THREE.Mesh(new THREE.SphereGeometry(R*1.004,48,32),nightMat);
+  nightMesh.renderOrder=-1;nightMesh.visible=false;mainSpin.add(nightMesh);
 
   /* ===== 标记点 =====
    * 形制同 world-heroines-atlas（实心点 + 光晕 + 描边 + 细环四层），配色按当前维度的分类取色。
@@ -310,6 +349,9 @@
   function load(u,ok){loader.load(u,ok,undefined,function(){});}
   load('./assets/earth.jpg',function(t){t.encoding=THREE.sRGBEncoding;t.anisotropy=maxA;earthMat.map=t;earthMat.needsUpdate=true;});
   load('./assets/clouds.png',function(t){t.anisotropy=maxA;cloudMat.map=t;cloudMat.alphaMap=t;cloudMat.needsUpdate=true;});
+  /* 夜景灯光贴图到货前球壳保持隐藏（不设 encoding：ShaderMaterial 是原始取样，
+     贴图本身已按显示值调好暖金）。切换开关见下面的 showNight。 */
+  load('./assets/earth-night.jpg',function(t){t.anisotropy=maxA;nightMat.uniforms.uMap.value=t;nightMesh.visible=showNight;});
 
   /* ===== 相机 ===== */
   function fitR(){var vFov=camera.fov*Math.PI/180;var hFov=2*Math.atan(Math.tan(vFov/2)*camera.aspect);return Math.max(4,2.0*R/Math.tan(hFov/2));}
@@ -324,7 +366,7 @@
     camera.position.set(radius*sp*Math.sin(theta),radius*Math.cos(phi),radius*sp*Math.cos(theta));
     camera.lookAt(0,-pan*radius,0);
   }
-  /* 落点：起手由「此刻的太阳直射方向」给出（aimSun），不再用维度自带的 DIM.home 开场；
+  /* 落点：起手固定对准中国上空（aimHome / CAM_HOME），不用维度自带的 DIM.home 开场；
      HOME_LAT / HOME_LON 仍保留——切维度的兜底落点、名录跳转前的就近选点还按它算 */
   var HOME_LAT=DIM.home.lat,HOME_LON=DIM.home.lon;
   var _aim=new THREE.Vector3();
@@ -342,14 +384,14 @@
     aimWorld(_aim);
   }
   function aimLatLon(lat,lon){aimLocal(ll2v(lat,lon,1));}
-  /* 开场视角：正对此刻阳光直射的那一点。
-     _sunV 是太阳所在的世界方向（astroUpdate 里按真实北京时间算），地球球心在原点，
-     所以「世界方向 = _sunV」的球面点就是被照亮的半球正中——镜头正对过去，
-     开场看到的就是地球亮面，而不是随便一个经纬度。
-     注意：太阳光是世界空间固定的，地球自转（自动旋转）时亮面会跟着挪，届时以光照为准。 */
-  function aimSun(){
-    astroUpdate();
-    aimWorld(_sunV);
+  /* 开场视角：固定对准中国上空（CAM_HOME），不再跟着此刻的太阳走——
+     一点开看到的就是这片土地，是白天还是夜里交给真实光照去决定（夜面另有城市灯光）。
+     走 aimLatLon 而不是 aimWorld：地点是挂在地球上的，得先经 mainSpin 的世界矩阵，
+     否则自动旋转过的球会把地点转到画面外。 */
+  var CAM_HOME={lat:35,lon:105};
+  function aimHome(){
+    astroUpdate();                 /* 先按此刻的日期时间摆好太阳，免得开场那一帧光照不对 */
+    aimLatLon(CAM_HOME.lat,CAM_HOME.lon);
   }
 
   /* ===== 分类定位：把某一类整体框进画面 =====
@@ -961,13 +1003,15 @@
 
   /* ===== 设置 ===== */
   /* 自动旋转默认关：默认视角是静态的，想看转动的再去设置里开 */
-  var autoSpin=false,showStars=true,showClouds=true,showLabel=true;
+  var autoSpin=false,showStars=true,showClouds=true,showLabel=true,showNight=true;
   function bind(id,fn){var el=document.getElementById(id);el.addEventListener('click',function(){el.classList.toggle('on');fn(el.classList.contains('on'));});}
   bind('swSpin',function(v){autoSpin=v;});
   bind('swStars',function(v){showStars=v;stars.visible=v;sky.visible=v;});
   bind('swClouds',function(v){showClouds=v;clouds.visible=v;});
   bind('swLabel',function(v){showLabel=v;});
-  document.getElementById('bReset').addEventListener('click',function(){aimSun();radiusG=fitR();userZoomed=false;clearSelection();});
+  /* 城市灯光：贴图没到货时 uMap 还是空的，别把空球壳打开 */
+  bind('swNight',function(v){showNight=v;nightMesh.visible=v&&!!nightMat.uniforms.uMap.value;});
+  document.getElementById('bReset').addEventListener('click',function(){aimHome();radiusG=fitR();userZoomed=false;clearSelection();});
   document.getElementById('bTop').addEventListener('click',function(){phiG=0.02;});
   var sheet=document.getElementById('sheet'),scrim=document.getElementById('scrim');
   function openSheet(v){sheet.classList.toggle('show',v);scrim.classList.toggle('show',v);}
@@ -1316,7 +1360,7 @@
   var eSpin=0.3;
   var EARTH_SPIN=0.06;
   mainSpin.rotation.y=eSpin;
-  aimSun();                 /* 开场正对此刻的阳光直射点 */
+  aimHome();                /* 开场固定在中国上空 */
   theta=thetaG;phi=phiG;
   function animate(){
     if(!running)return;

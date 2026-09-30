@@ -1,0 +1,28 @@
+{
+  "name": "world-heroines-atlas",
+  "entry": "index.html",
+  "include": [
+    "index.html",
+    "assets"
+  ],
+  "allowedExt": [
+    ".jpg",
+    ".css",
+    ".gif",
+    ".svg",
+    ".png",
+    ".js",
+    ".jpeg",
+    ".json",
+    ".html",
+    ".woff2",
+    ".webp",
+    ".woff"
+  ],
+  "maxZipBytes": 10485760,
+  "guards": [
+    "entry-exists",
+    "entry-at-root",
+    "size-budget"
+  ]
+}

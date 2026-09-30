@@ -164,44 +164,128 @@
    *   所以这个函数**只读 data.js 的 AT.AIRLINES**，绝不碰 ui.state / el 缓存
    *   （el 由 init→cacheEls 填充，这里用 $() 直接查）。
    *
-   * 交互：点击一张卡片 → 收起覆盖层 → 回调 onPick(airlineId)（由启动脚本去 boot）。
+   * 交互（2026-09-30 三改：分屏预览 + 宫格点选，两步式 inspect→commit）：
+   *   下方 3 列宫格点选 → 上方预览卡即时更新 → 底部「确认开航」才是真正提交。
+   *   理由：「本局不可更换航司」是不可逆选择，两步给玩家一次反悔的机会；
+   *   默认选中第一家 —— 预览区不空场，不关心的玩家一击也能直达。
    * 返回 true 表示选择界面已呈现；返回 false 时调用方应退回默认开局
    * （#uSelect 缺失 / 没有航司数据 —— 不能让玩家卡在白屏上）。 */
   function showAirlineSelect(onPick) {
-    var wrap = $('uSelect'), box = $('uSelectList');
+    var wrap = $('uSelect'), pv = $('uSelPreview'), grid = $('uSelectList'), go = $('uSelGo');
     var list = (AT.AIRLINES || []);
-    if (!wrap || !box || !list.length) return false;
+    if (!wrap || !pv || !grid || !go || !list.length) return false;
 
-    /* 卡片（用户 2026-09-30 二次反馈「简洁但不简陋」）：IATA 二字码作为大号低透明度
-     * 水印贴在卡右上角（装饰性，故 aria-hidden），航司名用识别色 —— 设计感来自
-     * 字号层级与留白，而非边框图形。识别色 --ac 由内联样式注入，animation-delay 错峰入场。 */
-    var html = '';
-    list.forEach(function (a, i) {
+    /* 默认选中第一家 */
+    var cur = list[0].id;
+
+    function byId(id) {
+      for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+      return list[0];
+    }
+
+    /* hex → rgba()：识别色的低透明度底（选中态底色 / 徽标光晕用）。
+     * Chrome 61 没有 color-mix()，只能由 JS 算好注入 CSS 变量。 */
+    function tint(hex, a) {
+      var m = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
+      if (!m) return 'rgba(99,210,255,' + a + ')';
+      var n = parseInt(m[1], 16);
+      return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+    }
+
+    /* 六个技能的小图标（内联 SVG，与底部 dock 同一套描线语言；纯装饰 aria-hidden）。
+     * 纯展示映射：trait.id → 图形，不给任何行为。 */
+    var TRAIT_ICONS = {
+      scale: '<path d="M4 6h16M4 12h16M4 18h9"/>',
+      service: '<path d="M12 4l2.2 4.9 5.3.6-4 3.6 1.1 5.2-4.6-2.7-4.6 2.7 1.1-5.2-4-3.6 5.3-.6z"/>',
+      alliance: '<circle cx="6" cy="17" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M7.8 15.2l8.2-6.4M8.3 16.6l6.4.9"/>',
+      capital: '<circle cx="12" cy="12" r="8.2"/><path d="M9 7.5l3 4.2 3-4.2M12 11.7V17M9.6 13h4.8M9.6 15.2h4.8"/>',
+      transit: '<path d="M4 9h13M14 5.5L17.5 9 14 12.5M20 15H7M10 11.5L6.5 15l3.5 3.5"/>',
+      regional: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.7 2.3 4 4.9 4 8s-1.3 5.7-4 8c-2.7-2.3-4-4.9-4-8s1.3-5.7 4-8z"/>'
+    };
+    function iconOf(tr) {
+      var d = TRAIT_ICONS[tr && tr.id];
+      if (!d) return '';
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
+        ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
+    }
+
+    /* 登机牌票面（2026-09-30 四改）：实色 IATA 徽标 + 名称/原型 + 地区 →
+     * HUB 栏 → 撕线打孔 → SKILL 栏（技能数字全部在 desc 里，不再另做 chips）→
+     * 条码票根 + 航班号。识别色只出现在：徽标 / 左缘竖条 / 地区字 / 技能名 / 条码。 */
+    function renderPreview(a) {
       var base = AT.CITIES_BY_ID[a.baseCityId] || {};
       var reg = AT.REGIONS_BY_CODE[a.region] || {};
       var tr = AT.normalizeTrait(a.trait);
-      html += '<button class="al-card" type="button" data-act="pick-airline" data-val="' + h(a.id) +
-        '" style="--ac:' + h(a.color || '#63d2ff') + ';animation-delay:' + (i * 60) + 'ms">' +
-        '<span class="al-iata" aria-hidden="true">' + h(a.iata || '') + '</span>' +
-        '<div class="al-name">' + h(a.name) + '</div>' +
-        '<div class="al-pos">' + h(a.prototype || reg.name || '') + '</div>' +
-        '<div class="al-route"><span class="al-hub">HUB</span><b>' + h(base.name || '—') + '</b>' +
-        '<span class="al-code">' + h(a.baseCode || base.id || a.baseCityId) + '</span>' +
-        '<span class="al-leader" aria-hidden="true"></span>' +
-        '<span class="al-region">' + h(reg.name || '') + '</span></div>' +
-        '<div class="al-skill">' + h(tr.name) + '</div>' +
-        '<div class="al-desc">' + h(tr.desc) + '</div>' +
+      pv.innerHTML = '<div class="bp" style="--ac:' + h(a.color || '#63d2ff') + ';' +
+        '--ac-soft:' + tint(a.color, 0.12) + '">' +
+        '<div class="bp-head"><span class="bp-code">' + h(a.iata || '') + '</span>' +
+        '<span class="bp-id"><span class="bp-name">' + h(a.name) + '</span>' +
+        '<span class="bp-proto">' + h(a.prototype || '') + '</span></span>' +
+        '<span class="bp-region">' + h(reg.name || '') + '</span></div>' +
+        '<div class="bp-line"><i>HUB</i><b>' + h(base.name || '—') + '</b>' +
+        '<u>' + h(a.baseCode || base.id || '') + '</u></div>' +
+        '<div class="bp-tear" aria-hidden="true"></div>' +
+        '<div class="bp-line"><i>SKILL</i><b class="bp-skillname">' + iconOf(tr) + h(tr.name) + '</b></div>' +
+        '<span class="bp-desc">' + h(tr.desc) + '</span>' +
+        '<div class="bp-foot"><span class="bp-bars" aria-hidden="true"></span>' +
+        '<span class="bp-flt">AT·' + h(a.iata || '') + '·Q60</span></div>' +
+        '</div>';
+    }
+
+    /* 离港板行（2026-09-30 四改：迷你卡 → 数据行）：实色 IATA 码块 + 名称/技能 +
+     * 基地行（mono 弱化）+ 选中圆标。左对齐数据行，不是营销卡；点选只换登机牌不提交。 */
+    function tileHtml(a, i) {
+      var base = AT.CITIES_BY_ID[a.baseCityId] || {};
+      var reg = AT.REGIONS_BY_CODE[a.region] || {};
+      var tr = AT.normalizeTrait(a.trait);
+      return '<button class="al-card' + (a.id === cur ? ' on' : '') + '" type="button"' +
+        ' data-act="pick-airline" data-val="' + h(a.id) + '" style="--ac:' + h(a.color || '#63d2ff') + ';' +
+        '--ac-soft:' + tint(a.color, 0.12) + ';animation-delay:' + (i * 45) + 'ms">' +
+        '<span class="al-code">' + h(a.iata || '') + '</span>' +
+        '<span class="al-main"><span class="al-l1"><span class="al-name">' + h(a.name) + '</span>' +
+        '<span class="al-trait">' + h(tr.name) + '</span></span>' +
+        '<span class="al-l2">' + h(base.name || '') + ' ' + h(a.baseCode || '') +
+        ' · ' + h(reg.name || '') + '</span></span>' +
+        '<span class="al-mark" aria-hidden="true"></span>' +
         '</button>';
-    });
-    box.innerHTML = html;
+    }
+
+    var html = '';
+    list.forEach(function (a, i) { html += tileHtml(a, i); });
+    grid.innerHTML = html;
+
+    /* 同步选中态与确认按钮文案（只在 .on 类与文本上做增量更新，
+     * 不重建宫格 —— 重建会重播入场动画，每次点选都闪一遍）。
+     * 同时把「当前选中航司色」写到页面级 --sel-ac：节标签竖标随点选换色，
+     * 让整个屏幕对「当前是谁」有一处轻量回应。 */
+    function syncSel() {
+      var tiles = grid.querySelectorAll('[data-act="pick-airline"]');
+      for (var i = 0; i < tiles.length; i++) {
+        tiles[i].classList.toggle('on', tiles[i].getAttribute('data-val') === cur);
+      }
+      go.textContent = '确认开航 · ' + byId(cur).name;
+      wrap.style.setProperty('--sel-ac', byId(cur).color || '#63d2ff');
+    }
+
+    renderPreview(byId(cur));
+    syncSel();
     wrap.classList.add('show');
 
-    box.addEventListener('click', function (e) {
+    grid.addEventListener('click', function (e) {
       var t = e.target.closest ? e.target.closest('[data-act="pick-airline"]') : null;
       if (!t) return;
       var id = t.getAttribute('data-val');
+      if (id === cur) return;
+      cur = id;
+      renderPreview(byId(id));
+      syncSel();
+      sfx('click');
+    }, false);
+
+    go.addEventListener('click', function () {
+      sfx('confirm');
       wrap.classList.remove('show');
-      if (onPick) onPick(id);
+      if (onPick) onPick(cur);
     }, false);
     return true;
   }
@@ -248,7 +332,8 @@
       ui.newFrom = c.id;
       closePanel();
       openPanel('newroute');
-      toast('从 ' + c.name + ' 出发，选择一个目的地');
+      toast('从 ' + c.name + ' 出发，选择一个目的地' +
+        (S.networkCityIds(ui.state)[c.id] ? '' : '（目的地须为已通航城市）'));
     }
   }
 
@@ -272,13 +357,18 @@
         html += '<span class="cc-tag">' + h(on ? on.name : other) + '</span>';
       });
       html += '</div>';
-    } else if (S.networkCityIds(st)[c.id]) {
-      /* 「从这里开新航线」只在**本城已在我的网络里**时才给（2026-09-30 用户拍板）：
-       * 旧版对任何城市都给这个按钮，于是玩家能在一座与自己的网络毫无关系的城市上
-       * 直接开出一条线 —— 凭空冒出来的航线。基地是网络的根，故基地永远给按钮。 */
+    }
+    /* 「从这里开新航线」对所有城市开放（2026-10-01 用户反馈：未入网的城市也应该能
+     * **连回**自己的网络 —— sim.openRoute 的规则本就是「两端至少一端在网络」，
+     * UI 不该比它更严）。差别只在约束方向：
+     *   已入网城市 → 目的地任意（旧版 bug：已通航城市反而不给按钮）；
+     *   未入网城市 → 目的地必须是网络城市，面板会禁掉连不回的选项。
+     * 「凭空开线」（两端都不在网络）依然被面板禁用 + sim 兜底拒绝。 */
+    if (S.networkCityIds(st)[c.id]) {
       html += '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
     } else {
-      html += '<div class="cc-lines"><i class="c-warn">未与你的网络连通 · 新航线只能从基地或已通航城市延伸出去</i></div>';
+      html += '<div class="cc-lines"><i class="c-warn">此城未入你的网络 · 新航线须连回基地或已通航城市</i></div>' +
+        '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
     }
     el.uCityCard.innerHTML = html;
     el.uCityCard.classList.add('show');
@@ -499,9 +589,9 @@
     var st = ui.state;
     if (!ui.newTo) return { ok: false, reason: '请选择目的地' };
     if (!ui.newType) return { ok: false, reason: '请选择机型' };
-    /* 出发地要落在我的网络里（与 renderNewRoute 同一口径；sim 仍会再校验一次） */
-    var net = S.networkCityIds(st);
-    var from = (ui.newFrom && net[ui.newFrom]) ? ui.newFrom : st.homeCityId;
+    /* 出发地：跟随面板选择 —— 可以是未入网城市（目的地连回网络即可），
+     * UI 不再擅自回落基地；「两端至少一端在网络」由 sim.openRoute 最终校验。 */
+    var from = (ui.newFrom && AT.CITIES_BY_ID[ui.newFrom]) ? ui.newFrom : st.homeCityId;
 
     var idle = S.idlePlanes(st).filter(function (p) { return p.type === ui.newType; }).length;
     if (!idle) {
@@ -919,15 +1009,20 @@
   }
 
   function renderNewRoute(st) {
-    /* 出发城市必须是**我的网络里**的城市（2026-09-30）：ui.newFrom 可能已经是失效值
-     * （网络收缩 —— 玩家关掉了那条线，或它本来就没连上），此时回落到基地。
-     * 这一段是 UI 侧的自愈，真正的规则仍在 sim.openRoute（唯一真源）。 */
+    /* 出发城市：允许**未入网**城市（2026-10-01 用户反馈：未入网的城市也应该能连回
+     * 自己的网络 —— sim.openRoute 本就只要求「两端至少一端在网络」，UI 不该更严）。
+     * 这里只自愈空值/无效 id（城市不会被删除，不需要回落基地）。
+     * 真正的连通性规则仍在 sim.openRoute（唯一真源）。 */
     var net = S.networkCityIds(st);
-    if (!ui.newFrom || !net[ui.newFrom]) ui.newFrom = st.homeCityId;
+    if (!ui.newFrom || !AT.CITIES_BY_ID[ui.newFrom]) ui.newFrom = st.homeCityId;
     var fromId = ui.newFrom;
+    var offNet = !net[fromId];       // 出发地未入网 ⇒ 目的地必须是网络城市
+    /* 出发地换成未入网城市后，之前选中的目的地可能不再合法（也未入网），清掉重选 */
+    if (offNet && ui.newTo && !net[ui.newTo]) ui.newTo = null;
     var from = AT.CITIES_BY_ID[fromId];
     var out = '<div class="nw-sec"><div class="rd-h">① 出发城市</div><div class="chips">';
-    // 出发地：基地 + 已通航城市（未通航城市不能作为起点 —— 网络是连通的）
+    // 出发地：当前选择 + 基地 + 已通航城市（未入网城市只能从它的城市卡进入；
+    // 面板内切换出发地仍只列网络城市，避免在面板里凭空选一座孤城当起点）
     var fromList = [fromId];
     st.routes.forEach(function (r) {
       if (fromList.indexOf(r.a) < 0) fromList.push(r.a);
@@ -968,10 +1063,14 @@
       var reach = AT.PLANES.filter(function (p) { return p.range >= dist; });
       var canFlyNow = reach.some(function (p) { return idleTypes[p.id]; });
       var canBuy = reach.some(function (p) { return st.cash >= p.price; });
+      /* 连通性（与 sim.openRoute 同口径）：出发地未入网时，目的地必须已入网，
+       * 否则两端都不在网络里 —— 「凭空开线」。这类城市直接禁用并说明原因。 */
+      var badNet = offNet && !net[c.id];
       cands.push({
         c: c, dist: dist, pot: S.routePotential(st, fromId, c.id),
         reach: reach, canFlyNow: canFlyNow, canBuy: canBuy,
-        tier: canFlyNow ? 0 : (reach.length && canBuy ? 1 : 2),
+        badNet: badNet,
+        tier: badNet ? 2 : (canFlyNow ? 0 : (reach.length && canBuy ? 1 : 2)),
         stocked: canFlyNow
       });
     });
@@ -981,11 +1080,14 @@
     });
 
     out += '<div class="nw-sec"><div class="rd-h">② 目的地（先列现在就能飞的，再按需求排序）' +
+      (offNet ? ' · 出发地未入网，目的地须为已通航城市' : '') +
       '</div><div class="chips">';
     cands.forEach(function (x) {
       var ok = x.reach.length > 0;
       var tag = '';
-      if (ok && !x.canFlyNow) {
+      if (x.badNet) {
+        tag = '<i class="c-bad">未与你的网络连通 · 不能凭空开线</i>';
+      } else if (ok && !x.canFlyNow) {
         var cheapest = null;
         x.reach.forEach(function (p) {
           if (cheapest === null || p.price < cheapest.price) cheapest = p;

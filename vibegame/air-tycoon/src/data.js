@@ -350,14 +350,16 @@
    *
    * ⚠ color 的口径：它是**选航司页的识别色**（2026-09-30 起也是地图上该航司航线与客机的颜色，
    *   见 render.js 的色板注释），取自所属地区色（§2 的 REGIONS[].color），
-   *   不是航司真实品牌色 —— 因为按品牌色会有四家都是红的（东航/英航/阿联酋/澳航），
+   *   不是航司真实品牌色 —— 因为按品牌色会有四家都是红的（国航/英航/阿联酋/澳航），
    *   六家根本无法区分。地区取色才能保证六色互不撞车。仅有 qf 因「南半球」的
    *   地区色是中性灰（灰在深底上像禁用态），改用 rose 补全色相环缺口。
    */
   AT.AIRLINES = [
-    /* ── 东亚：超大机队的规模经济 ── */
-    { id: 'al_mu', iata: 'MU', name: '中国东方航空', region: 'EASIA', baseCityId: 'C01', baseCode: 'PVG', color: '#E24B4A',
-      prototype: '东亚大型全服务网络航司',
+    /* ── 东亚：超大机队的规模经济 ──
+     * 2026-09-30 用户拍板：东亚席从东航（MU/上海 PVG）换成国航（CA/北京 PEK）。
+     * id 随之从 al_mu 改为 al_ca（旧 id 已无任何引用）。 */
+    { id: 'al_ca', iata: 'CA', name: '中国国际航空', region: 'EASIA', baseCityId: 'C02', baseCode: 'PEK', color: '#E24B4A',
+      prototype: '东亚载旗全服务航司',
       trait: { id: 'scale', name: '规模经济',
         desc: '超大机队摊薄固定成本：全机队持有成本 −20%。',
         ownershipMul: 0.80 } },

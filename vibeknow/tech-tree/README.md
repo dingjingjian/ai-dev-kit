@@ -58,12 +58,12 @@
 
 **科技树的节点不配图**——节点是紧凑小卡（年代 + 名称 + 英文 + 连线），塞图会挤掉连线空间也看不清。图片只用在两处：**详情页大图**，以及**图鉴视图的卡片与时代封面**。
 
-1. **规格**：条目图 `assets/img/<科技 id>.webp` 640×360；时代封面 `assets/img/cover-<时代 key>.webp` 960×540。尺寸、体积、构图与禁用项的细则统一写在 [`_dev/image-spec.md`](_dev/image-spec.md)（唯一真源，生成时自动嵌入施工图）。
-2. **提示词施工图**：逐张提示词见 [`_dev/IMAGE_PROMPTS.md`](_dev/IMAGE_PROMPTS.md)（另有机器可读的 [`_dev/image-prompts.json`](_dev/image-prompts.json)）。该清单由 `python _dev/gen_image_prompts.py` **从 `data.js` 自动派生**，数据只维护一遍。
+1. **规格**：条目图 `assets/img/<科技 id>.webp` 640×360；时代封面 `assets/img/cover-<时代 key>.webp` 960×540。尺寸、体积、构图与禁用项的细则统一写在 [`tools/image-spec.md`](tools/image-spec.md)（唯一真源，生成时自动嵌入施工图）。
+2. **提示词施工图**：逐张提示词见 [`tools/IMAGE_PROMPTS.md`](tools/IMAGE_PROMPTS.md)（另有机器可读的 [`tools/image-prompts.json`](tools/image-prompts.json)）。该清单由 `python tools/gen_image_prompts.py` **从 `data.js` 自动派生**，数据只维护一遍。
 3. **拼接口径**：完整提示词 = `data.js` 里的 `IMG_STYLE`（统一风格串）+ 空格 + 条目的 `subject`。详情页展示的也正是这条拼好的提示词。
 4. **两种画面模式**：`subject` 已指定是「博物馆器物实拍」还是「极简 3D 概念图」（语言、哲学、互联网、人工智能这类没有单一实物的条目走概念图）。风格串里只禁「可读的现代文字」，允许泥板、铅字、针灸铜人上的不可辨识古文字刻痕。
 5. **投入即生效**：图片按名放入 `assets/img/` 即可，页面无任何改动；后缀回退链为 `webp → jpg → jpeg → png`，全部找不到才显示占位块。
-6. **体积**：条目图 ≤45 KB、时代封面 ≤90 KB、全部配图合计 ≤1.8 MB。`build_zip.py` 会在打包时统计并提示。
+6. **体积**：条目图 ≤45 KB、时代封面 ≤90 KB、全部配图合计 ≤1.8 MB。统一构建入口会在打包时统计并提示。
 7. **状态**：**82 / 82 张已就位**（10 张时代封面 960×540 + 72 张条目图 640×360），合计 845 KB，逐张核过尺寸与体积均在 spec 之内；占位块只在缺图时才露出来。
 
 ## 背景音乐
@@ -73,7 +73,7 @@
 | 项 | 说明 |
 |------|------|
 | 曲目 | 《Sogno di Volare》· 取源曲 **16s → 121s** 这段 105s 乐句 · 64kbps 单声道 22.05kHz（解码后 821 KB / 0.802 MiB） |
-| 数据 | `assets/audio/bgm.js`（`window.TT_BGM`，由 `_dev/audio/make-bgm.mjs` 生成）；源曲 `assets/audio/bgm.mp3` 是构建输入，**不进 zip** |
+| 数据 | `assets/audio/bgm.js`（`window.TT_BGM`，由 `tools/audio/make-bgm.mjs` 生成）；源曲 `assets/audio/bgm.mp3` 是构建输入，**不进 zip** |
 | 为什么 base64 | 容器上传白名单不收任何音频扩展名，CSP 又禁 `data:` / `blob:` 媒体源 ——「包内音频文件 + `<audio src>`」在容器里不存在，音频只能以字符串藏进 `.js`，运行时 `atob → ArrayBuffer → decodeAudioData` 交给 Web Audio，**全程不产生任何 URL** |
 | 选点 | 由 `make-bgm.mjs --auto` 选出：判据是「整段平均能量高 + 接缝处安静」（本题 105s 段：能量 0.1343 / 接缝 0.0878），详见 [`docs/背景音乐需求.md`](docs/背景音乐需求.md) §3 |
 | 起播 | **用户第一次点按之后**才出声（容器 autoplay 策略要求手势），之后全程循环 |
@@ -85,7 +85,7 @@
 
 > ⚠️ **版权**：《Sogno di Volare》是《文明 VI》主题曲（Christopher Tin），文件来自素材站下载，
 > **不构成商用授权** —— 上架小红书小工具或用于宣传片前必须换曲或取得授权。
-> 换曲只需重跑 `node _dev/audio/make-bgm.mjs "新曲目.mp3"`，页面与代码一行都不用改。
+> 换曲只需重跑 `node tools/audio/make-bgm.mjs "新曲目.mp3"`，页面与代码一行都不用改。
 
 ## 分享到小红书（详情页）
 
@@ -107,9 +107,9 @@
 | 项 | 说明 |
 |----|------|
 | 源码 | `index.html`（内联 CSS）+ `data.js`（数据真源）+ `main.js`（渲染逻辑，经典脚本） |
-| 数据真源 | `data.js` 的 `ERAS`（时代）、`TECHS`（科技）、`IMG_STYLE`（配图风格串）；`_dev/parse_data.py` 负责解析，供校验与清单派生共用 |
+| 数据真源 | `data.js` 的 `ERAS`（时代）、`TECHS`（科技）、`IMG_STYLE`（配图风格串）；`tools/parse_data.py` 负责解析，供校验与清单派生共用 |
 | 条目字段 | `id / era / name / en / year / roots[] / tag / intro / specs[[k,v]] / feats[] / subject`；图片路径由 `id` 与 `era` 推出，不额外存路径 |
-| `roots` 字段 | 前置科技的 id 数组，空数组表示该时代起点。**只能指向同代或更早时代**，`_dev/check_data.py` 会校验 |
+| `roots` 字段 | 前置科技的 id 数组，空数组表示该时代起点。**只能指向同代或更早时代**，`tests/check_data.py` 会校验 |
 | 排序约定 | 时代内顺序不写死在数据里，由 `computeEraOrder()` 按前置重心 + 保序拓扑排序算出；数据顺序只作为并列时的基准 |
 | 网格列数 | 视口 <520px 两列、否则三列。`main.js` 的 `cols()` 必须与 `index.html` 的 `@media(min-width:520px)` 断点一致 |
 | 时代立柱 | `.era` 是 flex：左侧 `.era-rail`（74px，`position:sticky` 吸顶，罗马数字用时代色）+ 右侧 `.era-grid`。立柱不横占节点区，因此连线不被遮住；年代跨度用 `-webkit-line-clamp:3` 截断，完整跨度在图鉴与详情 |
@@ -125,24 +125,24 @@
 | 主题色 | 图鉴与树内选中用 `--era-accent`（每个时代一色）；详情页按时代把 `--accent / --accent-soft` 写到根元素 |
 | 顶部预留带 | 写法与 [`vibegame/ai-os`](../../vibegame/ai-os/) 对齐：`--top-gap:50px` + `--safe-top:calc(var(--top-gap) + var(--inset-top))`，`.topband{min-height:50px; height:var(--safe-top); padding-top:var(--inset-top)}`。原因：`env()` / 容器注入的 `--safe-area-inset-top` 只覆盖状态栏，**不含**宿主那行「返回 / 分享 / 更多」按钮。容器内嵌时 `body.in-app` **重新声明** `--safe-top` 并把 `--top-gap` 加到 70px |
 | 顶栏结构 | 两段：① `.topband` = 预留带，左右各让开 72px 给宿主按钮，**标题（21px 衬线）就居中放在这条带子中间**（所以小屏也不会被挤到换行）；② `.topbar` 38px，左侧是当前视图的标签（科技树「72 项 · 10 个时代」/ 图鉴「72 项 · 按时代分组」/ **详情「当前科技名」，如「蒸汽机」**——它一直吸顶可见，滑到简介 / 参数 / 提示词哪一段都还知道在看哪条技术），右侧是视图切换与音乐开关。无宿主时总高 90px —— 比「标题也挤在第二行」省约 16px。`--nav-h` 仍取 `.topwrap` 实测高度，所以时代立柱的吸顶偏移自动跟着走 |
-| 背景音乐 | 载荷以 base64 藏在 `assets/audio/bgm.js`（白名单类型），运行时 `atob → ArrayBuffer → decodeAudioData → Web Audio`，不产生任何 URL；源曲 `bgm.mp3` 是构建输入、不进 zip。构建工具 `_dev/audio/make-bgm.mjs`（依赖仅构建期需要） |
+| 背景音乐 | 载荷以 base64 藏在 `assets/audio/bgm.js`（白名单类型），运行时 `atob → ArrayBuffer → decodeAudioData → Web Audio`，不产生任何 URL；源曲 `bgm.mp3` 是构建输入、不进 zip。构建工具 `tools/audio/make-bgm.mjs`（依赖仅构建期需要） |
 | 分享 | 详情页走容器 JSBridge `postNote`（见 `jsbridge-api.md`）：原图经 Canvas → `data:uri` →（有则 `writeTempFile`）→ `postNote`；标题 / 正文按 API 上限 20 / 1000 主动裁剪；`has-share` 标记挂在 `<html>` 上 |
 | 宿主判定 | `detectInApp()` 只认容器注入的桥对象 `window.xhs.miniTool` 与显式 query `?inapp=1`，**不做 UA / 机型判断**（与 ai-os 一致，打包守卫也会拦住 UA 判定） |
-| 自检 | `_dev/check_data.py`（数据）+ `_dev/shot_check.py`（45 项渲染断言） |
-| 打包 | `_dev/build_zip.py`：数据校验 + 33 项前置校验（含「时代是立柱而非横幅」「顶部显式预留 --top-gap 且标题放在带子中间」「不做 UA 判定」「音频只能藏在 .js 且解码后 ≤ 1 MiB」「分享走 postNote 且取图不发网络请求」） + **只收录被 `data.js` 引用的配图** + 打包 zip（产物 `tech-tree.zip`） |
+| 自检 | `tests/check_data.py`（数据）+ `tests/shot_check.py`（45 项渲染断言） |
+| 打包 | 统一入口 `build.mjs`：数据校验 + 33 项前置校验（含「时代是立柱而非横幅」「顶部显式预留 --top-gap 且标题放在带子中间」「不做 UA 判定」「音频只能藏在 .js 且解码后 ≤ 1 MiB」「分享走 postNote 且取图不发网络请求」） + **只收录被 `data.js` 引用的配图** + 打包 zip（产物 `tech-tree.zip`） |
 | 体积 | 源码 zip 约 785 KB（`index.html` + `data.js` + `main.js` + `assets/audio/bgm.js`，其中音频占绝大部分），配图就位后随图片增长，仍低于 2 MB 建议值 |
-| 改动顺序 | 一律直接改根目录 `index.html` / `data.js` / `main.js`，重跑 `check_data.py`、`gen_image_prompts.py` 与 `build_zip.py` 刷新清单 / `dist/` / zip，不要手改 `dist/` |
+| 改动顺序 | 一律直接改根目录 `index.html` / `data.js` / `main.js`，重跑 `check_data.py`、`gen_image_prompts.py` 与 `tools/build.mjs --pack` 刷新清单 / `dist/` / zip，不要手改 `dist/` |
 
 ## 构建命令
 
 ```bash
-python _dev/check_data.py         # 数据校验：前置 id / 时代先后 / 无环 / 字段完整性 / 时代入口
-python _dev/gen_image_prompts.py  # 从 data.js 派生 _dev/IMAGE_PROMPTS.md + image-prompts.json
-python _dev/shot_check.py         # 渲染自检（45 项：含顶栏两段结构 / 标题字号与居中、320px 窄屏、立柱不挡线、配图加载、音乐开关、分享链路）+ 截图到 _dev/_shots/
-node _dev/audio/make-bgm.mjs "原始曲目.mp3"   # 生成 assets/audio/bgm.js（需先在 _dev/audio 装两个音频包）
-python _dev/process_images.py     # 把 _dev/raw_img/*.png 批量转成 assets/img/*.webp
-python _dev/build_zip.py          # 数据校验 + 前置校验 + 配图盘点 + 打包 zip
-python _dev/make_icon.py          # 生成 icon.png（2048×2048）
+python tests/check_data.py         # 数据校验：前置 id / 时代先后 / 无环 / 字段完整性 / 时代入口
+python tools/gen_image_prompts.py  # 从 data.js 派生 tools/IMAGE_PROMPTS.md + image-prompts.json
+python tests/shot_check.py         # 渲染自检（45 项：含顶栏两段结构 / 标题字号与居中、320px 窄屏、立柱不挡线、配图加载、音乐开关、分享链路）+ 截图到 .work/shots/
+node tools/audio/make-bgm.mjs "原始曲目.mp3"   # 生成 assets/audio/bgm.js（需先在 tools/audio 装两个音频包）
+python tools/process_images.py     # 把 .work/raw_img/*.png 批量转成 assets/img/*.webp
+node ../../tools/build.mjs --pack          # 数据校验 + 前置校验 + 配图盘点 + 打包 zip
+python tools/make_icon.py          # 生成 icon.png（2048×2048）
 
 # 规范审计（skill 自带脚本，任选其一，本仓库两者均可用）
 node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs ./dist
@@ -172,6 +172,6 @@ python ../../.skill/minitool-zip-builder/scripts/audit_artifact.py ./tech-tree.z
 
 > 兼容性状态：已在 Chromium（桌面内核）390×844 视口完成 45 项渲染自检；**Chrome 61 / Android 8.1 真机兼容性未实测**，交付前须按 `.skill/minitool-zip-builder/references/` 的 JS / CSS 自检清单在目标内核复核。
 >
-> 配图状态：**82 / 82 张已就位**（10 张时代封面 + 72 张条目图），合计 845 KB；尺寸与体积逐张核过，全部在 `_dev/image-spec.md` 的预算内。逐张提示词仍见 `_dev/IMAGE_PROMPTS.md`（换图后重跑 `gen_image_prompts.py` 即可）。
+> 配图状态：**82 / 82 张已就位**（10 张时代封面 + 72 张条目图），合计 845 KB；尺寸与体积逐张核过，全部在 `tools/image-spec.md` 的预算内。逐张提示词仍见 `tools/IMAGE_PROMPTS.md`（换图后重跑 `gen_image_prompts.py` 即可）。
 >
 > 音乐状态：已接入（《Sogno di Volare》105s 乐句 · 解码后 821 KB）。**版权未清**，上架前必须换曲或取得授权，见 [`docs/背景音乐需求.md`](docs/背景音乐需求.md) §6。

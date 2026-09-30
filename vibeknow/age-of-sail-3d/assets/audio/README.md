@@ -3,7 +3,7 @@
 | 文件 | 角色 | 进 zip 吗 |
 |------|------|-----------|
 | `bgm.js` | **运行时资源**：`window.AOS3D_BGM` = base64 音频，由 `app.js` 交给 Web Audio 解码播放 | ✅ 进 |
-| `bgm.mp3` | **构建输入**：源曲目（158.1s / MPEG-2 Layer III / 22.05kHz / 80kbps CBR / 无 ID3） | ❌ 不进（`pack.mjs` 的 excludes） |
+| `bgm.mp3` | **构建输入**：源曲目（158.1s / MPEG-2 Layer III / 22.05kHz / 80kbps CBR / 无 ID3） | ❌ 不进（`build.config.json` 的 exclude） |
 | `README.md` | 本文件（容器不支持 `.md`） | ❌ 不进 |
 
 ## 为什么是「base64 藏进 .js」而不是一个 mp3

@@ -50,15 +50,15 @@
 | 间距基线 | Chrome <84 无 flex gap（基线 Chrome 61），分组标题中英文、色块、场景列等间距一律用子项 `margin`；顶栏 tab 用短名 + `flex-wrap` 换行（不依赖横向滚动），见 `index.html` 顶部「Flex 间距基线」块 |
 | 实例管理 | `activeCharts` 数组跟踪当前页所有 echarts 实例，路由切换前 `disposeCharts()` 全部销毁，避免内存泄漏 |
 | 渲染时机 | `requestAnimationFrame` 内 init，确保 DOM 已布局获得真实尺寸；`window.resize` 时统一 `resize()` |
-| 打包 | `_dev/build_zip.py`，前置校验 + 打包 zip（产物 `echarts-gallery.zip`，含 `index.html` / `main.js` / `echarts.min.js`） |
+| 打包 | 统一入口 `build.mjs`，前置校验 + 打包 zip（产物 `echarts-gallery.zip`，含 `index.html` / `main.js` / `echarts.min.js`） |
 | 体积 | zip 约 1.05MB（echarts.min.js 占大头），低于 2MB 建议值 |
-| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `build_zip.py` 刷新 `dist/` 与 zip，不要手改 `dist/` |
+| 改动顺序 | 一律直接改根目录 `index.html` / `main.js`，重跑 `node ../../tools/build.mjs --pack` 刷新 `dist/` 与 zip，不要手改 `dist/` |
 
 ## 构建命令
 
 ```bash
-python _dev/build_zip.py    # 前置校验 + 打包 zip
-python _dev/make_icon.py    # 生成 icon.png（2048×2048）
+node ../../tools/build.mjs --pack    # 前置校验 + 打包 zip
+python tools/make_icon.py    # 生成 icon.png（2048×2048）
 ```
 
 ## 应用上架信息

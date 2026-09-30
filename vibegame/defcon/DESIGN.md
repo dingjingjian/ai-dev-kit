@@ -943,7 +943,7 @@ AI 打分 `sc = pop / (飞行时间 + 8)^0.10`、`topK=30`，人口权重是线�
 
 | 序 | 任务 | 落点 | 验证 |
 |---|---|---|---|
-| 1 | **城市定位环** —— 每城光点外描一圈细白环（直径 1.55× 光点），让玩家看清具体坐标 | `src/render.js` 新增 `ringTex()` / `ringPoints` 层 / `syncCities` 同步 / 选中环 `setTarget` / `clearTarget` | 浏览器冒烟截图 `docs/screenshot-d3.png` 可见（环清晰、不与光点阵营色冲突） |
+| 1 | **城市定位环** —— 每城光点外描一圈细白环（直径 1.55× 光点），让玩家看清具体坐标 | `src/render.js` 新增 `ringTex()` / `ringPoints` 层 / `syncCities` 同步 / 选中环 `setTarget` / `clearTarget` | 浏览器冒烟可验（环清晰、不与光点阵营色冲突）；冒烟截图为过程产物，不入库 |
 | 2 | **§11.6 剩余辉光脉冲** —— 受击瞬间城市亮度 ×2.8 上冲、0.25s 回落，过 bloom 阈值只在这一瞬炸光 | `src/render.js` `cityPulse` + `syncCities(state, dt)` | 视觉验证（需用户开浏览器看） |
 | 3 | **WebAudio 程序化音效** —— 5 个音（DEFCON 跃迁 / 发射 / 拦截 / 核爆 / 拒），全部合成、不引音频文件，默认静音，顶栏开关 | `src/audio.js` 新增、`src/ui.js` 触发点（DC 变化 / impacts / 拦截累计 / fire / deny）、`index.html` 顶栏 `#sndBtn` | 无头断言里加入 `audio.js` 红线扫描；浏览器冒烟不报错即视为通过 |
 | 4 | **终局复盘三行** —— 导火索 / 首枚落地 / 你的战果 | `src/sim.js` 加 `firstImpact` + `stats.hits/lost`；`src/ui.js` `buildRecap`；`index.html` 加 `#ovRecap` 与 CSS | `tests/headless.js` 加 3 条断言（hits 枚数口径、firstImpact 完整性、lost 与 intercepts 恒等） |

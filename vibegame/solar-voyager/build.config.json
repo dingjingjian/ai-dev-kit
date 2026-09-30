@@ -1,0 +1,29 @@
+{
+  "name": "solar-voyager",
+  "entry": "index.html",
+  "include": [
+    "index.html",
+    "src"
+  ],
+  "allowedExt": [
+    ".html",
+    ".js",
+    ".css",
+    ".json",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".svg",
+    ".woff",
+    ".woff2"
+  ],
+  "maxZipBytes": 10485760,
+  "guards": [
+    "entry-exists",
+    "entry-at-root",
+    "size-budget"
+  ],
+  "zip": "solar-voyager.zip"
+}

@@ -1,6 +1,8 @@
 # 为了小猫我飞遍全球 · 世界猫咪图鉴
 
-> `#vibeknow` 人文知识。参照 `jurassic-park-3d` 的多页框架与 Three.js 地球组件，将交互从「园区游览 app」重构为「世界猫咪图鉴 → 心动 → 飞去见小猫 → 爱猫基因解析」。核心创新：地区切换用**爱心第一视角沿地球表面飞行动画**（"我带着一颗心飞去见它"），而非地球转动定位相机。
+> **分类**：`#vibeknow` 人文知识　·　分类索引见根目录 [`TRACKS.md`](../../TRACKS.md)
+>
+> 参照 `jurassic-park-3d` 的多页框架与 Three.js 地球组件，将交互从「园区游览 app」重构为「世界猫咪图鉴 → 心动 → 飞去见小猫 → 爱猫基因解析」。核心创新：地区切换用**爱心第一视角沿地球表面飞行动画**（"我带着一颗心飞去见它"），而非地球转动定位相机。
 
 零构建、双击即开的离线前端项目。主视觉图片（24 张猫咪品种图 + 1 张 hero 横幅）已按 `docs/生图规范.md` 出图入库，替换时覆盖同名文件即可。
 
@@ -104,7 +106,7 @@
 cat-globe-3d/
 ├── index.html              页面骨架 + 全套 CSS（3 页布局）
 ├── README.md
-├── pack.mjs                手写 ZIP 打包（零第三方依赖）
+
 ├── assets/
 │   ├── app.js              业务逻辑 + 飞行场景（Three.js IIFE）
 │   ├── cats.js             24 只猫咪数据 + 常量
@@ -123,7 +125,7 @@ cat-globe-3d/
 
 ```bash
 node ../../.skill/minitool-zip-builder/scripts/audit_artifact.mjs .
-node pack.mjs
+node ../../tools/build.mjs --pack
 ```
 
 产出 `cat-globe-3d.zip`（zip 根即 `index.html`），可直接分发。

@@ -116,13 +116,13 @@ reference/
 ```bash
 cd ../vibecoding-gallery
 ```
-1. **盘点**：`reference/` 的子目录（除 `README.md`）即待发布清单；与 `vibecoding-gallery/_dev/make_covers.py` 的 `ORDER` 取差集 → 本批发布项。
-2. `ORDER` 追加这批目录名（保持现有命名 / 顺序）→ 跑 `python _dev/make_covers.py` 生成封面 + 更新 `covers-data.js`。
-3. 在 `main.js` 的 `WORKS`（及 `NOTES`）为每条补数据（字段见 gallery README「新增作品」）→ 同步 `_dev/works_raw.json` 一条。
+1. **盘点**：`reference/` 的子目录（除 `README.md`）即待发布清单；与 `vibecoding-gallery/vibecoding-gallery/tools/make_covers.py` 的 `ORDER` 取差集 → 本批发布项。
+2. `ORDER` 追加这批目录名（保持现有命名 / 顺序）→ 跑 `python vibecoding-gallery/tools/make_covers.py` 生成封面 + 更新 `covers-data.js`。
+3. 在 `main.js` 的 `WORKS`（及 `NOTES`）为每条补数据（字段见 gallery README「新增作品」）→ 同步 `vibecoding-gallery/tools/works_raw.json` 一条。
 4. 本文件「总索引」对应行的「画廊发布」列改为 ✅。
-5. `python _dev/build_zip.py` 校验 + 打包。
+5. 在 `vibecoding-gallery/` 下跑 `node ../tools/build.mjs --pack` 校验 + 打包。
 
-> `build_zip.py` 会把 `main.js` 的链接与 `works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；发布期后本目录与画廊再次对齐，下一轮积累从空蓄水池重新开始。
+> 统一构建入口会把 `main.js` 的链接与 `works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；发布期后本目录与画廊再次对齐，下一轮积累从空蓄水池重新开始。
 
 ## 约定
 

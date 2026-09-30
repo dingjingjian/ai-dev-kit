@@ -9,7 +9,7 @@
 
 **科技树的节点不配图**（节点是紧凑小卡，只有年代、名称与连线），图片只用于详情页大图与图鉴视图的卡片、时代封面。
 
-完整的逐张提示词（含年代列）、尺寸与验收清单见 [`../../_dev/IMAGE_PROMPTS.md`](../../_dev/IMAGE_PROMPTS.md)
-（该清单由 `python _dev/gen_image_prompts.py` 从 `data.js` 自动派生）。
+完整的逐张提示词（含年代列）、尺寸与验收清单见 [`../../tools/IMAGE_PROMPTS.md`](../../tools/IMAGE_PROMPTS.md)
+（该清单由 `python tools/gen_image_prompts.py` 从 `data.js` 自动派生）。
 
 本 README 不会被打进 zip（打包脚本只收 `.html/.css/.js/图片/字体/.json`）。

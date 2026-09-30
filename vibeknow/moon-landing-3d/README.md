@@ -113,10 +113,10 @@
 |------|------|
 | `build.mjs` | 构建 `dist/`（`index.html` 置于根 + `assets/`，仅复制允许类型） |
 | `verify-minitool.mjs` | 逐条对照规范校验 `dist/`（包结构 / 引用路径 / 端能力 / 跨端 / 体积，共 27 项） |
-| `pack.mjs` | 压缩 `dist/` 的「内容」为 `moon-landing-3d.zip`（`index.html` 位于 zip 根，无多余层级） |
+| `node ../../tools/build.mjs --pack` | 压缩 `dist/` 的「内容」为 `moon-landing-3d.zip`（`index.html` 位于 zip 根，无多余层级） |
 
 ```bash
-node build.mjs && node verify-minitool.mjs dist && node pack.mjs
+node build.mjs && node verify-minitool.mjs dist && node ../../tools/build.mjs --pack
 ```
 
 ## 物料状态

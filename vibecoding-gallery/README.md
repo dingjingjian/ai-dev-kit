@@ -3,7 +3,7 @@
 > 分类：**非参赛作品**。它是浏览 [`reference/`](./reference/README.md) 归档的**展示 / 浏览工具**，本身并不投放到小红书 vibecoding 大赛，
 > 因此不占 `vibetool/`、`vibegame/`、`vibeart/`、`vibeknow/` 四个赛道目录，也不计入 TRACKS.md 的赛道清单。
 >
-> 位置：仓库根 `vibecoding-gallery/`（与 `reference/` 同级）。`_dev/make_covers.py` 会自动定位 `reference/`，
+> 位置：仓库根 `vibecoding-gallery/`（与 `reference/` 同级）。`tools/make_covers.py` 会自动定位 `reference/`，
 > 无论本目录放在根还是在 `reference/` 内都能直接跑，不需要改代码。
 
 把 [`reference/`](./reference/README.md) 归档的 23 件优秀作品 + **本人 3 件参赛作品**（共 26 件），做成**复刻小红书信息流形态**的展示小工具：双列瀑布流 + 笔记详情页 + 扭蛋机「随机邂逅」彩蛋。用小红书自己的产品形态逛小红书上的 vibecoding 作品，形式与内容同构。
@@ -27,31 +27,31 @@
 vibecoding-gallery/          # 仓库根，与 reference/ 同级
 ├── index.html            # 入口 + 全部样式（内联 <style>）
 ├── main.js               # 数据（26 件作品 + 完整链接）+ 全部逻辑
-├── covers-data.js        # 封面尺寸表（由 _dev/make_covers.py 生成）
+├── covers-data.js        # 封面尺寸表（由 tools/make_covers.py 生成）
 ├── covers/               # 26 张压缩封面（540px 宽 JPEG，01–23 归档 / 24–26 本人）
 ├── icon.png              # 上传图标（不进 zip）
 ├── vibecoding-gallery.zip # 打包产物（约 860KB）
 ├── dist/                 # zip 源（index.html + main.js + covers-data.js + covers/）
-└── _dev/
+└── tests/                  ← 验证脚本
     ├── works_raw.json    # 20 份作品原始数据（17 归档 + 3 本人）
     ├── make_covers.py    # 从 reference/ 与各项目目录压缩生成 covers/ + covers-data.js
     ├── make_icon.py      # 生成 icon.png
-    └── build_zip.py      # 前置校验（17 项）→ 构建 dist → 打包
+
 ```
 
 ## 构建与打包
 
 ```bash
-python _dev/make_covers.py   # reference 截图变化后重跑：自动取各目录最新图片（jpg/png/webp），同步生成尺寸表
-python _dev/make_icon.py
-python _dev/build_zip.py     # 校验 + 打包 vibecoding-gallery.zip
+python tools/make_covers.py   # reference 截图变化后重跑：自动取各目录最新图片（jpg/png/webp），同步生成尺寸表
+python tools/make_icon.py
+node ../tools/build.mjs --pack     # 校验 + 打包 vibecoding-gallery.zip
 ```
 
 - **截图更新流程**：直接替换 `reference/<dir>/screenshots/` 里的图（文件名不限，脚本取最新一张），重跑 `make_covers.py` 即可——封面与瀑布流比例自动更新，无需改 `main.js`。
 - **两阶段机制（推荐）**：日常在 `reference/` 按规范积累归档、**暂不进本画廊**；攒够一批（如 5~10 件）再批量发布。完整流程见 [`reference/README.md`](../reference/README.md) 的「与画廊同步：两阶段机制」章节。
 - **新增作品**：在 `reference/` 按规范归档后，`make_covers.py` 的 `ORDER` 追加目录名，重跑生成封面，再在 `main.js` 的 `WORKS` 追加一条（`cover` / `noteId` / `link` 从脚本输出与归档 README 取）。
-- **链接（不得动参数）**：`WORKS[].link` 必须用归档 README 里的**完整原文链接**（含 `xsec_token` 等全部查询参数），去掉参数站外打不开。`build_zip.py` 会把 26 条链接与原始数据 `_dev/works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；页面展示与复制也都原样输出，不做裁剪。
-- **分享令牌（xsec_token）**：26 条里 `xianhua-moon-letter` **仍未取到** `xsec_token`（站外打不开），链接原样保留、详情页标注「未取到分享令牌」，拿到分享链接后同步补进该作品 README、`works_raw.json`、`main.js`；其余 19 条已带完整参数。`build_zip.py` 每次打包都会点名提醒缺令牌的条目。
+- **链接（不得动参数）**：`WORKS[].link` 必须用归档 README 里的**完整原文链接**（含 `xsec_token` 等全部查询参数），去掉参数站外打不开。统一构建入口会把 26 条链接与原始数据 `tools/works_raw.json` **逐字比对**，任何截断 / 改动都会直接拒绝打包；页面展示与复制也都原样输出，不做裁剪。
+- **分享令牌（xsec_token）**：26 条里 `xianhua-moon-letter` **仍未取到** `xsec_token`（站外打不开），链接原样保留、详情页标注「未取到分享令牌」，拿到分享链接后同步补进该作品 README、`tools/works_raw.json`、`main.js`；其余 19 条已带完整参数。统一构建入口每次打包都会点名提醒缺令牌的条目。
 - **本人作品（`mine: true`）**：`WORKS` 里 `mine: true` 的条目（人工智能Ding🥕 的 3 件）会在封面打「我的」红标、详情页作者名后带「本人作品」徽章；素材不在 `reference/` 内，封面由 `make_covers.py` 的 `SELF` 清单直接从各项目目录取（路径相对仓库根）。
 
 ## 兼容性与约束

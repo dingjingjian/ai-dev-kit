@@ -952,7 +952,7 @@
      *     取 4.5%/季 ≈ 18%/年，接近真实航司「折旧+租赁利息+保险」的综合负担，
      *     也使「买贵机飞薄线」真正变成一个会亏钱的决策。 */
     var ownershipRatePerQ = (CONFIG.ownershipPerQuarter == null ? 0.045 : CONFIG.ownershipPerQuarter);
-    /* 特色技能「规模经济」（中国东方航空）：持有成本 ×0.80 —— 超大机队摊薄固定成本。 */
+    /* 特色技能「规模经济」（中国国际航空）：持有成本 ×0.80 —— 超大机队摊薄固定成本。 */
     var ownership = nPlanes * T.price * ownershipRatePerQ * traitOf(state).ownershipMul;
 
     var cost = fuel + landing + crew + maint + ownership;

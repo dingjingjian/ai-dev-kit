@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, '../..'); // tests/ 上一层 = 项目根
 const ASSETS = path.join(ROOT, 'assets');
 
 let pass = 0, fail = 0;

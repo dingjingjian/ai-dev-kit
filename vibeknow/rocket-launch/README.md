@@ -19,7 +19,7 @@
 | 脚本 | 用途 |
 |------|------|
 | `build-minitool.mjs` | 构建小工具版本 |
-| `pack.mjs` | 打包为 zip |
+| `node ../../tools/build.mjs --pack` | 打包为 zip |
 | `verify-minitool.mjs` / `zip-check.mjs` | 产物与 zip 校验 |
 | `runtime-test.py` | 运行期冒烟测试 |
 

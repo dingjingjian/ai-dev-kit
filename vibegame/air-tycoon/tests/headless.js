@@ -163,9 +163,9 @@ var stSQ = S.create({ seed: 7, airlineId: 'al_sq' });   // 新加坡航空：起
 ok(stSQ.reputation === 65, '「服务品牌」起始声誉 65（默认 50）', String(stSQ.reputation));
 
 /* 未选中的 5 家航司成为 AI 竞对，且玩家不在其中 */
-var stRiv = S.create({ seed: 7, airlineId: 'al_mu' });
+var stRiv = S.create({ seed: 7, airlineId: 'al_ca' });
 ok(stRiv.rivals.length === 5, '未选中的 5 家航司成为竞对', String(stRiv.rivals.length));
-ok(stRiv.rivals.every(function (r) { return r.airlineId && r.airlineId !== 'al_mu'; }),
+ok(stRiv.rivals.every(function (r) { return r.airlineId && r.airlineId !== 'al_ca'; }),
   '竞对里没有玩家所选的那家');
 ok(stRiv.rivals.every(function (r) {
   var a = AT.AIRLINES_BY_ID[r.airlineId];
@@ -797,7 +797,7 @@ ok(oN4.ok, '⑤ freeNetwork 关掉约束后仍可任意开线（工具用）', o
 /* ⑥ 竞对同规则：跑满一局后，逐家校验「每条线的至少一端 ∈ 该家自己的网络」。
  *    ⚠ 按数组顺序增量校验 —— 竞对的线是逐条追加的，第 k 条只需在第 k-1 条时的
  *    网络里（这正是规则的定义），所以顺序遍历就是正确判据。 */
-var stRN = S.create({ seed: 9, airlineId: 'al_mu', autoPlayer: true });
+var stRN = S.create({ seed: 9, airlineId: 'al_ca', autoPlayer: true });
 var gN = 0;
 while (stRN.phase !== 'over' && gN < 200000) {
   if (stRN.card) S.chooseEvent(stRN, 0);

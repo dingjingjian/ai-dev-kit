@@ -51,8 +51,7 @@ async def run(pw):
     # ── 0. 开局选航司（用户 2026-09-29）──
     # ⚠ 这是新增的**必经入口**：不点卡则游戏永不开始（gameRunning 恒 false）。
     #   故先断言覆盖层与六家航司都渲染出来，再点第一张进入游戏。
-    #   第一张是中国东方航空（基地 C01）—— 与首版默认基地一致，
-    #   故后续所有断言的数值口径（示范航线、排序等）与改动前保持不变。
+    #   第一张是中国国际航空（2026-09-30 起，基地北京 C02）。
     out["select"] = await page.evaluate("""() => {
         const w = document.getElementById('uSelect');
         const b = document.getElementById('uSelectList');
@@ -64,7 +63,9 @@ async def run(pw):
           gameRunning: !!(window.AT && window.AT.game && window.AT.game.running)
         };
     }""")
+    # 2026-09-30 起选航司改为两步式：点宫格只换预览，点「确认开航」才建局
     await page.click("#uSelectList .al-card")
+    await page.click("#uSelGo")
     await page.wait_for_timeout(4000)
     out["selectAfter"] = await page.evaluate("""() => ({
         shown: document.getElementById('uSelect').classList.contains('show'),

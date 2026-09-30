@@ -451,7 +451,7 @@ const PATTERNS = [
  }
 ];
 
-// 中秋色卡。硬约束：任意两色 RGB 欧氏距离 >= 60，否则逐格填豆时认不出（由 _dev/_check.py 体检）。
+// 中秋色卡。硬约束：任意两色 RGB 欧氏距离 >= 60，否则逐格填豆时认不出（由 tests/check.py 体检）。
 const PALETTE = [
   {code:'w',name:'月白',hex:'#FBF6E9'},{code:'e',name:'银灰',hex:'#9C9686'},
   {code:'k',name:'墨黑',hex:'#1C1A1E'},{code:'m',name:'栗棕',hex:'#63351A'},

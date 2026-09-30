@@ -9,9 +9,9 @@
 
 页面只展示**交通工具的类型**，不出现型号与品牌；生图提示词里的具体型号仅供提高造型准确度，不得画进画面。
 
-完整的逐张提示词（含「时代」列）、尺寸与验收清单见 [`../../_dev/IMAGE_PROMPTS.md`](../../_dev/IMAGE_PROMPTS.md)
-（该清单由 `python _dev/gen_image_prompts.py` 从 `main.js` 自动派生）。
+完整的逐张提示词（含「时代」列）、尺寸与验收清单见 [`../../tools/IMAGE_PROMPTS.md`](../../tools/IMAGE_PROMPTS.md)
+（该清单由 `python tools/gen_image_prompts.py` 从 `main.js` 自动派生）。
 
-改版前的「具体型号版」配图已归档到 [`../../_dev/_legacy_img/`](../../_dev/_legacy_img/)，不再参与打包。
+改版前的「具体型号版」配图已归档到 [`../../_legacy_img/`](../../_legacy_img/)，不再参与打包。
 
 本 README 不会被打进 zip（打包脚本只收 `.html/.css/.js/图片/字体/.json`）。

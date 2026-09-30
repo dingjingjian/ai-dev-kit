@@ -1,7 +1,7 @@
 # xiaohongshu/ — 小红书参赛与宣传素材
 
 本目录存放「大航海时代 · 帆船图鉴」的小红书 vibecoding 大赛参赛 / 宣传素材。
-**这些素材不进入小工具 zip**——zip 仅含 `index.html` + `assets/`（由 `pack.mjs` 产出）。
+**这些素材不进入小工具 zip**——zip 仅含 `index.html` + `assets/`（由 （在项目根）`node ../../tools/build.mjs --pack` 产出）。
 
 ## 目录内容
 

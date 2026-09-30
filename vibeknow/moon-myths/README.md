@@ -75,7 +75,7 @@
 
 | 项 | 状态 |
 |----|------|
-| zip | `moon-myths.zip`（`node pack.mjs` 生成） |
+| zip | `moon-myths.zip`（`node ../../tools/build.mjs --pack` 生成） |
 | 神话配图 ×14 | 待补（占位已就位，规格与提示词见 [`docs/配图提示词.md`](docs/配图提示词.md)） |
 | 图标 | 待补 |
 | 宣传图 | 待补 |

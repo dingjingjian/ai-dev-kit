@@ -11,7 +11,9 @@
          （见 app.js 的 itemImg）。缺图或加载失败时回退到程序化占位，
          不出现空白块，也不改变卡片尺寸（IMG_OK 预检）。
      ② 地球贴图       assets/earth.jpg / clouds.png   复用 earth-3d 系列
-     ③ Three.js       assets/three.min.js              复用 earth-3d 系列 */
+     ③ 夜面城市灯光   assets/earth-night.jpg          2048×1024，暖金灯光 + 全黑背景，
+                                                      由 _dev/make_night_texture.py 从 NASA 黑大理石夜景图生成
+     ④ Three.js       assets/three.min.js              复用 earth-3d 系列 */
   :root{
     /* 深夜蓝 · 奖章金 —— 诺奖之夜的配色：斯德哥尔摩市政厅蓝厅的深靛蓝底，
        配诺贝尔奖章的金。冷底 + 暖金，与 world-food-atlas（焦糖黑暖琥珀）、
@@ -152,13 +154,14 @@
   .listbtn svg{width:18px;height:18px;fill:none;stroke:var(--dawn);stroke-width:1.6}
   .listwrap{position:fixed;top:0;right:0;bottom:0;left:0;z-index:26;display:flex;flex-direction:column;background:rgba(5,8,16,.95);-webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);opacity:0;visibility:hidden;pointer-events:none;transition:opacity .26s,visibility .26s}
   .listwrap.show{opacity:1;visibility:visible;pointer-events:auto}
-  /* 清单是整屏浮层，顶部只需让开安全区，不再沿用地图那 50px 的标题位——否则顶上会空一条 */
-  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:flex-start;padding:calc(var(--sat) + 12px) 56px 12px 16px;border-bottom:1px solid var(--line)}
+  /* 清单是整屏浮层，顶部与设置抽屉同样让开「安全区 + 标题位（--top-gap）」：
+     容器 / 手机上方的状态栏、标题栏是压在页面上的，顶上留一条才不会被切掉 */
+  .listbar{flex:0 0 auto;width:100%;max-width:600px;margin:0 auto;display:flex;flex-direction:column;align-items:flex-start;padding:calc(var(--sat) + var(--top-gap)) 56px 12px 16px;border-bottom:1px solid var(--line)}
   .listbar .dimsw{margin:10px 0 0}
   .listtitle{font-family:var(--serif);font-size:17px;color:var(--dawn);letter-spacing:1.5px}
   .listtitle span{display:block;font-family:var(--sans);font-size:11px;font-weight:400;color:var(--mut);letter-spacing:1px;margin-top:3px}
   .listtitle i{font-style:normal;color:var(--acc)}
-  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + 14px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
+  .lclose{position:absolute;z-index:2;top:calc(var(--sat) + var(--top-gap) + 2px);right:14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.06);border:1px solid var(--line);color:var(--txt);font-size:16px;cursor:pointer}
   /* 横向内边距交给每行自己（.item / .grp h4），这样吸顶的分类头能左右通铺，
      滚过去的内容不会从分类头两侧透出来（原来那 14px 边距看着就是「缝」）。 */
   .listscroll{flex:1 1 auto;width:100%;max-width:600px;margin:0 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:0 0 calc(var(--sab) + 26px)}
@@ -250,6 +253,7 @@
   <div class="row"><label>自动旋转</label><div class="sw" id="swSpin"><i></i></div></div>
   <div class="row"><label>星空背景</label><div class="sw on" id="swStars"><i></i></div></div>
   <div class="row"><label>云层</label><div class="sw on" id="swClouds"><i></i></div></div>
+  <div class="row"><label>城市灯光</label><div class="sw on" id="swNight"><i></i></div></div>
   <div class="row"><label>标记标签</label><div class="sw on" id="swLabel"><i></i></div></div>
   <h3>视角</h3>
   <div style="display:flex;margin-top:4px">

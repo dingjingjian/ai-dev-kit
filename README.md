@@ -1,8 +1,10 @@
 # AI Dev Kit
 
-本目录是一个 AI 开发工具集合。自研项目按用途分为四个顶层目录（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`），多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。另有两个**非赛道目录**：`reference/`（他人优秀作品归档，参考资料）与 `vibecoding-gallery/`（浏览这些归档的展示工具），均不计入下面的项目清单。仓库级可复用技能在 `.skill/`。
+本目录是一个 AI 开发工具集合。自研项目按用途分为四个顶层目录（`vibetool/` / `vibegame/` / `vibeart/` / `vibeknow/`），多数浏览器端工具为零依赖单文件 HTML，开箱即用；服务端与脚本类项目集中在 `vibetool/ai_gateway/`、`vibetool/password-manager/`、`vibetool/daily-report/`、`vibetool/ai-news/` 等。另有两个**非分类目录**：`reference/`（他人优秀作品归档，参考资料）与 `vibecoding-gallery/`（浏览这些归档的展示工具），均不计入下面的项目清单。仓库级可复用技能在 `.skill/`。
 
-每个子项目可能带有各自的 `README.md` 或 `CLAUDE.md`/`SKILL.md`；工作区级协作约定见 `AGENTS.md`，详细用法请参阅对应文件。
+每个子项目可能带有各自的 `README.md` 或 `CLAUDE.md`/`SKILL.md`；工作区级约定见 `AGENTS.md`，详细用法请参阅对应文件。
+
+工程方法（标准骨架、脚本落位、构建入口、什么能入库）见 [`CONVENTIONS.md`](CONVENTIONS.md)（唯一真源）；作品分类与物料状态见 [`TRACKS.md`](TRACKS.md)（唯一真源）。
 
 ## 项目列表
 
@@ -47,7 +49,7 @@
 
 | 项目 | 目录 | 说明 |
 |------|------|------|
-| 泰坦尼克号 | `vibeart/Titanic/` | 照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，可旋转观赏的 3D 船模 |
+| 泰坦尼克号 | `vibeart/titanic/` | 照乐高 10294 参考图逐像素丈量建模的泰坦尼克号，可旋转观赏的 3D 船模 |
 | 郑和宝船 | `vibeart/zhenghe-treasure-ship/` | Blender 建模的明代宝船，九桅十二帆、水密隔舱、七下西洋航线，三种模式可观赏 |
 
 ### #vibeknow　人文知识（13）
@@ -70,14 +72,16 @@
 
 ## 其他目录
 
-以下目录**不属于四个赛道分类**，不进上面的项目清单：
+以下目录**不属于四个分类**，不进上面的项目清单：
 
 | 目录 | 说明 |
 |------|------|
 | `reference/` | 他人优秀小工具归档（截图 + 元信息），仅作学习借鉴与笔记素材，规范见 `reference/README.md` |
-| `vibecoding-gallery/` | 浏览 `reference/` 归档的展示小工具（非参赛作品），见 `vibecoding-gallery/README.md` |
+| `vibecoding-gallery/` | 浏览 `reference/` 归档的展示小工具，见 `vibecoding-gallery/README.md` |
 | `.skill/` | 仓库级可复用技能：小工具打包器、宣传片录制器 |
-| `docs/` | 工作区级文档与素材：大赛官方启动文案、参赛总结、应用清单 |
+| `docs/` | 工作区级文档与素材：赛事归档（官方启动文案、参赛总结）、应用清单 |
+| `tools/` | 工作区级工具：统一构建入口 `build.mjs`、结构审计 `audit_structure.py` |
+| `scripts/` | 工作区级校验脚本（小红书命名合规等） |
 
 ## 快速开始
 

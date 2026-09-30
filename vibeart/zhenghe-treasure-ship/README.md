@@ -77,10 +77,10 @@ node build.mjs && node verify-minitool.mjs dist
 |------|------|
 | `build.mjs` | 构建 `dist/`（`index.html` 置于根 + `assets/`，仅复制允许类型） |
 | `verify-minitool.mjs` | 逐条对照规范校验 `dist/` |
-| `pack.mjs` | 压缩 `dist/` 的「内容」为 `zhenghe-treasure-ship.zip` |
+| `node ../../tools/build.mjs --pack` | 压缩 `dist/` 的「内容」为 `zhenghe-treasure-ship.zip` |
 
 ```bash
-node build.mjs && node verify-minitool.mjs dist && node pack.mjs
+node build.mjs && node verify-minitool.mjs dist && node ../../tools/build.mjs --pack
 ```
 
 ## 物料状态
