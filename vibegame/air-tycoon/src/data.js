@@ -347,6 +347,19 @@
    *   baseCode    —— 基地机场的现实 IATA 三字码（选航司页 HUB 行展示，纯展示）
    *   prototype   —— 现实原型说明（给玩家看的「这家像谁」）
    *   trait       —— 特色技能，字段见 AT.normalizeTrait 的默认值（纯被动，无操作）
+   *   startPlane  —— 开局机型（2026-10-07 加）：按地区给「该航司现实中最有辨识度的
+   *                  机型」，让六家的开局既不同又能看出地域性格。选型依据：
+   *                    CA 北京   → 商飞 ARJ21     （国航确有 ARJ21 机队，中国制造）
+   *                    SQ 新加坡 → 空客 A321neo    （Scoot 是新航旗下 A321neo 运营商；
+   *                                       E175 全球销量第一但中文语境太冷门，2026-10-07 换）
+   *                    BA 伦敦   → ATR 72-600     （欧洲短程涡桨传统，伦敦-巴黎/法兰克福短途网）
+   *                    UA 芝加哥 → 波音 737-800   （联航是全球最大的 737 运营商）
+   *                    EK 迪拜   → 波音 737 MAX 8 （flydubai 是迪拜基地的 737 MAX 运营商）
+   *                    QF 悉尼   → 空客 A320neo   （Jetstar 是澳航旗下的 A320 运营商）
+   *                  ⚠ 平衡口径：机型价值有意不均（ATR 480万 vs A321neo 2960万）——
+   *                    大机开局运力强、可飞目的地多，这是地区优势的一部分，
+   *                    与「雄厚资本 +50%」这类强技能同级的刻意不对称；
+   *                    但都限制在 tier 1~2，不许开局直接拿到宽体。
    *
    * ⚠ color 的口径：它是**选航司页的识别色**（2026-09-30 起也是地图上该航司航线与客机的颜色，
    *   见 render.js 的色板注释），取自所属地区色（§2 的 REGIONS[].color），
@@ -358,47 +371,54 @@
     /* ── 东亚：超大机队的规模经济 ──
      * 2026-09-30 用户拍板：东亚席从东航（MU/上海 PVG）换成国航（CA/北京 PEK）。
      * id 随之从 al_mu 改为 al_ca（旧 id 已无任何引用）。 */
-    { id: 'al_ca', iata: 'CA', name: '中国国际航空', region: 'EASIA', baseCityId: 'C02', baseCode: 'PEK', color: '#E24B4A',
+    { id: 'al_ca', iata: 'CA', name: '中国国际航空', region: 'EASIA', baseCityId: 'C02', baseCode: 'PEK', color: '#E24B4A', startPlane: 'cRJ2',
       prototype: '东亚载旗全服务航司',
       trait: { id: 'scale', name: '规模经济',
         desc: '超大机队摊薄固定成本：全机队持有成本 −20%。',
         ownershipMul: 0.80 } },
 
     /* ── 东南亚：高端服务与品牌溢价 ── */
-    { id: 'al_sq', iata: 'SQ', name: '新加坡航空', region: 'SEASIA', baseCityId: 'C05', baseCode: 'SIN', color: '#EF9F27',
+    { id: 'al_sq', iata: 'SQ', name: '新加坡航空', region: 'SEASIA', baseCityId: 'C05', baseCode: 'SIN', color: '#EF9F27', startPlane: 'cNB5',
       prototype: '高端服务型枢纽航司',
       trait: { id: 'service', name: '服务品牌',
         desc: '顶级服务口碑：起始声誉 65（默认 50），声誉对需求与票价的影响翻倍。',
         repStart: 65, repEffectMul: 2.0 } },
 
     /* ── 西欧：成熟枢纽的时刻优势 ── */
-    { id: 'al_ba', iata: 'BA', name: '英国航空', region: 'EUR', baseCityId: 'C09', baseCode: 'LHR', color: '#1D9E75',
+    { id: 'al_ba', iata: 'BA', name: '英国航空', region: 'EUR', baseCityId: 'C09', baseCode: 'LHR', color: '#1D9E75', startPlane: 'cRJ0',
       prototype: '欧洲老牌跨洋枢纽航司',
       trait: { id: 'alliance', name: '联盟网络',
         desc: '老牌枢纽的时刻优先权：所有航线的时刻槽位 +15%。',
         slotMul: 1.15 } },
 
     /* ── 北美：雄厚资本与融资能力 ── */
-    { id: 'al_ua', iata: 'UA', name: '联合航空', region: 'NAMER', baseCityId: 'C15', baseCode: 'ORD', color: '#378ADD',
-      prototype: '北美规模网络航司',
+    { id: 'al_ua', iata: 'UA', name: '联合航空', region: 'NAMER', baseCityId: 'C15', baseCode: 'ORD', color: '#378ADD', startPlane: 'cNB1',
+      prototype: '北美超大型网络航司',
       trait: { id: 'capital', name: '雄厚资本',
         desc: '资本市场融资便利：起始资金 +50%，贷款额度 +50%。',
         startCashMul: 1.5, loanLimitMul: 1.5 } },
 
     /* ── 中东：东西方十字路口的中转枢纽 ── */
-    { id: 'al_ek', iata: 'EK', name: '阿联酋航空', region: 'MIDEAST', baseCityId: 'C17', baseCode: 'DXB', color: '#7F77DD',
+    { id: 'al_ek', iata: 'EK', name: '阿联酋航空', region: 'MIDEAST', baseCityId: 'C17', baseCode: 'DXB', color: '#7F77DD', startPlane: 'cNB4',
       prototype: '中东超级中转航司',
       trait: { id: 'transit', name: '中转枢纽',
         desc: '连接东西方的中转网络：航线两端分属不同地区、且一端在基地地区时，需求 +25%。',
         crossRegionDemand: 1.25 } },
 
     /* ── 南半球（大洋洲 / 非洲 / 南美）：本土市场的区域深耕 ── */
-    { id: 'al_qf', iata: 'QF', name: '澳洲航空', region: 'OTHER', baseCityId: 'C21', baseCode: 'SYD', color: '#E05284',
+    { id: 'al_qf', iata: 'QF', name: '澳洲航空', region: 'OTHER', baseCityId: 'C21', baseCode: 'SYD', color: '#E05284', startPlane: 'cNB2',
       prototype: '大洋洲区域霸主',
       trait: { id: 'regional', name: '区域深耕',
         desc: '南半球本土壁垒：本区城市的开发度增长 +40%。',
         devGrowthMul: 1.40 } }
   ];
+
+  /* 地区 → 开局机型（2026-10-07 加）。
+   * 六家航司一地区一家，故从 AIRLINES 派生这张表：
+   * 玩家所选航司按 airline.startPlane 开局；旧路径（无航司参数）下的
+   * 竞对按其母城所属地区查此表 —— 两处共用一个来源，永不漂移。 */
+  AT.START_PLANE_BY_REGION = {};
+  AT.AIRLINES.forEach(function (a) { AT.START_PLANE_BY_REGION[a.region] = a.startPlane; });
 
   /* 特色技能的默认值（中性）。
    * sim 的每一处技能读取都经 AT.normalizeTrait —— 这样「没有技能」与
@@ -488,31 +508,54 @@
    *   fuelPerKm —— 每公里油耗（升）—— 油价波动直接打在这里
    *   premium   —— 商务/头等舱座位占比（享 firstClassMul 溢价）
    *   upkeep    —— 每季度固定维护成本（万元）
-   *   tier      —— 等级（1 支线 / 2 窄体 / 3 宽体 / 4 超远程），用于城市开发度加成
+   *   tier      —— 等级（1 支线 / 2 窄体 / 3 宽体 / 4 超远程 / 5 旗舰巨无霸），用于城市开发度加成
    */
-  /* 机型表（2026-09-14 油耗复核后修正）
+  /* 机型表（2026-09-14 油耗复核后修正；2026-10-07 扩充到 13 款）
    *
    * ⚠ fuelPerKm 必读：这是「满载全经济布局下的巡航升/公里」，不是实际油耗。
    *   首版取值整体高估 1.23~1.46 倍，导致油费占收入虚高到 47%（短途线），
    *   而真实支线线约 34~38%。
    *   修正依据（机型一律取真实型号，与下表 name 字段一致）：
+   *     ATR 72-600     对标 ATR 72 涡桨  → 1.8 L/km
    *     巴航 E175      对标 E175/ARJ21  → 2.3 L/km（首版 3.1）
+   *     商飞 ARJ21     对标 ARJ21       → 2.7 L/km（同引擎机体更重）
    *     波音 737-800   对标 737-800     → 3.7 L/km（首版 5.4）
    *     空客 A320neo   对标 A320neo     → 3.5 L/km（首版 4.6）
+   *     商飞 C919      对标 C919        → 3.4 L/km（LEAP-1C，新机省油）
+   *     波音 737 MAX 8 对标 737 MAX 8   → 3.3 L/km（比 NG 省 ~14%）
+   *     空客 A321neo   对标 A321neo     → 3.6 L/km（机体更长更重）
    *     空客 A330-300  对标 A330-300    → 6.5 L/km（首版 8.2）
+   *     波音 787-9     对标 787-9       → 5.5 L/km（同代最省的宽体）
    *     波音 777-9     对标 777-9       → 8.0 L/km（首版 9.8）
-   *   换算方式：巡航燃油流量(kg/h) ÷ 航速(km/h) ÷ 航油密度(0.8 kg/L)。
+   *     波音 747-8     对标 747-8       → 11.0 L/km（四发老平台，油老虎）
+   *     空客 A380-800  对标 A380-800    → 12.4 L/km（最大但也有最贵的油单）
+   *   换算方式：巡航燃油流量(kg/h) ÷ 航速(km/h) ÷ 航油密度(0.8 kg/L)，
+   *   再按首版整体口径（A330 实测 ≈ 公式值 × 0.73）统一缩放。
    *   例：A320neo 巡航 2,500 kg/h ÷ 840 km/h ÷ 0.8 ≈ 3.7 L/km。
    *
    * ⚠ 油耗同时受「油价」影响，见 sim.js 的航油单价 7.6 元/升 ——
    *   这是 2024~2025 年国内航煤综合采购价的合理水平（含税）。
-   *   若日后调整油价，所有航线的利润率会同向漂移，需重跑 tools/calib-cost.js。 */
+   *   若日后调整油价，所有航线的利润率会同向漂移，需重跑 tools/calib-cost.js。
+   *
+   * ⚠ 扩充原则（2026-10-07）：同一 tier 里允许「平价 / 高端」两款并存，
+   *   让购机是**取舍**而不是线性升级 —— 例如 787-9 比 A330 贵但省油且航程远，
+   *   适合远程薄线；A330 便宜、座位相近，适合中程厚线。A380 是唯一 tier 5：
+   *   单机运力与开发度加成全场最高，但油价与维护也全场最高 ——
+   *   只在「时刻饱和的黄金干线」上才划算，是荣誉机型而非万能答案。 */
   AT.PLANES = [
-    { id: 'cRJ1',  name: '巴航 E175',    tier: 1, price: 320,  seats: 76,  range: 2400,  speed: 780,  fuelPerKm: 2.3, premium: 0.06, upkeep: 26 },
-    { id: 'cNB1',  name: '波音 737-800', tier: 2, price: 980,  seats: 174, range: 5600,  speed: 840,  fuelPerKm: 3.7, premium: 0.10, upkeep: 62 },
-    { id: 'cNB2',  name: '空客 A320neo', tier: 2, price: 1180, seats: 180, range: 6300,  speed: 858,  fuelPerKm: 3.5, premium: 0.12, upkeep: 68 },
-    { id: 'cWB1',  name: '空客 A330-300',tier: 3, price: 2350, seats: 288, range: 11700, speed: 880,  fuelPerKm: 6.5, premium: 0.18, upkeep: 128 },
-    { id: 'cWB2',  name: '波音 777-9',   tier: 4, price: 3900, seats: 384, range: 15800, speed: 905,  fuelPerKm: 8.0, premium: 0.22, upkeep: 186 }
+    { id: 'cRJ0',  name: 'ATR 72-600',    tier: 1, price: 240,  seats: 70,  range: 1500,  speed: 510,  fuelPerKm: 1.8,  premium: 0.05, upkeep: 21 },
+    { id: 'cRJ1',  name: '巴航 E175',     tier: 1, price: 320,  seats: 76,  range: 2400,  speed: 780,  fuelPerKm: 2.3,  premium: 0.06, upkeep: 26 },
+    { id: 'cRJ2',  name: '商飞 ARJ21',    tier: 1, price: 450,  seats: 90,  range: 3700,  speed: 800,  fuelPerKm: 2.7,  premium: 0.07, upkeep: 30 },
+    { id: 'cNB1',  name: '波音 737-800',  tier: 2, price: 980,  seats: 174, range: 5600,  speed: 840,  fuelPerKm: 3.7,  premium: 0.10, upkeep: 62 },
+    { id: 'cNB2',  name: '空客 A320neo',  tier: 2, price: 1180, seats: 180, range: 6300,  speed: 858,  fuelPerKm: 3.5,  premium: 0.12, upkeep: 68 },
+    { id: 'cNB3',  name: '商飞 C919',     tier: 2, price: 1120, seats: 168, range: 5500,  speed: 840,  fuelPerKm: 3.4,  premium: 0.11, upkeep: 64 },
+    { id: 'cNB4',  name: '波音 737 MAX 8',tier: 2, price: 1250, seats: 178, range: 6500,  speed: 840,  fuelPerKm: 3.3,  premium: 0.11, upkeep: 67 },
+    { id: 'cNB5',  name: '空客 A321neo',  tier: 2, price: 1480, seats: 210, range: 7400,  speed: 860,  fuelPerKm: 3.6,  premium: 0.13, upkeep: 76 },
+    { id: 'cWB1',  name: '空客 A330-300', tier: 3, price: 2350, seats: 288, range: 11700, speed: 880,  fuelPerKm: 6.5,  premium: 0.18, upkeep: 128 },
+    { id: 'cWB0',  name: '波音 787-9',    tier: 3, price: 2750, seats: 296, range: 14100, speed: 900,  fuelPerKm: 5.5,  premium: 0.20, upkeep: 146 },
+    { id: 'cWB2',  name: '波音 777-9',    tier: 4, price: 3900, seats: 384, range: 15800, speed: 905,  fuelPerKm: 8.0,  premium: 0.22, upkeep: 186 },
+    { id: 'cWB3',  name: '波音 747-8',    tier: 4, price: 4100, seats: 410, range: 14300, speed: 900,  fuelPerKm: 11.0, premium: 0.22, upkeep: 205 },
+    { id: 'cWB4',  name: '空客 A380-800', tier: 5, price: 4800, seats: 545, range: 15200, speed: 900,  fuelPerKm: 12.4, premium: 0.24, upkeep: 260 }
   ];
 
   /* ───────────────────────── 5. 事件卡（15 张，精简首版）─────────────────────────

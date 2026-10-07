@@ -157,6 +157,7 @@
           airlineId: a.id,
           homeCityId: a.baseCityId,
           color: a.color,
+          startPlane: a.startPlane,   // 地区开局机型（玩家竞对各不相同，见 data.js AIRLINES）
           cash: (CONFIG.rivalStartCash && CONFIG.rivalStartCash[rivals.length]) || 1000,
           aggression: (CONFIG.rivalAggression && CONFIG.rivalAggression[rivals.length]) || 0.55,
           fleet: [],
@@ -181,6 +182,7 @@
           id: 'R' + (rivals.length + 1),
           name: RIVAL_NAMES[rivals.length % RIVAL_NAMES.length],
           homeCityId: hc.id,
+          startPlane: AT.START_PLANE_BY_REGION[hc.region],  // 按母城地区取开局机型
           cash: (CONFIG.rivalStartCash && CONFIG.rivalStartCash[rivals.length]) || 1000,
           aggression: (CONFIG.rivalAggression && CONFIG.rivalAggression[rivals.length]) || 0.55,
           fleet: [],
@@ -191,18 +193,23 @@
         });
       }
     }
-    // 竞对开局机队（按资金能负担的机型给）
+    // 竞对开局机队：机型按「地区开局机型」（见 data.js START_PLANE_BY_REGION），
+    // 架数按资金能负担的量给 —— 六家竞对的机队因此各有地域性格。
     rivals.forEach(function (r) {
-      r.fleet.push({ type: CONFIG.startPlaneType, count: 2 + Math.floor(r.cash / 1200) });
+      r.fleet.push({ type: r.startPlane || CONFIG.startPlaneType,
+                     count: 2 + Math.floor(r.cash / 1200) });
     });
     state.rivals = rivals;
 
     /* ── 玩家开局：单基地 + 少量飞机 ──
-     * 用户定稿「单基地虚拟公司」：总部一座城，2 架支线机，800 万资金。
+     * 用户定稿「单基地虚拟公司」：总部一座城，2 架飞机，800 万资金。
+     * 机型跟随所选航司的地区初始机型（如国航 = 商飞 ARJ21）；无航司参数
+     * （测试/旧路径）回落到全局 startPlaneType，行为与首版一致。
      * 飞机构造出来先闲置，由玩家在 UI 里指派到航线 —— 开局即做第一个决策。 */
     var nStart = CONFIG.startPlanes || 2;
+    var startType = (airline && airline.startPlane) || CONFIG.startPlaneType;
     for (var pi = 0; pi < nStart; pi++) {
-      state.planes.push(makePlane(state, CONFIG.startPlaneType));
+      state.planes.push(makePlane(state, startType));
     }
 
     // 玩家初始资金（开局自带 2 架飞机的价值不计入现金）
@@ -220,7 +227,8 @@
     state.nextEventAt = 4 + Math.floor(state.rng() * 3);
 
     log(state, '公司「' + state.companyName + '」成立于 ' + cityName(state, homeId) +
-              '，机队 ' + nStart + ' 架，启动资金 ' + state.cash + ' 万元' +
+              '，机队 ' + nStart + ' 架 ' + AT.planeOf(startType).name +
+              '，启动资金 ' + state.cash + ' 万元' +
               (airline ? '，特色技能「' + trait.name + '」' : ''));
 
     return state;

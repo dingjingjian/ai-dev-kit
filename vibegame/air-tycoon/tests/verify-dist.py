@@ -138,10 +138,9 @@ async def check_runtime(tmp):
         # （宫格点选 → 预览 → 确认提交）。
         await page.click("#uSelectList .al-card")
         await page.click("#uSelGo")
-        # ⚠ briefing 阶段 8 秒（CONFIG.briefingSeconds），之后 game.js 的
-        #   phaseBefore==='briefing' 钩子才会 seedFirstRoute 给一条示范航线。
-        #   等 4.5 秒就断言「有航线」必然失败 —— 那是我的时机错，不是产品 bug。
-        #   这里直接等过简报，让示范航线真的出现。
+        # ⚠ briefing 阶段 8 秒（CONFIG.briefingSeconds），briefing 期间 phase
+        #   还是 'briefing'，等 4.5 秒就断言「进入运营」必然失败 —— 时机错，不是产品 bug。
+        #   这里直接等过简报。
         await page.wait_for_timeout(11000)
 
         ok(not errs, "无 console 报错", errs[:3])
@@ -201,11 +200,12 @@ async def check_runtime(tmp):
         ok(st["airline"], "所选航司已生效（state.airlineName 非空）", st["airline"])
         ok(st["homeCity"] == "C02", "航司基地即玩家基地（国航 → 北京 C02）", st["homeCity"])
         ok(st["cityCount"] == 24, "24 座城市数据就位", st["cityCount"])
-        # 开局示范航线由 game.js 的 briefing→operating 钩子给出（见 seedFirstRoute）。
-        # 它的意义是「让玩家一进场就看到航线弧与客机」，不是预设玩法，故断言它存在。
-        ok(st["routes"] and st["routes"] > 0, "开局自动给了一条示范航线（玩家能看到弧线/客机）",
-           st["routes"])
+        # 开局不送示范航线（seedFirstRoute 已移除）：第一条线开在哪由玩家自己决策，
+        # 航线面板的空态文案（ui.js「还没有航线…」）负责引导第一步。
+        ok(st["routes"] == 0, "开局 0 条航线（首个决策留给玩家）", st["routes"])
         ok(st["planes"] and st["planes"] > 0, "开局已有飞机", st["planes"])
+        ok(st["idle"] == st["planes"], "开局飞机全部闲置（未被自动指派）",
+           {"planes": st["planes"], "idle": st["idle"]})
         ok(st["cash"] and st["cash"] > 0, "开局有启动资金", st["cash"])
         ok(st["dockVisible"], "底部操作条可见（容器里能点到按钮）")
 
@@ -230,16 +230,17 @@ async def check_runtime(tmp):
                     bodyLen: b.textContent.trim().length};
         }""")
         ok(panel["open"], "「我的航线」面板可打开（按钮能点）")
-        ok(panel["cards"] >= 1, "面板列出示范航线（内容真的渲染了）", panel)
+        ok(panel["cards"] == 0 and panel["bodyLen"] > 0,
+           "开局无航线 → 面板显示空态引导文案（不崩、不列假卡片）", panel)
 
         await page.click("#uPanelClose")
         await page.wait_for_timeout(400)
 
         # ⑤ 真的开一条新航线 —— 提交包能不能玩，最终看这个
         #
-        # ⚠ 开局 2 架支线机里，1 架已被示范航线占用。剩余闲置 1 架恰好是 cRJ1，
-        #   而面板的机型列表**只给库存里有的机型挂 data-act**（见 ui.js renderNewRoute
-        #   的库存标注逻辑）。所以这里必须走真实玩家的路径：
+        # ⚠ 开局 2 架支线机全部闲置（不送示范航线）。面板的机型列表**只给库存里
+        #   有的机型挂 data-act**（见 ui.js renderNewRoute 的库存标注逻辑）。
+        #   所以这里必须走真实玩家的路径：
         #   先看机型区是否已可选；若不可选（库存机型航程不够），去机队买一架再回来。
         await page.click("#uBtnNew")
         await page.wait_for_timeout(700)
@@ -270,8 +271,13 @@ async def check_runtime(tmp):
         }""")
         ok(pickinfo["clickable"] > 0, "有当下可行的目的地", pickinfo)
         ok(pickinfo["disabled"] > 0, "不可行目的地被置灰不可点（不会领玩家进死胡同）", pickinfo)
-        ok("首尔" in (pickinfo["firstClickable"] or "") or "北京" in (pickinfo["firstClickable"] or ""),
-           "**近期可达线排在洲际线之前**（排序修复生效）", pickinfo)
+        # 排序不变量：第一位必须是「现在就能飞」的目的地（不带 需现购/买不起 标）。
+        # （旧断言写死「首尔」，那是示范航线时代的副产物 —— 种子线占掉了需求最高
+        #   的东京，新线面板排除已开航线后才轮到首尔；移除种子线后东京理应第一。）
+        ok(pickinfo["firstClickable"] and
+           "需现购" not in pickinfo["firstClickable"] and
+           "买不起" not in pickinfo["firstClickable"],
+           "**现在就能飞的线排在洲际线之前**（排序修复生效）", pickinfo)
 
         # 选第一个可点的（= 现阶段最该开的线）
         await page.click('[data-act="pick-to"]')
@@ -295,7 +301,7 @@ async def check_runtime(tmp):
             return {routes: g.routes.length, planes: g.planes.length,
                     toast: t ? t.textContent.trim() : ''};
         }""")
-        ok(after["routes"] >= 2, "**成功开辟新航线（提交包可玩）**", after)
+        ok(after["routes"] == 1, "**成功开辟第一条航线（提交包可玩）**", after)
 
         # 季度真的在推进（等一小段，看 quarter 或 t 有没有变化）
         q_before = await page.evaluate("() => window.AT.game.state.quarter")

@@ -115,7 +115,6 @@
     }
 
     var st = game.state;
-    var phaseBefore = st.phase;
 
     /* ① 逻辑：按固定步长推进（accumulator 模式）。
      * 倍速通过「一帧内跑几次 tick」实现，而不是把 dt 乘大 ——
@@ -129,17 +128,6 @@
     }
     // 兜底：加速倍率极高或卡顿时，直接对齐到最近步长，避免 accumulator 无限膨胀
     if (guard >= 600) game.acc = 0;
-
-    /* 阶段切换钩子：briefing → operating 时给一条示范航线。
-     *
-     * ⚠ 必须在**这里**做，不能在启动脚本里直接调 openRoute ——
-     *   开局时 phase 还是 briefing，而 openRoute 第一句就检查
-     *   `if (state.phase !== 'operating') return {ok:false, reason:'尚未开始运营'}`，
-     *   直接调用必定失败（实机确认：routes 恒为 0）。
-     *   阶段切换只有 sim 内部 tick 知道，所以钩子必须挂在主循环里。 */
-    if (phaseBefore === 'briefing' && st.phase === 'operating') {
-      seedFirstRoute(st);
-    }
 
     /* ② 表现：渲染层拿真实 dt（它只做插值与动画，不需要确定性） */
     if (game.renderOk && R.frame) {
@@ -184,31 +172,8 @@
     return 'startup';
   }
 
-  /* 开局示范航线：从基地飞往一个可达的大城。
-   *
-   * 为什么需要：开局 2 架闲置飞机 + 0 条航线，画面上只有 24 个光点、一条线都没有 ——
-   * 「这是个航线经营游戏」这件事无法自证。给一条起始线，玩家立刻看到：
-   * 弧线怎么画、客机怎么飞、城市怎么被点亮。之后所有扩张由玩家自己做。
-   *
-   * 选址策略：在航程内挑**需求潜力最大**的城市对，优先基地出发 ——
-   * 用 sim 自己的 routePotential 排序，不另写一套判断（避免与真身漂移）。 */
-  function seedFirstRoute(st) {
-    if (st.routes.length) return;
-    var home = st.homeCityId;
-    var T = AT.planeOf(AT.CONFIG.startPlaneType);
-    var best = null, bestPot = -1;
-    st.cities.forEach(function (c) {
-      if (c.id === home) return;
-      var d = S.routeDistance(st, home, c.id);
-      if (d <= 0 || d > T.range) return;                  // 航程外飞不到
-      if (!S.idlePlanes(st).filter(function (p) { return p.type === T.id; }).length) return;
-      var pot = S.routePotential(st, home, c.id);
-      if (pot > bestPot) { bestPot = pot; best = c.id; }
-    });
-    if (!best) return;
-    var o = S.openRoute(st, home, best, T.id, 1);
-    if (!o.ok) console.warn('[AT] 示范航线开通失败：' + o.reason);
-  }
+  /* 开局示范航线：已移除 —— 开局 0 条航线、2 架闲置飞机，
+   * 第一个「开哪条线」的决策完全交给玩家（用户定稿）。 */
 
   function stop() {
     game.running = false;

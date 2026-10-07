@@ -224,6 +224,8 @@
         '<span class="bp-region">' + h(reg.name || '') + '</span></div>' +
         '<div class="bp-line"><i>HUB</i><b>' + h(base.name || '—') + '</b>' +
         '<u>' + h(a.baseCode || base.id || '') + '</u></div>' +
+        '<div class="bp-line"><i>FLEET</i><b>' + h((AT.planeOf(a.startPlane) || {}).name || '—') +
+        ' × ' + (AT.CONFIG.startPlanes || 2) + '</b></div>' +
         '<div class="bp-tear" aria-hidden="true"></div>' +
         '<div class="bp-line"><i>SKILL</i><b class="bp-skillname">' + iconOf(tr) + h(tr.name) + '</b></div>' +
         '<span class="bp-desc">' + h(tr.desc) + '</span>' +
@@ -330,6 +332,9 @@
       var c = AT.CITIES_BY_ID[ui.selCity];
       if (!c) return;
       ui.newFrom = c.id;
+      /* 城市卡片功成身退：它的任务（定出发地）已完成，后续选择都在面板里做，
+       * 卡片若留在原地会压在面板上方挡视线。 */
+      if (el.uCityCard) el.uCityCard.classList.remove('show');
       closePanel();
       openPanel('newroute');
       toast('从 ' + c.name + ' 出发，选择一个目的地' +
@@ -411,8 +416,13 @@
   function openPanel(name) {
     ui.panel = name;
     /* 打开「新航线」时清掉可能残留的滚动标记：它是「这次点击」的一次性意图，
-     * 不该跨次生效（比如上次点完目的地就关面板，再打开时会莫名跳一下）。 */
-    if (name === 'newroute') ui.scrollType = false;
+     * 不该跨次生效（比如上次点完目的地就关面板，再打开时会莫名跳一下）。
+     * 同时把面板滚回顶部：上次可能停在③机型区，重新进来应从 ① 出发地
+     * 开始看 —— 带着旧滚动位置开新决策，读起来像「面板坏了」。 */
+    if (name === 'newroute') {
+      ui.scrollType = false;
+      if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
+    }
     if (el.uPanel) el.uPanel.classList.add('show');
     syncTabs();
     pauseForPanel(true);
@@ -602,6 +612,9 @@
     var res = S.openRoute(st, from, ui.newTo, ui.newType, 1);
     if (res.ok) {
       ui.newTo = null;
+      /* 开线成功后面板回到顶部：表单已重置（目的地清空），顶部是
+       * ① 出发地区 —— 下一条线的决策从这里重新开始，而不是停在刚开完的③机型区。 */
+      if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
       dirty.panel = true; dirty.hud = true;
     }
     return res;

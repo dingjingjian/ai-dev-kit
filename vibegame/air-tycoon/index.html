@@ -697,18 +697,18 @@
        verify-heading / check-fallback），改 id 前先同步这四个脚本。 -->
   <div id="uSelect" class="sel">
     <div class="sel-hd">
-      <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 开局</span></div>
+      <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 值机</span></div>
       <span class="sel-title">选择你的航空公司</span>
-      <span class="sel-sub">六家航司各据一洲，基地与特色技能各不相同 —— 选择即开局。</span>
+      <span class="sel-sub">六家航司各守一域 —— 基地定起点，技能定打法，初始机队随地区出厂。</span>
     </div>
     <div class="sel-main">
       <div id="uSelPreview"></div>
-      <div class="sel-lab"><b>离港航司</b><span>DEPARTURES · 没选的五家即本局对手</span></div>
+      <div class="sel-lab"><b>离港航司</b><span>DEPARTURES · 未选的五家，就是本局的对手</span></div>
       <div id="uSelectList" class="sel-list"></div>
     </div>
     <div class="sel-cta">
       <button id="uSelGo" class="sel-go" type="button">确认开航</button>
-      <div class="sel-ft">选定即开航 · 本局不可更换航司</div>
+      <div class="sel-ft">一经值机，不可改签 · 本局全程执掌所选航司</div>
     </div>
   </div>
 
@@ -755,8 +755,8 @@
  *
  * ⚠ 这里**不开航线、不推进阶段**：开局 phase 是 briefing，
  *   而 openRoute 会检查 `phase !== 'operating'` 直接拒绝（实测 routes 恒为 0）。
- *   推进阶段由主循环的 tick 负责（briefing 满 8 秒自动转 operating），
- *   切换瞬间由 game.js 的 seedFirstRoute 给一条示范航线 —— 见 game.js。 */
+ *   推进阶段由主循环的 tick 负责（briefing 满 8 秒自动转 operating）。
+ *   开局 0 条航线：第一条线开在哪，由玩家自己决策（见 sim.js 建局注释）。 */
 (function () {
   function showFallback() {
     var fb = document.getElementById('fallback');
