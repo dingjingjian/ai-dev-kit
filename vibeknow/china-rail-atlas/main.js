@@ -820,15 +820,17 @@ function copyPrompt(btn){
  * 其中 mediaInfo 必填、且图片 / 视频 / 实况至少传一种（见 .skill/minitool-zip-builder/
  * references/jsbridge-api.md）；本页只发图文。
  *
- * 取图走 Canvas 而非 XHR：本仓 skill 的 device-capabilities.md §4/§7 把网络请求 API
- * 列为本容器**不可用行为**并进了扫描清单（连标识符都不许出现，打包守卫会 grep），
- * 所以从详情页**已经加载好的那张原图**画一次拿 data:uri。代价是重编码一次（单张约
- * 12 KB 的 webp 重编码后仍在几十 KB 量级），换来的是一行被禁 API 都不用。容器里页面
- * 与图同源，画布不会被污染；桌面 file:// 下会被污染而抛错，此时按失败提示，不硬撑。
+ * 分享图走 Canvas 合成而非 XHR：本仓 skill 的 device-capabilities.md §4/§7 把网络
+ * 请求 API 列为本容器**不可用行为**并进了扫描清单（连标识符都不许出现，打包守卫会
+ * grep），所以分享卡用 Canvas 现场画：顶部通栏铺详情页**已经加载好的那张原图**
+ * （cover 裁切 + 下缘渐隐），下方深绿底文字区放「分类行 / 名称 / 一句话亮点 /
+ * 正文 / 关键参数 / 标签」，页脚品牌——整块文字都落在纯底色上，不与配图交叠
+ * （版式对齐 nobel-atlas）。容器里页面与图同源，画布不会被污染；桌面 file:// 下
+ * CAN_SHARE 本就是 false，走不到这里。
  *
  * 交付约定：
- *   ① 图文就是该条目的原图（不合成卡片）；
- *   ② 正文就是该条目的介绍 + 分类 · 类型 + 年代 + 关键参数；
+ *   ① 分享图是 Canvas 合成的竖版卡（1080×1440，3:4），非原始配图；
+ *   ② 正文：【名称】分类 · 类型 + 介绍 + 年代 + 关键参数 + 落款 + 话题；
  *   ③ 能力检测而非 UA 判断：拿不到 postNote 就整块隐藏（桌面直接开 index.html 不出现）；
  *   ④ 标题 ≤ 20、正文 ≤ 1000（API 上限，这里主动裁剪）；
  *   ⑤ postNote 成功只代表发布页被唤起、用户点了发布，**不代表过审** —— 所以只当
@@ -840,47 +842,161 @@ if (CAN_SHARE) { document.documentElement.classList.add("has-share"); }
 
 var shareBtn = null, shareImg = null, shareBusy = false;
 
-/* 正文：介绍 + 分类 · 类型 + 年代 + 关键参数 */
+/* 正文（格式对齐 nobel-atlas）：【名称】分类 · 类型 + 介绍 + 年代 + 关键参数 + 落款 + 话题 */
 function shareNote(v){
   var c = catOf(v.cat), specs = [], i;
   for(i = 0; i < v.specs.length; i++){ specs.push(v.specs[i][0] + "：" + v.specs[i][1]); }
-  return v.intro + "\n\n" +
-    c.zh + " · " + v.kind +
-    "\n年代：" + v.era +
-    (specs.length ? "\n" + specs.join("｜") : "") +
-    "\n\n—— 中国铁路图鉴（小红书小工具）";
+  var t = "【" + v.name + "】" + c.zh + " · " + v.kind + "\n" + v.intro + "\n\n";
+  t += "年代：" + v.era + "\n";
+  if(specs.length){ t += "关键参数：" + specs.join("｜") + "\n"; }
+  t += "\n—— 中国铁路图鉴 · CHINA RAIL ATLAS\n#中国铁路 #火车";
+  return t;
 }
-/* 标题超长（超过 API 上限 20）就退成纯条目名，别把名字从中间截断 */
+/* 标题：条目名在前，超过 API 上限 20 直接裁尾 */
 function shareTitle(v){
-  var t = "中国铁路图鉴 · " + v.name;
-  return (t.length > 20 ? v.name : t).slice(0, 20);
+  var c = catOf(v.cat);
+  return (v.name + " · " + c.zh).slice(0, 20);
 }
 function sharePaint(ok){
   if(!shareBtn){ return; }
   shareBtn.className = "share" + (ok ? "" : " off");
   shareBtn.disabled = !ok;
 }
-/* 原图 → data:uri：从页面上已加载的那张原图经 Canvas 取，不经过网络
-   （XHR / fetch 都在禁用清单里）。先试 WebP，编码不被支持再退 JPEG。 */
-function imgDataURI(img){
-  return new Promise(function(resolve, reject){
-    try {
-      var cv = document.createElement("canvas");
-      cv.width = img.naturalWidth;
-      cv.height = img.naturalHeight;
-      cv.getContext("2d").drawImage(img, 0, 0);
-      var url = cv.toDataURL("image/webp", 0.92);
-      if(url.indexOf("data:image/webp") !== 0){ url = cv.toDataURL("image/jpeg", 0.92); }
-      resolve(url);
-    } catch(err){ reject({stage:"img"}); }
-  });
+/* 分享卡：1080×1440 竖版（3:4）。版式对齐 nobel-atlas：
+   顶部通栏原图（cover 裁切 + 下缘渐隐）→ 深绿底文字区
+   「分类行 / 名称 / 一句话亮点 / 正文 / 关键参数 / 标签胶囊」→ 页脚品牌。
+   整块文字都落在纯底色上，不与照片交叠，任何一张图上都清晰可读。
+   入参 img 必须已加载完成（shareItem 里有 naturalWidth 守卫）；
+   画布被污染时 toDataURL 抛错，按 {stage:"img"} 上抛交由调用方提示。 */
+function drawShareCard(img, v){
+  var sw = 1080, sh = 1440, P = 80, HERO = 820, W = sw - P * 2;
+  var SERIF = 'Georgia,"Songti SC","Noto Serif SC","STSong","SimSun",serif';
+  var SANS = '-apple-system,"PingFang SC","Microsoft YaHei",sans-serif';
+  var BG = "#0a110c";                       /* 文字区底色，与顶部图下缘的渐隐色一致 */
+  var GOLD = "#e3c25c";                     /* 强调色：铁道黄在深底上的柔化版 */
+  var c = document.createElement("canvas");
+  c.width = sw; c.height = sh;
+  var x = c.getContext("2d");
+  var cc = catOf(v.cat);
+  var NO_START = "，。、；：？！）』」》〉”’…—·%｜";
+  function wrap(str, font, maxW){
+    x.font = font;
+    var chars = str.split(""), line = "", out = [], i;
+    for(i = 0; i < chars.length; i++){
+      var ch = chars[i], t = line + ch;
+      if(x.measureText(t).width > maxW && line){
+        /* 中文禁则：标点不另起一行，挂在上行行尾之后再换行 */
+        if(NO_START.indexOf(ch) >= 0){ out.push(t); line = ""; }
+        else{ out.push(line); line = ch; }
+      }else{ line = t; }
+    }
+    if(line){ out.push(line); }
+    return out;
+  }
+  function drawBg(){
+    var bg = x.createLinearGradient(0, 0, 0, sh);
+    bg.addColorStop(0, "#142219"); bg.addColorStop(.62, BG); bg.addColorStop(1, "#060a07");
+    x.fillStyle = bg; x.fillRect(0, 0, sw, sh);
+    var vg = x.createRadialGradient(sw / 2, sh * 0.72, 0, sw / 2, sh * 0.72, sw * 0.78);
+    vg.addColorStop(0, "rgba(227,194,92,.05)"); vg.addColorStop(1, "rgba(227,194,92,0)");
+    x.fillStyle = vg; x.fillRect(0, HERO, sw, sh - HERO);
+    x.fillStyle = "rgba(232,240,235,.5)";
+    for(var i = 0; i < 46; i++){
+      x.globalAlpha = Math.random() * 0.22 + 0.05;
+      x.beginPath();
+      x.arc(Math.random() * sw, HERO + 40 + Math.random() * (sh - HERO - 140),
+            Math.random() * 1.5 + 0.4, 0, Math.PI * 2);
+      x.fill();
+    }
+    x.globalAlpha = 1;
+  }
+  function heroFade(){
+    var fg = x.createLinearGradient(0, HERO - 170, 0, HERO);
+    fg.addColorStop(0, "rgba(10,17,12,0)"); fg.addColorStop(1, "rgba(10,17,12,1)");
+    x.fillStyle = fg; x.fillRect(0, HERO - 170, sw, 170);
+  }
+  function drawText(){
+    var TOP = HERO + 40;
+    x.textAlign = "left";
+    x.shadowColor = "rgba(0,0,0,.55)"; x.shadowBlur = 8; x.shadowOffsetY = 2;
+    /* 分类行：左「分类 · 类型」，右「年代」 */
+    x.fillStyle = GOLD; x.font = "600 27px " + SANS;
+    x.fillText(cc.zh + " · " + v.kind, P, TOP);
+    x.textAlign = "right";
+    x.fillStyle = "#8fa093"; x.font = "400 23px " + SANS;
+    x.fillText(v.era, sw - P, TOP);
+    /* 名称 */
+    x.textAlign = "left";
+    x.fillStyle = "#f2f7f2"; x.font = "600 72px " + SERIF;
+    x.fillText(v.name, P, TOP + 74);
+    /* 一句话亮点 */
+    x.fillStyle = "#cdbb8a"; x.font = "500 27px " + SANS;
+    x.fillText(v.tag, P, TOP + 126);
+    /* 正文：最多三行，超出截断加省略号 */
+    x.fillStyle = "#dfe7e0"; x.font = "32px " + SERIF;
+    var lines = wrap(v.intro, "32px " + SERIF, W);
+    if(lines.length > 3){ lines = lines.slice(0, 3); lines[2] = lines[2].slice(0, -1) + "…"; }
+    var y = TOP + 184, lh = 44, i;
+    for(i = 0; i < lines.length; i++){ x.fillText(lines[i], P, y); y += lh; }
+    var lastBaseline = y - lh;
+    /* 关键参数行：标签金 + 内容（最多两行） */
+    var specs = [], si;
+    for(si = 0; si < v.specs.length; si++){ specs.push(v.specs[si][0] + "：" + v.specs[si][1]); }
+    if(specs.length){
+      var nx = lastBaseline + 52;
+      x.font = "500 26px " + SANS;
+      x.fillStyle = GOLD; x.fillText("关键参数", P, nx);
+      var lw = x.measureText("关键参数").width;
+      var ex = wrap(specs.join("｜"), "27px " + SANS, W - lw - 16);
+      if(ex.length > 2){ ex = ex.slice(0, 2); ex[1] = ex[1].slice(0, -1) + "…"; }
+      x.font = "27px " + SANS; x.fillStyle = "#a9bbad";
+      if(ex[0]){ x.fillText(ex[0], P + lw + 16, nx); }
+      if(ex[1]){ x.fillText(ex[1], P, nx + 38); }
+      lastBaseline = nx + (ex[1] ? 38 : 0);
+    }
+    /* 标签：一行胶囊 */
+    x.shadowBlur = 0; x.shadowOffsetY = 0;
+    x.font = "500 24px " + SANS;
+    var tags = ["#中国铁路", "#" + cc.zh];
+    var tx = P, ty = lastBaseline + 32, ti;
+    for(ti = 0; ti < tags.length; ti++){
+      var tag = tags[ti], tw = x.measureText(tag).width + 32;
+      if(tx + tw > sw - P && tx > P){ tx = P; ty += 44 + 12; }
+      x.fillStyle = "rgba(227,194,92,.13)"; x.fillRect(tx, ty, tw, 44);
+      x.strokeStyle = "rgba(227,194,92,.45)"; x.lineWidth = 1.5;
+      x.strokeRect(tx + 0.75, ty + 0.75, tw - 1.5, 42.5);
+      x.fillStyle = GOLD; x.fillText(tag, tx + 16, ty + 30);
+      tx += tw + 14;
+    }
+    /* 页脚：分隔线 + 左中文品牌 / 右英文品牌 */
+    x.strokeStyle = "rgba(227,194,92,.22)"; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(P, 1352); x.lineTo(sw - P, 1352); x.stroke();
+    x.fillStyle = GOLD; x.font = "600 27px " + SERIF;
+    x.fillText("中国铁路图鉴", P, 1398);
+    x.textAlign = "right";
+    x.fillStyle = "#8fa093"; x.font = "500 20px " + SANS;
+    x.fillText("CHINA RAIL ATLAS", sw - P, 1397);
+    x.textAlign = "left";
+  }
+  drawBg();
+  /* 顶部通栏原图：cover 裁切铺满 HERO 区，再向下渐隐进文字区底色 */
+  var s = Math.max(sw / img.naturalWidth, HERO / img.naturalHeight);
+  var dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+  x.save(); x.beginPath(); x.rect(0, 0, sw, HERO); x.clip();
+  x.drawImage(img, (sw - dw) / 2, (HERO - dh) / 2, dw, dh);
+  x.restore();
+  heroFade(); drawText();
+  try { return c.toDataURL("image/jpeg", 0.92); }
+  catch(err){ throw {stage: "img"}; }
 }
 function shareItem(v){
   if(!CAN_SHARE || shareBusy){ return; }
   if(!shareImg || !shareImg.naturalWidth){ showToast("配图还没出，稍后再试"); return; }
   shareBusy = true;
   if(shareBtn){ shareBtn.disabled = true; }
-  imgDataURI(shareImg).then(function(dataURL){
+  Promise.resolve().then(function(){
+    return drawShareCard(shareImg, v);     /* 同步合成；画布被污染时按 {stage:"img"} 抛错 */
+  }).then(function(dataURL){
     var payload = {
       title: shareTitle(v),                                  /* API 上限 20 */
       content: shareNote(v).slice(0, 1000),                  /* API 上限 1000 */

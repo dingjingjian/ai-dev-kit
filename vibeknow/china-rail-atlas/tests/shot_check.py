@@ -247,16 +247,18 @@ with sync_playwright() as p:
           % (rec[0]["head"] if rec else "?", rec[0]["len"] if rec else 0),
           "桥调用异常：%s" % rec)
     note = rec[1] if len(rec) > 1 else {}
-    check(note.get("title") == "中国铁路图鉴 · 龙号机车" and len(note.get("title") or "") <= 20,
-          "标题为条目名且 ≤20（%s）" % note.get("title"), "标题异常：%r" % note.get("title"))
+    check(note.get("title") == "龙号机车 · 火车头" and len(note.get("title") or "") <= 20,
+          "标题为条目名在前且 ≤20（%s）" % note.get("title"), "标题异常：%r" % note.get("title"))
     check(note.get("pageType") == "photo_publish" and note.get("url") == "/tmp/cra-share.webp",
           "pageType=photo_publish，媒体用 writeTempFile 返回的 filePath",
           "图文参数异常：%s" % note)
     body = note.get("content") or ""
-    check(body.startswith(intro_text) and "年代：1881 年 — 1930 年代" in body
-          and "火车头 · 第一台中国造蒸汽机车" in body
-          and "—— 中国铁路图鉴" in body and len(body) <= 1000,
-          "正文是该条目介绍 + 分类 · 类型 + 年代 + 关键参数（%d 字）" % len(body),
+    check(body.startswith("【龙号机车】火车头 · 第一台中国造蒸汽机车\n" + intro_text)
+          and "年代：1881 年 — 1930 年代" in body
+          and "关键参数" in body
+          and "—— 中国铁路图鉴 · CHINA RAIL ATLAS" in body
+          and "#中国铁路" in body and len(body) <= 1000,
+          "正文为【名称】分类 · 类型 + 介绍 + 年代 + 关键参数 + 落款 + 话题（%d 字）" % len(body),
           "正文异常：%s" % body[:80])
     after = sp.evaluate("""() => ({dis: document.getElementById('shareBtn').disabled})""")
     check(not after["dis"], "唤起后按钮恢复可点（busy 复位）", "按钮未复位：%s" % after)
