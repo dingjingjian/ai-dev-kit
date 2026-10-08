@@ -77,7 +77,7 @@ console.log('═'.repeat(74));
 /* ── 数据层 ── */
 section('数据层');
 ok(AT.CITIES.length === 24, '城市数 = 24', '实际 ' + AT.CITIES.length);
-ok(AT.PLANES.length === 5, '机型数 = 5', '实际 ' + AT.PLANES.length);
+ok(AT.PLANES.length === 13, '机型数 = 13', '实际 ' + AT.PLANES.length);
 ok(AT.REGIONS.length === 6, '地区数 = 6', '实际 ' + AT.REGIONS.length);
 ok(AT.EVENTS.length >= 12, '事件卡 ≥ 12', '实际 ' + AT.EVENTS.length);
 
@@ -103,14 +103,23 @@ var badPlane = AT.PLANES.filter(function (p) {
     p.premium == null || p.tier == null;
 });
 ok(badPlane.length === 0, '机型字段完整', badPlane.map(function (p) { return p.id; }).join(','));
-/* 机型梯队应单调：tier 越大，座位与价格越大 */
-var byTier = AT.PLANES.slice().sort(function (a, b) { return a.tier - b.tier; });
-var tierMono = true;
-for (var i = 1; i < byTier.length; i++) {
-  if (byTier[i].seats < byTier[i - 1].seats) tierMono = false;
-  if (byTier[i].price < byTier[i - 1].price) tierMono = false;
+/* 机型梯队应随 tier 递进：**同一 tier 内**允许「平价 / 高端」两款并存
+ * （数据扩充原则，见 data.js §4），故不再要求逐条单调，改为校验
+ * 「tier 区间不重叠」——低一档的最大座位与价格，都不超过高一档的最小值。 */
+var tierAgg = {};
+AT.PLANES.forEach(function (p) {
+  var a = tierAgg[p.tier] || (tierAgg[p.tier] = { maxS: -Infinity, maxP: -Infinity, minS: Infinity, minP: Infinity });
+  a.maxS = Math.max(a.maxS, p.seats); a.minS = Math.min(a.minS, p.seats);
+  a.maxP = Math.max(a.maxP, p.price); a.minP = Math.min(a.minP, p.price);
+});
+var tierKeys = Object.keys(tierAgg).map(Number).sort(function (a, b) { return a - b; });
+var tierOk = true;
+for (var ti = 1; ti < tierKeys.length; ti++) {
+  var lo = tierAgg[tierKeys[ti - 1]], hi = tierAgg[tierKeys[ti]];
+  if (hi.minS <= lo.maxS) tierOk = false;
+  if (hi.minP <= lo.maxP) tierOk = false;
 }
-ok(tierMono, '机型梯队单调（tier↑ → 座位↑ 价格↑）');
+ok(tierOk, '机型梯队区间递进（同 tier 并存平价/高端，跨 tier 座位与价格不重叠）');
 
 var badEv = AT.EVENTS.filter(function (e) {
   return !e.id || !e.title || !e.options || e.options.length < 2;

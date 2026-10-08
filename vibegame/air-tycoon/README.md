@@ -47,7 +47,7 @@ air-tycoon/
 ├── index.html          # 页面骨架 + 全部 CSS + 启动脚本
 ├── src/
 │   ├── compat.js       # Chrome 61 兼容层（flex-gap 检测等）
-│   ├── data.js         # 唯一数据源：24 城 / 5 机型 / 15 事件卡 / AT.CONFIG
+│   ├── data.js         # 唯一数据源：24 城 / 13 机型 / 15 事件卡 / AT.CONFIG
 │   ├── geo.js          # 经纬度、大圆距离、球面几何
 │   ├── landmask.js     # 陆地掩码（判断城市光点是否落在陆地上）
 │   ├── sim.js          # 全部游戏逻辑（需求/运力/槽位/结算/事件/终局），唯一真源

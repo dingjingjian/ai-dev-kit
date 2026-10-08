@@ -2657,8 +2657,8 @@
     return 0;
   }
 
-  /* 终局评价：三档。
-   *   巨企（达成胜条件）/ 区域强者 / 勉强存活 / 破产退市 */
+  /* 终局评价：五档（bankrupt / giant / major / survivor / failing）。
+   *   ⚠ 胜负必须用 tier 判（tier === 'giant'），verdict 从不返回 win 字段。 */
   function verdict(state) {
     var C = AT.CONFIG;
     var rank = myRank(state);
