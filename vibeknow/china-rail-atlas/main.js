@@ -823,7 +823,7 @@ function copyPrompt(btn){
  * 分享图走 Canvas 合成而非 XHR：本仓 skill 的 device-capabilities.md §4/§7 把网络
  * 请求 API 列为本容器**不可用行为**并进了扫描清单（连标识符都不许出现，打包守卫会
  * grep），所以分享卡用 Canvas 现场画：顶部通栏铺详情页**已经加载好的那张原图**
- * （cover 裁切 + 下缘渐隐），下方深绿底文字区放「分类行 / 名称 / 一句话亮点 /
+ * （contain 完整入画 + 四角取样底色补边 + 下缘渐隐），下方深绿底文字区放「分类行 / 名称 / 一句话亮点 /
  * 正文 / 关键参数 / 标签」，页脚品牌——整块文字都落在纯底色上，不与配图交叠
  * （版式对齐 nobel-atlas）。容器里页面与图同源，画布不会被污染；桌面 file:// 下
  * CAN_SHARE 本就是 false，走不到这里。
@@ -863,7 +863,7 @@ function sharePaint(ok){
   shareBtn.disabled = !ok;
 }
 /* 分享卡：1080×1440 竖版（3:4）。版式对齐 nobel-atlas：
-   顶部通栏原图（cover 裁切 + 下缘渐隐）→ 深绿底文字区
+   顶部通栏原图（contain 完整入画，空隙用四角取样底色补齐 + 下缘渐隐）→ 深绿底文字区
    「分类行 / 名称 / 一句话亮点 / 正文 / 关键参数 / 标签胶囊」→ 页脚品牌。
    整块文字都落在纯底色上，不与照片交叠，任何一张图上都清晰可读。
    入参 img 必须已加载完成（shareItem 里有 naturalWidth 守卫）；
@@ -909,6 +909,26 @@ function drawShareCard(img, v){
       x.fill();
     }
     x.globalAlpha = 1;
+  }
+  /* 条目图是纯底插画：取四角 16px 真实像素的均色当补边底色，图与补边同色无缝衔接；
+     取样失败（画布被污染等）退回固定纸色。 */
+  function edgeColor(im){
+    var DEF = "#f2ecdf", S = 16;
+    try {
+      var t = document.createElement("canvas");
+      t.width = S; t.height = S;
+      var tc = t.getContext("2d");
+      var x0 = Math.max(0, im.naturalWidth - S), y0 = Math.max(0, im.naturalHeight - S);
+      var pos = [[0, 0], [x0, 0], [0, y0], [x0, y0]];
+      var r = 0, g = 0, b = 0, n = 0, i, j, d;
+      for(i = 0; i < 4; i++){
+        tc.clearRect(0, 0, S, S);
+        tc.drawImage(im, pos[i][0], pos[i][1], S, S, 0, 0, S, S);
+        d = tc.getImageData(0, 0, S, S).data;
+        for(j = 0; j < d.length; j += 4){ r += d[j]; g += d[j + 1]; b += d[j + 2]; n++; }
+      }
+      return "rgb(" + Math.round(r / n) + "," + Math.round(g / n) + "," + Math.round(b / n) + ")";
+    } catch(err){ return DEF; }
   }
   function heroFade(){
     var fg = x.createLinearGradient(0, HERO - 170, 0, HERO);
@@ -979,9 +999,13 @@ function drawShareCard(img, v){
     x.textAlign = "left";
   }
   drawBg();
-  /* 顶部通栏原图：cover 裁切铺满 HERO 区，再向下渐隐进文字区底色 */
-  var s = Math.max(sw / img.naturalWidth, HERO / img.naturalHeight);
+  /* 顶部通栏原图：contain 完整入画（任何比例的源图都不裁左右），空隙用图自身
+     四角取样的底色垫满，再向下渐隐进文字区底色。
+     不用 cover——16:9 源图 cover 进 1080×820 的横带会左右各裁约 13%，
+     正侧视机车的车头 / 车尾就被切掉了。 */
+  var s = Math.min(sw / img.naturalWidth, HERO / img.naturalHeight);
   var dw = img.naturalWidth * s, dh = img.naturalHeight * s;
+  x.fillStyle = edgeColor(img); x.fillRect(0, 0, sw, HERO);
   x.save(); x.beginPath(); x.rect(0, 0, sw, HERO); x.clip();
   x.drawImage(img, (sw - dw) / 2, (HERO - dh) / 2, dw, dh);
   x.restore();

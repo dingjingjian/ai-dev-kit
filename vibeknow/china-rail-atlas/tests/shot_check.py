@@ -14,6 +14,8 @@
  10. 分类筛选：点某个 tab 后只剩一个分组
  11. 分享到小红书：拿不到 postNote 时整块隐藏；注入桥桩后按钮出现、原图到货即转可用，
      点击先 writeTempFile 落临时文件再 postNote，标题 / 正文按 API 上限裁剪且内容正确
+ 12. 分享卡为 contain 完整入画：合成源图左右缘的标记色块在分享图左右缘仍可见
+     （若退化成 cover，16:9 源图会左右各裁约 13%，标记就被裁掉）
 
 用法：python tests/shot_check.py
 """
@@ -214,6 +216,7 @@ with sync_playwright() as p:
         writeTempFile: function (o) {
           window.__share.push({api: 'writeTempFile', head: String(o.data).slice(0, 22),
                                len: String(o.data).length});
+          window.__shareData = String(o.data);
           return Promise.resolve({filePath: '/tmp/cra-share.webp'});
         },
         postNote: function (o) {
@@ -262,6 +265,45 @@ with sync_playwright() as p:
           "正文异常：%s" % body[:80])
     after = sp.evaluate("""() => ({dis: document.getElementById('shareBtn').disabled})""")
     check(not after["dis"], "唤起后按钮恢复可点（busy 复位）", "按钮未复位：%s" % after)
+
+    print("—— 分享卡不裁左右（contain 回归） ——")
+    # 用一张合成图替换详情页原图：左右缘各贴一个色块标记。contain 入画时标记应落在
+    # 分享图左右边缘；若退化成 cover，16:9 源图左右各裁约 13%，两个标记都被裁掉。
+    # contain 几何：scale=1080/640=1.6875，左标记 → 卡 x[0,40]、y[390,430]，探点 (12,410)；
+    # 右标记 → 卡 x[1040,1080]，探点 (1068,410)。
+    sp.evaluate("""() => {
+      const c = document.createElement('canvas'); c.width = 640; c.height = 360;
+      const g = c.getContext('2d');
+      g.fillStyle = '#f0e9dc'; g.fillRect(0, 0, 640, 360);
+      g.fillStyle = '#ff0000'; g.fillRect(0, 168, 24, 24);
+      g.fillStyle = '#0000ff'; g.fillRect(616, 168, 24, 24);
+      window.__share.length = 0; window.__shareData = '';
+      document.querySelector('.hero .shot-img').src = c.toDataURL('image/png');
+    }""")
+    sp.wait_for_function(
+        "() => { const i = document.querySelector('.hero .shot-img'); return !!(i && i.naturalWidth === 640); }")
+    sp.wait_for_timeout(150)
+    sp.click("#shareBtn")
+    sp.wait_for_timeout(500)
+    probes = sp.evaluate("""async () => {
+      if (!window.__shareData) { return {size: [0, 0], left: [0, 0, 0], right: [0, 0, 0]}; }
+      const img = new Image();
+      await new Promise((ok, bad) => { img.onload = ok; img.onerror = bad; img.src = window.__shareData; });
+      const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const g = c.getContext('2d'); g.drawImage(img, 0, 0);
+      const px = (x, y) => { const d = g.getImageData(x, y, 1, 1).data; return [d[0], d[1], d[2]]; };
+      return {size: [img.naturalWidth, img.naturalHeight], left: px(12, 410), right: px(1068, 410)};
+    }""")
+    check(probes["size"] == [1080, 1440],
+          "分享卡尺寸 1080×1440",
+          "分享卡尺寸异常：%s" % probes["size"])
+    L, R = probes["left"], probes["right"]
+    check(L[0] > 180 and L[1] < 100 and L[2] < 100,
+          "源图左缘标记在分享图上可见（rgb=%s）——未裁左" % L,
+          "左缘被裁：探点 rgb=%s，期望红" % (L,))
+    check(R[2] > 180 and R[0] < 100 and R[1] < 100,
+          "源图右缘标记在分享图上可见（rgb=%s）——未裁右" % R,
+          "右缘被裁：探点 rgb=%s，期望蓝" % (R,))
     sp.close()
 
     check(not js_errors, "无 JS 运行时错误", "JS 报错：%s" % js_errors[:3])
