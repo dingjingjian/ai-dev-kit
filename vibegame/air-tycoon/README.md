@@ -17,13 +17,27 @@
 
 ## 技术路线
 
-- `index.html` + `src/` 下 8 个外置经典脚本，**无构建步骤**，作为小红书「小工具」上传挂载
+- `index.html` + `src/` 下 10 个外置经典脚本，**无构建步骤**，作为小红书「小工具」上传挂载
 - 竖屏移动端布局（390×844 基准）
 - 3D 引擎：**three.js r149**（随包内联，608 KB）；渲染层 `src/render.js` 自写（球体、城市光点、航线弧、HUD 投射），含自动降级
 - 音频：WebAudio 程序化合成（13 音效 + 三段落 BGM），**零音频文件**，见下节
 - 逻辑 10 Hz 固定步长 + 渲染 60 fps 插值，确定性便于无头测试
 - 红线：离线运行不联网、无 `fetch` / `Worker` / `eval`、脚本全外置、无外部资源
 - 兼容基线：Chrome 61（无 CSS `inset` 简写、无 flex `gap`、`var()` 需兜底）
+
+
+## 自动存档
+
+每 5 秒写一次档（真实时间，见 `game.js` 的 `AUTOSAVE_SEC`），另在切后台 / 页面卸载（`visibilitychange` + `pagehide`）时立即补写一次；`phase === 'over'`（终局）时清档。启动时若读到**可读存档**，先弹「继续经营 / 开启新的一局」覆盖层（`ui.showResume`），点选后才建局（`boot` 必须在点击手势里执行以解锁 AudioContext）；没有可读存档则直接进选航司。
+
+存储按小红书小工具规范 **§2.4 数据存储 / §3.6 版本判断 / §3.7 Storage JS API** 分两级，全部实现在 `src/save.js`：
+
+- 客户端 ≥ 9.46（`buildVersion` 忽略末 3 位编译序号后 ≥ 9460）→ `window.xhs.miniTool.setStorage / getStorage / removeStorage`（规范推荐方案）；
+- 客户端 < 9.46，或未注入端能力（普通浏览器预览）→ 降级 `localStorage`。
+
+读写一律包在 `try/catch` 内，失败只返回 `false` / `null`、**绝不抛出**（规范明确浏览器自带存储不保证可用/持久），调用方必须容忍「读不到、写不成」。**全仓仅 `src/save.js` 允许触碰 `localStorage`**，`tests/check-chrome61.py` 有对应扫描项（⑤b）钉住这条边界。
+
+存档是整局 `state` 的 JSON 快照，有两处不能直接 JSON 化：`rng` 是闭包函数，故另存 `rngState`（`sim.makeRng` 暴露了 `getState/setState`），复原时把随机流**接着往下跑**而不是从种子重放 —— 否则读档后的世界线会与「一直玩下去」分叉，破坏「同种子同结果」的确定性契约；`fx` 是每帧消费的瞬时特效队列，不存。读档时 `paused` 一律复位为 `false`：存档可能写在面板打开的暂停态，原样恢复会让 `tick` 永远早退、游戏卡死。
 
 
 ## 目录结构
@@ -37,10 +51,11 @@ air-tycoon/
 │   ├── geo.js          # 经纬度、大圆距离、球面几何
 │   ├── landmask.js     # 陆地掩码（判断城市光点是否落在陆地上）
 │   ├── sim.js          # 全部游戏逻辑（需求/运力/槽位/结算/事件/终局），唯一真源
+│   ├── save.js         # 自动存档：Storage JS API 优先 + localStorage 降级（见「自动存档」）
 │   ├── render.js       # three.js 渲染层（球体、城市、航线弧、HUD 投射）
-│   ├── ui.js           # 三层 UI：HUD / 抽屉面板 / 模态层
+│   ├── ui.js           # 三层 UI：HUD / 抽屉面板 / 模态层（含续玩覆盖层 showResume）
 │   ├── audio.js        # WebAudio 程序化音频（13 音效 + 三段落 BGM）
-│   └── game.js         # 主循环、脚本装配、状态推进
+│   └── game.js         # 主循环、脚本装配、状态推进（含每 5 秒自动存档）
 ├── tests/
 │   ├── headless.js     # 功能与结构断言（对不对）
 │   ├── audio.js        # 音频层断言（该响的响了没有、参数对不对）
@@ -68,10 +83,10 @@ air-tycoon/
 ```bash
 cd vibegame/air-tycoon
 
-# 对不对（132 项功能/结构断言）
+# 对不对（161 项功能/结构断言）
 node tests/headless.js
 
-# UI 契约（46 项静态校验，不开浏览器）
+# UI 契约（49 项静态校验，不开浏览器）
 node tests/ui-contract.js
 
 # 音频（67 项：去抖叠层、总线结构、包络安全区、BGM 音序）
@@ -175,6 +190,7 @@ var fwd = (t < 0.5) ? 1 : -1;        // ← 拿位置判方向：位置每周期
 - 改动 sim 逻辑后，`headless.js` + `balance.js` 必跑；改动 UI 后，`ui-contract.js` + `smoke-render.py` 必跑；改动音频后，`audio.js` 必跑；**改动渲染层（尤其飞机/弧线/相机）后，`probe-heading.js` + `verify-heading.py` 必跑**——姿态类错误不会让任何别的层变红
 - **改了任何源码后都要重打包，再跑 `check-chrome61.py` / `verify-dist.py`**——这两个脚本扫的是 **zip 内产物**，不重打包会拿旧包给出**假绿**。踩过两次：一次是 `audio.js` 加入后仍报「未使用 WebAudio」；一次是 `sim.js` 改了 17 行、`air-tycoon.zip` 还是旧包，八层却「全绿」。`tools/build_dist.py` 会打印「内容有变化：xxx」以提示差异，别忽略这行。
 - 保持零构建、零依赖；不引入 CDN 与外部资源
+- **`localStorage` 只允许出现在 `src/save.js`**（小工具规范 §2.4 的降级路径，且须包在 `try/catch` 内）。要加持久化需求请复用 `AT.save`，不要在别处直接读写浏览器存储 —— 否则 `tests/check-chrome61.py` 的 ⑤b 会失败
 - 不擅自改动单位口径与需求压缩系数（会连带破坏玩法闭环）
 
 

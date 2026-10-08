@@ -275,7 +275,6 @@ def main():
             (r'navigator\.serviceWorker', 'Service Worker'),
             (r'\beval\s*\(', 'eval'),
             (r'new\s+Function\s*\(', 'new Function'),
-            (r'localStorage|sessionStorage', '存储 API（容器内不稳定）'),
             (r'Notification\s*\(', 'Notification'),
             (r'navigator\.geolocation', 'Geolocation'),
         ]
@@ -284,6 +283,32 @@ def main():
             hits = re.findall(pat, js_concat)
             ok(not hits, "未使用 %s" % label,
                ("%d 处" % len(hits)) if hits else "")
+
+        # ── ⑤b 浏览器存储：规范 §2.4/§3.7 只允许**作为低版本客户端的兼容降级**，
+        #   本仓库把它收敛到唯一的 src/save.js，且每处读写都在 try/catch 内。
+        #   其余文件一律不得触碰；sessionStorage 无正当用途，任何文件都禁止。 ──
+        def raw_text(n):
+            return z.read(n).decode("utf-8", "ignore")
+        store_owner = "src/save.js"
+        off_limit = []
+        for n in own:
+            body = strip_js_strings_and_comments(raw_text(n))
+            c = len(re.findall(r'localStorage', body))
+            if c and n != store_owner:
+                off_limit.append("%s×%d" % (n, c))
+        ok(not off_limit, "localStorage 仅出现在 %s（降级路径收敛）" % store_owner,
+           ("越界：" + ", ".join(sorted(off_limit))) if off_limit else "")
+        ok(not re.findall(r'sessionStorage',
+                          "\n".join(strip_js_strings_and_comments(raw_text(n)) for n in own)),
+           "未使用 sessionStorage")
+        save_stripped = strip_js_strings_and_comments(raw_text(store_owner)) if store_owner in own else ""
+        if re.search(r'localStorage', save_stripped):
+            # 行为约束：读写必须包在 try/catch 内（规范要求容忍失败/丢失），
+            # 且必须经 global 兜底判空，而不是裸调用 window.localStorage。
+            ok(('try' in save_stripped) and ('catch' in save_stripped),
+               "%s 的 localStorage 读写包在 try/catch 内" % store_owner)
+            ok('global.localStorage' in save_stripped,
+               "%s 经 global 判空后访问 localStorage" % store_owner)
 
         # ── ⑥ 触摸可用性 ──
         print("\n── ⑥ 触摸端可用性 " + "─" * 42)

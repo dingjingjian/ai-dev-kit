@@ -28,13 +28,18 @@
   /* ───────────────────────── 1. 确定性随机 ───────────────────────── */
   function makeRng(seed) {
     var s = (seed >>> 0) || 1;
-    return function () {
+    var rng = function () {
       s = (s + 0x6D2B79F5) >>> 0;
       var t = s;
       t = Math.imul(t ^ (t >>> 15), t | 1);
       t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
+    /* 存档要「接着往下跑」而不是从头重放：暴露闭包内 s 的读写口，
+     * 供 save.js 序列化 / 复原（否则读档后的事件序列会与一直玩下去的世界线分叉）。 */
+    rng.getState = function () { return s; };
+    rng.setState = function (v) { s = (v >>> 0) || 1; };
+    return rng;
   }
   function randRange(rng, lo, hi) { return lo + (hi - lo) * rng(); }
   function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
@@ -474,7 +479,7 @@
    *   也让「一架机撑起一条干线」变成不可能，逼出堆几十架飞机的荒谬循环。
    *
    *   新版把「架数」与「频次」解耦：运力 = 飞机数 × 每日班次 × 座位数，
-   *   每日班次由玩家选的档位决定（1/3/6/12/20），单架最高 6 班。
+   *   每日班次由玩家选的档位决定（1/3/6；2026-10-08 删掉永远置灰的 12/20 档），单架最高 6 班。
    *   这样一架飞机就能撑起像样的业务，想再扩就买第二架。 */
   function routeFlights(perDay) {
     var p = Math.max(1, Math.min(CONFIG.routeMaxPerDay || 20, perDay || 1));
@@ -589,7 +594,7 @@
 
     /* ① 排班 —— 「频次档位」模型（2026-09-14 用户拍板）
      *
-     * 玩家对每条航线选一个频次档位（每架每日 1/3/6/12/20 班），
+     * 玩家对每条航线选一个频次档位（每架每日 1/3/6 班），
      * 航线总运力 = 飞机数 × 每架每日班次 × 座位数。
      *
      * ⚠ 语义要钉死（2026-09-14 修）：「档位」的物理含义是**每架飞机的日排班**，

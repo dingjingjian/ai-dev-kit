@@ -26,9 +26,11 @@
   var R = AT.render;
   var UI = AT.ui;
   var A = AT.audio;      // audio.js 在本脚本之前加载；缺失时全链路静默降级
+  var SV = AT.save;      // save.js 在本脚本之前加载；缺失时自动存档整体静默降级
 
   var MAX_CATCHUP = 2.0;        // 单帧最多补跑的真实秒数
   var LOAD_TIMEOUT = 12000;     // 贴图/首帧加载超时（毫秒）
+  var AUTOSAVE_SEC = 5;         // 自动存档间隔（真实秒）；另有「切后台」即时存档
 
   var game = {
     state: null,
@@ -37,6 +39,8 @@
     raf: 0,
     last: 0,
     acc: 0,
+    _saveAcc: 0,                // 自动存档计时累加器
+    _overCleared: false,        // 终局清档只做一次
     started: false,
     renderOk: false,
     /* 帧率统计（供诊断；不参与逻辑） */
@@ -44,13 +48,17 @@
   };
 
   /* 开局：建 state → 初始化渲染 → 起主循环。
-   * opts: { seed, airlineId, homeCityId, companyName, autoPlayer }
+   * opts: { seed, airlineId, homeCityId, companyName, autoPlayer } 或 { state }
    *   airlineId 由「开局选航司」界面传入（见 index.html 启动脚本），
    *   opts 原样透传给 S.create —— sim 侧负责按它决定基地/资金/技能/竞对。
-   * ⚠ boot 必须在用户手势（点选航司）中调用：下面的 A.unlock() 依赖手势，
-   *   否则 AudioContext 解锁失败、首次 play() 会被自动播放策略静默拦下。 */
+   *   opts.state 传入时**不建新局**，直接接着这局跑（读档续玩，见 index.html）。
+   * ⚠ boot 必须在用户手势（点选航司 / 点「继续经营」）中调用：下面的 A.unlock()
+   *   依赖手势，否则 AudioContext 解锁失败、首次 play() 会被自动播放策略静默拦下。 */
   function boot(opts) {
-    game.state = S.create(opts || {});
+    opts = opts || {};
+    game.state = opts.state || S.create(opts);
+    game._saveAcc = 0;
+    game._overCleared = false;
 
     var canvas = document.getElementById('stage');
     if (!canvas) { console.error('[AT] 找不到 #stage 画布'); return false; }
@@ -155,6 +163,27 @@
         if (cue !== lastCue) { lastCue = cue; A.setCue(cue); }
       } catch (e) { console.error('[AT] 音频帧异常：', e); }
     }
+
+    /* ⑤ 自动存档：真实时间每 AUTOSAVE_SEC 秒写一次（与逻辑步长无关；
+     *    切后台另有即时存档，见 visibilitychange）。终局清档，让下次启动回到选航司。 */
+    if (SV) {
+      if (!game._overCleared && st.phase === 'over') {
+        game._overCleared = true;
+        try { SV.clear(); } catch (e) {}
+      }
+      game._saveAcc += dt;
+      if (game._saveAcc >= AUTOSAVE_SEC) {
+        game._saveAcc = 0;
+        autosave();
+      }
+    }
+  }
+
+  /* 写一次存档。fire-and-forget：不 await、不看返回值 —— 存档失败也只表现为
+   * 「这次没存上」，绝不打断游戏（规范 §3.7：调用方必须容忍写入失败）。 */
+  function autosave() {
+    if (!SV || !game.state || game.state.phase === 'over') return;
+    try { SV.save(game.state); } catch (e) {}
   }
 
   /* BGM 段落判据：按公司**规模**换段，与玩家的成就感同步。
@@ -196,8 +225,13 @@
       global.setTimeout(onResize, 260);
     }, false);
     // 切后台暂停主循环，回来重新校准时间戳（避免回来后一次性补跑）
+    // pagehide 覆盖「App 被切走 / 页面被卸载」这条 visibilitychange 未必触发的路径
+    global.addEventListener('pagehide', function () { autosave(); }, false);
     global.addEventListener('visibilitychange', function () {
       if (document.hidden) {
+        /* 切后台前即时存一次：移动端 App 被切走/杀掉时，5 秒周期可能刚好没轮到，
+         * 这一存是「下次还能接着玩」的最后保障。 */
+        autosave();
         stop();
         /* 主循环停了，音序器也就不再泵 —— 但**已在排程里的音符仍会继续播完**，
          * 浏览器对后台标签的 WebAudio 不做自动暂停，于是「切走后还有几秒音乐」。
@@ -220,6 +254,8 @@
     stop: stop,
     init: init,
     onResize: onResize,
+    /* 手动存档入口（切后台/终局之外的即时存档；也是测试可打桩的落点） */
+    saveNow: autosave,
     get state() { return game.state; },
     get running() { return game.running; },
     get renderOk() { return game.renderOk; },

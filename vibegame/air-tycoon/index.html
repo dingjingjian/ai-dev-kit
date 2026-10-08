@@ -712,6 +712,11 @@
     </div>
   </div>
 
+  <!-- 启动续玩覆盖层（自动存档）：有可读存档时先于选航司显示，给「继续 / 新开」两条路。
+       内容由 ui.js 的 showResume 填充（复用 .sel / .bp 样式），这里只放空壳。
+       #uResume 是既有启动脚本与 ui.js 的锚点，改名前先同步二者。 -->
+  <div id="uResume" class="sel"></div>
+
   <!-- 兼容占位：ui.js 里 cacheEls 会取这几个 id。
        tab / trade / mine / dev 属保留接口（ui.js 对 null 是安全的），
        显式声明是为了避免「找不到节点」的隐式歧义，也方便日后启用。
@@ -741,6 +746,9 @@
 <!-- 海陆掩膜（布阵/城市地理判定用，Natural Earth 光栅化，离线内联） -->
 <script src="src/landmask.js"></script>
 <script src="src/sim.js"></script>
+<!-- 自动存档（Storage JS API 优先，低版本降级 localStorage）：必须早于 game.js；
+     它只依赖 sim.js（复原随机流），不依赖渲染/UI。 -->
+<script src="src/save.js"></script>
 <script src="src/render.js"></script>
 <script src="src/ui.js"></script>
 <!-- 音频放在 ui 之后、game 之前：ui 会在操作分支里调 AT.audio.play()，
@@ -777,18 +785,46 @@
     if (!ok) showFallback();
   }
 
-  function start() {
-    var ld = document.getElementById('loader');
-    if (ld) ld.className = 'hide';        // loader 只是「正在装载」，装载完交给选航司层
-    /* 开局先选航司（用户 2026-09-29 拍板）：**在 boot 之前**显示。
-     * ⚠ boot 必须在玩家点击的手势里执行 —— 它要解锁 AudioContext，
-     *   否则音效会被自动播放策略拦下（见 game.js 的 boot 注释）。
-     *   故这里把 bootGame 作为回调交给选择界面，点选后才建局。
-     * showAirlineSelect 返回 false（覆盖层缺失 / 无航司数据）时直接默认开局，
-     *   不让玩家卡在白屏上。 */
+  /* 从自动存档接着跑（不建新局）。state 由 AT.save.load 复原（见下 start）。
+   * ⚠ 与 bootGame 一样，必须在点击手势里调用 —— boot 要解锁 AudioContext。 */
+  function bootFromSave(state) {
+    var ok = window.AT && window.AT.game && window.AT.game.init() &&
+             window.AT.game.boot({ state: state });
+    if (!ok) showFallback();
+  }
+
+  /* 进选航司界面（新开一局）。无航司覆盖层时退回默认开局，不让玩家卡白屏。 */
+  function showSelect() {
     var U = window.AT && window.AT.ui;
     var shown = U && U.showAirlineSelect && U.showAirlineSelect(bootGame);
     if (!shown) bootGame(null);
+  }
+
+  function start() {
+    var ld = document.getElementById('loader');
+    if (ld) ld.className = 'hide';        // loader 只是「正在装载」，装载完交给续玩/选航司层
+    /* 开局流程（用户 2026-09-29 拍板；2026-10-08 加入自动存档续玩）：
+     *   ① 先查有没有可读存档 —— 有 → 弹「继续经营 / 开启新的一局」；
+     *   ② 没有可读存档 → 直接进选航司。
+     * ⚠ boot 必须在玩家点击的手势里执行 —— 它要解锁 AudioContext，
+     *   否则音效会被自动播放策略拦下（见 game.js 的 boot 注释）。
+     *   故这里把 bootFromSave / bootGame 作为回调交给界面，点选后才建局。
+     * 存档读取失败（无 xhs 且无 localStorage、数据损坏等）一律当作无存档处理，
+     *   绝不因为存档问题把玩家挡在白屏上。 */
+    var U = window.AT && window.AT.ui;
+    var SA = window.AT && window.AT.save;
+    if (!SA || !U || !U.showResume) { showSelect(); return; }
+
+    SA.load().then(function (state) {
+      if (!state) { showSelect(); return; }
+      var shown = U.showResume(state, function () {
+        bootFromSave(state);              // 继续：在点击手势里接着这局跑
+      }, function () {
+        SA.clear();                       // 新开：先清掉旧档，再进选航司
+        showSelect();
+      });
+      if (!shown) showSelect();           // 覆盖层缺失时退回选航司
+    }, function () { showSelect(); });    // 读档异常同样退回选航司
   }
 
   try { start(); } catch (e) {

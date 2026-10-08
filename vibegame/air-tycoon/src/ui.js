@@ -36,6 +36,7 @@
     reports: [],              // 待看季报队列
     modal: null,              // 'event' | 'report' | 'over' | 'invest' | null
     scrollType: false,        // 新航线：下一次重绘后把③机型区滚进视野（一次性）
+    scrollOpen: false,        // 新航线：选完机型后把「开通」按钮滚进视野（一次性）
     toastT: 0
   };
   var el = {};
@@ -292,6 +293,58 @@
     return true;
   }
 
+  /* ───────────────────────── 启动续玩（自动存档）─────────────────────────
+   * 与 showAirlineSelect 同一约束：**在 boot 之前**运行（ui.state 仍为 null），
+   * 故只读传进来的 state 与 data.js 的 AT.CONFIG，不碰 el 缓存。
+   *
+   * 交互：有可读存档时先显示本层，给两条路 ——「继续经营」（接着这局跑）与
+   * 「开启新的一局」（清档 → 回到选航司）。返回 true 表示已呈现；返回 false
+   * 时调用方应直接进入选航司（不让玩家卡死）。
+   * 复用值机屏（.sel / .bp 等）的样式语言，不新增 CSS。 */
+  function showResume(state, onResume, onNew) {
+    var wrap = $('uResume');
+    if (!wrap || !state) return false;
+    var total = C.totalQuarters || 60;
+    var q = Math.min(state.quarter || 0, total);
+    var name = state.companyName || '未命名航空';
+    var nRoutes = state.routes ? state.routes.length : 0;
+    var nPlanes = state.planes ? state.planes.length : 0;
+
+    wrap.innerHTML =
+      '<div class="sel-hd">' +
+        '<div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 续飞</span></div>' +
+        '<span class="sel-title">继续上一次经营？</span>' +
+        '<span class="sel-sub">进度已自动保存。接着执掌现有航线网络，或开启全新一局。</span>' +
+      '</div>' +
+      '<div class="sel-main">' +
+        '<div class="bp" style="--ac:#63d2ff">' +
+          '<div class="bp-head"><span class="bp-code">Q' + q + '</span>' +
+          '<span class="bp-id"><span class="bp-name">' + h(name) + '</span>' +
+          '<span class="bp-proto">已进行 ' + q + ' / ' + total + ' 个季度</span></span></div>' +
+          '<div class="bp-tear" aria-hidden="true"></div>' +
+          '<div class="bp-line"><i>ROUTES</i><b>' + nRoutes + ' 条航线</b></div>' +
+          '<div class="bp-line"><i>FLEET</i><b>' + nPlanes + ' 架飞机</b></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sel-cta">' +
+        '<button class="sel-go" data-act="resume-continue" type="button">继续经营</button>' +
+        '<button class="btn" data-act="resume-new" type="button" ' +
+          'style="width:100%;margin:8px 0 0">开启新的一局</button>' +
+        '<div class="sel-ft">自动存档 · 每 5 秒与切到后台时各保存一次</div>' +
+      '</div>';
+    wrap.classList.add('show');
+
+    wrap.addEventListener('click', function (e) {
+      var t = e.target.closest ? e.target.closest('[data-act]') : null;
+      if (!t) return;
+      var act = t.getAttribute('data-act');
+      wrap.classList.remove('show');
+      if (act === 'resume-continue') { sfx('confirm'); if (onResume) onResume(); }
+      else if (act === 'resume-new') { sfx('click'); if (onNew) onNew(); }
+    }, false);
+    return true;
+  }
+
   /* ───────────────────────── 画布交互 ───────────────────────── */
 
   /* 点城市 → 飞过去 + 弹卡片；长按/拖动已由 render 处理，这里只区分「点」与「拖」。
@@ -316,6 +369,9 @@
       if (c) {
         ui.selCity = c.id;
         R.flyToCity(ui.state, c.id);
+        /* 卡片互斥的另一半：面板开着时点城市 → 收面板，只留城市卡片。
+         * 两张卡叠在一起（底部面板 + 左下城市卡）会互相遮挡。 */
+        if (ui.panel) closePanel();
         renderCityCard(c);
         dirty.hud = true;
       } else if (el.uCityCard) {
@@ -332,9 +388,7 @@
       var c = AT.CITIES_BY_ID[ui.selCity];
       if (!c) return;
       ui.newFrom = c.id;
-      /* 城市卡片功成身退：它的任务（定出发地）已完成，后续选择都在面板里做，
-       * 卡片若留在原地会压在面板上方挡视线。 */
-      if (el.uCityCard) el.uCityCard.classList.remove('show');
+      /* 城市卡片由 openPanel 统一收起（卡片互斥），这里不必单独处理。 */
       closePanel();
       openPanel('newroute');
       toast('从 ' + c.name + ' 出发，选择一个目的地' +
@@ -415,12 +469,17 @@
 
   function openPanel(name) {
     ui.panel = name;
+    /* 卡片互斥（2026-10-08 用户要求）：同屏只留一张卡 —— 面板升起时收掉城市卡片，
+     * 否则它会压在面板上方挡视线。城市卡片自己的「从这里开新航线」分支
+     * （onCityCardClick）不必再单独收卡，这里统一兜底。 */
+    if (el.uCityCard) el.uCityCard.classList.remove('show');
     /* 打开「新航线」时清掉可能残留的滚动标记：它是「这次点击」的一次性意图，
      * 不该跨次生效（比如上次点完目的地就关面板，再打开时会莫名跳一下）。
      * 同时把面板滚回顶部：上次可能停在③机型区，重新进来应从 ① 出发地
      * 开始看 —— 带着旧滚动位置开新决策，读起来像「面板坏了」。 */
     if (name === 'newroute') {
       ui.scrollType = false;
+      ui.scrollOpen = false;
       if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
     }
     if (el.uPanel) el.uPanel.classList.add('show');
@@ -483,6 +542,10 @@
       case 'pick-type':
         sfx('click');
         ui.newType = t.getAttribute('data-type');
+        /* 选完机型要立刻看到「开通」按钮（2026-10-08 用户反馈：机型区下面
+         * 还有潜在需求说明 + 按钮，小屏上落在折线以下，玩家不知道要下翻）。
+         * 由 syncPanel 在重绘后滚到位（见那边的 scrollOpen 处理）。 */
+        ui.scrollOpen = true;
         dirty.panel = true;
         break;
       case 'do-open':
@@ -533,9 +596,10 @@
       case 'freq':
         res = S.setFrequency(st, key, +val);
         if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
-        /* 档位被夹取时响 deny 而不是 confirm：玩家点的是 20 班、系统只给了 6 班，
+        /* 档位被夹取时响 deny 而不是 confirm：玩家点的是 6 班、系统只给了 1 班
+         * （宽体洲际线单架物理上限就是 1~2），
          * 这是「你的指令没能完全执行」，用「被拒」的音色比「成功」更诚实 ——
-         * 否则玩家会以为自己真的拿到了 20 班。 */
+         * 否则玩家会以为自己真的拿到了 6 班。 */
         if (res.clamped) { sfx('deny'); toast(res.reason || '档位已按上限调整', 'warn'); }
         else { sfx('click'); toast('班次已调整为每架每日 ' + res.perDay + ' 班', 'ok'); }
         dirty.panel = true;
@@ -830,7 +894,7 @@
     var sig = ui.panel + '\u0000' + sub + '\u0000' + html;
     /* 内容没变就不重建 DOM（见上）。这种情况滚动标记也没有意义，一并清掉：
      * 否则它会留到下一次无关的重绘里才生效（例如 1Hz 的季度刷新），变成「莫名跳一下」。 */
-    if (sig === panelSig) { ui.scrollType = false; return; }
+    if (sig === panelSig) { ui.scrollType = false; ui.scrollOpen = false; return; }
     panelSig = sig;
     if (el.uPanelTitle) el.uPanelTitle.textContent = title;
     if (el.uPanelSub) el.uPanelSub.textContent = sub;
@@ -848,6 +912,18 @@
         var br = el.uPanelBody.getBoundingClientRect();
         var sr = tsec.getBoundingClientRect();
         el.uPanelBody.scrollTop += (sr.top - br.top) - 6;
+      }
+    }
+    /* 选完机型后把「开通」按钮带进视野。只在按钮落在折线以下时滚
+     * （sr.bottom > br.bottom），已可见就不动 —— 避免明明看得见还跳一下。
+     * 用 bottom 对 bottom 的差值：按钮露出即可，机型区仍留在按钮上方可对照。 */
+    if (ui.scrollOpen) {
+      ui.scrollOpen = false;
+      var goBtn = el.uPanelBody.querySelector('.nw-actions');
+      if (goBtn) {
+        var abr = el.uPanelBody.getBoundingClientRect();
+        var asr = goBtn.getBoundingClientRect();
+        if (asr.bottom > abr.bottom) el.uPanelBody.scrollTop += asr.bottom - abr.bottom;
       }
     }
   }
@@ -1353,6 +1429,8 @@
     /* 开局选航司：**必须在 init/boot 之前**调用（此时 ui.state 仍为 null），
      * 故它只读 data.js，不碰 ui.state。启动脚本见 index.html 末尾。 */
     showAirlineSelect: showAirlineSelect,
+    /* 启动续玩覆盖层：同样在 boot 之前调用（读存档 state，不碰 ui.state）。 */
+    showResume: showResume,
     openPanel: openPanel,
     closePanel: closePanel,
     /* 音效入口暴露给测试打桩：测试里替换 ui._sfx = fn 即可断言

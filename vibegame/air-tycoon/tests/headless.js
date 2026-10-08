@@ -31,10 +31,10 @@
 var path = require('path');
 var SRC = path.join(__dirname, '..', 'src');
 global.window = global;
-['data', 'geo', 'landmask', 'sim'].forEach(function (f) {
+['data', 'geo', 'landmask', 'sim', 'save'].forEach(function (f) {
   require(path.join(SRC, f + '.js'));
 });
-var AT = global.AT, S = AT.sim, C = AT.CONFIG, G = AT.geo;
+var AT = global.AT, S = AT.sim, C = AT.CONFIG, G = AT.geo, SV = AT.save;
 
 var pass = 0, fail = 0;
 var failures = [];
@@ -818,6 +818,77 @@ ok(badRiv === 0, '⑥ 竞对的每条线都从自己母城长出来（无凭空�
   '违规 ' + badRiv + ' / 合计 ' + totRiv);
 ok(noColor === 0, '⑥ 竞对都带航司识别色（render.js 按它对航线/客机着色）',
   '缺色 ' + noColor + ' 家');
+
+/* ───────────────────────── 存档层 ─────────────────────────
+ * 自动存档的核心不变量：serialize → deserialize 必须得到「同一局」，
+ * 且随机流**接着往下跑**（读档后的事件序列不能与一直玩下去的世界线分叉）。
+ * 存储 I/O（xhs Storage / localStorage）在无头环境不可用，故这里只钉纯函数往返；
+ * 真实读写由实机冒烟（smoke-render / verify-dist）覆盖。 */
+section('存档层');
+
+/* ① 往返一致：跑到中局（含事件/竞对/航线）再序列化 → 复原，关键字段必须相等 */
+var stS = S.create({ seed: 12345, airlineId: 'al_ca', autoPlayer: true });
+var gS = 0;
+while (stS.quarter < 12 && stS.phase !== 'over' && gS < 200000) {
+  if (stS.card) S.chooseEvent(stS, 0);
+  S.tick(stS, S.TICK); gS++;
+}
+var textS = SV.serialize(stS);
+ok(typeof textS === 'string' && textS.length > 0, '① serialize 产出非空 JSON 字符串');
+var rt = SV.deserialize(textS);
+ok(!!rt, '① deserialize 复原出 state');
+ok(rt && rt.companyName === stS.companyName, '① 公司名一致');
+ok(rt && rt.quarter === stS.quarter, '① 当前季度一致',
+  rt ? ('实际 Q' + rt.quarter + ' 期望 Q' + stS.quarter) : '');
+ok(rt && Math.round(rt.cash) === Math.round(stS.cash), '① 资金一致');
+ok(rt && rt.routes.length === stS.routes.length, '① 航线数一致');
+ok(rt && rt.planes.length === stS.planes.length, '① 机队数一致');
+ok(rt && rt.rivals.length === stS.rivals.length, '① 竞对数一致');
+ok(rt && rt.cities.length === stS.cities.length, '① 城市数一致');
+
+/* ② 随机流续跑：复原后 rng 的下一个值必须与原 state 的下一个值相同
+ *   （若只按种子重建 rng 而不复原推进位，这里会不等 → 读档后世界线分叉）。 */
+var aNext = stS.rng(), bNext = rt ? rt.rng() : NaN;
+ok(aNext === bNext, '② 复原后随机流接着往下跑（rng 下一值相同）',
+  '实际 ' + bNext + ' 期望 ' + aNext);
+
+/* ③ 复原后继续推进，结果与「从未存档」完全一致（固定步长确定性的直接后果） */
+var stA = S.create({ seed: 777, airlineId: 'al_ca', autoPlayer: true });
+S.advance(stA, 30);
+var stB = SV.deserialize(SV.serialize(stA));
+S.advance(stA, 60);
+S.advance(stB, 60);
+ok(Math.round(stA.cash) === Math.round(stB.cash) &&
+   stA.quarter === stB.quarter &&
+   stA.routes.length === stB.routes.length,
+  '③ 存档续跑与不存档续跑结果一致（Q' + stA.quarter + '）',
+  '不存档 ' + Math.round(stA.cash) + ' vs 存档 ' + Math.round(stB.cash));
+
+/* ④ 面板打开（paused）时写的档：复原后必须复位为 false，否则 tick 永远早退 */
+var stP = S.create({ seed: 3 });
+stP.phase = 'operating';
+S.setPaused(stP, true);
+var stP2 = SV.deserialize(SV.serialize(stP));
+ok(stP2 && stP2.paused === false, '④ 复原后 paused 复位为 false（避免读档即卡死）');
+
+/* ⑤ 坏档一律当「无存档」：返回 null，绝不抛异常 */
+ok(SV.deserialize('') === null, '⑤ 空串 → null');
+ok(SV.deserialize('{') === null, '⑤ 非法 JSON → null');
+ok(SV.deserialize(JSON.stringify({ v: 999, s: {} })) === null, '⑤ 版本不符 → null');
+ok(SV.deserialize(JSON.stringify({ v: SV.VERSION, s: { phase: 'operating' } })) === null,
+  '⑤ 结构残缺（缺 cities/routes/…）→ null');
+ok(SV.deserialize(null) === null, '⑤ null → null');
+
+/* ⑥ 单档体积必须留在 Storage 单 key 上限（1 MB）以内 */
+ok(textS.length < 1024 * 1024, '⑥ 单档体积 < 1 MB（Storage 单 key 上限）',
+  '实际 ' + Math.round(textS.length / 1024) + ' KB');
+
+/* ⑦ 客户端版本判据（规范 §3.6）：末三位编译序号必须被忽略 */
+ok(SV.getClientVersion(9462004) === 9462, '⑦ buildVersion 9462004 → 客户端 9.46.2');
+ok(SV.isClientVersionAtLeast(9462004, SV.STORAGE_MIN_CLIENT_VERSION),
+  '⑦ 9.46+ 判定为支持 Storage JS API');
+ok(!SV.isClientVersionAtLeast(9459000, SV.STORAGE_MIN_CLIENT_VERSION),
+  '⑦ 9.45 判定为不支持（应走 localStorage 降级）');
 
 /* ── 汇总 ── */
 console.log('\n' + '═'.repeat(74));
