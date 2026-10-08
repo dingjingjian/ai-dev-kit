@@ -182,6 +182,26 @@ ok(stOld.airlineId === null && stOld.homeCityId === 'C01' &&
                    rep: stOld.reputation, loan: stOld.loanLimit }));
 ok(S.traitOf(stOld).id === 'none', '不传 airlineId：中性技能（无任何加成）');
 
+/* ── 商飞机型专供中国国际航空（2026-10-08）── */
+ok(!!AT.planeOf('cRJ2').exclusive && !!AT.planeOf('cNB3').exclusive,
+  '商飞 ARJ21 / C919 均标记 exclusive: al_ca');
+var rX = S.buyPlane(stUA, 'cNB3', 1);   // stUA = 联合航空（起始资金 1200 万，买得起）
+ok(!rX.ok && /商飞|国航/.test(rX.reason || ''),
+  '非国航不能新购商飞 C919（资金充足也被拒）', rX.reason);
+var stCA = S.create({ seed: 7, airlineId: 'al_ca' });
+stCA.cash = 1e9;
+ok(S.buyPlane(stCA, 'cRJ2', 1).ok && S.buyPlane(stCA, 'cNB3', 1).ok,
+  '中国国际航空可采购商飞两款机型');
+ok(AT.canBuyPlane(AT.planeOf('cRJ2'), null), '旧路径（无航司，上海基地）放行商飞机型');
+stOld.cash = 1e9;
+ok(S.buyPlane(stOld, 'cRJ2', 1).ok, '旧路径实际购机成功（工具/测试行为不变）');
+/* 不追溯：手工塞一架非国航的商飞机 → 运营不受限，但补购同型被拒 */
+stUA.cash = 1e9;
+stUA.planes.push({ id: 'PX0', type: 'cNB3', reg: 'AT-X', routeKey: null, ageQ: 0, onGround: 0 });
+ok(stUA.planes.some(function (p) { return p.type === 'cNB3'; }),
+  '已持有的商飞机不追溯（照常在机队）');
+ok(!S.buyPlane(stUA, 'cNB3', 1).ok, '但非国航补购同型仍被拒');
+
 /* ── 地理层 ── */
 section('地理层');
 function ST() { return S.create({ seed: 1, homeCityId: 'C01' }); }

@@ -2100,6 +2100,12 @@
   function buyPlane(state, typeId, count) {
     count = Math.max(1, count || 1);
     var T = AT.planeOf(typeId);
+    /* 商飞机型专供中国国际航空（资格判定唯一真源见 data.js canBuyPlane）。
+     * 只挡新购不追溯：旧存档里非国航玩家已持有的商飞机仍可运营、加派，
+     * 但再补购同型会被拒 —— 与「商飞是中国特有制造商」的现实口径一致。 */
+    if (!AT.canBuyPlane(T, state.airlineId)) {
+      return { ok: false, reason: T.name + ' 为中国商飞机型，仅中国国际航空可采购' };
+    }
     var total = T.price * count;
     if (state.cash + loanLimitOf(state) - state.debt < total) {
       return { ok: false, reason: '资金不足（需 ' + total + ' 万元，现金 ' + Math.round(state.cash) +
@@ -2358,9 +2364,10 @@
           }
           return;
         }
-        /* 档 2：需要买新机 —— 取「能飞且最买得起」的那款 */
+        /* 档 2：需要买新机 —— 取「能飞且最买得起」的那款（商飞专供机型除外，
+         * 否则智能推荐会把非国航玩家引向一条买了也买不了的购机路径） */
         var cands = AT.PLANES.filter(function (p) {
-          return p.range >= dist && p.price <= affordable;
+          return p.range >= dist && p.price <= affordable && AT.canBuyPlane(p, state.airlineId);
         }).sort(function (x, y) { return x.price - y.price; });
         if (!cands.length) return;
         var ideal2 = idealSeatsFor(state, a.id, b.id);
@@ -2390,9 +2397,11 @@
     return pot * 1e6 / (perPlaneFlights * (CONFIG.loadFactorBase || 0.74));
   }
 
-  /* 为一条航线挑选「刚好够用」的机型：能飞且价格最低 */
+  /* 为一条航线挑选「刚好够用」的机型：能飞、有购机资格且价格最低 */
   function bestNeededType(state, dist) {
-    var cands = AT.PLANES.filter(function (p) { return p.range >= dist; })
+    var cands = AT.PLANES.filter(function (p) {
+      return p.range >= dist && AT.canBuyPlane(p, state.airlineId);
+    })
       .sort(function (a, b) { return a.price - b.price; });
     return cands.length ? cands[0].id : AT.PLANES[AT.PLANES.length - 1].id;
   }

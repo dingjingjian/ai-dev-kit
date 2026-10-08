@@ -511,6 +511,11 @@
    *   premium   —— 商务/头等舱座位占比（享 firstClassMul 溢价）
    *   upkeep    —— 每季度固定维护成本（万元）
    *   tier      —— 等级（1 支线 / 2 窄体 / 3 宽体 / 4 超远程 / 5 旗舰巨无霸），用于城市开发度加成
+   *   exclusive —— 购机资格限制（2026-10-08 加，可选）：指定「唯一可采购的航司 id」。
+   *                中国商飞（COMAC）是中国特有的主制造商，现实中也几乎只由中国
+   *                航司运营 —— 故商飞两款标 exclusive: 'al_ca'，仅中国国际航空可
+   *                **新购**；已购机队不追溯（旧存档里非国航玩家手里的商飞机照飞）。
+   *                AI 竞对的机型阶梯 pickRivalPlane 本就不含商飞，无需另改。
    */
   /* 机型表（2026-09-14 油耗复核后修正；2026-10-07 扩充到 13 款）
    *
@@ -547,10 +552,10 @@
   AT.PLANES = [
     { id: 'cRJ0',  name: 'ATR 72-600',    tier: 1, price: 240,  seats: 70,  range: 1500,  speed: 510,  fuelPerKm: 1.8,  premium: 0.05, upkeep: 21 },
     { id: 'cRJ1',  name: '巴航 E175',     tier: 1, price: 320,  seats: 76,  range: 2400,  speed: 780,  fuelPerKm: 2.3,  premium: 0.06, upkeep: 26 },
-    { id: 'cRJ2',  name: '商飞 ARJ21',    tier: 1, price: 450,  seats: 90,  range: 3700,  speed: 800,  fuelPerKm: 2.7,  premium: 0.07, upkeep: 30 },
+    { id: 'cRJ2',  name: '商飞 ARJ21',    tier: 1, price: 450,  seats: 90,  range: 3700,  speed: 800,  fuelPerKm: 2.7,  premium: 0.07, upkeep: 30, exclusive: 'al_ca' },
     { id: 'cNB1',  name: '波音 737-800',  tier: 2, price: 980,  seats: 174, range: 5600,  speed: 840,  fuelPerKm: 3.7,  premium: 0.10, upkeep: 62 },
     { id: 'cNB2',  name: '空客 A320neo',  tier: 2, price: 1180, seats: 180, range: 6300,  speed: 858,  fuelPerKm: 3.5,  premium: 0.12, upkeep: 68 },
-    { id: 'cNB3',  name: '商飞 C919',     tier: 2, price: 1120, seats: 168, range: 5500,  speed: 840,  fuelPerKm: 3.4,  premium: 0.11, upkeep: 64 },
+    { id: 'cNB3',  name: '商飞 C919',     tier: 2, price: 1120, seats: 168, range: 5500,  speed: 840,  fuelPerKm: 3.4,  premium: 0.11, upkeep: 64, exclusive: 'al_ca' },
     { id: 'cNB4',  name: '波音 737 MAX 8',tier: 2, price: 1250, seats: 178, range: 6500,  speed: 840,  fuelPerKm: 3.3,  premium: 0.11, upkeep: 67 },
     { id: 'cNB5',  name: '空客 A321neo',  tier: 2, price: 1480, seats: 210, range: 7400,  speed: 860,  fuelPerKm: 3.6,  premium: 0.13, upkeep: 76 },
     { id: 'cWB1',  name: '空客 A330-300', tier: 3, price: 2350, seats: 288, range: 11700, speed: 880,  fuelPerKm: 6.5,  premium: 0.18, upkeep: 128 },
@@ -681,6 +686,17 @@
 
   AT.PLANES_BY_ID = {};
   AT.PLANES.forEach(function (p) { AT.PLANES_BY_ID[p.id] = p; });
+
+  /* 商飞机型的购机资格（2026-10-08 加）：exclusive 标记「唯一可采购的航司」。
+   * 规则口径：
+   *   · 只挡「新购」，不追溯 —— 已购机队（旧存档 / 开局赠送）照常运营；
+   *   · airlineId 为空的旧路径（工具 / 测试 / 未选航司的旧存档）默认基地是
+   *     上海 C01 —— 商飞总部所在地，视同中国承运人放行，保证工具行为不变。
+   * sim 的 buyPlane 与 ui 的三处购机入口（机队购买 / 置换机型 / 新开线选型）
+   * 都经此函数判定，UI 对不可购机型**置灰并说明原因**，不静默隐藏。 */
+  AT.canBuyPlane = function (p, airlineId) {
+    return !p.exclusive || !airlineId || p.exclusive === airlineId;
+  };
 
   AT.REGIONS_BY_CODE = {};
   AT.REGIONS.forEach(function (r) { AT.REGIONS_BY_CODE[r.code] = r; });

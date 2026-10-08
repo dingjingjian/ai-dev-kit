@@ -1017,8 +1017,12 @@
       (capFull ? '<div class="rd-note">该线时刻已用满：再加机不会增班，只会白付持有成本 —— 请换更大机型</div>' : '') +
       '</div>';
 
-    /* 换机型：槽位满后唯一出路，故只在机型可升级时给按钮 */
-    var cands = AT.PLANES.filter(function (p) { return p.range >= dist && p.id !== r.type && p.price > T.price; });
+    /* 换机型：槽位满后唯一出路，故只在机型可升级时给按钮。
+     * 置换本质是「退役 + 新购」，同样受购机资格约束（商飞专供国航）。 */
+    var cands = AT.PLANES.filter(function (p) {
+      return p.range >= dist && p.id !== r.type && p.price > T.price &&
+             AT.canBuyPlane(p, st.airlineId);
+    });
     if (cands.length) {
       out += '<div class="rd-sec"><div class="rd-h">置换机型（补差价，' + n + ' 架一起换）</div><div class="rd-btns">';
       cands.forEach(function (p) {
@@ -1073,12 +1077,16 @@
     out += '<div class="fsec"><div class="rd-h">购买新机</div><div class="plist">';
     AT.PLANES.forEach(function (p) {
       var afford = st.cash >= p.price;
-      out += '<div class="prow' + (afford ? '' : ' no') + '">' +
+      /* 商飞专供国航（见 data.js canBuyPlane）：置灰并说明原因，不静默隐藏 ——
+       * 让玩家知道「有这架飞机、但它不属于我」，而不是以为机型列表做漏了。 */
+      var buyable = AT.canBuyPlane(p, st.airlineId);
+      out += '<div class="prow' + (afford && buyable ? '' : ' no') + '">' +
         '<div class="pinfo"><b>' + h(p.name) + '</b>' +
-        '<span>' + p.seats + ' 座 · 航程 ' + p.range + ' km · ' + p.speed + ' km/h · 每季维护 ' + p.upkeep + ' 万</span></div>' +
+        '<span>' + p.seats + ' 座 · 航程 ' + p.range + ' km · ' + p.speed + ' km/h · 每季维护 ' + p.upkeep + ' 万</span>' +
+        (buyable ? '' : '<i class="c-warn">中国商飞专供 · 仅中国国际航空可采购</i>') + '</div>' +
         '<div class="pact"><span class="price">' + money(p.price) + '</span>' +
-        '<button class="btn btn-sm' + (afford ? '' : ' dis') + '" data-act="buy-plane" data-val="' + p.id +
-        '" type="button">' + (afford ? '购买' : '资金不足') + '</button></div></div>';
+        '<button class="btn btn-sm' + (afford && buyable ? '' : ' dis') + '" data-act="buy-plane" data-val="' + p.id +
+        '" type="button">' + (buyable ? (afford ? '购买' : '资金不足') : '专供国航') + '</button></div></div>';
     });
     out += '</div></div>';
 
@@ -1144,12 +1152,20 @@
      * ⚠ 潜在需求取自 S.routePotential（sim 的真源），不在 UI 重算。 */
     var idleTypes = {};
     S.idlePlanes(st).forEach(function (p) { idleTypes[p.type] = 1; });
+    /* 全机队的机型集合（不只闲置）：商飞专供判定要放行「旧存档里已持有的
+     * 商飞机」—— 只挡新购不追溯，手里的机仍能用来开新线。 */
+    var ownedTypes = {};
+    st.planes.forEach(function (p) { ownedTypes[p.type] = 1; });
     var cands = [];
     st.cities.forEach(function (c) {
       if (c.id === fromId) return;
       if (S.findRoute(st, fromId, c.id)) return;
       var dist = S.routeDistance(st, fromId, c.id);
-      var reach = AT.PLANES.filter(function (p) { return p.range >= dist; });
+      /* reach 同时放行「有购机资格」与「机队已持有（旧存档追溯放行）」的机型，
+       * 否则商飞专供机型会把「现购」文案顶掉，目的地被误判为不可达 */
+      var reach = AT.PLANES.filter(function (p) {
+        return p.range >= dist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]);
+      });
       var canFlyNow = reach.some(function (p) { return idleTypes[p.id]; });
       var canBuy = reach.some(function (p) { return st.cash >= p.price; });
       /* 连通性（与 sim.openRoute 同口径）：出发地未入网时，目的地必须已入网，
@@ -1227,7 +1243,11 @@
        * 这是给玩家的**提示**而非硬约束 —— 真正取舍仍由玩家按价格、
        * 库存、以及后续换机型余地自己决定。 */
       var perPlaneNeed = ideal / 3;
-      var flyable = AT.PLANES.filter(function (p) { return p.range >= selDist; });
+      /* 推荐机型只从「飞得到 + 有购机资格（或已持有）」里挑 ——
+       * 推荐一枚点不了的机型比不推荐更糟 */
+      var flyable = AT.PLANES.filter(function (p) {
+        return p.range >= selDist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]);
+      });
       var recId = null, recGap = Infinity;
       flyable.forEach(function (p) {
         var gap = Math.abs(p.seats - perPlaneNeed);
@@ -1239,6 +1259,12 @@
         if (p.range < selDist) {
           out += '<button class="chip chip-wide over" type="button" disabled>' + h(p.name) +
             '<i>航程不足（需 ' + num(selDist) + 'km）</i></button>';
+          return;
+        }
+        /* 商飞专供且机队里没有（旧存档持有的除外）：置灰说明原因，不静默隐藏 */
+        if (!AT.canBuyPlane(p, st.airlineId) && !ownedTypes[p.id]) {
+          out += '<button class="chip chip-wide over" type="button" disabled>' + h(p.name) +
+            '<i>中国商飞专供 · 仅中国国际航空可采购</i></button>';
           return;
         }
         var afford = st.cash >= p.price;
