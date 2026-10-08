@@ -219,6 +219,19 @@
     rivalPriceWarMul: 0.86,    // 竞对价格战的票价折扣
     priceWarQuarters: 3,       // 价格战持续回合
 
+    /* ── 竞对资本部署（2026-10-08 加，修「囤现金不投资」）──
+     * 旧版竞对买机被 `rng() < 0.34+aggression*0.36` 的概率闸门限流（≈0.55 架/季），
+     * 与现金无关 —— 实测竞对终局囤积 260 万现金、机队却卡在 18 线/40 架，
+     * 经营收益停在 5.8 万/季不动，而玩家一路复利到 45 万/季（玩家 5.5×）。
+     * 现改为「资本部署」：每季把超过备用金的部分投入机队，最多买 rivalBuyPerQuarter 架。
+     * 这几个参数是难度的主旋钮，调完必跑 tools/balance.js。
+     * 标定结果（40 局托管 AI）：cap=2 / res=400 / mul=1.0 → 玩家 Q10 仅 0.19×榜首、
+     *   约 Q50 反超、Q60 以 1.21× 领先且 90% 登顶；五家竞对全存活、终局各 18 线。
+     *   对比旧版「Q10 即 100% 第一」，追赶弧线完整。 */
+    rivalIncomeMul: 1.0,       // 竞对经营收益倍率（1.0 = 与玩家同口径、无隐性补贴）
+    rivalReserveCash: 400,     // 竞对保留的周转现金（低于此值不再买机）
+    rivalBuyPerQuarter: 2,     // 竞对每季最多购机数（资本部署节奏，旧版实测约 0.55）
+
     /* ── 并购（2026-10-08 加）──
      * 报价 = 对手净资产 × 溢价；对手现金告急时折价（趁你病要你命）。
      * 资格门槛（排名领先 + 资金足够）见 sim.js 的 acquireInfo。 */
@@ -309,12 +322,47 @@
     slotMinPerDay: 6,          // 任何航线的最低保障槽位（不至于让薄线完全不能飞）
     slotMaxPerDay: 60,         // 全球最繁忙干线的槽位天花板
 
+    /* ── 城市适航门槛（2026-10-08 加）──
+     *
+     * 问题（用户反馈「无脑选 A380」）：槽位是硬上限，槽位一满，加机不再增运力，
+     *   唯一的扩张手段就是换更大的机型 —— 于是「买最贵的那架」在几乎所有够厚的
+     *   航线（尤其城市全养到高等级后）都成立，机型选择退化成单一答案，
+     *   「飞机要根据城市发展状况来选」的意图落空。
+     *
+     * 机制：机型按 tier 需要**航线两端城市达到一定开发度**（取两端较小者 ——
+     *   巨无霸需要两端都是发达枢纽，一端是小城就喂不饱）。低于门槛时，该机型在
+     *   这条线上「喂不饱」（缺乏巨机所需的客流与地面保障能力），有效运力按开发度
+     *   差距衰减 —— **软惩罚，不硬禁**：仍可飞，只是明显不划算，
+     *   逼玩家「小城用小机、大城才养得起巨无霸」。
+     *
+     *   minDevByTier  —— index = tier（0 位占位不用）：机型所需的最低城市开发度
+     *   stepDev       —— 开发度差距的计步单位
+     *   falloffPerStep—— 每差一个 stepDev，有效运力乘的系数（越小惩罚越猛）
+     *
+     * ⚠ 参数口径（勿凭直觉改）：
+     *   · tier1（支线）不限 —— 开局机型不受影响；
+     *   · tier2（窄体）门槛很低（≈ Lv2）—— 窄体机是现代机场的标配；
+     *   · tier3（宽体 A330/787）≈ Lv3 底、tier4（777/747）≈ Lv4 顶、
+     *     tier5（A380）≈ Lv5 顶 —— 越大的机越靠后解锁；
+     *   · 门槛设在「同一等级内仍有区分」的位置（如 84 / 93），否则城市全 Lv5 后
+     *     又回到「最大机型通吃」。改前跑 tools/audit-econ.js 看最优机型是否随
+     *     城市开发度变化。 */
+    planeGate: {
+      minDevByTier: [0, 0, 22, 60, 84, 93],
+      stepDev: 10,
+      falloffPerStep: 0.55
+    },
+
     /* ── 机型数量（见 §3 机型表）── */
     fleetTypes: 5,
 
-    /* ── 事件卡 ── */
+    /* ── 事件卡 ──
+     * ⚠ 2026-10-08 加强打击：一局上限 14→20、触发间隔 3~7 季→2~5 季（见 sim.js
+     *   的 nextEventAt）。用户反馈「很少有亏损」—— 提高频率与幅度制造中段波折。
+     *   注意：乘法类效果（cost_all / demand_all 的 mult）会随公司规模放大，
+     *   是让事件在后期仍有分量的关键；平面金额（cash ±）后期相对缩水。 */
     eventChance: 0.55,         // 每回合触发事件卡的概率（不是每回合都有，避免刷屏）
-    eventsPerGameCap: 14,      // 一局最多触发的事件数
+    eventsPerGameCap: 20,      // 一局最多触发的事件数（原 14）
 
     /* ── 终局判定 ── */
     winRank: 3,                // 进入全球前 N 即为「航空巨企」
@@ -592,7 +640,7 @@
   AT.EVENTS = [
     { id: 'ev_oil_spike', title: '原油价格跳涨', desc: '主要产油区局势紧张，航空煤油现货价格一周内上涨三成。行业内所有航司的每公里油耗成本同步抬升。',
       options: [
-        { label: '全额承受，维持票价不变', crisis: 0, effect: { type: 'cost_all', mult: 0.22, turns: 3 } },
+        { label: '全额承受，维持票价不变', crisis: 0, effect: { type: 'cost_all', mult: 0.30, turns: 3 } },
         { label: '套期保值锁定油价', crisis: 0, effect: { type: 'cash', amount: -420, note: '支付套保保证金' } },
         { label: '把成本转嫁给乘客', crisis: 0, effect: { type: 'demand_all', mult: -0.12, turns: 3, note: '提价损失客流' } }
       ] },
@@ -607,7 +655,7 @@
     { id: 'ev_budget_rival', title: '廉价航空入场', desc: '一家新成立的廉价航司宣布以极低票价切入多条干线，行业价格战一触即发。',
       options: [
         { label: '跟进降价守住份额', crisis: 0, effect: { type: 'demand_all', mult: 0.06, turns: 3, extra: { cash: -260 } } },
-        { label: '坚持定位不降价', crisis: 0, effect: { type: 'demand_all', mult: -0.10, turns: 3 } },
+        { label: '坚持定位不降价', crisis: 0, effect: { type: 'demand_all', mult: -0.14, turns: 3 } },
         { label: '与对方谈判划分市场', crisis: 0, effect: { type: 'cash', amount: -180, note: '支付和解成本' } }
       ] },
 
@@ -619,8 +667,8 @@
 
     { id: 'ev_pilot_strike', title: '飞行员工会罢工', desc: '工会要求提高薪酬与改善排班，谈判陷入僵局，部分航班面临停飞风险。',
       options: [
-        { label: '接受涨薪诉求', crisis: 0, effect: { type: 'cost_all', mult: 0.10, turns: 4, extra: { cash: -200 } } },
-        { label: '强硬拒绝，承受停飞', crisis: 0, effect: { type: 'fleet_ground', count: 2, turns: 2 } },
+        { label: '接受涨薪诉求', crisis: 0, effect: { type: 'cost_all', mult: 0.14, turns: 4, extra: { cash: -200 } } },
+        { label: '强硬拒绝，承受停飞', crisis: 0, effect: { type: 'fleet_ground', count: 3, turns: 2 } },
         { label: '紧急招募替代机组', crisis: 0, effect: { type: 'cash', amount: -480, note: '高昂的临时成本' } }
       ] },
 
@@ -633,8 +681,8 @@
 
     { id: 'ev_typhoon', title: '超强台风袭击枢纽', desc: '一场罕见的超强台风正面袭击你的枢纽机场，连续多日关闭跑道，航班大面积取消。',
       options: [
-        { label: '紧急转运旅客', crisis: 0, effect: { type: 'cash', amount: -340, note: '赔偿与转运成本' } },
-        { label: '按规退票，不多赔付', crisis: 0, effect: { type: 'reputation', amount: -10 } }
+        { label: '紧急转运旅客', crisis: 0, effect: { type: 'cash', amount: -520, note: '赔偿与转运成本' } },
+        { label: '按规退票，不多赔付', crisis: 0, effect: { type: 'reputation', amount: -14 } }
       ] },
 
     { id: 'ev_visa', title: '签证便利化协议', desc: '数个地区之间达成互免签证安排，跨境出行门槛大幅降低，短途国际航线需求激增。',
@@ -657,32 +705,32 @@
 
     { id: 'ev_safety', title: '机队老龄化的隐忧', desc: '监管机构提出新的适航要求，部分机龄偏高的飞机需要额外检修才能继续执飞。',
       options: [
-        { label: '按规全面检修', crisis: 0, effect: { type: 'cash', amount: -520 } },
-        { label: '分批检修，拖延部分机队', crisis: 0, effect: { type: 'fleet_ground', count: 1, turns: 3 } }
+        { label: '按规全面检修', crisis: 0, effect: { type: 'cash', amount: -760 } },
+        { label: '分批检修，拖延部分机队', crisis: 0, effect: { type: 'fleet_ground', count: 2, turns: 3 } }
       ] },
 
     { id: 'ev_new_route_right', title: '优质航权公开招标', desc: '监管机构放出一批高价值的跨洲航权，多家航司参与竞标，价格不菲。',
       options: [
-        { label: '高价竞得航权', crisis: 0, effect: { type: 'cash', amount: -980, extra: { freeRoute: 1 } } },
+        { label: '高价竞得航权', crisis: 0, effect: { type: 'cash', amount: -1200, extra: { freeRoute: 1 } } },
         { label: '放弃竞标', crisis: 0, effect: { type: 'rival_gain', amount: 0.05 } }
       ] },
 
     { id: 'ev_recession', title: '全球经济放缓', desc: '主要经济体增速下行，企业差旅预算普遍压缩，商务舱需求明显走弱。',
       options: [
-        { label: '转向休闲客源市场', crisis: 0, effect: { type: 'demand_all', mult: -0.06, turns: 4, extra: { cash: -150 } } },
-        { label: '维持商务定位静待回暖', crisis: 0, effect: { type: 'demand_all', mult: -0.16, turns: 4 } },
+        { label: '转向休闲客源市场', crisis: 0, effect: { type: 'demand_all', mult: -0.10, turns: 4, extra: { cash: -150 } } },
+        { label: '维持商务定位静待回暖', crisis: 0, effect: { type: 'demand_all', mult: -0.22, turns: 4 } },
         { label: '收缩航线减少亏损', crisis: 0, effect: { type: 'cash', amount: 300, extra: { closeWeakRoute: 1 } } }
       ] },
 
     { id: 'ev_green', title: '可持续航空燃料强制掺混', desc: '多地下达强制掺混指令，可持续航空燃料用量必须达到一定比例，成本高于传统航油。',
       options: [
         { label: '提前锁定长期供应', crisis: 0, effect: { type: 'cash', amount: -600, extra: { costTurns: 6, costMult: -0.05 } } },
-        { label: '按最低比例执行', crisis: 0, effect: { type: 'cost_all', mult: 0.08, turns: 6 } }
+        { label: '按最低比例执行', crisis: 0, effect: { type: 'cost_all', mult: 0.12, turns: 5 } }
       ] },
 
     { id: 'ev_rival_crisis', title: '竞争对手陷入困境', desc: '一家主要竞争对手因资金链紧张被迫停飞部分航线，其航线网络出现明显空缺。',
       options: [
-        { label: '迅速接手其核心航线', crisis: 0, effect: { type: 'cash', amount: -700, extra: { stealRoute: 1 } } },
+        { label: '迅速接手其核心航线', crisis: 0, effect: { type: 'cash', amount: -900, extra: { stealRoute: 1 } } },
         { label: '挖走其飞行员队伍', crisis: 0, effect: { type: 'cash', amount: -340, extra: { reputation: 6 } } },
         { label: '按兵不动，观察局势', crisis: 0, effect: { type: 'cash', amount: 100 } }
       ] }
@@ -744,6 +792,27 @@
 
   // 机型查找
   AT.planeOf = function (typeId) { return AT.PLANES_BY_ID[typeId] || AT.PLANES[0]; };
+
+  /* 机型适航门槛（见 CONFIG.planeGate）：该机型需要航线两端城市达到的最低开发度。
+   * 入参可以是**机型 id 字符串 / 机型对象 / tier 数字** —— sim/UI 两处共用同一
+   * 来源，永不漂移。
+   * ⚠ 必须支持字符串 id：sim 的 settleRoute / planeGateFactor 拿到的是
+   *   route.type（id 字符串），早期只认对象与数字，导致「字符串 → tier 取不到
+   *   → 兜底 tier 1 → 门槛恒为 0」的静默失效 —— 门槛形同虚设，界面却显示正常。 */
+  AT.planeGateMinDev = function (planeOrTier) {
+    var g = AT.CONFIG.planeGate || {};
+    var arr = g.minDevByTier || [];
+    if (!arr.length) return 0;
+    var tier;
+    if (typeof planeOrTier === 'number') {
+      tier = planeOrTier;
+    } else {
+      var p = (typeof planeOrTier === 'string') ? AT.planeOf(planeOrTier) : planeOrTier;
+      tier = (p && p.tier) || 1;
+    }
+    var i = Math.max(0, Math.min(arr.length - 1, tier | 0));
+    return arr[i] == null ? 0 : arr[i];
+  };
 
   /* 航线距离（两种口径）：
    *   球面大圆距离 —— 用于 flyDistKm 相关逻辑（渲染、航程判定）

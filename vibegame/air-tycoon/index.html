@@ -418,17 +418,18 @@
   .md-actions{margin-top:15px}
   .md-actions > .btn{width:100%;margin-right:0}
 
-  /* ── 开局选航司覆盖层（用户 2026-09-29 拍板；2026-09-30 四改：登机牌 + 离港板）──
-     设计隐喻只有一个：**值机屏 + 登机牌**。上段是所选航司的「登机牌」
-     （实色 IATA 徽标 + HUB 栏 + 撕线打孔 + 技能栏 + 条码票根），
-     下段是「离港板」式的航司行列表 —— 行是数据（出发板），不是营销卡；
+  /* ── 开局选航司覆盖层（用户 2026-09-29 拍板；2026-10-08 七改：基地地球 + 航司列表）──
+     设计隐喻：**值机屏 + 航线图**。上段是所选航司的「基地地球」——
+     一颗 3D 小球，选中航司时镜头转到其基地城市并打点标注（见 ui.js createPreviewGlobe）；
+     下段是航司行列表 —— 行是数据（IATA 码块 + 名称/技能/基地），不是营销卡。
      编辑式左对齐排版，去掉居中堆叠 / 眉标胶囊 / 居中分隔线这类套路。
-     两步式（inspect→commit）不变：点行只换登机牌，「确认开航」才建局。
+     两步式（inspect→commit）不变：点行只换地球转向，「确认开航」才建局。
      z-index 250：压在 HUD(10)/模态(190)/toast(200) 之上，
      但仍在 loader(300)/fallback(290) 之下 —— 它自己不负责报错态。
      识别色 --ac / --ac-soft（12% 透明底，Chrome 61 无 color-mix，由 JS 算好）内联注入；
      --sel-ac 是「当前选中航司色」的页面级联动（节标签色随点选变化，ui.js 维护）。
-     ⚠ .sel 底色必须纯 #050c18：登机牌撕线的「打孔」用同色圆伪装，渐变底会对不上孔位；
+     ⚠ .sel 底色必须纯 #050c18：覆盖层要与局内 HUD（白字）完全隔离 ——
+       哪怕 1.5% 的透出都会在深空底上显成重影（实测踩过）；
      顶部冷光改走 background-image 固定层（不随滚动）。 */
   .sel{position:absolute;top:0;right:0;bottom:0;left:0;z-index:250;display:none;
     flex-direction:column;padding:calc(var(--safe-t) + 20px) 18px calc(var(--safe-b) + 12px);
@@ -452,80 +453,66 @@
     letter-spacing:.06em}
   .sel-sub{display:block;margin-top:6px;font-size:11.5px;line-height:1.65;color:var(--ink2)}
 
-  /* 中段（登机牌 + 离港板）：纵向 flex 分区 —— 登机牌与节标签常驻不动，
-     只有离港板列表自身滚动（2026-09-30 五改）。原先整段滚动，矮屏往下滑
-     选后排航司时会把顶部的登机牌滚出视口，看不到点选的预览更新；
-     滚动收进列表后，预览卡在任何滚动位置都可见。 */
+  /* 中段（基地地球 + 航司列表）：纵向 flex 分区 —— 地球与节标签常驻不动，
+     只有航司列表自身滚动（2026-09-30 五改）。原先整段滚动，矮屏往下滑
+     选后排航司时会把顶部的地球滚出视口，看不到点选的预览更新；
+     滚动收进列表后，地球在任何滚动位置都可见。 */
   .sel-main{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
     padding:14px 2px 10px}
   #uSelPreview{flex:0 0 auto}
 
-  /* 登机牌：所选航司的详情「票面」。结构 = 头（徽标+名称） / HUB 栏 /
-     撕线（两侧打孔） / SKILL 栏 / 条码票根。左缘一条识别色竖条是唯一装饰。 */
-  .bp{position:relative;overflow:hidden;border:1px solid var(--line2);border-radius:10px;
-    padding:14px 16px 12px;
-    background:linear-gradient(180deg,rgba(112,182,242,.08),rgba(112,182,242,.02));
-    animation:pvIn .22s ease-out both}
-  .bp::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ac)}
-  .bp-head{display:flex;align-items:center}
-  .bp-code{flex:0 0 auto;width:46px;height:46px;border-radius:9px;text-align:center;
-    font-family:var(--mono);font-size:17px;font-weight:700;line-height:46px;letter-spacing:.02em;
-    color:#fff;background:var(--ac);box-shadow:0 3px 10px -3px var(--ac-soft,rgba(99,210,255,.4))}
-  .bp-id{flex:1 1 auto;min-width:0;margin-left:12px}
-  .bp-name{display:block;font-size:17px;font-weight:700;color:var(--ink);letter-spacing:.02em;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .bp-proto{display:block;margin-top:3px;font-size:10.5px;color:var(--ink3);letter-spacing:.03em}
-  .bp-region{flex:0 0 auto;margin-left:8px;font-family:var(--mono);font-size:10px;
-    color:var(--ac);letter-spacing:.08em}
-  /* 栏：mono 小标签轨（HUB / SKILL）+ 内容，标签宽 46px 对齐整张票面 */
-  .bp-line{display:flex;align-items:baseline;margin-top:12px}
-  .bp-line i{flex:0 0 auto;width:46px;font-style:normal;font-family:var(--mono);
-    font-size:9px;color:var(--ink3);letter-spacing:.16em}
-  .bp-line b{font-size:14px;font-weight:600;color:var(--ink)}
-  .bp-line u{text-decoration:none;margin-left:auto;font-family:var(--mono);font-size:10px;
-    color:var(--ink3)}
-  .bp-skillname{font-size:13.5px;color:var(--ac)}
-  .bp-skillname svg{width:13px;height:13px;margin-right:5px;vertical-align:-2px;opacity:.95}
-  /* ⚠ min-height 预留两行：六家技能 desc 有 1 行也有 2 行，若随内容伸缩，
-     每次点选航司整张票面高度都会变，把下方节标签与列表顶得一跳。
-     钉死为最长 desc 的行数后，票面高度恒定（2026-10-01 五改）。 */
-  .bp-desc{display:block;margin:5px 0 0 46px;min-height:3.4em;
-    font-size:11px;line-height:1.7;color:var(--ink2)}
-  /* 撕线：贯通票面的虚线 + 两侧「打孔」（同 #050c18 圆形，半枚咬进票边） */
-  .bp-tear{position:relative;height:0;margin:13px -16px;
-    border-top:1px dashed rgba(112,182,242,.28)}
-  .bp-tear::before,.bp-tear::after{content:'';position:absolute;top:-6px;width:12px;height:12px;
-    border-radius:50%;background:#050c18}
-  .bp-tear::before{left:-6px}
-  .bp-tear::after{right:-6px}
-  /* 条码票根：三层错周期 repeating-gradient 叠出「疏密不一」的条码，右缘航班号 */
-  .bp-foot{display:flex;align-items:center;margin-top:11px}
-  .bp-bars{flex:1 1 auto;height:22px;opacity:.5;
-    background:repeating-linear-gradient(90deg,var(--ac) 0 1px,transparent 1px 4px),
-      repeating-linear-gradient(90deg,var(--ac) 0 2px,transparent 2px 9px),
-      repeating-linear-gradient(90deg,var(--ac) 0 1px,transparent 1px 6px)}
-  .bp-flt{flex:0 0 auto;margin-left:10px;font-family:var(--mono);font-size:9px;
-    color:var(--ink3);letter-spacing:.12em}
+  /* ── 顶部「基地地球」：所选航司的 3D 地球预览（2026-10-08 七改）──
+     地球是主角 —— 选中航司时镜头转到其基地并打点标注。
+     原地球下方的信息带卡片（IATA 徽标 + 名称 + 技能说明）已整块删除：
+     航司名 / 技能 / 基地这些信息航司列表行里都有，卡片属于重复陈列；
+     技能说明与开局机型如需详情，留给点选行内展开（暂未做）。 */
+  .gp{display:flex;flex-direction:column;animation:pvIn .24s ease-out both}
+  /* 球体舞台：canvas 铺满；星域底 + 顶部冷光由 CSS 提供（canvas 自带 alpha 透明）。
+     ⚠ 这里**不画**实色圆当兜底球 —— 球在画面里的位置由 three.js 相机决定，
+       CSS 圆对不准，宁可只留星域底（真兜底见 .noglobe）。 */
+  .gp-stage{position:relative;flex:0 0 auto;height:27vh;min-height:146px;max-height:214px;
+    border:1px solid var(--line);border-radius:10px;overflow:hidden;
+    background:radial-gradient(120% 104% at 50% 44%,rgba(99,210,255,.10),rgba(5,12,24,0) 68%),
+      #061423}
+  .gp-canvas{position:absolute;top:0;right:0;bottom:0;left:0;width:100%;height:100%;display:block}
+  /* 左上角 BASE 标牌（仪表语言）：点明地球上的亮点是「基地」，不是随便一座城 */
+  .gp-tag{position:absolute;left:9px;top:8px;font-family:var(--mono);font-size:8.5px;
+    letter-spacing:.18em;color:var(--ink3);pointer-events:none}
+  /* 基地城市标签：left/top 由 ui.js 每帧把基地球面坐标投影到屏幕后内联写入，
+     贴在标记正上方随球体一起走；基地转到球背面时由 ui.js 把 opacity 置 0。
+     默认（无 three.js 时）停在舞台中央 —— 构建失败也不会少一个「基地在哪」的答案。 */
+  .gp-base{position:absolute;left:50%;top:50%;pointer-events:none;white-space:nowrap;
+    -webkit-transform:translate(-50%,-172%);transform:translate(-50%,-172%);
+    font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--ink);
+    text-shadow:0 1px 4px rgba(3,9,18,.92);transition:opacity .18s ease}
+  /* ── .noglobe：three.js / WebGL 不可用时的静态兜底 ──
+     隐藏画布，给标签补一枚 CSS 小点（否则只剩一行悬空文字）。 */
+  #uSelPreview.noglobe .gp-canvas{display:none}
+  #uSelPreview.noglobe .gp-base{opacity:1}
+  #uSelPreview.noglobe .gp-base::before{content:'';display:block;width:8px;height:8px;
+    margin:0 auto 6px;border-radius:50%;background:var(--ac);box-shadow:0 0 10px var(--ac)}
 
-  /* 离港板节标签：识别色小竖标 + 板名 + 英文角标 + 淡出细线；
+  /* 航司列表节标签：识别色小竖标 + 板名 + 英文角标 + 淡出细线；
      竖标颜色 = --sel-ac（当前选中航司色，随点选变化）。 */
   .sel-lab{display:flex;align-items:baseline;flex:0 0 auto;margin-top:16px;padding-left:9px;
-    border-left:2px solid var(--sel-ac,#63d2ff)}
+    border-left:2px solid var(--sel-ac,#63d2ff);transition:border-color .22s ease}
   .sel-lab b{flex:0 0 auto;font-size:12.5px;font-weight:700;color:var(--ink);letter-spacing:.04em}
   .sel-lab span{margin-left:9px;font-family:var(--mono);font-size:9px;color:var(--ink3);
     letter-spacing:.1em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .sel-lab::after{content:'';flex:1 1 auto;height:1px;margin-left:12px;
     background:linear-gradient(90deg,var(--line),transparent)}
 
-  /* 离港板：六行航司数据行（非宫格卡片）。行 = 实色 IATA 码块 + 名称/技能 +
+  /* 航司列表：六行航司数据行（非宫格卡片）。行 = 实色 IATA 码块 + 名称/技能 +
      基地行 + 选中圆标。选中态 → 识别色左条 + 同色低透明底 + 描边（行距用 margin）。
+     2026-10-08 七改：顶部信息带卡片删除后行加高（9→13px 内边距、36→40px 徽标），
+     六行填满地球让出的空间，点选目标也更大。
      列表是中段唯一的滚动区（min-height:0 + overflow-y:auto），矮屏才出滚动条。 */
   .sel-list{margin-top:10px;flex:1 1 auto;min-height:0;overflow-y:auto;
     -webkit-overflow-scrolling:touch}
   .sel-list::-webkit-scrollbar{width:4px}
   .sel-list::-webkit-scrollbar-thumb{background:rgba(99,210,255,.26);border-radius:2px}
   .al-card{position:relative;display:flex;align-items:center;width:100%;
-    margin:0 0 8px;padding:9px 12px 9px 10px;border-radius:9px;cursor:pointer;text-align:left;
+    margin:0 0 8px;padding:13px 14px 13px 12px;border-radius:10px;cursor:pointer;text-align:left;
     border:1px solid var(--line);background:rgba(9,21,38,.45);
     font-family:var(--sans);color:var(--ink);overflow:hidden;
     animation:alIn .38s ease-out both;
@@ -537,23 +524,31 @@
   .al-card:active{-webkit-transform:scale(.985);transform:scale(.985)}
   .al-card.on{border-color:var(--ac);background:var(--ac-soft,rgba(99,210,255,.1))}
   .al-card.on::before{opacity:1}
-  .al-code{flex:0 0 auto;width:36px;height:36px;border-radius:7px;text-align:center;
-    font-family:var(--mono);font-size:13px;font-weight:700;line-height:36px;letter-spacing:.02em;
-    color:#fff;background:var(--ac)}
-  .al-main{flex:1 1 auto;min-width:0;margin-left:11px}
+  .al-code{flex:0 0 auto;width:40px;height:40px;border-radius:8px;text-align:center;
+    font-family:var(--mono);font-size:13.5px;font-weight:700;line-height:40px;letter-spacing:.02em;
+    color:#fff;background:var(--ac);transition:box-shadow .14s ease}
+  .al-main{flex:1 1 auto;min-width:0;margin-left:12px}
   .al-l1{display:flex;align-items:baseline}
-  .al-name{font-size:13.5px;font-weight:600;color:var(--ink);letter-spacing:.01em;
+  .al-name{font-size:14.5px;font-weight:600;color:var(--ink);letter-spacing:.01em;
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .al-trait{flex:0 0 auto;margin-left:8px;font-size:11px;font-weight:600;color:var(--ac)}
-  .al-l2{display:block;margin-top:2px;font-family:var(--mono);font-size:9.5px;color:var(--ink3);
+  .al-trait{flex:0 0 auto;margin-left:8px;font-size:11.5px;font-weight:600;color:var(--ac)}
+  .al-l2{display:block;margin-top:3px;font-family:var(--mono);font-size:10px;color:var(--ink3);
     letter-spacing:.04em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   /* 选中圆标：空心圈 → 实色对勾 */
-  .al-mark{flex:0 0 auto;width:18px;height:18px;margin-left:10px;border-radius:50%;
+  .al-mark{flex:0 0 auto;width:20px;height:20px;margin-left:10px;border-radius:50%;
     border:1px solid var(--line2);position:relative}
   .al-card.on .al-mark{border-color:var(--ac);background:var(--ac)}
-  .al-card.on .al-mark::after{content:'';position:absolute;left:5px;top:2px;width:5px;height:9px;
+  .al-card.on .al-mark::after{content:'';position:absolute;left:6px;top:3px;width:5px;height:10px;
     border-right:2px solid #fff;border-bottom:2px solid #fff;
     -webkit-transform:rotate(45deg);transform:rotate(45deg)}
+  /* 选中行的 IATA 徽标带一点同色辉光：让「当前是谁」在六行里一眼可辨 */
+  .al-card.on .al-code{box-shadow:0 0 12px -3px var(--ac)}
+  /* 悬停态：只给有真悬停的设备（触屏把首按当 hover 会常亮，故包 hover 媒体查询）；
+     选中行的悬停维持识别色，不被中性灰盖掉。 */
+  @media (hover:hover){
+    .al-card:hover{border-color:var(--line2);background:rgba(13,29,52,.6)}
+    .al-card.on:hover{border-color:var(--ac);background:var(--ac-soft,rgba(99,210,255,.1))}
+  }
 
   /* CTA：确认开航 —— 金色只留给主操作，全页唯一按钮级金色；右侧小箭头指「起飞」 */
   .sel-cta{flex:0 0 auto;padding-top:12px}
@@ -574,12 +569,12 @@
     color:var(--ink);background:rgba(112,182,242,.06)}
   .sel-alt:active{background:rgba(99,210,255,.16)}
   /* ── 续玩报表（.rs）──
-     「继续上一次经营」不该只看一张登机牌：玩家要的是**存档时的经营账本**。
-     故这里不复用 .bp（那是「一次飞行的票面」，语义不同），改为一张报表：
+     「继续上一次经营」不该只看一条航司说明：玩家要的是**存档时的经营账本**。
+     故这里不复用顶部那条信息带（那是「新局选航司」的语义），改为一张报表：
      桌头（公司 + 季度） + 经营快照表 + 最近一季度结算明细 + 累计指标。
      账本行复用季报/终局的 .md-kv / .md-total / .md-notes ——
      一套「细线分行 + 等宽右对齐 + 合计行」的语言，两处数字读起来必须同一种味道。
-     盒模型沿用 .bp 的描边/圆角/底色，去掉撕线与条码（那两样是票面装饰，报表不需要）。 */
+     盒模型沿用值机屏的描边/圆角/底色（与 .gp-stage 同族），报表不另起一套。 */
   .rs{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
     border:1px solid var(--line2);border-radius:10px;padding:14px 15px 13px;
     background:linear-gradient(180deg,rgba(112,182,242,.07),rgba(112,182,242,.02))}
@@ -599,19 +594,15 @@
   .sel-ft{margin-top:8px;text-align:center;font-family:var(--mono);font-size:9.5px;
     color:var(--ink3);letter-spacing:.14em}
 
-  /* 矮屏（≤640px，如 360×640 基线机）：压缩页眉与登机牌（条码属纯装饰，直接让位），
-     给离港板多换两行可视高度。 */
+  /* 矮屏（≤640px，如 360×640 基线机）：压缩页眉与地球舞台，给航司列表多换两行可视高度。 */
   @media (max-height:640px){
     .sel-title{margin-top:9px;font-size:21px}
     .sel-sub{margin-top:4px;font-size:11px;line-height:1.55}
     .sel-main{padding-top:10px}
-    .bp{padding:10px 14px 9px}
-    .bp-tear{margin:10px -14px}
-    .bp-desc{font-size:10.5px;line-height:1.6;min-height:3.2em}
-    .bp-foot{display:none}
+    .gp-stage{height:23vh;min-height:128px}
     .sel-lab{margin-top:12px}
   }
-  /* 超矮视口（手机横屏）：登机牌整卡让位，先保住列表与「确认开航」可用；
+  /* 超矮视口（手机横屏）：地球整块让位，先保住列表与「确认开航」可用；
      行内本身的名称/技能/基地信息足够支撑选择。 */
   @media (max-height:480px){
     #uSelPreview{display:none}
@@ -619,10 +610,10 @@
     .sel-lab{margin-top:8px}
   }
 
-  /* 入场：覆盖层淡入；登机牌淡入（无位移，见 pvIn 注）；离港板各行错峰滑入（delay 由 ui.js 按序号内联注入） */
+  /* 入场：覆盖层淡入；地球淡入（无位移，见 pvIn 注）；航司列表各行错峰滑入（delay 由 ui.js 按序号内联注入） */
   @keyframes selIn{from{opacity:0}to{opacity:1}}
-  /* 登机牌切选动画：只做交叉淡入，不做位移 —— renderPreview 每次点选都重建票面，
-     若带 translateY 会整卡上下蹦（用户 2026-10-01 反馈的「跳动」之一）。 */
+  /* 预览淡入：只做交叉淡入，不做位移 —— 覆盖层里任何位移都会把下方节标签与列表顶得一跳
+     （用户 2026-10-01 反馈的「跳动」之一）。 */
   @keyframes pvIn{from{opacity:0}to{opacity:1}}
   @keyframes alIn{from{opacity:0;-webkit-transform:translateY(10px);transform:translateY(10px)}
     to{opacity:1;-webkit-transform:translateY(0);transform:translateY(0)}}
@@ -727,25 +718,34 @@
        否则「决策已生效」这类确认会被模态遮死、玩家以为点了没反应。 -->
   <div id="uToast"></div>
 
-  <!-- 开局选航司覆盖层（用户 2026-09-29 拍板；2026-09-30 四改：登机牌 + 离港板）：
-       boot 之前显示。两步式（inspect→commit）：下方离港板点行 → 上方登机牌即时更新 →
-       「确认开航」才建局。页眉与节标签为编辑式左对齐（机场标牌语言）。
-       #uSelect / #uSelectList / .al-card 是既有实机测试的锚点（smoke-render / verify-dist /
-       verify-heading / check-fallback），改 id 前先同步这四个脚本。 -->
+  <!-- 开局选航司覆盖层（用户 2026-09-29 拍板；2026-10-08 七改：基地地球 + 航司列表，
+       地球下方的信息带卡片已删，技能说明随卡片一并移除）：
+       boot 之前显示。两步式（inspect→commit）：下方列表点行 → 上方地球转到该航司基地
+       并打点 → 「确认开航」才建局。页眉与节标签为编辑式左对齐（机场标牌语言）。
+       #uSelPreview 里的 .gp-* 子节点是静态骨架：地球 canvas 常驻不重建（否则每次点选都会
+       新建一个 WebGL 上下文），点选只由 ui.js 驱动镜头转向。
+       #uSelect / #uSelectList / .al-card / #uSelGo 是既有实机测试的锚点（smoke-render /
+       verify-dist / verify-heading / check-fallback），改 id 前先同步这四个脚本。 -->
   <div id="uSelect" class="sel">
     <div class="sel-hd">
       <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 值机</span></div>
       <span class="sel-title">选择你的航空公司</span>
-      <span class="sel-sub">六家航司各守一域 —— 基地定起点，技能定打法，初始机队随地区出厂。</span>
+      <span class="sel-sub">六家航司各据一方 —— 点按下方航司试选，地球随之转向它的基地；技能决定这一局的打法。</span>
     </div>
     <div class="sel-main">
-      <div id="uSelPreview"></div>
-      <div class="sel-lab"><b>离港航司</b><span>DEPARTURES · 未选的五家，就是本局的对手</span></div>
+      <div id="uSelPreview" class="gp">
+        <div class="gp-stage">
+          <canvas id="uSelGlobe" class="gp-canvas"></canvas>
+          <span class="gp-tag">BASE 基地</span>
+          <span class="gp-base">—</span>
+        </div>
+      </div>
+      <div class="sel-lab"><b>六家航司</b><span>AIRLINES · 未选的五家，将是本局的对手</span></div>
       <div id="uSelectList" class="sel-list"></div>
     </div>
     <div class="sel-cta">
       <button id="uSelGo" class="sel-go" type="button">确认开航</button>
-      <div class="sel-ft">一经值机，不可改签 · 本局全程执掌所选航司</div>
+      <div class="sel-ft">一经值机，不可改签 · 60 个季度执掌所选航司</div>
     </div>
   </div>
 
@@ -852,14 +852,27 @@
     if (!SA || !U || !U.showResume) { showSelect(); return; }
 
     SA.load().then(function (state) {
-      if (!state) { showSelect(); return; }
-      var shown = U.showResume(state, function () {
-        bootFromSave(state);              // 继续：在点击手势里接着这局跑
-      }, function () {
-        SA.clear();                       // 新开：先清掉旧档，再进选航司
+      /* ⚠ 本回调里的异常**不会**被下面那个 rejection 处理器接住 —— Promise 的
+       *   then(onOk, onErr) 只处理上游的 rejection，不处理 onOk 自己抛的错。
+       *   而此处 loader 已被隐藏，一旦抛错就是「黑屏且无提示」。故整体 try/catch，
+       *   任何异常都退回选航司，绝不把玩家丢在空白屏幕上。 */
+      try {
+        if (!state) { showSelect(); return; }
+        var shown = U.showResume(state, function () {
+          /* 继续：在点击手势里接着这局跑。boot 失败（返回 false）时 showFallback，
+           * 抛异常时也兜住 —— 两种情况都不能只留一张黑画面。 */
+          try { bootFromSave(state); } catch (e) {
+            console.error('[AT] 续玩启动失败：', e); showFallback();
+          }
+        }, function () {
+          SA.clear();                       // 新开：先清掉旧档，再进选航司
+          showSelect();
+        });
+        if (!shown) showSelect();           // 覆盖层缺失时退回选航司
+      } catch (e) {
+        console.error('[AT] 续玩界面渲染失败，回退到选航司：', e);
         showSelect();
-      });
-      if (!shown) showSelect();           // 覆盖层缺失时退回选航司
+      }
     }, function () { showSelect(); });    // 读档异常同样退回选航司
   }
 

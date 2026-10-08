@@ -207,6 +207,34 @@
       r.fleet.push({ type: r.startPlane || CONFIG.startPlaneType,
                      count: 2 + Math.floor(r.cash / 1200) });
     });
+    /* ── 偏远母城的启动资金兜底（2026-10-08）──
+     * 圣保罗这类母城与**最近枢纽**相距 7600km+，即使买得起的最便宜机型航程
+     * 也到不了 —— 于是该竞对整局开不出一条线（实测：现金 1200 原地不动、0 航线），
+     * 与其它四家复利暴涨形成撕裂。
+     * 这里按「能飞到最近枢纽的最便宜机型」补足**一次性**启动资金，保证每家竞对
+     * 都有能力开出第一条线。母城周边就有短程线的竞对不受影响（所需资金很小，
+     * 现有现金已足够，本例只对圣保罗生效）。 */
+    rivals.forEach(function (r) {
+      var home = null;
+      state.cities.forEach(function (c) { if (c.id === r.homeCityId) home = c; });
+      if (!home) return;
+      var minDist = Infinity;
+      state.cities.forEach(function (c) {
+        if (c.id === r.homeCityId || !c.hub) return;   // 首个目的港只看枢纽
+        var d = G.distKm(home, c);
+        if (d < minDist) minDist = d;
+      });
+      if (!isFinite(minDist)) return;
+      var cheapest = null;
+      AT.PLANES.forEach(function (p) {
+        if (p.exclusive || p.range < minDist) return;  // 竞对不用商飞；航程要够
+        if (!cheapest || p.price < cheapest.price) cheapest = p;
+      });
+      if (!cheapest) return;
+      var need = cheapest.price * 0.85 +
+        (CONFIG.rivalReserveCash == null ? 400 : CONFIG.rivalReserveCash);
+      if (r.cash < need) r.cash = Math.ceil(need);
+    });
     state.rivals = rivals;
 
     /* ── 玩家开局：单基地 + 少量飞机 ──
@@ -589,6 +617,37 @@
     return slots;
   }
 
+  /* ───────────────────────── 5.5 城市适航门槛（2026-10-08 加）─────────────────────────
+   *
+   * 「飞机要根据城市发展状况来选」的机制化表达（见 data.js CONFIG.planeGate）。
+   *
+   * 问题：槽位是硬上限，槽位满后只有换更大机型能增运力 → 玩家/托管 AI 一律无脑
+   *   升级到最大机型，机型选择退化成单一答案。
+   *
+   * 修法：机型按 tier 要求航线两端城市达到一定开发度（取两端较小者）。
+   *   门槛不足时该机在这条线上「喂不饱」—— 有效运力按开发度差距衰减。
+   *   这是**软惩罚**：仍可飞，只是明显不划算，于是「小城用小机、大城才养得起巨无霸」
+   *   自然成立，玩家每次扩张都要先看两座城市发展到什么程度。
+   *
+   * ⚠ 惩罚落在 `sellable`（能承运的客量）而非 `capacity` 上：大机仍然照付
+   *   满员的油费、地服、持有成本，只是拉不满客 —— 这正是「浪费运力」的表达。
+   */
+  function routeGateDev(state, aId, bId) {
+    var ca = findCity(state, aId), cb = findCity(state, bId);
+    if (!ca || !cb) return 100;
+    return Math.min(ca.dev, cb.dev);
+  }
+  function planeGateFactor(state, aId, bId, planeType) {
+    var req = AT.planeGateMinDev(planeType);
+    if (!req) return 1;
+    var dev = routeGateDev(state, aId, bId);
+    if (dev >= req) return 1;
+    var g = CONFIG.planeGate || {};
+    var step = g.stepDev || 10;
+    var falloff = (g.falloffPerStep == null) ? 0.55 : g.falloffPerStep;
+    return Math.max(0.05, Math.pow(falloff, (req - dev) / step));
+  }
+
   function settleRoute(state, route) {
     var ca = findCity(state, route.a), cb = findCity(state, route.b);
     if (!ca || !cb) return null;
@@ -748,15 +807,20 @@
 
     /* 运力口径统一：「能承运多少客」而不是「有多少座位」。
      * 这样容量与需求（都为百万客/季）可以直接比较，不会出现量纲混淆。 */
-    var sellable = capacity * lf;                    // 我的运力能承运的客量（百万客）
+    var sellable = capacity * lf;                    // 名义运力（未计适航门槛）
+    /* ⚠ 城市适航门槛（2026-10-08）：机型超过两端城市发展水平时「喂不饱」，
+     *   有效运力按差距衰减。它只砍「能卖多少座」，不砍成本 —— 巨机照付满员成本，
+     *   这正是「小城硬上巨无霸 = 白飞」的表达。门槛达标时 gateF = 1，行为不变。 */
+    var gateF = planeGateFactor(state, route.a, route.b, route.type);
+    var sellableEff = sellable * gateF;              // 计入门槛后的有效运力
     var rivalEquiv = rivalCap * lf;                  // 竞对同口径运力（百万客）
 
     /* 份额 = 按运力瓜分市场。无竞对时 share 恒为 1（独吞整条线）。 */
-    var myCapEquiv = Math.max(1e-9, sellable);
+    var myCapEquiv = Math.max(1e-9, sellableEff);
     var share = myCapEquiv / (myCapEquiv + rivalEquiv);
 
     var demandWanted = marketSize * share;           // 我分到的市场（百万客）
-    var pax = Math.min(demandWanted, sellable);      // 受「装不下就装不下」约束
+    var pax = Math.min(demandWanted, sellableEff);   // 受「装不下就装不下」约束
     pax = Math.max(0, pax);
 
     /* 真实客座率：需求不足时低于基准 lf（这就是「该减机」的信号） */
@@ -984,7 +1048,14 @@
       perDay: perDay, perDayCap: perDayCap, slotCap: slotCap, slotTight: slotTight,
       capacity: capacity, sellable: sellable, realLf: realLf,
       potential: potential, pax: pax, loadFactor: lf, share: share, mature: mature,
-      /* 运力是否吃紧 —— 需求撑满运力：说明该加机/提频了（UI 提示） */
+      /* 城市适航门槛：gateF < 1 表示该机型超出两端城市发展水平、运力被浪费，
+       *   gateDev 是该线两端开发度的较小者，gateReq 是该机型所需门槛。
+       *   UI 据此提示「机型超出城市发展水平，考虑换小机型 / 先发展城市」。 */
+      gateF: gateF, gateDev: routeGateDev(state, route.a, route.b),
+      gateReq: AT.planeGateMinDev(route.type), gateLimited: gateF < 0.999,
+      /* 运力是否吃紧 —— 需求撑满名义运力：说明该加机/提频了（UI 提示）。
+       *   ⚠ 用**名义** sellable 判定，不受适航门槛影响 —— 否则被门槛压制时
+       *     会误报「运力吃紧」，把玩家引向继续加同款巨机（正好是反效果）。 */
       capacityTight: capacity > 1e-9 && demandWanted > sellable * 0.98,
       /* 需求是否填不满运力 —— 说明该减机/降频/降价了（UI 提示） */
       demandThin: capacity > 1e-9 && demandWanted < sellable * 0.62,
@@ -1130,7 +1201,8 @@
           Math.min(1, rk.ageQ / Math.max(1, CONFIG.routeMaturityQuarters || 6)));
         var marketSize = routePotential(state, rk.a, rk.b) * mature;
         var lf = CONFIG.loadFactorBase || 0.74;
-        var sellable = capacity * lf;
+        /* 城市适航门槛同口径：竞对机型超过两端城市发展水平时同样喂不饱（与玩家一致） */
+        var sellable = capacity * lf * planeGateFactor(state, rk.a, rk.b, rk.type);
 
         /* 玩家在同线的运力（把玩家的份额扣掉）+ 其他竞对 */
         var otherCap = 0;
@@ -1139,13 +1211,16 @@
             var pd = Math.max(1, Math.min(CONFIG.routeMaxPerDay || 20,
               Math.floor(routeSlots(state, pr.a, pr.b)),
               Math.min(maxPerDayFor(pr.type, dist), pr.perDay || 3) * pr.planes));
-            otherCap += AT.planeOf(pr.type).seats * routeFlights(pd) / 1e6 * lf;
+            otherCap += AT.planeOf(pr.type).seats * routeFlights(pd) / 1e6 * lf *
+              planeGateFactor(state, pr.a, pr.b, pr.type);
           }
         });
         state.rivals.forEach(function (o) {
           if (o === r || !o.alive) return;
           o.routes.forEach(function (ok2) {
-            if (ok2.key === rk.key) otherCap += (ok2.capacity || 0) * lf;
+            if (ok2.key === rk.key) {
+              otherCap += (ok2.capacity || 0) * lf * planeGateFactor(state, ok2.a, ok2.b, ok2.type);
+            }
           });
         });
         var share = sellable / Math.max(1e-9, sellable + otherCap);
@@ -1171,45 +1246,39 @@
           + rPlanes * T.price * (CONFIG.ownershipPerQuarter == null ? 0.045 : CONFIG.ownershipPerQuarter);
         income += (revenue - cost);
       });
-      /* 竞对的规模效应：小公司有隐性补贴（真实世界里新兴航司靠补贴与低人力成本活着），
-       * 否则开局就全灭。1.18 使它们能撑住但不至于反超玩家的精细经营。 */
-      r.cash += income * 1.18;
+      /* 竞对经营收益倍率：1.0 = 与玩家同口径（不再有小公司隐性补贴 —— 旧版 1.18 是
+       * 为补偿竞对模型粗糙，但实测会与「资本部署」叠加导致竞对过强；
+       * 现在靠理性投资就能给出健康的追赶弧线，倍率留作难度的微调旋钮）。 */
+      r.cash += income * (CONFIG.rivalIncomeMul == null ? 1 : CONFIG.rivalIncomeMul);
       r.cash -= r.routes.length * 18;      // 总部与销售等固定开销
 
-      /* ② 扩张：钱够了就买飞机 —— 但**先看该深耕还是该铺线**。
+      /* ② 扩张：把钱投出去 —— 资本部署（2026-10-08 重构）
        *
-       * ⚠ 2026-09-14 二次修正（竞对只铺线不深耕）：
-       *   上一版把「买机 → 抢一条新线」写死成唯一动作，后果与玩家托管 AI
-       *   曾经的退化一模一样：竞对终局 38 架机飞 35 条线、每条线恒定 1 架、
-       *   perDay 恒为 1 —— 而玩家 AI 深耕后单线可达 15 架。
-       *   结构上被碾压（玩家 7.9 架/线 vs 竞对 1.1 架/线），
-       *   难度曲线因此从 Q10 起就是「玩家第一、一路拉大」。
+       * ⚠ 旧版的病根：买机被 `rng() < 0.34 + aggression*0.36` 的**概率闸门**限流
+       *   （实测 ≈0.55 架/季），与现金无关。于是竞对终局囤积 200 多万现金不动、
+       *   机队卡在 18 线/40 架，经营收益停在 5.8 万/季，而玩家一路复利到 45 万/季
+       *   （tools/balance.js 实测 5.5×）——「守着金山不投资」，中后期毫无压力。
        *
-       *   现在竞对也做**二选一**：
-       *     ① 若存在「运力吃紧且槽位没满」的自有航线 → 加一架到那条线上（深耕）
-       *     ② 否则 → 抢一条新航线（铺线）
-       *   判据用与玩家同口径的 settleRoute 结果（capacityTight / slotTight），
-       *   保证双方的「吃紧」定义一致。
+       *   现改为**资本部署**：每季把超过备用金的部分投入机队，每季最多买
+       *   CONFIG.rivalBuyPerQuarter 架（保留节奏，避免一季暴涨）。
+       *   优先级沿用旧版：网络先铺到 ROUTE_FLOOR 条，之后才转向深耕
+       *   （给「槽位没满、需求远未吃饱」的自有干线加机）。
        *
-       *   竞对仍然「粗略」的地方：不做机型置换升级、不精算档位与票价、
-       *   不含事件卡影响、不做财务杠杆 —— 这些仍是玩家独有的决策深度，
-       *   也正是玩家应当领先的地方。目标是**能拉锯**，不是势均力敌。 */
-      var cheapest = 320;                      // 最便宜机型（巴航 E175）的机价
-      var totalPlanes = r.fleet.reduce(function (s, f) { return s + f.count; }, 0);
-      var canAfford = r.cash > cheapest * 1.15;
-      if (canAfford && (totalPlanes < 4 || state.rng() < 0.34 + r.aggression * 0.36)) {
+       *   竞对仍然「粗略」的地方：不精算档位与票价、不做财务杠杆、不含事件卡 ——
+       *   这些仍是玩家独有的决策深度。目标是**能拉锯**，不是势均力敌。 */
+      var reserve = (CONFIG.rivalReserveCash == null ? 400 : CONFIG.rivalReserveCash);
+      var buyCap = (CONFIG.rivalBuyPerQuarter == null ? 2 : CONFIG.rivalBuyPerQuarter);
+      var ROUTE_FLOOR = 18;                  // 航线数下限：未到这个数就优先铺线
+      var buys = 0;
+      while (buys < buyCap) {
+        var totalPlanes = r.fleet.reduce(function (s, f) { return s + f.count; }, 0);
+        var wantDeepen = r.cash > AT.planeOf('cWB1').price * 2.2 &&
+          r.routes.length >= ROUTE_FLOOR;
 
         /* ── 深耕 or 铺线？──
          * ⚠ 不能用「运力是否吃紧」当绝对判据：需求/运力在几乎所有线上都 > 2.5
          *   （这是 slotCap 偏紧的必然结果），若「吃紧就深耕」会变成永远深耕、
-         *   永不铺线 —— 实测竞对航线数从 35 掉到 2，净资产反而更低。
-         *   改成**按比例分流**：先把航线网络铺到一定规模，再逐步转向深耕。
-         *   这与真实航司的路径一致（先开航点、再把干线做厚），
-         *   也保证竞对不会「too deep, too narrow」。 */
-        var ROUTE_FLOOR = 18;                  // 航线数下限：未到这个数就优先铺线
-        var wantDeepen = r.cash > AT.planeOf('cWB1').price * 2.2 &&
-          r.routes.length >= ROUTE_FLOOR;
-
+         *   永不铺线。改成**按比例分流**：先把航线网络铺到一定规模，再转向深耕。 */
         /* 找「值得深耕」的自有航线：运力吃紧、槽位没满 */
         var deepen = null;
         if (wantDeepen) {
@@ -1235,37 +1304,69 @@
         }
 
         if (deepen) {
-          /* 深耕：买一架该线已有车型，加到这条线上 */
+          /* 深耕：加一架该线已有车型。若现金充裕、且现有车型偏小，则**置换升级**到
+           * 更大机型（与玩家的「换机型」同构）—— 否则竞对的线永远停在早期的小机上。
+           * ⚠ 先算清钱、判定买得起，再动 fleet —— 否则会出现「已卖掉旧机却买不起新机」
+           *   的状态污染（旧机型计数被扣、航线 type 却已改）。 */
           var tyD = deepen.type;
-          r.cash -= AT.planeOf(tyD).price * 0.85;
+          var distD = G.distKm(findCity(state, deepen.a), findCity(state, deepen.b));
+          var wantType = pickRivalPlane(state, r, totalPlanes, r.cash - reserve, distD);
+          var upgraded = AT.planeOf(wantType).seats > AT.planeOf(tyD).seats;
+          var buyT = upgraded ? wantType : tyD;
+          var costD = AT.planeOf(buyT).price * 0.85;
+          var salvage = upgraded ? AT.planeOf(tyD).price * 0.55 : 0;
+          if (r.cash + salvage - costD < reserve) break;   // 连这条线的机都买不起 → 收手
+          if (upgraded) {
+            for (var oi = 0; oi < r.fleet.length; oi++) {
+              if (r.fleet[oi].type === tyD && r.fleet[oi].count > 0) { r.fleet[oi].count--; break; }
+            }
+            tyD = wantType;
+            deepen.type = tyD;
+          }
+          r.cash += salvage - costD;
           var slotD = null;
           for (var di = 0; di < r.fleet.length; di++) if (r.fleet[di].type === tyD) slotD = r.fleet[di];
           if (slotD) slotD.count++; else r.fleet.push({ type: tyD, count: 1 });
           r.lastAction = '加厚 ' + cityName(state, deepen.a) + '—' + cityName(state, deepen.b);
+          buys++;
         } else {
-          /* 铺线：买机 + 抢新航线 */
-          var ty = pickRivalPlane(state, r, totalPlanes);
-          r.cash -= AT.planeOf(ty).price * 0.85;
+          /* 铺线：先选一条新航线，再买一架能飞它、且买得起的机型。
+           * ⚠ 2026-10-08 关键修正（「竞对整局 0 航线」的根因）：
+           *   pickRivalRoute 只看 potential，会挑出**买不起的远程线**（高潜力的
+           *   洲际线普遍比小竞对的钱多一个数量级）。旧逻辑遇到买不起就 break，
+           *   于是现金 ~900~1600 的小竞对（5 家里 4 家）**整局开不出一条线**，
+           *   而恰好挑到短线的 1 家复利暴涨 —— 竞对分布彻底撕裂。
+           *   现在先算「可动用现金能买得起的最远航程」maxRange，只在这个航程
+           *   范围内挑航线，保证选中的线一定有买得起的机型能飞。 */
+          var spare0 = r.cash - reserve;
+          var maxRange = 0;
+          AT.PLANES.forEach(function (pl) {
+            if (pl.exclusive) return;                     // 竞对不用商飞
+            if (pl.price * 0.85 <= spare0 && pl.range > maxRange) maxRange = pl.range;
+          });
+          if (maxRange <= 0) break;                       // 连最便宜的机都买不起 → 收手
+          var best = pickRivalRoute(state, r, maxRange);
+          if (!best) break;
+          var ty = pickRivalPlane(state, r, totalPlanes, r.cash - reserve, best.dist);
+          var Tn = AT.planeOf(ty);
+          if (r.cash - Tn.price * 0.85 < reserve) break;
+          r.cash -= Tn.price * 0.85;
           var slot = null;
           for (var i = 0; i < r.fleet.length; i++) if (r.fleet[i].type === ty) slot = r.fleet[i];
           if (slot) slot.count++; else r.fleet.push({ type: ty, count: 1 });
-
-          /* 抢航线：从「玩家还没开、但需求最高」的城市对里挑一条 */
-          var best = pickRivalRoute(state, r);
-          if (best) {
-            /* 竞对也按「频次档位」投放运力，取默认档 3 班/日，
-             * 但受该机型在该航线上的物理上限约束（洲际线宽体一天飞不了 3 班）。
-             * 单位与玩家的 capacity 严格同口径（百万座/季）。 */
-            var rivalPerDay = Math.min(CONFIG.defaultFreqPerDay || 3,
-              maxPerDayFor(ty, best.dist));
-            r.routes.push({
-              key: best.key, a: best.a, b: best.b, type: ty,
-              perDay: rivalPerDay,
-              ageQ: 0,
-              capacity: AT.planeOf(ty).seats * routeFlights(rivalPerDay) / 1e6
-            });
-            r.lastAction = '开通 ' + cityName(state, best.a) + '—' + cityName(state, best.b);
-          }
+          /* 竞对也按「频次档位」投放运力，取默认档 3 班/日，
+           * 但受该机型在该航线上的物理上限约束（洲际线宽体一天飞不了 3 班）。
+           * 单位与玩家的 capacity 严格同口径（百万座/季）。 */
+          var rivalPerDay = Math.min(CONFIG.defaultFreqPerDay || 3,
+            maxPerDayFor(ty, best.dist));
+          r.routes.push({
+            key: best.key, a: best.a, b: best.b, type: ty,
+            perDay: rivalPerDay,
+            ageQ: 0,
+            capacity: Tn.seats * routeFlights(rivalPerDay) / 1e6
+          });
+          r.lastAction = '开通 ' + cityName(state, best.a) + '—' + cityName(state, best.b);
+          buys++;
         }
       }
 
@@ -1499,9 +1600,14 @@
       var ca = findCity(state, r.a), cb = findCity(state, r.b);
       if (!ca || !cb) return;
       var dist = G.distKm(ca, cb);
-      /* 候选机型：能飞、座位数明显更大（≥1.5 倍，否则升级没意义） */
+      /* 候选机型：能飞、座位数明显更大（≥1.5 倍，否则升级没意义），
+       * 且**两端城市开发度够得上** —— 越级换装巨机（如欠发达城市硬上 A380）
+       * 会被城市适航门槛压制有效运力，换机钱白花。这是「飞机要根据城市
+       * 发展状况来选」在扩张决策上的直接体现。 */
+      var gateDevD = routeGateDev(state, r.a, r.b);
       var cands = AT.PLANES.filter(function (p) {
-        return p.range >= dist && p.seats >= T.seats * 1.5;
+        return p.range >= dist && p.seats >= T.seats * 1.5 &&
+          AT.planeGateMinDev(p) <= gateDevD;
       });
       cands.forEach(function (p) {
         var onRoute = state.planes.filter(function (x) { return x.routeKey === r.key; });
@@ -1639,16 +1745,38 @@
     return d.profit;
   }
 
-  /* 竞对选机型：按「现有最大机队规模」和「想开的航线距离」决定。
-   * ⚠ 上限原本停在 cWB1（288 座），导致竞对永远摸不到顶级宽体 cWB2，
-   *   在深耕后的玩家面前结构性落后（玩家清一色 384 座）。
-   *   现在 20 架以上开放 cWB2，让竞对也能进入顶级机型梯队。 */
-  function pickRivalPlane(state, r, totalPlanes) {
-    if (totalPlanes >= 20) return 'cWB2';
-    if (totalPlanes >= 10) return 'cWB1';
-    if (totalPlanes >= 6) return 'cNB2';
-    if (totalPlanes >= 3) return 'cNB1';
-    return 'cRJ1';
+  /* 竞对选机型：按「机队规模 + 可动用现金」和「目标航线距离」决定。
+   *
+   * ⚠ 2026-10-08 修正：门槛原本只看 totalPlanes（20 架以上才 cWB2），
+   *   与现金脱钩 —— 竞对囤着几百万现金却只能按机队数买小机，升级链被卡死。
+   *   现在改为**机队数或现金**任一达标即解锁更大机型，让竞对的钱真的能变成运力。
+   *   cash 参数传「可动用现金」（已扣备用金），航程不够时退到能飞的机型；
+   *   竞对一律不用商飞机型（exclusive 是购机资格，与现实一致）。 */
+  function pickRivalPlane(state, r, totalPlanes, spare, dist) {
+    var c = (spare == null) ? r.cash : spare;             // 可动用现金（已扣备用金）
+    var wantFly = (dist == null) ? 0 : dist;
+    var id;
+    if (totalPlanes >= 24 || c > 20000) id = 'cWB2';      // 波音 777-9（384 座）
+    else if (totalPlanes >= 14 || c > 10000) id = 'cWB1'; // 空客 A330-300（288 座）
+    else if (totalPlanes >= 8 || c > 5000) id = 'cNB2';   // 空客 A320neo（180 座）
+    else if (totalPlanes >= 4 || c > 2000) id = 'cNB1';   // 波音 737-800（174 座）
+    else id = 'cRJ1';                                     // 巴航 E175（76 座）
+    /* 航程不够 → 退到能飞这条线的机型里最便宜的那款（竞对不用商飞） */
+    if (AT.planeOf(id).range < wantFly) {
+      var flyable = AT.PLANES.filter(function (p) {
+        return p.range >= wantFly && !p.exclusive;
+      }).sort(function (a, b) { return a.price - b.price; });
+      if (flyable.length) id = flyable[0].id;
+    }
+    /* ⚠ 买不起 → 退到「能飞且买得起的」机型。少了这一步，现金不足的小竞对
+     *   会一直停在「挑了买不起的机型 → break」，整局开不出一条线（实测过）。 */
+    if (c - AT.planeOf(id).price * 0.85 < 0) {
+      var afford = AT.PLANES.filter(function (p) {
+        return p.range >= wantFly && !p.exclusive && (c - p.price * 0.85 >= 0);
+      }).sort(function (a, b) { return a.price - b.price; });
+      if (afford.length) id = afford[0].id;
+    }
+    return id;
   }
 
   /* ── 网络连通性（玩家与竞对共用同一条规则）──
@@ -1673,7 +1801,7 @@
    * ⚠ 2026-09-30 起与玩家同规则：**新线必须接到它自己的网络上**
    * （母城 + 它已有航线的两端）。AI 与玩家同一套规则，才谈得上公平；
    * 也让地图上每条竞对网络都真的是一棵从母城长出来的枢纽网。 */
-  function pickRivalRoute(state, r) {
+  function pickRivalRoute(state, r, maxDist) {
     var best = null, bestD = -1;
     var cities = state.cities;
     var net = { };
@@ -1690,10 +1818,14 @@
         var taken = false;
         for (var k = 0; k < r.routes.length; k++) if (r.routes[k].key === key) { taken = true; break; }
         if (taken) continue;
+        /* 航程超出竞对买得起的机型 → 跳过（否则会挑到飞不了/买不起的远程线卡死，
+         * 见 rivalTurn 铺线分支的注释）。maxDist 缺省表示不限。 */
+        var dd = G.distKm(a, b);
+        if (maxDist != null && dd > maxDist) continue;
         /* 玩家已经开的线竞对也会抢，但优先级降低（更有价值的是空白市场） */
         var playerHas = !!findRouteByKey(state, key);
         var d = routePotential(state, a.id, b.id) * (playerHas ? 0.55 : 1);
-        if (d > bestD) { bestD = d; best = { key: key, a: a.id, b: b.id, dist: G.distKm(a, b) }; }
+        if (d > bestD) { bestD = d; best = { key: key, a: a.id, b: b.id, dist: dd }; }
       }
     }
     return best;
@@ -1813,14 +1945,16 @@
               ' 利息 ' + interest.toFixed(0) + ' → 净利 ' + net.toFixed(0) +
               '（现金 ' + state.cash.toFixed(0) + '）');
 
-    /* ⑩ 事件卡：按 nextEventAt 触发（不是每回合都有） */
-    if (state.quarter >= state.nextEventAt && state.eventCount < (C.eventsPerGameCap || 14)) {
+    /* ⑩ 事件卡：按 nextEventAt 触发（不是每回合都有）。
+     * ⚠ 2026-10-08 加强事件打击：上限 14→20、间隔 3~7 季→2~5 季 —— 中段
+     *   波折更密，玩家不再一路无风无浪地复利（用户反馈「很少有亏损」）。 */
+    if (state.quarter >= state.nextEventAt && state.eventCount < (C.eventsPerGameCap || 20)) {
       var ev = drawEvent(state);
       if (ev) {
         state.card = ev;
         state.choice = null;
         state.eventCount++;
-        state.nextEventAt = state.quarter + 3 + Math.floor(state.rng() * 5);
+        state.nextEventAt = state.quarter + 2 + Math.floor(state.rng() * 4);
       }
     }
 
@@ -2463,10 +2597,21 @@
         });
         var score = pot * (rivalOn ? 0.6 : 1.0) * (1 + (100 - b.dev) / 220);
 
+        /* 城市适航门槛：优先从「两端城市开发度够得上」的机型里挑。
+         * 越级机型（如需 dev≥93 的 A380）在欠发达城市上会被软惩罚压制有效运力，
+         * 故不进入首选集合 —— 这就是「飞机要根据城市发展状况来选」的落地。
+         * 若候选里全是越级机型（例如机队只有宽体），才退回原集合（惩罚已在
+         * settleRoute 生效，选型仍按座位匹配度取最接近的一款）。 */
+        var gateDev = routeGateDev(state, a.id, b.id);
+
         /* 档 1：机队里已有能飞的机型 —— 选其中**最合适的**（按该线需求密度） */
         var canFlyNow = AT.PLANES.filter(function (p) {
           return ownedTypes[p.id] && p.range >= dist;
         });
+        var canFlyFit = canFlyNow.filter(function (p) {
+          return AT.planeGateMinDev(p) <= gateDev;
+        });
+        if (canFlyFit.length) canFlyNow = canFlyFit;
         if (canFlyNow.length) {
           var ideal = idealSeatsFor(state, a.id, b.id);
           var pick = canFlyNow[0], pd = Infinity;
@@ -2487,6 +2632,12 @@
           return p.range >= dist && p.price <= affordable && AT.canBuyPlane(p, state.airlineId);
         }).sort(function (x, y) { return x.price - y.price; });
         if (!cands.length) return;
+        /* 同档 1：优先只在「城市开发度够得上」的机型里挑，避免智能推荐把
+         * 玩家引向一架在欠发达城市上被门槛压制的越级巨机。 */
+        var candsFit = cands.filter(function (p) {
+          return AT.planeGateMinDev(p) <= gateDev;
+        });
+        if (candsFit.length) cands = candsFit;
         var ideal2 = idealSeatsFor(state, a.id, b.id);
         var pick2 = cands[0], pd2 = Infinity;
         cands.forEach(function (p) {
@@ -2721,6 +2872,7 @@
     routePotential: routePotential, routeFlights: routeFlights,
     networkCityIds: networkCityIds,
     maxPerDayFor: maxPerDayFor, tierOf: tierOf, routeSlots: routeSlots,
+    routeGateDev: routeGateDev, planeGateFactor: planeGateFactor,
     maxPlanesForRoute: maxPlanesForRoute,
     settleRoute: settleRoute, costMul: costMul, modMul: modMul,
     // 指令

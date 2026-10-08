@@ -193,6 +193,12 @@
     if (!isArr(state.fx)) state.fx = [];
     if (!isArr(state.history)) state.history = [];
     if (!isArr(state.log)) state.log = [];
+    /* mods / priceWars 同样被 sim 每季遍历（settleRoute 的 modEffects / routeAtWar），
+     * 旧档若缺这两个数组会**反序列化「成功」**却在首次结算时抛
+     * 「Cannot read properties of undefined」—— 静默半坏档比直接判坏更难查。
+     * 缺省语义安全（无生效修正 / 无价格战），故补 []，不判为无存档。 */
+    if (!isArr(state.mods)) state.mods = [];
+    if (!isArr(state.priceWars)) state.priceWars = [];
     if (!state.stats || typeof state.stats !== 'object') {
       state.stats = { paxTotal: 0, cashEarned: 0, cashSpent: 0, routesOpened: 0,
         routesClosed: 0, planesBought: 0, devPushed: 0, citiesUpgraded: 0 };

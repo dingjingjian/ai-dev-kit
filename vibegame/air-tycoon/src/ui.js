@@ -161,14 +161,190 @@
     syncTabs();
   }
 
-  /* ───────────────────────── 开局选航司（用户 2026-09-29 拍板）─────────────────────────
+  /* ───────────────────────── 选航司页「基地地球」（2026-10-08 加）─────────────────────────
+   *
+   * 与 render.js 的主地球**完全独立**：主渲染器是游戏画布（#stage）的单例，建局时才起、
+   * 且带城市/航线/客机/bloom 全链路；本层在 boot 之前运行，生命周期只到「确认开航」。
+   * 故这里另搭一个最小 three.js 场景：贴图球 + 三盏灯 + 基地标记。
+   * 依赖 index.html 顶部随包加载的 three.min.js 与 assets/earth-tex.js（内联 data URI，
+   * file:// 下外链 jpg 会被 CORS 拒绝）。
+   *
+   * ⚠ 任一环不可用（无 THREE / 无 WebGL / 创建失败）→ 返回 null，调用方给 #uSelPreview
+   *   挂 .noglobe，露出 CSS 静态兜底（见 index.html）—— 绝不抛错、绝不挡住选航司。
+   * ⚠ 镜头缓动到基地、基地标记与城市标签左右都跟着走；基地转到球背面时淡出（见 loop 里的 vis）。
+   * ⚠ dispose 必须调用：选完航司这一层就该把 WebGL 上下文还给浏览器（Chrome 有上下文数量上限）。 */
+
+  /* 基地标记贴图：外圈细环 + 中心柔光 + 实心核（与局内城市标记同一语言）。
+   * 纯白绘制，颜色交给 SpriteMaterial.color 染色（六家航司各一色，复用同一张贴图）。 */
+  function previewMarkTex() {
+    var c = document.createElement('canvas');
+    c.width = c.height = 128;
+    var x = c.getContext('2d');
+    x.translate(64, 64);
+    x.strokeStyle = 'rgba(255,255,255,.5)'; x.lineWidth = 3;
+    x.beginPath(); x.arc(0, 0, 40, 0, Math.PI * 2); x.stroke();
+    var g = x.createRadialGradient(0, 0, 0, 0, 0, 30);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.45, 'rgba(255,255,255,.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g;
+    x.beginPath(); x.arc(0, 0, 30, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff';
+    x.beginPath(); x.arc(0, 0, 8, 0, Math.PI * 2); x.fill();
+    return new THREE.CanvasTexture(c);
+  }
+
+  /* 建一个基地地球预览。canvas = 舞台里的常驻画布；labelEl = 基地城市标签（每帧投影定位）。
+   * 返回 { setBase(lat,lon,color), dispose() }；不可用时返回 null。 */
+  function createPreviewGlobe(canvas, labelEl) {
+    if (typeof THREE === 'undefined' || !canvas || !THREE.WebGLRenderer) return null;
+    var gl = null;
+    try { gl = canvas.getContext('webgl2') || canvas.getContext('webgl'); } catch (e) {}
+    if (!gl) return null;
+
+    var R = 1;
+    var renderer, scene, camera, globe, marker, markerMat, markTex;
+    var baseDir = new THREE.Vector3(0, 1, 0);   // 基地方向（球心 → 基地）
+    var camDir = new THREE.Vector3(0, 0, 1);
+    var tmp = new THREE.Vector3();
+    /* 球坐标（与 render.js 的 applyCam 同一套约定）：
+     * pos = d·(sinφ·sinθ, cosφ, sinφ·cosθ) —— θ=atan2(x,z)、φ=acos(y) 时朝向基地。 */
+    var cur = { theta: 0.6, phi: 1.2, dist: 3.2, tTheta: 0.6, tPhi: 1.2 };
+    var raf = 0, disposed = false, sizerW = 0, sizerH = 0, elapsed = 0;
+
+    try {
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+    } catch (e) { return null; }
+    if (!renderer || !renderer.getContext) return null;
+
+    renderer.setClearAlpha(0);                 // 透明底：露出 .gp-stage 的星域渐变
+    if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+
+    var mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.86, metalness: 0.04 });
+    globe = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 32), mat);
+    scene.add(globe);
+
+    scene.add(new THREE.AmbientLight(0x2b3f58, 3.4));
+    var key = new THREE.DirectionalLight(0xfff2d0, 2.6);
+    key.position.set(2.4, 2.0, 3.6);
+    scene.add(key);
+    var rim = new THREE.DirectionalLight(0x4aa8d6, 1.2);
+    rim.position.set(-3.2, -1.2, -2.4);
+    scene.add(rim);
+
+    /* 贴图：内联 data URI；缺失或加载失败一律回落纯色球（不白屏、不抛错）。 */
+    var texSrc = (typeof global.AT_EARTH_TEX === 'string' && global.AT_EARTH_TEX) || null;
+    if (texSrc) {
+      try {
+        new THREE.TextureLoader().load(texSrc, function (tx) {
+          if (THREE.sRGBEncoding !== undefined) tx.encoding = THREE.sRGBEncoding;
+          tx.anisotropy = 4;
+          mat.map = tx; mat.needsUpdate = true;
+        }, undefined, function () { mat.color.setHex(0x7fa8c4); mat.needsUpdate = true; });
+      } catch (e) { mat.color.setHex(0x7fa8c4); mat.needsUpdate = true; }
+    } else {
+      mat.color.setHex(0x7fa8c4);
+    }
+
+    markTex = previewMarkTex();
+    markerMat = new THREE.SpriteMaterial({
+      map: markTex, color: 0xffffff, transparent: true,
+      depthTest: false, depthWrite: false, opacity: 1   // depthTest 关掉：靠 vis 控制显隐，避免贴到球面边缘被裁
+    });
+    marker = new THREE.Sprite(markerMat);
+    marker.scale.set(0.18, 0.18, 1);
+    scene.add(marker);
+
+    function applySize(w, hh) {
+      renderer.setPixelRatio(Math.min(global.devicePixelRatio || 1, 2));
+      renderer.setSize(w, hh, false);
+      camera.aspect = w / hh;
+      /* 距离：让直径 2R 的球恰好塞进视口（竖/横两向取更紧的那个）+ 6% 余量 */
+      var vF = camera.fov * Math.PI / 180;
+      var hF = 2 * Math.atan(Math.tan(vF / 2) * camera.aspect);
+      cur.dist = Math.max(1 / Math.sin(vF / 2), 1 / Math.sin(hF / 2)) * 1.06;
+      camera.updateProjectionMatrix();
+    }
+
+    function loop() {
+      if (disposed) return;
+      raf = global.requestAnimationFrame(loop);
+      var w = canvas.clientWidth, hh = canvas.clientHeight;
+      if (!w || !hh) return;                       // 覆盖层还没 display（.show 未加）→ 等下一帧
+      if (w !== sizerW || hh !== sizerH) { sizerW = w; sizerH = hh; applySize(w, hh); }
+
+      elapsed += 1 / 60;
+      var t = elapsed;
+      cur.theta += (cur.tTheta - cur.theta) * 0.13;
+      cur.phi += (cur.tPhi - cur.phi) * 0.13;
+      /* 极轻微摆动：让静止的球不至于死板，同时基地始终停在视野中心附近（±2.3°）。 */
+      var th = cur.theta + Math.sin(t * 0.4) * 0.04;
+      var ph = cur.phi, d = cur.dist;
+      camera.position.set(d * Math.sin(ph) * Math.sin(th), d * Math.cos(ph), d * Math.sin(ph) * Math.cos(th));
+      camera.lookAt(0, 0, 0);
+
+      marker.position.set(baseDir.x * R * 1.012, baseDir.y * R * 1.012, baseDir.z * R * 1.012);
+      var pulse = 1 + Math.sin(t * 2.1) * 0.1;
+      marker.scale.set(0.18 * pulse, 0.18 * pulse, 1);
+
+      /* 可见性：基地是否朝向相机（转到球背面时把标记与标签一起淡出）。 */
+      camDir.copy(camera.position).normalize();
+      var vis = baseDir.dot(camDir);
+      var op = Math.max(0, Math.min(1, (vis - 0.05) / 0.2));
+      markerMat.opacity = op;
+
+      renderer.render(scene, camera);
+
+      if (labelEl) {
+        tmp.copy(baseDir).multiplyScalar(R * 1.02).project(camera);
+        labelEl.style.left = ((tmp.x * 0.5 + 0.5) * w) + 'px';
+        labelEl.style.top = ((-tmp.y * 0.5 + 0.5) * hh) + 'px';
+        labelEl.style.opacity = op > 0.5 ? '1' : '0';
+      }
+    }
+
+    function setBase(lat, lon, color) {
+      if (typeof lat !== 'number' || typeof lon !== 'number') return;
+      var v = AT.geo.ll2v(lat, lon, 1);
+      baseDir.set(v.x, v.y, v.z).normalize();
+      var phi = Math.acos(Math.max(-1, Math.min(1, baseDir.y)));
+      var theta = Math.atan2(baseDir.x, baseDir.z);
+      /* 沿最短弧转向新基地（θ 跨 ±π 时直接赋值会绕远路）。 */
+      var dd = theta - cur.tTheta;
+      while (dd > Math.PI) dd -= Math.PI * 2;
+      while (dd < -Math.PI) dd += Math.PI * 2;
+      cur.tTheta += dd;
+      cur.tPhi = Math.max(0.16, Math.min(Math.PI - 0.16, phi));   // 留出极点余量，避免 lookAt 与 up 退化
+      if (color) { try { markerMat.color.set(color); } catch (e) {} }
+    }
+
+    function dispose() {
+      disposed = true;
+      if (raf) { try { global.cancelAnimationFrame(raf); } catch (e) {} raf = 0; }
+      try { if (markTex) markTex.dispose(); } catch (e) {}
+      try { markerMat.dispose(); } catch (e) {}
+      try { globe.geometry.dispose(); globe.material.dispose(); } catch (e) {}
+      try { renderer.dispose(); } catch (e) {}
+      try { if (renderer.forceContextLoss) renderer.forceContextLoss(); } catch (e) {}
+    }
+
+    raf = global.requestAnimationFrame(loop);
+    return { setBase: setBase, dispose: dispose };
+  }
+
+  /* ───────────────────────── 开局选航司（用户 2026-09-29 拍板；2026-10-08 六改）─────────
    *
    * ⚠ 它必须在 **boot 之前** 运行 —— 此时 ui.state 还是 null、init 也还没跑，
    *   所以这个函数**只读 data.js 的 AT.AIRLINES**，绝不碰 ui.state / el 缓存
    *   （el 由 init→cacheEls 填充，这里用 $() 直接查）。
    *
-   * 交互（2026-09-30 三改：分屏预览 + 宫格点选，两步式 inspect→commit）：
-   *   下方 3 列宫格点选 → 上方预览卡即时更新 → 底部「确认开航」才是真正提交。
+   * 交互（2026-09-30 三改确立两步式 inspect→commit；2026-10-08 六改换上基地地球，
+   *      七改删掉地球下方的信息带卡片 —— 行内信息已够，卡片属重复陈列）：
+   *   下方列表点行 → 上方地球转到该航司基地并标记打点 →
+   *   底部「确认开航」才是真正提交。
    *   理由：「本局不可更换航司」是不可逆选择，两步给玩家一次反悔的机会；
    *   默认选中第一家 —— 预览区不空场，不关心的玩家一击也能直达。
    * 返回 true 表示选择界面已呈现；返回 false 时调用方应退回默认开局
@@ -178,6 +354,9 @@
     var list = (AT.AIRLINES || []);
     if (!wrap || !pv || !grid || !go || !list.length) return false;
 
+    /* 地球的静态子节点（由 index.html 提供）。缺任一 → 对应内容跳过，不报错。 */
+    var gCanvas = $('uSelGlobe'), gLabel = pv.querySelector('.gp-base');
+
     /* 默认选中第一家 */
     var cur = list[0].id;
 
@@ -186,7 +365,7 @@
       return list[0];
     }
 
-    /* hex → rgba()：识别色的低透明度底（选中态底色 / 徽标光晕用）。
+    /* hex → rgba()：识别色的低透明度底（行选中底色用）。
      * Chrome 61 没有 color-mix()，只能由 JS 算好注入 CSS 变量。 */
     function tint(hex, a) {
       var m = /^#([0-9a-f]{6})$/i.exec(String(hex || ''));
@@ -195,50 +374,24 @@
       return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
     }
 
-    /* 六个技能的小图标（内联 SVG，与底部 dock 同一套描线语言；纯装饰 aria-hidden）。
-     * 纯展示映射：trait.id → 图形，不给任何行为。 */
-    var TRAIT_ICONS = {
-      scale: '<path d="M4 6h16M4 12h16M4 18h9"/>',
-      service: '<path d="M12 4l2.2 4.9 5.3.6-4 3.6 1.1 5.2-4.6-2.7-4.6 2.7 1.1-5.2-4-3.6 5.3-.6z"/>',
-      alliance: '<circle cx="6" cy="17" r="2.4"/><circle cx="18" cy="7" r="2.4"/><circle cx="17" cy="18" r="2.4"/><path d="M7.8 15.2l8.2-6.4M8.3 16.6l6.4.9"/>',
-      capital: '<circle cx="12" cy="12" r="8.2"/><path d="M9 7.5l3 4.2 3-4.2M12 11.7V17M9.6 13h4.8M9.6 15.2h4.8"/>',
-      transit: '<path d="M4 9h13M14 5.5L17.5 9 14 12.5M20 15H7M10 11.5L6.5 15l3.5 3.5"/>',
-      regional: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.7 2.3 4 4.9 4 8s-1.3 5.7-4 8c-2.7-2.3-4-4.9-4-8s1.3-5.7 4-8z"/>'
-    };
-    function iconOf(tr) {
-      var d = TRAIT_ICONS[tr && tr.id];
-      if (!d) return '';
-      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"' +
-        ' stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + d + '</svg>';
-    }
+    /* 基地地球：建在**常驻画布**上。为什么不随点选重建 innerHTML ——
+     * 重建会连带新建一个 WebGLRenderer（每次点选都多占一个 WebGL 上下文）。
+     * 点选只做两件事：改基地标签文字、把镜头缓动到新基地。 */
+    var globe = gCanvas ? createPreviewGlobe(gCanvas, gLabel) : null;
+    if (!globe) pv.className += ' noglobe';         // three.js / WebGL 不可用 → CSS 静态兜底
 
-    /* 登机牌票面（2026-09-30 四改）：实色 IATA 徽标 + 名称/原型 + 地区 →
-     * HUB 栏 → 撕线打孔 → SKILL 栏（技能数字全部在 desc 里，不再另做 chips）→
-     * 条码票根 + 航班号。识别色只出现在：徽标 / 左缘竖条 / 地区字 / 技能名 / 条码。 */
+    /* 更新顶部预览（地球转向 + 打点换色）。识别色只出现在地球标记
+     * （含 .noglobe 兜底小点）；技能名 / IATA 徽标等详情都在列表行内。 */
     function renderPreview(a) {
       var base = AT.CITIES_BY_ID[a.baseCityId] || {};
-      var reg = AT.REGIONS_BY_CODE[a.region] || {};
-      var tr = AT.normalizeTrait(a.trait);
-      pv.innerHTML = '<div class="bp" style="--ac:' + h(a.color || '#63d2ff') + ';' +
-        '--ac-soft:' + tint(a.color, 0.12) + '">' +
-        '<div class="bp-head"><span class="bp-code">' + h(a.iata || '') + '</span>' +
-        '<span class="bp-id"><span class="bp-name">' + h(a.name) + '</span>' +
-        '<span class="bp-proto">' + h(a.prototype || '') + '</span></span>' +
-        '<span class="bp-region">' + h(reg.name || '') + '</span></div>' +
-        '<div class="bp-line"><i>HUB</i><b>' + h(base.name || '—') + '</b>' +
-        '<u>' + h(a.baseCode || base.id || '') + '</u></div>' +
-        '<div class="bp-line"><i>FLEET</i><b>' + h((AT.planeOf(a.startPlane) || {}).name || '—') +
-        ' × ' + (AT.CONFIG.startPlanes || 2) + '</b></div>' +
-        '<div class="bp-tear" aria-hidden="true"></div>' +
-        '<div class="bp-line"><i>SKILL</i><b class="bp-skillname">' + iconOf(tr) + h(tr.name) + '</b></div>' +
-        '<span class="bp-desc">' + h(tr.desc) + '</span>' +
-        '<div class="bp-foot"><span class="bp-bars" aria-hidden="true"></span>' +
-        '<span class="bp-flt">AT·' + h(a.iata || '') + '·Q60</span></div>' +
-        '</div>';
+      var color = a.color || '#63d2ff';
+      pv.style.setProperty('--ac', color);
+      if (gLabel) gLabel.textContent = (base.name || '') + (a.baseCode ? ' · ' + a.baseCode : '');
+      if (globe) globe.setBase(base.lat, base.lon, color);
     }
 
-    /* 离港板行（2026-09-30 四改：迷你卡 → 数据行）：实色 IATA 码块 + 名称/技能 +
-     * 基地行（mono 弱化）+ 选中圆标。左对齐数据行，不是营销卡；点选只换登机牌不提交。 */
+    /* 航司列表行（迷你卡 → 数据行）：实色 IATA 码块 + 名称/技能 +
+     * 基地行（mono 弱化）+ 选中圆标。左对齐数据行，不是营销卡；点选只换地球不提交。 */
     function tileHtml(a, i) {
       var base = AT.CITIES_BY_ID[a.baseCityId] || {};
       var reg = AT.REGIONS_BY_CODE[a.region] || {};
@@ -260,7 +413,7 @@
     grid.innerHTML = html;
 
     /* 同步选中态与确认按钮文案（只在 .on 类与文本上做增量更新，
-     * 不重建宫格 —— 重建会重播入场动画，每次点选都闪一遍）。
+     * 不重建航司列表 —— 重建会重播入场动画，每次点选都闪一遍）。
      * 同时把「当前选中航司色」写到页面级 --sel-ac：节标签竖标随点选换色，
      * 让整个屏幕对「当前是谁」有一处轻量回应。 */
     function syncSel() {
@@ -289,6 +442,7 @@
 
     go.addEventListener('click', function () {
       sfx('confirm');
+      if (globe) { globe.dispose(); globe = null; }   // 交还 WebGL 上下文，停掉这一层的 rAF
       wrap.classList.remove('show');
       if (onPick) onPick(cur);
     }, false);
@@ -386,6 +540,10 @@
         '<button class="sel-alt" data-act="resume-new" type="button">开启新的一局</button>' +
         '<div class="sel-ft">自动存档 · 每 5 秒与切到后台时各保存一次</div>' +
       '</div>';
+    /* ⚠ 必须把报表写进覆盖层再显示：漏掉这行时 #uResume 只有 .show、内部为空，
+     *   而启动流程此刻已把 loader 隐藏 → 表现为**纯黑屏且不报错**（无任何异常，
+     *   只是什么都没画）。这是「静默失效」最典型的一种：有输出、没抛错。 */
+    wrap.innerHTML = html;
     wrap.classList.add('show');
 
     wrap.addEventListener('click', function (e) {
@@ -441,10 +599,12 @@
     if (act === 'open-here') {
       var c = AT.CITIES_BY_ID[ui.selCity];
       if (!c) return;
-      ui.newFrom = c.id;
-      /* 城市卡片由 openPanel 统一收起（卡片互斥），这里不必单独处理。 */
       closePanel();
       openPanel('newroute');
+      /* ⚠ 先 openPanel（清空上一次的决策）再种入出发地 —— 顺序反了会被
+       * openPanel 的「每次打开都初始化」当成残留清掉。 */
+      ui.newFrom = c.id;
+      /* 城市卡片由 openPanel 统一收起（卡片互斥），这里不必单独处理。 */
       toast('从 ' + c.name + ' 出发，选择一个目的地' +
         (S.networkCityIds(ui.state)[c.id] ? '' : '（目的地须为已通航城市）'));
     }
@@ -527,14 +687,26 @@
      * 否则它会压在面板上方挡视线。城市卡片自己的「从这里开新航线」分支
      * （onCityCardClick）不必再单独收卡，这里统一兜底。 */
     if (el.uCityCard) el.uCityCard.classList.remove('show');
-    /* 打开「新航线」时清掉可能残留的滚动标记：它是「这次点击」的一次性意图，
-     * 不该跨次生效（比如上次点完目的地就关面板，再打开时会莫名跳一下）。
-     * 同时把面板滚回顶部：上次可能停在③机型区，重新进来应从 ① 出发地
-     * 开始看 —— 带着旧滚动位置开新决策，读起来像「面板坏了」。 */
+    /* 每次打开都回到顶部：上次可能停在列表中部，重新进来应从第一屏开始看 ——
+     * 带着旧滚动位置开新决策，读起来像「面板坏了」。 */
+    if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
+    /* 展开/选中态同样每次打开都初始化（2026-10-08 用户要求）：
+     * 航线行的展开详情（selRoute）、对手榜的「确认并购」展开（acquireId），
+     * 关面板 ≠ 取消选中 —— 不清的话重开面板后旧行还是摊开的（「展开永远是展开的」）。 */
+    ui.selRoute = null;
+    ui.acquireId = null;
+    /* 「新航线」是一张决策表单，**每次打开都初始化**（2026-10-08 用户要求）：
+     * 出发地/目的地/机型全部清空 —— 关面板不等于做决定，「上次看到一半」的
+     * 选中项不该在重开后冒充已选（目的地/机型的高亮、开通按钮的可用态都会骗人）。
+     * 清掉的 newFrom 由 renderNewRoute 重新落回基地默认（见 1421 行附近）；
+     * 城市卡片「从这里开新航线」的出发地意图在 openPanel 之后再种入（onCityCardClick）。
+     * 滚动意图标记一并清掉：它是「这次点击」的一次性量，不该跨次生效。 */
     if (name === 'newroute') {
+      ui.newFrom = null;
+      ui.newTo = null;
+      ui.newType = null;
       ui.scrollType = false;
       ui.scrollOpen = false;
-      if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
     }
     if (el.uPanel) el.uPanel.classList.add('show');
     syncTabs();
@@ -546,6 +718,7 @@
   function closePanel() {
     ui.panel = null;
     ui.acquireId = null;      // 关面板即收起「确认并购」的展开态，下次进来从头看
+    ui.selRoute = null;       // 航线行展开态同理（openPanel 打开时也会再兜一次）
     if (el.uPanel) el.uPanel.classList.remove('show');
     syncTabs();
     pauseForPanel(false);
@@ -756,7 +929,8 @@
     var res = S.openRoute(st, from, ui.newTo, ui.newType, 1);
     if (res.ok) {
       ui.newTo = null;
-      /* 开线成功后面板回到顶部：表单已重置（目的地清空），顶部是
+      ui.newType = null;
+      /* 开线成功后面板回到顶部：表单已重置（目的地/机型清空），顶部是
        * ① 出发地区 —— 下一条线的决策从这里重新开始，而不是停在刚开完的③机型区。 */
       if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
       dirty.panel = true; dirty.hud = true;
@@ -1045,6 +1219,9 @@
         (d && d.slotTight ? '<div class="rc-hint warn">时刻已饱和 —— 加机不再增班，考虑换更大机型</div>' : '') +
         (d && d.demandThin ? '<div class="rc-hint">需求偏薄 —— 客座率偏低，可减班或换小机型</div>' : '') +
         (d && d.capacityTight ? '<div class="rc-hint warn">运力吃紧 —— 需求撑满航班，可加机</div>' : '') +
+        (d && d.gateLimited ? '<div class="rc-hint warn">城市开发度不足 —— ' + h(T.name) +
+          ' 需两端开发度 ≥' + d.gateReq + '（现 ' + Math.round(d.gateDev) +
+          '），有效运力仅 ' + pct(d.gateF, 0) + '</div>' : '') +
         '</div>';
 
       if (sel) out += renderRouteDetail(st, r, d, n, T, dist, slot);
@@ -1110,12 +1287,22 @@
              AT.canBuyPlane(p, st.airlineId);
     });
     if (cands.length) {
-      out += '<div class="rd-sec"><div class="rd-h">置换机型（补差价，' + n + ' 架一起换）</div><div class="rd-btns">';
+      /* 城市适航门槛：换装到越级机型（两端开发度不够）会被软惩罚压制有效运力，
+       * 故在按钮上直接标注门槛，引导玩家「按城市发展状况选机型」。
+       * 门槛是软惩罚而非硬禁，按钮仍可点（玩家自行权衡）。 */
+      var upGateDev = S.routeGateDev(st, r.a, r.b);
+      out += '<div class="rd-sec"><div class="rd-h">置换机型（补差价，' + n + ' 架一起换 · 该线两端开发度 ' +
+        Math.round(upGateDev) + '）</div><div class="rd-btns">';
       cands.forEach(function (p) {
-        out += '<button class="btn" data-act="upgrade" data-key="' + h(r.key) + '" data-val="' + p.id +
-          '" type="button">换 ' + h(p.name) + '<i>' + p.seats + ' 座</i></button>';
+        var req = AT.planeGateMinDev(p);
+        var overGate = req > upGateDev;
+        out += '<button class="btn" data-act="upgrade" data-key="' + h(r.key) +
+          '" data-val="' + p.id + '" type="button">换 ' + h(p.name) +
+          '<i>' + p.seats + ' 座</i>' +
+          (overGate ? '<i class="c-warn">需两端开发度 ≥' + req + '</i>' : '') + '</button>';
       });
-      out += '</div><div class="rd-note">旧机按机龄折价回收（约 92% 残值）</div></div>';
+      out += '</div><div class="rd-note">旧机按机龄折价回收（约 92% 残值）' +
+        ' · 标注门槛的机型在城市发展到位前运力受限</div></div>';
     }
 
     /* 成本明细：把 settleRoute 的分解原样列出，让玩家看得见钱花在哪 */
@@ -1371,8 +1558,12 @@
        *   两者一起才够玩家做决策。 */
       var ideal = S.idealSeatsFor(st, fromId, ui.newTo);
       var needType = S.bestNeededType(st, selDist);
+      /* 城市适航门槛：该线两端城市的**最低开发度**。越级机型（门槛高于它）
+       * 会被软惩罚压制有效运力 —— 这正是「飞机要根据城市发展状况来选」。 */
+      var nwGateDev = S.routeGateDev(st, fromId, ui.newTo);
       out += '<div class="nw-sec nw-type"><div class="rd-h">③ 机型（全线需约 ' + Math.round(ideal) +
-        ' 座 · 最省能飞 ' + h(AT.planeOf(needType).name) + '）</div><div class="chips">';
+        ' 座 · 最省能飞 ' + h(AT.planeOf(needType).name) +
+        ' · 该线两端开发度 ' + Math.round(nwGateDev) + '）</div><div class="chips">';
       /* 先算出「推荐机型」：在可飞机型里，选单机座位数最接近 `需要座位/3` 的一款。
        * 为什么是 /3：一条线要填满槽位大约需要 3 架（与 sim 的 idealSeatsFor
        * 内部同款假设一致），故单架理想座位 ≈ 总需求 / 3。
@@ -1384,8 +1575,12 @@
       var flyable = AT.PLANES.filter(function (p) {
         return p.range >= selDist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]);
       });
+      /* 推荐池优先只放「城市开发度够得上」的机型 —— 否则推荐会把玩家
+       * 引向一架在这条线上被门槛压制的越级巨机。全都越级时才退回原集合。 */
+      var flyableFit = flyable.filter(function (p) { return AT.planeGateMinDev(p) <= nwGateDev; });
+      var recPool = flyableFit.length ? flyableFit : flyable;
       var recId = null, recGap = Infinity;
-      flyable.forEach(function (p) {
+      recPool.forEach(function (p) {
         var gap = Math.abs(p.seats - perPlaneNeed);
         if (gap < recGap) { recGap = gap; recId = p.id; }
       });
@@ -1407,11 +1602,16 @@
         var stock = idleOf ? '<i class="c-good">机队有 ' + idleOf + ' 架可派</i>'
                            : '<i class="c-warn">机队没有 · 需现购 ' + money(p.price) + '</i>';
         var rec = (p.id === recId) ? '<b class="rec-tag">推荐</b>' : '';
+        /* 越级机型（门槛高于该线两端开发度）：显式标注会被压制运力，
+         * 但**不置灰** —— 门槛是软惩罚，玩家仍可自行权衡。 */
+        var pReq = AT.planeGateMinDev(p);
+        var gateTag = (pReq > nwGateDev)
+          ? '<i class="c-warn">需两端开发度 ≥' + pReq + '（不足 · 运力被压制）</i>' : '';
         out += '<button class="chip chip-wide' + (ui.newType === p.id ? ' on' : '') +
           (afford || idleOf ? '' : ' over') +
           '"' + (afford || idleOf ? ' data-act="pick-type" data-type="' + p.id + '"' : '') + ' type="button">' +
           h(p.name) + rec + '<em>' + p.seats + ' 座 · ' + money(p.price) + (afford ? '' : ' · 资金不足') + '</em>' +
-          stock + '</button>';
+          stock + gateTag + '</button>';
       });
       out += '</div>';
       var pot = S.routePotential(st, fromId, ui.newTo);
