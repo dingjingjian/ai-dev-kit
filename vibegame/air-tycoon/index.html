@@ -565,6 +565,37 @@
     margin-top:-4px;border-top:2px solid #ffe3b0;border-right:2px solid #ffe3b0;
     -webkit-transform:rotate(45deg);transform:rotate(45deg);opacity:.8}
   .sel-go:active{background:rgba(255,199,107,.28)}
+  /* 次要 CTA：与 .sel-go 同一盒模型（同高、同圆角、同字号），只把「金色主操作」
+     降级成冷色描线 —— 金色是整页唯一的「起飞」信号，次要路径不跟它抢。
+     用于续玩层的「开启新的一局」：与主按钮并排时同高同宽，不再是一枚小号通用按钮。 */
+  .sel-alt{position:relative;display:block;width:100%;margin-top:8px;padding:13px;
+    border-radius:9px;cursor:pointer;border:1px solid var(--line2);
+    font-family:var(--sans);font-size:14.5px;font-weight:600;letter-spacing:.06em;
+    color:var(--ink);background:rgba(112,182,242,.06)}
+  .sel-alt:active{background:rgba(99,210,255,.16)}
+  /* ── 续玩报表（.rs）──
+     「继续上一次经营」不该只看一张登机牌：玩家要的是**存档时的经营账本**。
+     故这里不复用 .bp（那是「一次飞行的票面」，语义不同），改为一张报表：
+     桌头（公司 + 季度） + 经营快照表 + 最近一季度结算明细 + 累计指标。
+     账本行复用季报/终局的 .md-kv / .md-total / .md-notes ——
+     一套「细线分行 + 等宽右对齐 + 合计行」的语言，两处数字读起来必须同一种味道。
+     盒模型沿用 .bp 的描边/圆角/底色，去掉撕线与条码（那两样是票面装饰，报表不需要）。 */
+  .rs{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    border:1px solid var(--line2);border-radius:10px;padding:14px 15px 13px;
+    background:linear-gradient(180deg,rgba(112,182,242,.07),rgba(112,182,242,.02))}
+  /* 桌头：公司名左、季度右 —— 与值机屏的编辑式左对齐一致，不做居中堆叠。
+     ⚠ 不给它画底线：紧邻的 .md-kv 自带 border-top，两条线会叠成双描边。 */
+  .rs-hd{display:flex;align-items:baseline;padding-bottom:1px}
+  .rs-co{flex:1 1 auto;min-width:0;font-size:16px;font-weight:700;color:var(--ink);
+    letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rs-q{flex:0 0 auto;margin-left:10px;font-family:var(--mono);font-size:10px;
+    color:var(--cyan);letter-spacing:.08em}
+  /* 分区标签：小破折号前缀 + 琥珀/冷青 mono 小字，右端可挂一个说明（季度号） */
+  .rs-sec{display:flex;align-items:center;margin-top:16px;font-family:var(--mono);
+    font-size:9.5px;color:var(--cyan);letter-spacing:.14em}
+  .rs-sec::before{content:'';flex:0 0 auto;width:8px;height:1px;background:var(--cyan);
+    margin-right:6px}
+  .rs-sec > u{text-decoration:none;margin-left:auto;color:var(--ink3);letter-spacing:.08em}
   .sel-ft{margin-top:8px;text-align:center;font-family:var(--mono);font-size:9.5px;
     color:var(--ink3);letter-spacing:.14em}
 
@@ -615,9 +646,11 @@
   /* 面板内滚动条（桌面端可见，移动端不显示；Chrome 61 支持 ::-webkit-scrollbar）*/
   .pn-body::-webkit-scrollbar,
   .md-box::-webkit-scrollbar,
+  .rs::-webkit-scrollbar,
   #uCityCard::-webkit-scrollbar{width:4px}
   .pn-body::-webkit-scrollbar-thumb,
   .md-box::-webkit-scrollbar-thumb,
+  .rs::-webkit-scrollbar-thumb,
   #uCityCard::-webkit-scrollbar-thumb{background:rgba(112,182,242,.32);border-radius:2px}
 </style>
 </head>
@@ -717,8 +750,8 @@
   </div>
 
   <!-- 启动续玩覆盖层（自动存档）：有可读存档时先于选航司显示，给「继续 / 新开」两条路。
-       内容由 ui.js 的 showResume 填充（复用 .sel / .bp 样式），这里只放空壳。
-       #uResume 是既有启动脚本与 ui.js 的锚点，改名前先同步二者。 -->
+       内容由 ui.js 的 showResume 填充：经营报表（.rs）+ 值机屏骨架（.sel / .sel-go / .sel-alt），
+       这里只放空壳。#uResume 是既有启动脚本与 ui.js 的锚点，改名前先同步二者。 -->
   <div id="uResume" class="sel"></div>
 
   <!-- 兼容占位：ui.js 里 cacheEls 会取这几个 id。

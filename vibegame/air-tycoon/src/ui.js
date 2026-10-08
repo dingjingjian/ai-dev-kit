@@ -302,36 +302,88 @@
    * 交互：有可读存档时先显示本层，给两条路 ——「继续经营」（接着这局跑）与
    * 「开启新的一局」（清档 → 回到选航司）。返回 true 表示已呈现；返回 false
    * 时调用方应直接进入选航司（不让玩家卡死）。
-   * 复用值机屏（.sel / .bp 等）的样式语言，不新增 CSS。 */
+   *
+   * 内容：一张**经营报表**（.rs），不是一张登机牌 —— 续玩前玩家要判断的是
+   * 「这局还值不值得接着打」，所以给存活状态快照（现金/净资产/排名/规模/全球化）、
+   * 最近一季度逐项账目（取自 history 快照的真实结算值）、以及累计战绩。
+   * 样式复用值机屏（.sel / .sel-go / .sel-alt）与季报的账本语言（.md-kv / .md-total）。 */
   function showResume(state, onResume, onNew) {
     var wrap = $('uResume');
     if (!wrap || !state) return false;
     var total = C.totalQuarters || 60;
     var q = Math.min(state.quarter || 0, total);
     var name = state.companyName || '未命名航空';
-    var nRoutes = state.routes ? state.routes.length : 0;
-    var nPlanes = state.planes ? state.planes.length : 0;
+    var routes = state.routes || [];
+    var planes = state.planes || [];
+    var stats = state.stats || {};
+    var history = state.history || [];
+    var last = history.length ? history[history.length - 1] : null;
+    var prev = history.length > 1 ? history[history.length - 2] : null;
+    var debt = state.debt || 0;
 
-    wrap.innerHTML =
+    /* 读档时 ui.state 还没建（本层跑在 boot 之前），故只拿传进来的 state 直接问 sim 的
+     * 纯查询接口 —— 它们都只读 state，不依赖全局单例，与 HUD 的算法同源，数字不会漂。 */
+    var rk = S.ranking(state);
+    var my = 0;
+    for (var i = 0; i < rk.length; i++) if (rk[i].isPlayer) { my = i + 1; break; }
+    var nw = S.netWorth(state);
+    var idle = S.idlePlanes(state).length;
+    var g = S.globalization(state);
+    /* 净资产环比：只在有两期快照时给，别拿「上季 vs 开局」冒充环比 */
+    var nwDelta = (last && prev) ? (last.netWorth - prev.netWorth) : null;
+
+    var html =
       '<div class="sel-hd">' +
         '<div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 续飞</span></div>' +
         '<span class="sel-title">继续上一次经营？</span>' +
-        '<span class="sel-sub">进度已自动保存。接着执掌现有航线网络，或开启全新一局。</span>' +
+        '<span class="sel-sub">进度已自动保存。以下是存档时的经营报表 —— 接着执掌，或开启全新一局。</span>' +
       '</div>' +
       '<div class="sel-main">' +
-        '<div class="bp" style="--ac:#63d2ff">' +
-          '<div class="bp-head"><span class="bp-code">Q' + q + '</span>' +
-          '<span class="bp-id"><span class="bp-name">' + h(name) + '</span>' +
-          '<span class="bp-proto">已进行 ' + q + ' / ' + total + ' 个季度</span></span></div>' +
-          '<div class="bp-tear" aria-hidden="true"></div>' +
-          '<div class="bp-line"><i>ROUTES</i><b>' + nRoutes + ' 条航线</b></div>' +
-          '<div class="bp-line"><i>FLEET</i><b>' + nPlanes + ' 架飞机</b></div>' +
+        '<div class="rs">' +
+          '<div class="rs-hd"><span class="rs-co">' + h(name) + '</span>' +
+            '<span class="rs-q">Q' + q + ' / ' + total + '</span></div>' +
+          /* ① 经营快照：存活状态的六个面 —— 现金/净资产/排名/负债/规模/全球化 */
+          '<div class="md-kv">' +
+            '<div><span>现金</span><b' + (state.cash < 0 ? ' class="c-bad"' : '') + '>' +
+              money(state.cash) + '</b></div>' +
+            '<div><span>净资产</span><b>' + money(nw) + (nwDelta != null ?
+              ' <i class="' + (nwDelta >= 0 ? 'c-good' : 'c-bad') + '">(' +
+              (nwDelta >= 0 ? '+' : '') + money(nwDelta) + ' 环比)</i>' : '') + '</b></div>' +
+            '<div><span>全球排名</span><b>第 ' + (my || '—') + ' / ' + (rk.length || '—') + ' 名</b></div>' +
+            (debt > 0 ? '<div><span>负债</span><b class="c-bad">' + money(debt) + '</b></div>' : '') +
+            '<div><span>航线 / 机队</span><b>' + routes.length + ' 条 / ' + planes.length + ' 架' +
+              (idle ? '<i class="c-warn">· ' + idle + ' 架闲置</i>' : '') + '</b></div>' +
+            '<div><span>全球化</span><b>' + g.pct + '%（' + g.cities + '/' + g.totalCities +
+              ' 城 · ' + g.regions + '/' + g.totalRegions + ' 地区）</b></div>' +
+          '</div>' +
+          /* ② 上一季度账目：逐项列出「收入 − 各项支出 = 净利」，全部取自 history 快照的
+           *    真实结算值（不是 forecast 的预测值），保证这页数字自洽、能对上账。
+           *    开局首季结算前没有快照，此时只留一句说明，不编造数字。 */
+          (last ?
+            '<div class="rs-sec">最近一季度结算<u>Q' + last.quarter + '</u></div>' +
+            '<div class="md-kv">' +
+              '<div><span>营业收入</span><b>' + money(last.revenue) + '</b></div>' +
+              '<div><span>运营成本</span><b class="c-bad">−' + money(last.cost) + '</b></div>' +
+              (last.groundCost ? '<div><span>地面与起降</span><b class="c-bad">−' +
+                money(last.groundCost) + '</b></div>' : '') +
+              '<div><span>管理支出</span><b class="c-bad">−' + money(last.overhead) + '</b></div>' +
+              (last.interest > 0 ? '<div><span>债务利息</span><b class="c-bad">−' +
+                money(last.interest) + '</b></div>' : '') +
+              '<div class="md-total"><span>净利润</span><b class="' +
+                (last.net >= 0 ? 'c-good' : 'c-bad') + '">' + moneyFull(last.net) + '</b></div>' +
+              '<div><span>季度客运量</span><b>' + (last.pax || 0).toFixed(2) + ' 百万客</b></div>' +
+            '</div>'
+            :
+            '<div class="rs-sec">账目<u>尚无季度结算记录</u></div>') +
+          /* ③ 累计指标：整局的宏观战绩，一行讲完 */
+          '<div class="md-notes">累计客运 ' + (stats.paxTotal || 0).toFixed(1) + ' 百万客 · 开线 ' +
+            (stats.routesOpened || 0) + ' 条 · 购机 ' + (stats.planesBought || 0) + ' 架 · 关线 ' +
+            (stats.routesClosed || 0) + ' 条</div>' +
         '</div>' +
       '</div>' +
       '<div class="sel-cta">' +
         '<button class="sel-go" data-act="resume-continue" type="button">继续经营</button>' +
-        '<button class="btn" data-act="resume-new" type="button" ' +
-          'style="width:100%;margin:8px 0 0">开启新的一局</button>' +
+        '<button class="sel-alt" data-act="resume-new" type="button">开启新的一局</button>' +
         '<div class="sel-ft">自动存档 · 每 5 秒与切到后台时各保存一次</div>' +
       '</div>';
     wrap.classList.add('show');
