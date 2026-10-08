@@ -57,6 +57,14 @@
   function boot(opts) {
     opts = opts || {};
     game.state = opts.state || S.create(opts);
+    /* 旧存档兼容（2026-10-08）：简报阶段已删除。改动前保存的档可能停在
+     * phase 'briefing'（quarter 还是 0）——tick 已不认识这个阶段，会永远卡死，
+     * 故读档时归一化到 operating，从第 1 季接着跑。 */
+    if (game.state.phase === 'briefing') {
+      game.state.phase = 'operating';
+      game.state.t = 0;
+      if (!game.state.quarter) game.state.quarter = 1;
+    }
     game._saveAcc = 0;
     game._overCleared = false;
 
@@ -84,8 +92,7 @@
       if (fb) fb.classList.add('show');
     }
 
-    /* 进入简报阶段 → 自动推进到运营。
-     * briefing 只用于展示「你的公司、你的基地」这一屏，8 秒后自动开局。 */
+    /* 开局即运营（简报阶段已删，2026-10-08）：计时直接开跑，无 8 秒等待。 */
     game.started = true;
     game.running = true;
     game.last = (global.performance || Date).now();

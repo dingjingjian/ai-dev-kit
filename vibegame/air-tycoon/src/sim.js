@@ -74,9 +74,10 @@
     var state = {
       seed: seed,
       rng: makeRng(seed),
-      phase: 'briefing',        // briefing → operating → over
-      t: 0,                     // 当前阶段已过秒数
-      quarter: 0,               // 当前回合（季度）
+      phase: 'operating',       // operating → over（开局即运营，无简报阶段；
+                                // 简报职能由 boot 前的选航司界面承担，2026-10-08 删）
+      t: 0,                     // 当前阶段已过秒数（operating = 本季度已过秒数）
+      quarter: 1,               // 当前回合（季度），从第 1 季起算
       speed: 1,
       /* 玩家操作暂停：抽屉面板（航线/机队/新航线）打开时置 true，由 UI 设置。
        * ⚠ 与 state.card 的区别：card 是「必须做决策才能继续」（模态层，sim 自管），
@@ -237,6 +238,9 @@
               '，机队 ' + nStart + ' 架 ' + AT.planeOf(startType).name +
               '，启动资金 ' + state.cash + ' 万元' +
               (airline ? '，特色技能「' + trait.name + '」' : ''));
+    /* 原来这句挂在 enterPhase('operating') 里；简报阶段删除后建局即运营，
+     * 开局宣言改由这里补上，日志叙事不变。 */
+    log(state, '正式运营开始 —— 共 ' + (AT.CONFIG.totalQuarters || 60) + ' 个季度');
 
     return state;
   }
@@ -1709,10 +1713,7 @@
   function enterPhase(state, phase) {
     state.phase = phase;
     state.t = 0;
-    if (phase === 'operating') {
-      state.quarter = 1;
-      log(state, '正式运营开始 —— 共 ' + (CONFIG.totalQuarters || 60) + ' 个季度');
-    } else if (phase === 'over') {
+    if (phase === 'over') {
       state.ranking = ranking(state);
       log(state, '经营期结束，开始清算');
     }
@@ -2528,15 +2529,9 @@
     if (!state || state.phase === 'over') return state;
     dt = (dt == null) ? TICK : dt;
 
-    if (state.phase === 'briefing') {
-      state.t += dt;
-      if (state.t >= (CONFIG.briefingSeconds || 8)) enterPhase(state, 'operating');
-      return state;
-    }
-
     if (state.phase === 'operating') {
       /* 面板打开（paused）时冻结回合计时 —— 玩家在读航线详情、挑目的地、
-       * 算钱的时候，时间不该继续走。放在简报阶段之外，简报不受影响。 */
+       * 算钱的时候，时间不该继续走。 */
       if (state.paused) return state;
       state.t += dt;
       /* 有未处理的事件卡时暂停回合计时 —— 玩家要先做出决策才能继续，
@@ -2598,7 +2593,6 @@
 
   /* 暂停/恢复回合计时。抽屉面板（航线/机队/新航线）打开时由 UI 调用 ——
    * 玩家在面板里读数据、挑目的地、算钱的时候，计时不该继续往前跑。
-   * ⚠ 只冻结 operating 阶段（见 tick）；简报阶段不受影响，不会卡在开场。
    * ⚠ 与 state.card 分工：card 由 sim 自管（必须做决策），paused 只由 UI 设置。 */
   function setPaused(state, on) {
     if (!state) return false;

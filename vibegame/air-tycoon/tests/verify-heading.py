@@ -30,7 +30,7 @@ EDGE = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 VW, VH = 390, 844
 OUT = ROOT / "docs" / "shots" / "heading"
 
-# 局面：越过 briefing、开三条航线（给钱 → 买机 → 开线 → 全部派飞）
+# 局面：开三条航线（给钱 → 买机 → 开线 → 全部派飞）
 SETUP = r"""
 () => {
   const st = window.AT.game.state;
@@ -42,8 +42,6 @@ SETUP = r"""
    * 故显式关掉连通性约束（sim.create 的 freeNetwork 开关）。
    * 连通性规则本身由 tests/headless.js 的「网络连通性」一节断言。 */
   st.freeNetwork = true;
-  let guard = 0;
-  while (st.phase === 'briefing' && guard++ < 40) S.advance(st, 1);
   log.push('phase → ' + st.phase);
   const tryRoute = (a, b, ty) => {
     for (let k = 0; k < 3; k++) { const r = S.buyPlane(st, ty); if (!r || !r.ok) break; }

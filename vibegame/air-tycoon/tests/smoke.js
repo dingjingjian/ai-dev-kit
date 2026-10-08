@@ -34,8 +34,6 @@ console.log('竞对:', st.rivals.map(function (r) { return r.name + '(' + S.find
 console.log('净资产:', Math.round(S.netWorth(st)));
 
 console.log('\n=== 手动开一条航线 ===');
-// 先推进过 briefing 阶段（8 秒 brief，10Hz → 80 tick 有余）
-S.advance(st, 9);
 console.log('阶段:', st.phase, '| 季度:', st.quarter);
 // 上海 → 首尔（距离应小于 2400km，支线机能飞）
 var r1 = S.openRoute(st, 'C01', 'C02', 'cRJ1', 1);

@@ -798,10 +798,9 @@
  * 放在最后一个 <script> 里（不在 DOMContentLoaded 里）—— 脚本都在 body 末尾，
  * 执行到这里 DOM 已完整，不必再加一层事件等待。
  *
- * ⚠ 这里**不开航线、不推进阶段**：开局 phase 是 briefing，
- *   而 openRoute 会检查 `phase !== 'operating'` 直接拒绝（实测 routes 恒为 0）。
- *   推进阶段由主循环的 tick 负责（briefing 满 8 秒自动转 operating）。
- *   开局 0 条航线：第一条线开在哪，由玩家自己决策（见 sim.js 建局注释）。 */
+ * ⚠ 这里**不开航线**：开局 0 条航线是刻意的 —— 第一条线开在哪，
+ *   由玩家自己决策（见 sim.js 建局注释）。建局即 operating 阶段
+ *   （简报阶段已删，2026-10-08），阶段推进由主循环的 tick 负责。 */
 (function () {
   function showFallback() {
     var fb = document.getElementById('fallback');

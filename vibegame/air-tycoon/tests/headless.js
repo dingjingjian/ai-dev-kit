@@ -688,8 +688,8 @@ section('暂停层');
 
 var stP = st9('C01');
 ok(stP.phase === 'operating', '先进入运营阶段', '实际 ' + stP.phase);
-/* ⚠ 基线取当前值而非假定 0：enterPhase('operating') 已把 quarter 置为 1
- * （见 sim.js enterPhase），所以进入运营 = 第 1 季，不是第 0 季。
+/* ⚠ 基线取当前值而非假定 0：建局即运营且 quarter 从 1 起算（见 sim.js 建局），
+ * 所以开局 = 第 1 季，不是第 0 季。
  * 断言必须相对基线写，否则会把「机制正确」误判成失败。 */
 var tBeforeP = stP.t, qBeforeP = stP.quarter;
 S.setPaused(stP, true);

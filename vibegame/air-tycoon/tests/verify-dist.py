@@ -138,10 +138,9 @@ async def check_runtime(tmp):
         # （宫格点选 → 预览 → 确认提交）。
         await page.click("#uSelectList .al-card")
         await page.click("#uSelGo")
-        # ⚠ briefing 阶段 8 秒（CONFIG.briefingSeconds），briefing 期间 phase
-        #   还是 'briefing'，等 4.5 秒就断言「进入运营」必然失败 —— 时机错，不是产品 bug。
-        #   这里直接等过简报。
-        await page.wait_for_timeout(11000)
+        # 简报阶段已删（2026-10-08）：点「确认开航」后建局即 operating。
+        # 这里等 5 秒是给主循环 / 贴图加载留时间，不再与任何阶段转换有关。
+        await page.wait_for_timeout(5000)
 
         ok(not errs, "无 console 报错", errs[:3])
         ok(not fails, "无请求失败（说明包内资源齐全）", fails[:5])
@@ -196,7 +195,7 @@ async def check_runtime(tmp):
         ok(st["renderOk"], "渲染器初始化成功（render.ok）")
         ok(st["texOk"], "**地球贴图真的加载了**（texOk —— 证明内联 data URI 在 file:// 下可用）")
         ok(st["gameRunning"], "主循环在跑")
-        ok(st["phase"] == "operating", "简报结束、进入运营阶段", st["phase"])
+        ok(st["phase"] == "operating", "开局即运营阶段（简报已删）", st["phase"])
         ok(st["airline"], "所选航司已生效（state.airlineName 非空）", st["airline"])
         ok(st["homeCity"] == "C02", "航司基地即玩家基地（国航 → 北京 C02）", st["homeCity"])
         ok(st["cityCount"] == 24, "24 座城市数据就位", st["cityCount"])
