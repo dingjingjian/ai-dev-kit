@@ -145,7 +145,9 @@
 
     /* ── 竞对航空公司 ──
      * 没有国家，竞争者就是同行。每家有一个母城、资金、以及「激进程度」。
-     * 它们会抢热门航线、发起价格战；玩家无法消灭它们，只能超越。 */
+     * 它们会抢热门航线、发起价格战。玩家击败它们有两条路：**市值/规模超越**，
+     * 或在排名领先且资金足够时**整体并购**（见 acquireRival）—— 后者会让对手
+     * 彻底退场，故本条原则已由「无法消灭，只能超越」放宽为「可超越也可并购」。 */
     var nRiv = (opts.rivalCount != null) ? opts.rivalCount : (CONFIG.rivals || 5);
     var rivals = [];
     if (airline) {
@@ -2096,6 +2098,120 @@
     return { ok: true };
   }
 
+  /* ─────────────────── 并购对手航司（2026-10-08 加）───────────────────
+   *
+   * 本作原本的设计原则是「竞对无法消灭，只能超越」（见文件头竞对段）。
+   * 现加入**整体并购**：当玩家排名领先且资金足够时，可买下整家对手 ——
+   * 接收其全部航线与机队，对手退场。这条原则随之放宽为
+   * 「可以超越，也可以在条件成熟时吞并」。
+   *
+   * 为什么用「排名 + 资金」双门槛：只卡资金的话，中后期现金充裕就能无脑吞并，
+   * 难度曲线会塌；要求「排名低于你」意味着你**先赢过它**才吞得下它 ——
+   * 并购因此是「领先的兑现」，而不是「翻盘的捷径」。
+   * 危机折价（对手现金告急）则给了「趁你病要你命」的战术窗口。 */
+
+  /* 并购报价与资格：纯计算，不改状态。
+   * UI 用它置灰按钮 + 展示「将接收什么」，acquireRival 用它做最终校验 —— 单一真源。 */
+  function acquireInfo(state, rivalId) {
+    if (state.phase !== 'operating') return { ok: false, reason: '尚未开始运营' };
+    var r = null;
+    state.rivals.forEach(function (x) { if (x.id === rivalId) r = x; });
+    if (!r) return { ok: false, reason: '该航司不存在' };
+    if (!r.alive) return { ok: false, reason: '该航司已退出市场' };
+
+    var base = rivalNetWorth(r);
+    var crisisCash = (CONFIG.acquireCrisisCash == null ? 0 : CONFIG.acquireCrisisCash);
+    var crisis = r.cash < crisisCash;
+    var mult = crisis ? (CONFIG.acquireCrisisMul == null ? 0.70 : CONFIG.acquireCrisisMul)
+                      : (CONFIG.acquirePremium == null ? 1.35 : CONFIG.acquirePremium);
+    var minPrice = (CONFIG.acquireMinPrice == null ? 200 : CONFIG.acquireMinPrice);
+    var price = Math.max(minPrice, Math.round(base * mult));
+
+    var info = {
+      ok: true, reason: '', price: price, crisis: crisis, mult: mult,
+      base: Math.round(base), gainRoutes: r.routes.length, gainPlanes: rivalFleetCount(r)
+    };
+
+    /* 只能并购排名低于自己的对手（下标更大 = 更弱）。 */
+    var rk = ranking(state), pi = -1, ri = -1;
+    for (var i = 0; i < rk.length; i++) {
+      if (rk[i].isPlayer) pi = i;
+      if (rk[i].id === rivalId) ri = i;
+    }
+    if (pi < 0 || ri < 0 || pi > ri) {
+      info.ok = false;
+      info.reason = '只能并购排名低于你的航司（你第 ' + (pi + 1) + '，对方第 ' + (ri + 1) + '）';
+      return info;
+    }
+    if (state.cash < price) {
+      info.ok = false;
+      info.reason = '资金不足（需 ' + price + ' 万，现金 ' + Math.round(state.cash) + ' 万）';
+      return info;
+    }
+    return info;
+  }
+
+  /* 执行并购：扣款 → 接收机队与航线 → 结束其价格战 → 对手退场。
+   * 飞机直接写 routeKey（同 openRoute 的派机方式），**不走 openRoute** ——
+   * 对手的航网可能与玩家网络不连通，而 openRoute 会以「网络连通性」拒绝，
+   * 但「买下一家公司就继承了它的航网」是并购的应有之义。 */
+  function acquireRival(state, rivalId) {
+    var info = acquireInfo(state, rivalId);
+    if (!info.ok) return { ok: false, reason: info.reason };
+    var idx = -1;
+    for (var i = 0; i < state.rivals.length; i++) if (state.rivals[i].id === rivalId) { idx = i; break; }
+    if (idx < 0) return { ok: false, reason: '该航司不存在' };
+    var r = state.rivals[idx], name = r.name;
+
+    state.cash -= info.price;
+
+    /* ① 机队转玩家：逐架造出玩家飞机对象，先进 pool 再分配 */
+    var pool = [];
+    r.fleet.forEach(function (f) {
+      for (var k = 0; k < f.count; k++) pool.push(makePlane(state, f.type));
+    });
+    pool.forEach(function (p) { state.planes.push(p); });
+
+    /* ② 航线转玩家：按运力降序贪心分配飞机。
+     *   已有同 key 的线 → 增厚（且不超该线架数上限）；否则新建玩家航线。
+     *   pool 用尽后剩余航线跳过（对手航网密度由其 AI 维持，pool 通常够用）。 */
+    var rts = r.routes.slice().sort(function (a, b) { return (b.capacity || 0) - (a.capacity || 0); });
+    var gainedRoutes = 0;
+    rts.forEach(function (rr, ri2) {
+      var remainingR = rts.length - ri2;
+      var existing = findRouteByKey(state, rr.key);
+      if (existing) {
+        if (pool.length && planesOnRoute(state, rr.key).length < maxPlanesForRoute(state, existing)) {
+          pool.shift().routeKey = rr.key;
+        }
+        return;
+      }
+      var take = Math.min(pool.length, Math.max(1, Math.round(pool.length / Math.max(1, remainingR))));
+      if (take < 1) return;                       // 无飞机可派 → 跳过这条线
+      state.routes.push({
+        key: rr.key, a: rr.a, b: rr.b, type: rr.type,
+        ageQ: rr.ageQ || 0, fareMul: 1, planes: take,
+        perDay: rr.perDay || CONFIG.defaultFreqPerDay || 3,
+        pax: 0, profit: 0
+      });
+      state.stats.routesOpened++;
+      for (var k = 0; k < take && pool.length; k++) pool.shift().routeKey = rr.key;
+      gainedRoutes++;
+    });
+
+    /* ③ 你买下了价格战的发起方 → 它对你的价格战一并结束 */
+    state.priceWars = state.priceWars.filter(function (w) { return w.by !== rivalId; });
+
+    /* ④ 对手退场：从榜单移除，市场少一家 */
+    state.rivals.splice(idx, 1);
+
+    recalcCityRoutes(state);
+    log(state, '以 ' + info.price + ' 万完成对「' + name + '」的并购：接收 ' +
+              gainedRoutes + ' 条航线、' + info.gainPlanes + ' 架在册飞机');
+
+    return { ok: true, price: info.price, routes: gainedRoutes, planes: info.gainPlanes, name: name };
+  }
+
   /* 购买飞机：现金支付；不足可贷款（由 UI 决定，sim 只做校验） */
   function buyPlane(state, typeId, count) {
     count = Math.max(1, count || 1);
@@ -2498,6 +2614,20 @@
    * 竞对规模用同一套公式折算（它们的 fleet/routes 是简化模型），
    * 保证玩家与竞对可比。
    */
+  /* 竞对的机队价值（重置价合计）与在册架数 —— 收购报价与排名共用同一口径。 */
+  function rivalFleetValue(r) {
+    return r.fleet.reduce(function (s, f) { return s + AT.planeOf(f.type).price * f.count; }, 0);
+  }
+  function rivalFleetCount(r) {
+    return r.fleet.reduce(function (s, f) { return s + f.count; }, 0);
+  }
+  /* 竞对净资产：现金 + 机队价值 × 0.85（残值折扣）。
+   * ⚠ ranking() 与 acquireInfo() 必须用这一个来源 —— 否则「榜单上看到的排名」
+   *   与「收购报价的高低」会漂，玩家会觉得报价算错了。 */
+  function rivalNetWorth(r) {
+    return r.cash + rivalFleetValue(r) * 0.85;
+  }
+
   function ranking(state) {
     var list = [];
     list.push({
@@ -2508,12 +2638,11 @@
       pax: state.stats.paxTotal, color: '#F5C542'
     });
     state.rivals.forEach(function (r) {
-      var fv = r.fleet.reduce(function (s, f) { return s + AT.planeOf(f.type).price * f.count; }, 0);
       list.push({
         id: r.id, name: r.name, isPlayer: false,
-        netWorth: r.cash + fv * 0.85,
+        netWorth: rivalNetWorth(r),
         cash: Math.round(r.cash), debt: 0,
-        fleet: r.fleet.reduce(function (s, f) { return s + f.count; }, 0),
+        fleet: rivalFleetCount(r),
         routes: r.routes.length, pax: 0, color: '#8C93A8',
         alive: r.alive
       });
@@ -2605,6 +2734,7 @@
     buyPlane: buyPlane, sellPlane: sellPlane, upgradeRouteType: upgradeRouteType,
     borrow: borrow, repay: repay, setFare: setFare, setFrequency: setFrequency,
     chooseEvent: chooseEvent,
+    acquireInfo: acquireInfo, acquireRival: acquireRival,
     pickBestNewRoute: pickBestNewRoute, bestNeededType: bestNeededType,
     idealSeatsFor: idealSeatsFor, playerTurn: playerTurn,
     // 结算与终局

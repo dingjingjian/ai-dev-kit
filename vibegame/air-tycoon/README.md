@@ -83,10 +83,10 @@ air-tycoon/
 ```bash
 cd vibegame/air-tycoon
 
-# 对不对（161 项功能/结构断言）
+# 对不对（193 项功能/结构断言）
 node tests/headless.js
 
-# UI 契约（49 项静态校验，不开浏览器）
+# UI 契约（50 项静态校验，不开浏览器）
 node tests/ui-contract.js
 
 # 音频（67 项：去抖叠层、总线结构、包络安全区、BGM 音序）

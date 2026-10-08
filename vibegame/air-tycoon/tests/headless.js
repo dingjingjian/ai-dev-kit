@@ -839,6 +839,131 @@ ok(badRiv === 0, '⑥ 竞对的每条线都从自己母城长出来（无凭空�
 ok(noColor === 0, '⑥ 竞对都带航司识别色（render.js 按它对航线/客机着色）',
   '缺色 ' + noColor + ' 家');
 
+/* ───────────────────────── 并购层 ─────────────────────────
+ * 「整体并购对手」玩法（2026-10-08）的核心不变量：
+ *   资格 = 排名领先（你排在它前面）+ 资金足够；报价 = 对手净资产 × 溢价（危机折价）；
+ *   成功后对手机队与航线并入玩家、对手彻底退场、它对你的价格战一并结束。
+ * ⚠ 报价口径必须与榜单一致：rivalNetWorth = 现金 + 机队重置价 × 0.85
+ *   （竞对机队不带机龄，故按重置价折扣，而非玩家的按机龄折旧残值）。 */
+section('并购层');
+
+/* 竞对在册架数 / 机队重置价 —— 与 sim 内部同口径（测试侧复算，防止口径漂移） */
+function fleetTotal(r) {
+  return r.fleet.reduce(function (s, f) { return s + f.count; }, 0);
+}
+function fleetAsk(r) {
+  return r.fleet.reduce(function (s, f) { return s + AT.planeOf(f.type).price * f.count; }, 0);
+}
+/* 推进到指定季度并自动处理事件卡（未决事件卡会让 tick 冻结回合计时） */
+function runTo(st, quarter) {
+  var g = 0;
+  while (st.quarter < quarter && st.phase !== 'over' && g < 200000) {
+    if (st.card) S.chooseEvent(st, 0);
+    S.tick(st, S.TICK); g++;
+  }
+  return st;
+}
+
+/* ① 资格与报价：排名第 1 + 现金充足 → 可并购，报价 = 净资产 × 正常溢价 */
+var stAc = S.create({ seed: 7, homeCityId: 'C01' });
+runTo(stAc, 8);
+stAc.cash = 1e9; stAc.debt = 0;               // 净资产碾压 → 稳居第 1
+ok(S.ranking(stAc)[0].isPlayer, '① 现金 1e9 → 玩家位列第 1（取得并购资格）');
+/* 选中「机队最多、且机队数 ≥ 航线数」的对手：保证其航线都能分到飞机（见②贪心分配） */
+var tgt = null;
+stAc.rivals.forEach(function (r) {
+  if (!r.alive || !r.routes.length) return;
+  if (fleetTotal(r) < r.routes.length) return;
+  if (!tgt || fleetTotal(r) > fleetTotal(tgt)) tgt = r;
+});
+ok(!!tgt, '① 存在「机队数 ≥ 航线数」的可并购对手（样本非空）');
+tgt.cash = 8000;                              // 明确非危机（高于 acquireCrisisCash）
+var tId = tgt.id;
+var infoA = S.acquireInfo(stAc, tId);
+ok(infoA.ok, '① 排名领先 + 资金充足 → acquireInfo.ok', infoA.reason);
+ok(infoA.crisis === false && infoA.mult === C.acquirePremium,
+  '① 非危机：溢价 = CONFIG.acquirePremium', 'crisis=' + infoA.crisis + ' mult=' + infoA.mult);
+var askBase = tgt.cash + fleetAsk(tgt) * 0.85;
+var askExp = Math.max(C.acquireMinPrice, Math.round(askBase * C.acquirePremium));
+ok(infoA.price === askExp, '① 报价 = max(下限, 对手净资产 × 溢价)',
+  '实际 ' + infoA.price + ' 期望 ' + askExp);
+ok(infoA.gainRoutes === tgt.routes.length && infoA.gainPlanes === fleetTotal(tgt),
+  '① 预展示「将接收」= 对手航线数 / 在册架数',
+  infoA.gainRoutes + ' 线 / ' + infoA.gainPlanes + ' 架');
+
+/* ② 执行并购：扣款、并入机队与航线、对手退场、价格战结束 */
+var cashB = stAc.cash, planesB = stAc.planes.length;
+var rivalsB = stAc.rivals.length, routesB = stAc.routes.length;
+var gainP = infoA.gainPlanes, gainR = infoA.gainRoutes;
+stAc.priceWars.push({ key: tgt.routes[0].key, turns: 3, by: tId });   // 它正对你打价格战
+var resA = S.acquireRival(stAc, tId);
+ok(resA.ok, '② 并购执行成功', resA.reason);
+ok(stAc.rivals.length === rivalsB - 1, '② 对手数减 1（彻底退场）', String(stAc.rivals.length));
+ok(stAc.rivals.every(function (r) { return r.id !== tId; }), '② 被并购方已从榜单移除');
+ok(Math.round(stAc.cash) === Math.round(cashB - infoA.price), '② 现金按报价扣除',
+  '实际 ' + Math.round(stAc.cash) + ' 期望 ' + Math.round(cashB - infoA.price));
+ok(stAc.planes.length === planesB + gainP, '② 机队并入：玩家机队 = 原 + 对手在册',
+  '实际 ' + stAc.planes.length + ' 期望 ' + (planesB + gainP));
+ok(stAc.routes.length === routesB + gainR, '② 航线并入：玩家航线 = 原 + 对手航线',
+  '实际 ' + stAc.routes.length + ' 期望 ' + (routesB + gainR));
+ok(stAc.priceWars.every(function (w) { return w.by !== tId; }),
+  '② 它对我的价格战一并结束（by 为该对手的记录被清除）');
+ok(S.ranking(stAc).length === rivalsB, '② 榜单总数减 1（原「玩家 + 对手数」少一家）',
+  '实际 ' + S.ranking(stAc).length);
+
+/* ③ 接收的航线可直接运营：每条都有飞机、结算无 NaN */
+var zeroPlane = 0, nanProfit = 0;
+stAc.routes.forEach(function (rt) {
+  if (S.planesOnRoute(stAc, rt.key).length < 1) zeroPlane++;
+  var d = S.settleRoute(stAc, rt);
+  if (!(typeof d.profit === 'number') || d.profit !== d.profit) nanProfit++;
+});
+ok(zeroPlane === 0, '③ 并入的每条航线至少分到 1 架飞机', '0 机航线 ' + zeroPlane + ' 条');
+ok(nanProfit === 0, '③ 并入航线可正常结算（profit 为有限数，无 NaN）');
+
+/* ④ 危机折价：对手现金告急 → 按 acquireCrisisMul 折价 */
+var stC = st9('C01');
+stC.cash = 1e9; stC.debt = 0;
+var tC = stC.rivals[0];
+tC.cash = -500;                               // 低于 acquireCrisisCash(0) → 危机
+var infoC = S.acquireInfo(stC, tC.id);
+ok(infoC.ok, '④ 危机对手仍可报价', infoC.reason);
+ok(infoC.crisis === true && infoC.mult === C.acquireCrisisMul,
+  '④ 对手现金告急 → 折价报价', 'crisis=' + infoC.crisis + ' mult=' + infoC.mult);
+ok(infoC.price === Math.max(C.acquireMinPrice,
+    Math.round((tC.cash + fleetAsk(tC) * 0.85) * C.acquireCrisisMul)),
+  '④ 折价报价 = 对手净资产 × acquireCrisisMul', '实际 ' + infoC.price);
+
+/* ⑤ 资金不足被拒（排名仍领先：用昂贵机队抬高净资产、现金抽干） */
+var tyBig = AT.PLANES.slice().sort(function (a, b) { return b.price - a.price; })[0].id;
+var stP = st9('C01');
+stP.cash = 1e9; stP.debt = 0;
+S.buyPlane(stP, tyBig, 20);                   // 净资产被机队抬高
+stP.cash = 50;                                // 但现金见底
+ok(S.ranking(stP)[0].isPlayer, '⑤ 现金见底但机队庞大 → 排名仍第 1（唯一变量 = 现金）');
+var infoP = S.acquireInfo(stP, stP.rivals[0].id);
+ok(!infoP.ok && /资金/.test(infoP.reason || ''), '⑤ 现金 < 报价 → 以「资金不足」拒绝', infoP.reason);
+
+/* ⑥ 排名落后被拒；已退场对手不可并购；资格确由「排名 + 资金」两项决定 */
+var stR = st9('C01');
+stR.cash = 0; stR.debt = 0; stR.planes = [];   // 净资产 0 → 垫底
+var infoR = S.acquireInfo(stR, stR.rivals[0].id);
+ok(!infoR.ok && /排名/.test(infoR.reason || ''),
+  '⑥ 玩家净资产垫底 → 以「只能并购排名低于你的航司」拒绝', infoR.reason);
+stR.rivals[1].alive = false;
+ok(!S.acquireInfo(stR, stR.rivals[1].id).ok, '⑥ 已退出市场的对手不可并购');
+stR.cash = 1e9;
+ok(S.acquireInfo(stR, stR.rivals[0].id).ok,
+  '⑥ 仅把现金抬到 1e9 → 同一对手转为可并购（资格确由排名 + 资金两项决定）');
+
+/* ⑦ 并购后的存档往返一致（对手少一家也要保留） */
+var rtAc = SV.deserialize(SV.serialize(stAc));
+ok(rtAc && rtAc.rivals.length === stAc.rivals.length &&
+   rtAc.routes.length === stAc.routes.length &&
+   rtAc.planes.length === stAc.planes.length,
+  '⑦ 并购后存档往返一致（对手 / 航线 / 机队数不变）',
+  rtAc ? (rtAc.rivals.length + ' / ' + rtAc.routes.length + ' / ' + rtAc.planes.length) : '复原失败');
+
 /* ───────────────────────── 存档层 ─────────────────────────
  * 自动存档的核心不变量：serialize → deserialize 必须得到「同一局」，
  * 且随机流**接着往下跑**（读档后的事件序列不能与一直玩下去的世界线分叉）。

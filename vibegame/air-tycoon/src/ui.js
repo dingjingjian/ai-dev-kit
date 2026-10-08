@@ -29,7 +29,8 @@
 
   var ui = {
     inited: false, game: null, state: null,
-    panel: null,              // 'routes' | 'fleet' | 'newroute' | null
+    panel: null,              // 'routes' | 'fleet' | 'newroute' | 'rivals' | null
+    acquireId: null,          // 对手榜：当前展开「确认并购」的对手 id（null=未展开）
     selCity: null,            // 选中城市 id
     selRoute: null,           // 选中航线 key
     lastQuarter: 0,           // 用于检测回合变化 → 弹季报
@@ -94,7 +95,7 @@
      'uDev', 'uTimer', 'uTimerBar', 'uCityCard', 'uHint', 'uToast', 'uLoader',
      'uMine', 'uPanel', 'uPanelBody', 'uPanelTitle', 'uPanelSub', 'uPanelClose',
      'uModal', 'uModalBody', 'uTabRoutes', 'uTabFleet', 'uTrade',
-     'uFallback', 'uStage', 'uBtnRoutes', 'uBtnFleet', 'uBtnNew'
+     'uFallback', 'uStage', 'uBtnRoutes', 'uBtnFleet', 'uBtnNew', 'uBtnRivals'
     ].forEach(function (k) { el[k] = $(ALIAS[k] || k); });
   }
 
@@ -120,6 +121,7 @@
     if (el.uBtnRoutes) el.uBtnRoutes.addEventListener('click', function () { togglePanel('routes'); }, false);
     if (el.uBtnFleet) el.uBtnFleet.addEventListener('click', function () { togglePanel('fleet'); }, false);
     if (el.uBtnNew) el.uBtnNew.addEventListener('click', function () { togglePanel('newroute'); }, false);
+    if (el.uBtnRivals) el.uBtnRivals.addEventListener('click', function () { togglePanel('rivals'); }, false);
     if (el.uPanelBody) el.uPanelBody.addEventListener('click', onPanelClick, false);
     if (el.uModalBody) el.uModalBody.addEventListener('click', onModalClick, false);
     if (el.uCityCard) el.uCityCard.addEventListener('click', onCityCardClick, false);
@@ -491,6 +493,7 @@
 
   function closePanel() {
     ui.panel = null;
+    ui.acquireId = null;      // 关面板即收起「确认并购」的展开态，下次进来从头看
     if (el.uPanel) el.uPanel.classList.remove('show');
     syncTabs();
     pauseForPanel(false);
@@ -505,6 +508,7 @@
     tabOn(el.uBtnRoutes, ui.panel === 'routes');
     tabOn(el.uBtnFleet, ui.panel === 'fleet');
     tabOn(el.uBtnNew, ui.panel === 'newroute');
+    tabOn(el.uBtnRivals, ui.panel === 'rivals');
   }
   function tabOn(btn, on) {
     if (!btn) return;
@@ -646,6 +650,30 @@
         dirty.panel = true; dirty.hud = true;
         break;
       }
+
+      /* ── 对手榜：并购 ──
+       * 二次确认在面板内完成（先 acquire 展开、再 acquire-confirm 执行）。
+       * 为什么不用模态：模态层由 syncModal 按阶段驱动，季报/事件卡会抢占；
+       * 面板内展开确认与既有 sel-route 详情同构，且开面板本就暂停计时。 */
+      case 'acquire':
+        sfx('click');
+        ui.acquireId = key;
+        dirty.panel = true;
+        break;
+      case 'acquire-cancel':
+        sfx('click');
+        ui.acquireId = null;
+        dirty.panel = true;
+        break;
+      case 'acquire-confirm':
+        res = S.acquireRival(st, key);
+        if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
+        ui.acquireId = null;
+        sfx('confirm');
+        toast('已完成对「' + res.name + '」的并购：接收 ' + res.routes + ' 条航线、' +
+              res.planes + ' 架飞机', 'ok');
+        dirty.panel = true; dirty.hud = true;
+        break;
     }
   }
 
@@ -882,6 +910,12 @@
       html = renderFleet(st);
       var idleN = S.idlePlanes(st).length;
       sub = st.planes.length + ' 架 · ' + (idleN ? idleN + ' 架闲置' : '全部在飞');
+    } else if (ui.panel === 'rivals') {
+      title = '竞争对手';
+      html = renderRivals(st);
+      var myR = 0, rk = S.ranking(st);
+      for (var ri = 0; ri < rk.length; ri++) if (rk[ri].isPlayer) { myR = ri + 1; break; }
+      sub = st.rivals.length + ' 家在营 · 你排第 ' + myR + ' / ' + rk.length;
     } else {
       title = '开通新航线';
       html = renderNewRoute(st);
@@ -1102,6 +1136,56 @@
       });
       out += '</div></div>';
     }
+    return out;
+  }
+
+  /* 对手榜 + 并购入口。所有数值来自 S.ranking（已按净资产排序）与
+   * S.acquireInfo（资格与报价的唯一真源）—— UI 不重算任何经济量。
+   * 收购走面板内二次确认（ui.acquireId），不弹模态：见 onPanelClick 的说明。 */
+  function renderRivals(st) {
+    var rk = S.ranking(st);
+    var out = '<div class="fsec"><div class="rd-h">全球排名（按净资产）</div><div class="flist">';
+    rk.forEach(function (row, i) {
+      var dot = '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
+        'background:' + h(row.color) + ';margin-right:6px"></i>';
+      if (row.isPlayer) {
+        out += '<div class="frow"><span>' + dot + (i + 1) + '. ' + h(row.name) +
+          ' <b class="c-good">（你）</b></span>' +
+          '<span class="fstate">净资产 ' + money(row.netWorth) + '</span></div>';
+        return;
+      }
+      var rv = null;
+      st.rivals.forEach(function (x) { if (x.id === row.id) rv = x; });
+      if (!rv) return;
+      var info = S.acquireInfo(st, row.id);
+      var home = AT.CITIES_BY_ID[rv.homeCityId] || {};
+      var expanded = ui.acquireId === row.id;
+      out += '<div class="frow"><span>' + dot + (i + 1) + '. ' + h(row.name) + '</span>' +
+        '<span class="pact">' +
+        (info.ok
+          ? '<span class="price">' + money(info.price) + '</span>' +
+            '<button class="btn btn-sm" data-act="acquire" data-key="' + h(row.id) +
+            '" type="button">收购</button>'
+          : '<button class="btn btn-sm dis" type="button">不可收购</button>') +
+        '</span></div>' +
+        '<div class="rd-note">' + h(home.name || '—') + ' · 机队 ' + row.fleet + ' 架 · 航线 ' +
+        row.routes + ' 条 · 净资产 ' + money(row.netWorth) +
+        (info.crisis ? ' · <i class="c-warn">现金告急（折价）</i>' : '') +
+        (info.ok ? '' : ' · <i class="c-warn">' + h(info.reason) + '</i>') + '</div>';
+
+      if (expanded && info.ok) {
+        out += '<div class="fsec" style="margin:8px 0">' +
+          '<div class="rd-note">确认并购「' + h(row.name) + '」：接收 ' + info.gainRoutes +
+          ' 条航线、' + info.gainPlanes + ' 架飞机，对手退出市场。报价 ' + money(info.price) +
+          '（对手净资产 ' + money(info.base) + ' × ' + info.mult.toFixed(2) + '）</div>' +
+          '<div class="pact" style="margin-top:8px">' +
+          '<button class="btn btn-sm btn-danger" data-act="acquire-confirm" data-key="' + h(row.id) +
+          '" type="button">确认收购</button>' +
+          '<button class="btn btn-sm" data-act="acquire-cancel" type="button" ' +
+          'style="margin-left:8px">取消</button></div></div>';
+      }
+    });
+    out += '</div></div>';
     return out;
   }
 
