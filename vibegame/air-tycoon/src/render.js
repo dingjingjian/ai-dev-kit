@@ -109,7 +109,6 @@
   var ringPoints, ringGeom, ringPos, ringColor, ringSize, ringAlpha;
   var arcLines, arcGeom, arcPos, arcCol;  // 合批的航线线段
   var arcSlots = [];                      // { key, a, b, order, owner, pts[] } 占位表
-  var arcSet = {};                        // routeKey → 槽位索引，避免每帧线性查重
   var planeMesh, planeDummy, planeList = [];   // InstancedMesh 客机
   var fxPool = [], ringPool = [];
   var clock;
@@ -885,16 +884,19 @@
    * 在竞对之后才申请到槽位，导致「我刚开的线不显示」——
    * 这在超过 MAX_ARCS 时必然发生，故必须显式优先。
    *
-   * 槽位复用：用 routeKey 索引 arcSet，同一航线每帧复用同一槽位，
-   * 避免每帧重算 48 段 slerp（那是 90×48 = 4320 次三角运算，60fps 下纯浪费）。 */
+   * 重合去重必须用**本帧局部**的 seenKeys，不能用跨帧的槽位索引表 ——
+   * 否则上一帧已显示的竞对航线在本帧会被误判为「与我的重合」而跳过、
+   * 下一帧又重新出现，逐帧乒乓闪烁（2026-10-08 修复）。 */
   function syncArcs(state, dt) {
     if (!arcGeom) return;
     var wanted = [];
     var i, r;
 
     // ① 我的航线（含刚开通的 fx 高亮）
+    var seenKeys = {};                    // 本帧 wanted 已有的 key（重合去重用）
     for (i = 0; i < state.routes.length; i++) {
       r = state.routes[i];
+      seenKeys[r.key] = 1;
       wanted.push({ key: r.key, a: r.a, b: r.b, owner: 'mine', glow: !!arcGlow[r.key],
                     color: state.airlineColor });
     }
@@ -906,8 +908,9 @@
       for (var j = 0; j < rv.routes.length; j++) {
         var rr = rv.routes[j];
         var key = rr.key || AT.routeKey(rr.a, rr.b);
-        if (arcSet[key] !== undefined) continue;      // 与我的航线重合：我的优先，跳过
+        if (seenKeys[key]) continue;      // 与本帧已有航线重合（我的优先/竞对间重线）：跳过
         if (rivalShown >= 40) break;
+        seenKeys[key] = 1;
         wanted.push({ key: key, a: rr.a, b: rr.b, owner: 'rival', glow: false,
                       color: rv.color });
         rivalShown++;
@@ -927,11 +930,8 @@
     if (arcGeom.drawRange.count !== n * ARC_SEG * 2) {
       arcGeom.setDrawRange(0, n * ARC_SEG * 2);
     }
-    // 先记录本轮出现的 key，用于清掉已消失的槽位
-    var seen = {};
     for (i = 0; i < n; i++) {
       var w = wanted[i];
-      seen[w.key] = 1;
       var c = AT.CITIES_BY_ID[w.a], c2 = AT.CITIES_BY_ID[w.b];
       if (!c || !c2) { clearArc(i); arcSlots[i] = null; continue; }
       var col;
@@ -947,15 +947,10 @@
       var lift = w.owner === 'mine' ? 0.035 : 0.018;
       writeArc(i, c, c2, col, lift);
       arcSlots[i] = { key: w.key, a: w.a, b: w.b };
-      arcSet[w.key] = i;
     }
     // 清空多余槽位
     for (i = n; i < MAX_ARCS; i++) {
-      if (arcSlots[i]) { clearArc(i); arcSet[arcSlots[i].key] = undefined; arcSlots[i] = null; }
-    }
-    // 清空本轮消失的键在 arcSet 里的残留
-    for (var k in arcSet) {
-      if (!seen[k]) delete arcSet[k];
+      if (arcSlots[i]) { clearArc(i); arcSlots[i] = null; }
     }
     arcGeom.getAttribute('position').needsUpdate = true;
     arcGeom.getAttribute('color').needsUpdate = true;
