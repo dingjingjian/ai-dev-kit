@@ -220,7 +220,8 @@
   /* 开局时玩家的基地是否落在夜面（真实时间下约有一半概率）。UI 据此提示。 */
   var openAtNight = false;
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
-  var haloPoints;                         // 城市柔光光晕层（与 cityGeom 共用几何，只换贴图与倍数）
+  /* ⚠ 2026-10-09 删除了 haloPoints（城市柔光光晕层）。
+   *   原因见 cityMarkTex 的改版说明：加性柔光在夜面灯火上糊成一团，点读不出来。 */
   var cityLevel, cityRinged;              // 每城当前等级 / 是否已通航（我的网络）
   var cityRingTone;                       // 每城当前环色：0=我的网络(橙黄) 1=仅竞对(紫罗兰) -1=无环
   var cityBaseSize;                       // 等级对应的基准尺寸（脉冲在此之上放大）
@@ -269,44 +270,54 @@
     return new THREE.CanvasTexture(c);
   }
 
-  /* 城市符号：一枚干净的小圆点 —— 实心核 + 极短软边。
-   * 2026-09-28 精简：去掉四向刻度与外环装饰，回到最简的「点」。
-   * ⚠ 软边只铺到 28px（≈半个符号的 0.44）就收干净：宽柔光铺满整张贴图，
-   *   再叠 additive + bloom 会糊成一团白雾（实机踩过的坑）；小而快地收边才是「点」。
-   *   需要外圈柔光时不要放宽这里，而是用单独的低透明度光晕层（cityHaloTex）。 */
+  /* 城市符号：一枚**硬边实心圆 + 细描边**（图钉式），不再是柔光点。
+   *
+   * 2026-10-09 改版（此前是「平顶实心核 + 极短软边 + 外层柔光光晕」三层）：
+   * ⚠ 旧版的柔光在**夜面灯火**背景下彻底失效 —— 光晕是加性混合、又与灯火同为暖白光，
+   *   叠上去之后点核与光晕的边界被拉平，肉眼只看到一团弥散的亮斑，
+   *   读不出「这里是一座城市」，也分不出点与点。用户原话：「带光晕反而效果不好」。
+   * → 改成硬边：中心实心盘 + 一圈更亮的细描边，边界干脆、任何尺寸下都是「一枚点」。
+   *
+   * ⚠ 描边必须比盘心**亮**而不是暗：贴图是**加性混合**，暗色描边等于「少加」，画不出暗环；
+   *   要读作「描边」只能靠亮环把盘心包住（对比来自环比盘亮，不是比盘暗）。
+   *   这同时带来一个额外好处：白描边 + 归属色盘心 = 点自身就能读归属，不必只靠外环。
+   *
+   * ⚠ 半径分层（贴图半宽 = 64，视觉半径按比例）：
+   *     0    → 0.70  实心盘（盘心 0.62，外圈色由顶点色 aColor 调制）
+   *     0.70 → 0.92  描边环（满白）—— 与盘心拉开 **1.6×** 的亮度差
+   *     0.92 → 0.99  抗锯齿收边
+   *   ⚠ 盘心必须比描边**明显**暗，不能只差一成：贴图是**加性混合**，
+   *     0.90 vs 1.00 只差 10%，叠到已经很亮的点上根本读不出边 ——
+   *     实测径向剖面是一段平顶（241→233）然后直接掉下去，完全没有描边台阶。
+   *     压到 0.62 之后亮度差 1.6×，屏幕上才真的出现「一圈边」。
+   *   ⚠ 描边环带必须够**宽**（这里占半径的 22%）：点缩到 12~20px 时，
+   *     若环带只有 0.10 倍半径，屏幕上不到 1px，会被纹理过滤直接抹平成纯盘面
+   *     —— 「描边」这个设计就白做了。22% 在 15px 的点上约 1.6px，刚好站得住。
+   *   ⚠ 不能留大幅留白（旧版正是留白到整张贴图、再靠光晕填）：
+   *     贴图外圈一旦大片透明，gl_PointSize 的大小就名不副实，点比设定值小一大圈。 */
   function cityMarkTex() {
     var c = document.createElement('canvas');
     c.width = c.height = 128;
     var x = c.getContext('2d');
-    var g = x.createRadialGradient(64, 64, 0, 64, 64, 28);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.55, 'rgba(255,255,255,1)');   // 平顶段 → 实心核
-    g.addColorStop(1, 'rgba(255,255,255,0)');      // 出核即收 → 极短软边
+    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0,     'rgba(255,255,255,0.62)');   // 盘心：明显压暗，
+    g.addColorStop(0.70,  'rgba(255,255,255,0.62)');   //   把「最亮」让给描边环
+    g.addColorStop(0.72,  'rgba(255,255,255,1)');      // 描边内沿：陡然拉到满白
+    g.addColorStop(0.92,  'rgba(255,255,255,1)');      // 描边外沿
+    g.addColorStop(0.99,  'rgba(255,255,255,0)');      // 抗锯齿收边
+    g.addColorStop(1,     'rgba(255,255,255,0)');
     x.fillStyle = g; x.fillRect(0, 0, 128, 128);
     return new THREE.CanvasTexture(c);
   }
 
-  /* 城市柔光光晕：叠在符号外围的一圈软光（对齐 world-food-atlas 的 haloTex）。
-   * 单独一层而不是并进「点」里：点核要保持小而利落，光晕要柔而铺得开，
-   * 两者尺寸/透明度都得分开调；并入同一张贴图就只剩一个固定的比例。 */
-  function cityHaloTex() {
-    var c = document.createElement('canvas');
-    c.width = c.height = 128;
-    var x = c.getContext('2d');
-    var g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-    g.addColorStop(0,    'rgba(255,255,255,0.92)');
-    g.addColorStop(0.18, 'rgba(255,255,255,0.58)');
-    g.addColorStop(0.38, 'rgba(255,255,255,0.24)');
-    g.addColorStop(0.62, 'rgba(255,255,255,0.07)');
-    g.addColorStop(0.85, 'rgba(255,255,255,0.015)');
-    g.addColorStop(1,    'rgba(255,255,255,0)');
-    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
-    return new THREE.CanvasTexture(c);
-  }
+  /* ⚠ 2026-10-09：这里原有一层「城市柔光光晕」（cityHaloTex / TEX.halo / haloPoints）。
+   *   已整层删除 —— 加性柔光与夜面灯火同为暖白，叠上去只会糊成一团，
+   *   点核边界被拉平后读不出「一座城市」。现在点自身就是「硬边盘 + 描边环」，
+   *   不需要外圈柔光来撑存在感（见 cityMarkTex 的改版说明）。 */
 
   /* 已通航外环：一根**柔化渐变**细环（对齐 world-food-atlas 的 ringLineTex）。
    * 早先是硬边描线，缩到 30 来像素既发死、又像贴在球上的 UI 准星；
-   * 改成从环心向两侧羽化（.64→.70→.74 的窄带），小尺寸下自动融进光晕里，
+   * 改成从环心向两侧羽化（.64→.70→.74 的窄带），小尺寸下自动收成一圈淡边，
    * 读作「城市外面淡淡一圈」，而不是一根画上去的线。
    * ⚠ 半径停在 .70（与旧描线的 45/64≈.703 基本一致），环的视觉直径不变。
    * ⚠ 与 TEX.ring（开航波纹）分开：波纹要靠柔光底做扩散感，这里只要一圈细环。 */
@@ -379,8 +390,7 @@
 
   var TEX = {};
   function buildTextures() {
-    /* 城市标记：柔光光晕 + 亮核 + 已通航细环（形制对齐 world-food-atlas）。 */
-    TEX.halo = cityHaloTex();
+    /* 城市标记：硬边实心圆 + 描边 + 已通航细环。 */
     TEX.dot = cityMarkTex();
     TEX.ring = ringTex();
     TEX.markRing = markRingTex();     // 已通航外环用的柔化细环（与开航波纹分开）
@@ -635,7 +645,7 @@
    *    不是所有「让夜晚更黑」都要靠调灯：实测把环境光降到 1/10，夜面屏幕上只掉 20%
    *    （原因见 NIGHT_DIM 的注释）。这一层直接在线性域乘系数，是唯一能把夜面压到
    *    接近黑色的手段，且**只作用在夜面**——阳面逐像素不变。
-   *    ⚠ renderOrder = −3（早于城市光晕的 −1）是本方案成立的关键：它只压暗先于它
+   *    ⚠ renderOrder = −3（早于所有城市标记）是本方案成立的关键：它只压暗先于它
    *      绘制的东西 —— 也就是**不透明**的地球本体。城市点/航线/客机/经纬网全是
    *      transparent 层，排在它之后，因此**不会被一起压暗**（这正是想要的：夜幕下
    *      信息层反而更突出）。调到正数会让整片夜景连同灯火一起变灰。
@@ -870,13 +880,14 @@
    * 色相只承担一件事：把城市从地球贴图里拎出来（见 PALETTE 注释）。
    * ⚠ 竞对环只在「我未通航」时才画 —— 同一座城两种环叠在一起会互相抵消，也读不出优先级。
    *
-   * 视觉语言（2026-09-28 对齐 world-food-atlas 的「点 + 光晕 + 细环」）：
-   *   ① 柔光光晕（TEX.halo / cityHaloTex）—— 最外一层软光，跟着城市色走，
-   *      让每个点在暗夜球面上「晕」开一小圈，不再是硬贴上去的一粒白；
-   *   ② 实心小圆点（TEX.dot / cityMarkTex）—— 亮核，一眼认出是个「点」；
-   *   ③ 已通航细环（TEX.markRing / markRingTex）—— 柔化渐变的一圈，套在光晕之上。
-   * ⚠ 三层一律 depthTest:false：标记是屏幕空间 billboard，贴到球面边缘时外缘会落到
-   *   曲面「后方」被地球深度剪掉（＝光圈陷进地球）。改由 syncCities 逐帧背面剔除
+   * 视觉语言（2026-10-09 改版：硬边「点 + 环」两层）：
+   *   ① 硬边实心点（TEX.dot / cityMarkTex）—— 盘心 + 一圈略亮的描边环，
+   *      边界干脆，任何尺寸下都是一枚清晰的「点」；
+   *   ② 已通航细环（TEX.markRing / markRingTex）—— 柔化渐变的一圈，贴在盘外沿。
+   * ⚠ 2026-10-09 删掉了原第①层「柔光光晕」：加性柔光与夜面灯火同为暖白，
+   *   叠上去把点核边界拉平成一团弥散亮斑，读不出「一座城市」（见 cityMarkTex 说明）。
+   * ⚠ 两层一律 depthTest:false：标记是屏幕空间 billboard，贴到球面边缘时外缘会落到
+   *   曲面「后方」被地球深度剪掉（＝标记陷进地球）。改由 syncCities 逐帧背面剔除
    *   兜底，与 world-food-atlas 的做法一致。
    * 三个信息通道原样保留；装饰元素仍不做刻度、不做缺口。 */
 
@@ -887,7 +898,7 @@
     'varying vec3 vColor;',
     'varying float vAlpha;',
     'uniform float uScale;',
-    'uniform float uSizeMul;',       // 层尺寸倍数：城市点/环为 1，光晕层放大
+    'uniform float uSizeMul;',       // 层尺寸倍数（点/环两层目前都是 1）
     'void main(){',
     '  vColor = aColor; vAlpha = aAlpha;',
     '  vec4 mv = modelViewMatrix * vec4(position, 1.0);',
@@ -898,7 +909,7 @@
 
   var CITY_FS = [
     'uniform sampler2D uTex;',
-    'uniform float uAlphaMul;',      // 层透明度倍数：光晕层压低，点/环为 1
+    'uniform float uAlphaMul;',      // 层透明度倍数（点/环两层目前都是 1）
     'varying vec3 vColor;',
     'varying float vAlpha;',
     'void main(){',
@@ -909,15 +920,14 @@
   ].join('\n');
 
   var RING_MUL = 1.5;           // 定位环直径 / 城市符号直径
-  /* ⚠ 符号精简成小圆点后，可见的点核只占符号的 ~0.24，环落在 0.35×RING_MUL：
-   *   1.5 → 0.53，点与环之间留出约 0.3 倍半径的空当，读作「点 + 一圈细环」。 */
-  /* 柔光光晕层（对齐 world-food-atlas 的 haloTex）：与城市共用几何，只把贴图换成软光、
-   *   尺寸倍数放大、整体透明度压低 —— 于是每个点外围都有一圈淡淡的柔光，
-   *   亮度自动跟随城市色（未通航冰青 / 已通航橙黄），不额外开信息通道。
-   * ⚠ HALO_ALPHA 压到 0.38：光晕峰值 × 色亮度 ≈ 0.3，落在 bloom 阈值 0.72 之下，
-   *   不会像早先的宽柔光那样被 bloom 拉成一团白雾。 */
-  var HALO_MUL = 1.6;           // 光晕层直径 / 城市符号直径
-  var HALO_ALPHA = 0.38;        // 光晕层整体透明度
+  /* ⚠ 环半径必须让开点核：贴图里可见盘面到 0.92（省下的 0.08 是抗锯齿收边），
+   *   环落在 0.70（见 markRingTex），所以「盘边 0.92 × 0.5 = 0.46」与
+   *   「环 0.70 × 0.5 = 0.35」在半径上是**环在盘内**的关系 ——
+   *   为避免环切进盘面，RING_MUL 按点核外径（0.92）而不是贴图半宽来定：
+   *   ringSize = base × RING_MUL，而 base 对应整张贴图，故视觉上
+   *   环半径 / 盘半径 = (0.70 × RING_MUL) / 0.92。RING_MUL=1.5 → **1.14**，
+   *   即环紧贴盘外沿 —— 硬边点 + 贴边环，读作「带边的图钉」。 */
+  /* ⚠ 2026-10-09：柔光光晕层（HALO_MUL / HALO_ALPHA）随 haloPoints 一起删除。 */
 
   function buildCities(state) {
     var n = state.cities.length;
@@ -960,14 +970,19 @@
        *   首版 0.13 + pop×0.0075 → 390×844 屏上仅 4~6px，24 城糊在地图里看不见；
        *   二版 0.30 + pop×0.0055 → 上海 48px、内罗毕 36px，两座城的光环直接叠在一起
        *                            （截图确认，日本海一片糊）。
-       *   现在 0.145 + pop×0.0028 → 上海约 23px、内罗毕约 14px，
-       *   叠加 bloom（视觉直径约为光核的 1.8 倍）后大城约 40px、小城约 25px ——
-       *   东亚这种城市密集区仍能分辨出是几座城。
+       *   三版 0.145 + pop×0.0028 → 上海约 23px、内罗毕约 14px（这是**软光点**时代的标定）。
+       *
+       * ⚠ 2026-10-09 换成硬边盘后**必须重标**：旧贴图的可见核只占整张贴图的等效半径
+       *   0.344（0→0.55 平顶、外径仅到 28/64），新盘面等效半径 **0.913** —— 比值 2.65×。
+       *   沿用 0.145 会让点瞬间胖一倍多、读作「贴了一枚硬币」而非一枚点。
+       *   故按「目标 = 旧可见核的 1.45 倍」反解：0.145 × 0.546 → **0.079 + pop×0.0015**。
+       *   取 1.45× 而不是 1.0× 的理由：硬边点在视觉上比同尺寸的软光点**显小**
+       *   （软光的尾巴撑住感知尺寸），且硬边点边界清晰、放大一点也不会邻居粘连。
        *
        * 换算依据：屏幕像素直径 = aSize × (画布缓冲高/2) ÷ 观察距离，
        *   观察距离 ≈ cam.radius 7.4 − 球半径 1.6 = 5.8（朝前）~ 7.4（侧面）。
        *   改 cam.radius 的默认值或 uScale 的系数都必须重算这一项。 */
-      var base = 0.145 + c.pop0 * 0.0028;
+      var base = 0.079 + c.pop0 * 0.0015;
       cityBaseSize[i] = base;
       citySize[i] = base;
       cityAlpha[i] = 1;
@@ -995,24 +1010,12 @@
     cityPoints = new THREE.Points(cityGeom, mat);
     scene.add(cityPoints);
 
-    /* 柔光光晕：与城市共用几何 —— 位置、颜色、尺寸、透明度全跟着城市走，
-     * 只把材质换成软光贴图、尺寸倍数放大、整体透明度压低，故无需单独维护属性。
-     * renderOrder=-1：让光晕先画，点核再压在中间（加性混合下顺序不影响颜色，
-     * 但这样在观感调试时更符合「光晕在点后面」的直觉）。
-     * ⚠ depthTest:false（城市三层都关）：光晕比点大 1.6 倍，城市转到球体边缘时，
-     *   光晕外缘在 3D 空间落到地球曲面「后方」，被地球的深度缓冲剪掉 ——
-     *   看上去就是「光圈陷进地球里面」。关掉深度测试后改由 syncCities 的
-     *   背面剔除兜底（背对相机的城市 alpha 收 0，不会透穿地球）；
-     *   这也是 world-food-atlas 的做法：标记一律 depthTest:false + 朝相机判定。 */
-    var hmat = new THREE.ShaderMaterial({
-      uniforms: { uTex: { value: TEX.halo }, uScale: { value: 400 },
-                  uSizeMul: { value: HALO_MUL }, uAlphaMul: { value: HALO_ALPHA } },
-      vertexShader: CITY_VS, fragmentShader: CITY_FS,
-      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending
-    });
-    haloPoints = new THREE.Points(cityGeom, hmat);
-    haloPoints.renderOrder = -1;
-    scene.add(haloPoints);
+    /* ⚠ 2026-10-09：柔光光晕层（haloPoints）已删除 —— 见 cityMarkTex 的改版说明。
+     *   原先三层是「光晕 + 点核 + 细环」，光晕比点大 1.6 倍、加性叠在夜面灯火上，
+     *   结果是点核边界被拉平成一团弥散亮斑。现在只剩「点 + 环」两层。
+     *   ⚠ depthTest:false（点/环两层都关）：标记是屏幕空间 billboard，贴到球面边缘时
+     *   外缘会落到曲面「后方」被地球深度剪掉（＝标记陷进地球）。改由 syncCities
+     *   逐帧背面剔除兜底（背对相机的城市 alpha 收 0，不会透穿地球）。 */
 
     ringGeom = new THREE.BufferGeometry();
     ringGeom.setAttribute('position', new THREE.BufferAttribute(ringPos, 3));
@@ -1033,7 +1036,6 @@
   function syncPointScale() {
     var h = (renderer ? renderer.domElement.height : global.innerHeight) || 800;
     if (cityPoints) cityPoints.material.uniforms.uScale.value = h * 0.5;
-    if (haloPoints) haloPoints.material.uniforms.uScale.value = h * 0.5;
     if (ringPoints) ringPoints.material.uniforms.uScale.value = h * 0.5;
   }
 
@@ -1074,10 +1076,10 @@
     var rDirty = false, rSizeDirty = false, rColorDirty = false, aDirty = false;
     var decay = (dt > 0) ? dt / CITY_PULSE_SEC : 0;
 
-    /* 背面剔除（城市三层关掉 depthTest 后必须自己做）：
+    /* 背面剔除（城市两层关掉 depthTest 后必须自己做）：
      * 球面上某点「可见」的判据是 dot(法线, 相机方向) ≥ R/|相机| —— 相机越近，可见的球面盖越小。
      * 城市法线就是它的位置方向。早先靠地球的深度遮挡背面城市，现在逐帧把背对相机的城市
-     * alpha 收回 0（点、光晕、环一起），免得透穿地球 —— 与 world-food-atlas 的 refreshMarkers
+     * alpha 收回 0（点与环一起），免得透穿地球 —— 与 world-food-atlas 的 refreshMarkers
      * 同路数。在可见边界两侧留 0.08 的软过渡，转球时城市不会在边缘「啪」地闪一下。 */
     if (!_pn) { _pv = new THREE.Vector3(); _pn = new THREE.Vector3(); _cd = new THREE.Vector3(); }
     var hasCam = !!(camera && camera.position.lengthSq() > 1e-6);
