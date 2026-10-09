@@ -94,6 +94,9 @@
        * 旧路径（不传 airlineId）没有航司 → null，渲染层回落到暖金色。 */
       airlineColor: airline ? (airline.color || null) : null,
       homeCityId: homeId,
+      bases: [homeId],           /* 玩家基地城市 id 数组（主基地开局自动入列，
+                                   * 后续可经 buildBase 增设分基地）。航线扩展
+                                   * 只能从基地城市出发（见 openRoute）。 */
       homeRegion: homeRegion,   // 基地所在地区（特色技能按它判定，见 trait）
       trait: trait,             // 已归一化的特色技能（defaults 见 AT.NEUTRAL_TRAIT）
       /* 全局修正器：事件卡的持续效果挂在这里，每回合递减。
@@ -1870,9 +1873,43 @@
    * ⚠ 用对象当 set（Chrome 61 可用；不需要 Set 的遍历语义）。 */
   function networkCityIds(state) {
     var set = {};
-    set[state.homeCityId] = 1;
+    var bases = state.bases || [state.homeCityId];
+    for (var bi = 0; bi < bases.length; bi++) set[bases[bi]] = 1;
     state.routes.forEach(function (r) { set[r.a] = 1; set[r.b] = 1; });
     return set;
+  }
+
+  /* 玩家基地城市集合（仅基地，不含已通航非基地城市）。
+   * openRoute 用它判定「新航线至少一端是基地」（见下方）。 */
+  function baseCitySet(state) {
+    var set = {};
+    var bases = state.bases || [state.homeCityId];
+    for (var bi = 0; bi < bases.length; bi++) set[bases[bi]] = 1;
+    return set;
+  }
+
+  /* ── 建立分基地 ──
+   * 玩家可在任意城市投资设立分基地。设立后该城享受基地待遇（航线容量 +homeRouteBonus、
+   * 地图标记实线环 + 亮色），且**只有基地城市才能作为新航线的扩展起点**（见 openRoute）。
+   * 条件：运营中、城市存在、尚未是基地、资金 ≥ buildBaseCost。
+   * ⚠ 主基地（homeCityId）开局已在 state.bases 里，不需要再建。 */
+  function buildBase(state, cityId) {
+    if (state.phase !== 'operating') return { ok: false, reason: '尚未开始运营' };
+    var c = findCity(state, cityId);
+    if (!c) return { ok: false, reason: '城市不存在' };
+    var bases = state.bases || [state.homeCityId];
+    for (var i = 0; i < bases.length; i++) {
+      if (bases[i] === cityId) return { ok: false, reason: c.name + ' 已是基地' };
+    }
+    var cost = CONFIG.buildBaseCost || 300;
+    if (state.cash < cost) return { ok: false, reason: '资金不足（需 ' + cost + ' 万）' };
+    state.cash -= cost;
+    state.stats.cashSpent += cost;
+    bases.push(cityId);
+    state.bases = bases;
+    c.isHome = true;             /* 享受基地待遇：容量 +homeRouteBonus、渲染亮色实线 */
+    log(state, '在 ' + c.name + ' 建立基地（耗资 ' + cost + ' 万）');
+    return { ok: true, city: c };
   }
 
   /* 竞对选新航线：从「玩家还没开、但需求最高」的城市对里挑一条。
@@ -2237,16 +2274,14 @@
     var key = AT.routeKey(aId, bId);
     if (findRouteByKey(state, key)) return { ok: false, reason: '该航线已开通' };
 
-    /* ── 网络连通性（2026-09-30 用户拍板）──
-     * 新航线**至少一端**必须是基地或已通航城市，否则就是「凭空开线」。
-     * 为什么必须有这条：单基地起步的航司，网络只能从母城长出去；
-     * 玩家若不慎把「出发城市」选到一座孤立城市（旧版城市卡上任何城都能
-     * 「从这里开新航线」），就能凭空造出一条与自己的网络毫无关系的线 ——
-     * 那既不符合航空业的基本形态，也让「基地选在哪」这个开局决策失去意义。 */
+    /* ── 基地扩展约束（2026-10-09 用户拍板）──
+     * 新航线**至少一端**必须是基地城市（state.bases），否则不能开线。
+     * 玩家可在任意城市投资建立分基地（见 buildBase），只有基地才能作为
+     * 航线扩展的起点 —— 这让「在哪建基地」成为持续的经营决策，而不只是开局选一次。 */
     if (!state.freeNetwork) {
-      var net = networkCityIds(state);
-      if (!net[aId] && !net[bId]) {
-        return { ok: false, reason: '新航线必须与现有网络相连：出发地或目的地至少要有一端是基地或已通航城市' };
+      var bases = baseCitySet(state);
+      if (!bases[aId] && !bases[bId]) {
+        return { ok: false, reason: '新航线必须从基地城市出发：出发地或目的地至少要有一端是基地（可先在该城建立基地）' };
       }
     }
 
@@ -3179,7 +3214,7 @@
     totalSeats: totalSeats, fleetValue: fleetValue, netWorth: netWorth,
     traitOf: traitOf, loanLimitOf: loanLimitOf,
     routePotential: routePotential, routeFlights: routeFlights,
-    networkCityIds: networkCityIds,
+    networkCityIds: networkCityIds, baseCitySet: baseCitySet, buildBase: buildBase,
     maxPerDayFor: maxPerDayFor, tierOf: tierOf, routeSlots: routeSlots,
     cityRouteCap: cityRouteCap, routeGateLevel: routeGateLevel, planeLevelGate: planeLevelGate,
     maxPlanesForRoute: maxPlanesForRoute,

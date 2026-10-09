@@ -326,6 +326,18 @@
     return t;
   }
 
+  /* solidRing：实线圆环 —— 与 cityRingTex 同参数但不 setLineDash，
+   * 基地城市用此贴图（从虚线变实线），已通航非基地城市也用实线。 */
+  function solidRingTex() {
+    var s = 128, c = document.createElement('canvas'); c.width = c.height = s;
+    var x = c.getContext('2d');
+    x.strokeStyle = 'rgba(255,255,255,1)'; x.lineWidth = 7;
+    x.beginPath(); x.arc(64, 64, 45, 0, Math.PI * 2); x.stroke();
+    var t = new THREE.CanvasTexture(c);
+    if (THREE.sRGBEncoding !== undefined) t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
   /* 客机图标：不用几何体，画成**俯视飞机剪影**的贴图走 billboard。
    * 理由与 defcon 的单位图标一致：缩到十几像素时，立体几何的剪影认不出是什么，
    * 而位于球面边缘时几何体侧视会退化成一个点，形状信息全丢。
@@ -385,6 +397,7 @@
     TEX.halo = haloTex();
     TEX.core = coreTex();
     TEX.cityRing = cityRingTex();
+    TEX.solidRing = solidRingTex();
     TEX.plane = planeTex();
     TEX.flash = radialTex('rgba(255,248,224,1)', 'rgba(255,206,120,0.6)', 'rgba(255,150,60,0)');
   }
@@ -912,7 +925,7 @@
       for (var i = 0; i < markers.length; i++) {
         var m = markers[i];
         m.contour.material.dispose(); m.halo.material.dispose();
-        m.core.material.dispose(); m.ring.material.dispose();
+        m.core.material.dispose(); m.ring.material.dispose(); m.solidRing.material.dispose();
       }
       scene.remove(markerGroup);
       markerGroup = null;
@@ -943,13 +956,16 @@
       var ring = new THREE.Sprite(new THREE.SpriteMaterial({
         map: TEX.cityRing, transparent: true, depthWrite: false, depthTest: false, toneMapped: false, opacity: 0.4
       }));
+      var solidRing = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: TEX.solidRing, transparent: true, depthWrite: false, depthTest: false, toneMapped: false, opacity: 0.4
+      }));
 
-      contour.renderOrder = 10; halo.renderOrder = 11; ring.renderOrder = 12; core.renderOrder = 13;
-      grp.add(contour); grp.add(halo); grp.add(ring); grp.add(core);
+      contour.renderOrder = 10; halo.renderOrder = 11; ring.renderOrder = 12; solidRing.renderOrder = 12; core.renderOrder = 13;
+      grp.add(contour); grp.add(halo); grp.add(ring); grp.add(solidRing); grp.add(core);
       markerGroup.add(grp);
 
       markers.push({
-        city: c, grp: grp, contour: contour, halo: halo, core: core, ring: ring,
+        city: c, grp: grp, contour: contour, halo: halo, core: core, ring: ring, solidRing: solidRing,
         base: 0.079 + c.pop0 * 0.0015,
         pulse: 0, lastDev: c.dev, face: 1
       });
@@ -1014,8 +1030,8 @@
       m.face = face;
       var show = face > 0.01;
       m.contour.visible = show; m.halo.visible = show;
-      m.core.visible = show; m.ring.visible = show;
-      if (!show) continue;
+      m.core.visible = show;
+      if (!show) { m.ring.visible = false; m.solidRing.visible = false; continue; }
 
       /* 开发度上涨 → 脉冲。 */
       if (c.dev > m.lastDev + 1e-4) m.pulse = 1;
@@ -1057,17 +1073,22 @@
       m.contour.scale.set(ctS, ctS, 1);
       m.contour.material.opacity = 0.6 * face;
 
-      /* ring：虚线环，归属色，自转。已通航亮、未通航淡。 */
-      m.ring.material.color.copy(cLin);
+      /* ring：基地/已通航用实线环（solidRing），未通航/竞对用虚线环（ring）。
+       * 建立基地的城市从虚线变实线 —— 用户需求。 */
+      var useSolid = (tone === 0);
+      m.ring.visible = !useSolid;
+      m.solidRing.visible = useSolid;
+      var ringSprite = useSolid ? m.solidRing : m.ring;
+      ringSprite.material.color.copy(cLin);
       var rs = s * MK_RING;
-      m.ring.scale.set(rs, rs, 1);
+      ringSprite.scale.set(rs, rs, 1);
       var ra;
       if (tone === 0) ra = c.isHome ? 0.85 : (0.50 + lv * 0.06);
       else if (tone === 1) ra = 0.70;
       else ra = 0.30;
       if (p > 0) ra = Math.min(1.2, ra * (1 + 0.8 * p));
-      m.ring.material.opacity = ra * face;
-      m.ring.material.rotation = _markerTime * (tone >= 0 ? 0.55 : 0.3) + i * 0.7;
+      ringSprite.material.opacity = ra * face;
+      ringSprite.material.rotation = _markerTime * (tone >= 0 ? 0.55 : 0.3) + i * 0.7;
     }
   }
 

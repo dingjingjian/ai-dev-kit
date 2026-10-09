@@ -598,17 +598,24 @@
     var a = e.target.closest ? e.target.closest('[data-act]') : null;
     if (!a) return;
     var act = a.getAttribute('data-act');
-    if (act === 'open-here') {
+    if (act === 'build-base') {
+      var c0 = AT.CITIES_BY_ID[ui.selCity];
+      if (!c0) return;
+      var res = S.buildBase(ui.state, c0.id);
+      if (res.ok) {
+        toast('已在 ' + c0.name + ' 建立基地');
+        renderCityCard(S.findCity(ui.state, c0.id) || c0);
+        dirty.hud = true;
+      } else {
+        toast(res.reason || '建立基地失败');
+      }
+    } else if (act === 'open-here') {
       var c = AT.CITIES_BY_ID[ui.selCity];
       if (!c) return;
       closePanel();
       openPanel('newroute');
-      /* ⚠ 先 openPanel（清空上一次的决策）再种入出发地 —— 顺序反了会被
-       * openPanel 的「每次打开都初始化」当成残留清掉。 */
       ui.newFrom = c.id;
-      /* 城市卡片由 openPanel 统一收起（卡片互斥），这里不必单独处理。 */
-      toast('从 ' + c.name + ' 出发，选择一个目的地' +
-        (S.networkCityIds(ui.state)[c.id] ? '' : '（目的地须为已通航城市）'));
+      toast('从 ' + c.name + ' 出发，选择一个目的地');
     }
   }
 
@@ -641,17 +648,14 @@
       });
       html += '</div>';
     }
-    /* 「从这里开新航线」对所有城市开放（2026-10-01 用户反馈：未入网的城市也应该能
-     * **连回**自己的网络 —— sim.openRoute 的规则本就是「两端至少一端在网络」，
-     * UI 不该比它更严）。差别只在约束方向：
-     *   已入网城市 → 目的地任意（旧版 bug：已通航城市反而不给按钮）；
-     *   未入网城市 → 目的地必须是网络城市，面板会禁掉连不回的选项。
-     * 「凭空开线」（两端都不在网络）依然被面板禁用 + sim 兜底拒绝。 */
-    if (S.networkCityIds(st)[c.id]) {
+    /* 基地城市可直接扩展航线；非基地城市须先建立基地
+     * （只有基地城市才能作为新航线的扩展起点，见 sim.openRoute）。 */
+    var isBase = !!c.isHome;
+    var baseCost = (AT.CONFIG && AT.CONFIG.buildBaseCost) || 300;
+    if (isBase) {
       html += '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
     } else {
-      html += '<div class="cc-lines"><i class="c-warn">此城未入你的网络 · 新航线须连回基地或已通航城市</i></div>' +
-        '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
+      html += '<div class="cc-actions"><button class="btn" data-act="build-base" type="button">建立基地（¥' + baseCost + '）</button></div>';
     }
     el.uCityCard.innerHTML = html;
     el.uCityCard.classList.add('show');
@@ -1538,19 +1542,17 @@
      * 这里只自愈空值/无效 id（城市不会被删除，不需要回落基地）。
      * 真正的连通性规则仍在 sim.openRoute（唯一真源）。 */
     var net = S.networkCityIds(st);
-    if (!ui.newFrom || !AT.CITIES_BY_ID[ui.newFrom]) ui.newFrom = st.homeCityId;
+    var bases = S.baseCitySet(st);
+    /* 出发地必须是基地城市（只有基地才能扩展航线，见 sim.openRoute）。
+     * 若当前选择不是基地（从旧存档或 Tab 栏直接进入），回落主基地。 */
+    if (!ui.newFrom || !AT.CITIES_BY_ID[ui.newFrom] || !bases[ui.newFrom]) ui.newFrom = st.homeCityId;
     var fromId = ui.newFrom;
-    var offNet = !net[fromId];       // 出发地未入网 ⇒ 目的地必须是网络城市
-    /* 出发地换成未入网城市后，之前选中的目的地可能不再合法（也未入网），清掉重选 */
-    if (offNet && ui.newTo && !net[ui.newTo]) ui.newTo = null;
     var from = AT.CITIES_BY_ID[fromId];
-    var out = '<div class="nw-sec"><div class="rd-h">① 出发城市</div><div class="chips">';
-    // 出发地：当前选择 + 基地 + 已通航城市（未入网城市只能从它的城市卡进入；
-    // 面板内切换出发地仍只列网络城市，避免在面板里凭空选一座孤城当起点）
-    var fromList = [fromId];
-    st.routes.forEach(function (r) {
-      if (fromList.indexOf(r.a) < 0) fromList.push(r.a);
-      if (fromList.indexOf(r.b) < 0) fromList.push(r.b);
+    var out = '<div class="nw-sec"><div class="rd-h">① 出发城市（基地）</div><div class="chips">';
+    // 出发地：只列基地城市（只有基地才能扩展航线）
+    var fromList = [];
+    (st.bases || [st.homeCityId]).forEach(function (cid) {
+      if (fromList.indexOf(cid) < 0) fromList.push(cid);
     });
     fromList.slice(0, 12).forEach(function (cid) {
       var c = AT.CITIES_BY_ID[cid];
@@ -1599,9 +1601,9 @@
       var reach = reachAll.filter(function (p) { return AT.planeLevelMin(p) <= gateLv; });
       var canFlyNow = reach.some(function (p) { return idleTypes[p.id]; });
       var canBuy = reach.some(function (p) { return st.cash >= p.price; });
-      /* 连通性（与 sim.openRoute 同口径）：出发地未入网时，目的地必须已入网，
-       * 否则两端都不在网络里 —— 「凭空开线」。这类城市直接禁用并说明原因。 */
-      var badNet = offNet && !net[c.id];
+      /* 基地扩展约束：出发地已是基地（见上方），sim.openRoute 的「至少一端是基地」
+       * 自动满足，目的地无网络连通性限制。 */
+      var badNet = false;
       /* 城市航线上限（2026-10-09 加，与 sim.openRoute 同口径）：两端任一已满则不可开 */
       var capFull = (from.routes || 0) >= S.cityRouteCap(st, fromId) ||
         (c.routes || 0) >= S.cityRouteCap(st, c.id);
@@ -1619,7 +1621,6 @@
     });
 
     out += '<div class="nw-sec"><div class="rd-h">② 目的地（先列现在就能飞的，再按需求排序）' +
-      (offNet ? ' · 出发地未入网，目的地须为已通航城市' : '') +
       '</div><div class="chips">';
     cands.forEach(function (x) {
       var ok = x.reach.length > 0;
