@@ -522,6 +522,8 @@
               '<div><span>运营成本</span><b class="c-bad">−' + money(last.cost) + '</b></div>' +
               (last.groundCost ? '<div><span>地面与起降</span><b class="c-bad">−' +
                 money(last.groundCost) + '</b></div>' : '') +
+              (last.baseMaint ? '<div><span>基地维护</span><b class="c-bad">−' +
+                money(last.baseMaint) + '</b></div>' : '') +
               '<div><span>管理支出</span><b class="c-bad">−' + money(last.overhead) + '</b></div>' +
               (last.interest > 0 ? '<div><span>债务利息</span><b class="c-bad">−' +
                 money(last.interest) + '</b></div>' : '') +
@@ -649,9 +651,10 @@
       html += '</div>';
     }
     /* 基地城市可直接扩展航线；非基地城市须先建立基地
-     * （只有基地城市才能作为新航线的扩展起点，见 sim.openRoute）。 */
+     * （只有基地城市才能作为新航线的扩展起点，见 sim.openRoute）。
+     * 建基地费用按城市等级差异化（AT.buildBaseCostOf），高等级枢纽更贵。 */
     var isBase = !!c.isHome;
-    var baseCost = (AT.CONFIG && AT.CONFIG.buildBaseCost) || 300;
+    var baseCost = AT.buildBaseCostOf(c.level || 1);
     if (isBase) {
       html += '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
     } else {
@@ -1066,6 +1069,7 @@
       '<div><span>营业收入</span><b>' + money(rep.revenue) + '</b></div>' +
       '<div><span>运营成本</span><b class="c-bad">−' + money(rep.cost) + '</b></div>' +
       (rep.groundCost ? '<div><span>地面与起降</span><b class="c-bad">−' + money(rep.groundCost) + '</b></div>' : '') +
+      (rep.baseMaint ? '<div><span>基地维护</span><b class="c-bad">−' + money(rep.baseMaint) + '</b></div>' : '') +
       '<div><span>管理支出</span><b class="c-bad">−' + money(rep.overhead) + '</b></div>' +
       (rep.interest > 0 ? '<div><span>债务利息</span><b class="c-bad">−' + money(rep.interest) + '</b></div>' : '') +
       '<div class="md-total"><span>净利润</span><b class="' + (rep.net >= 0 ? 'c-good' : 'c-bad') + '">' +
@@ -1815,6 +1819,7 @@
           overhead: hasBreak ? hh.overhead : 0,
           interest: hasBreak ? hh.interest : 0,
           groundCost: hasBreak ? (hh.groundCost || 0) : 0,
+          baseMaint: hasBreak ? (hh.baseMaint || 0) : 0,
           net: hh.net, cash: hh.cash, netWorth: hh.netWorth, nwDelta: nwDelta,
           pax: hh.pax, routes: hh.routes, planes: hh.planes
         });

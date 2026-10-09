@@ -1891,8 +1891,10 @@
   /* ── 建立分基地 ──
    * 玩家可在任意城市投资设立分基地。设立后该城享受基地待遇（航线容量 +homeRouteBonus、
    * 地图标记实线环 + 亮色），且**只有基地城市才能作为新航线的扩展起点**（见 openRoute）。
-   * 条件：运营中、城市存在、尚未是基地、资金 ≥ buildBaseCost。
-   * ⚠ 主基地（homeCityId）开局已在 state.bases 里，不需要再建。 */
+   * 条件：运营中、城市存在、尚未是基地、资金 ≥ 按等级差异化的建基地费用。
+   * ⚠ 主基地（homeCityId）开局已在 state.bases 里，不需要再建。
+   * ⚠ 建基地费用按城市等级差异化（AT.buildBaseCostOf），高等级枢纽更贵；
+   *   基地还需每季付维护费（baseMaintOf），不是一次性投资。 */
   function buildBase(state, cityId) {
     if (state.phase !== 'operating') return { ok: false, reason: '尚未开始运营' };
     var c = findCity(state, cityId);
@@ -1901,7 +1903,7 @@
     for (var i = 0; i < bases.length; i++) {
       if (bases[i] === cityId) return { ok: false, reason: c.name + ' 已是基地' };
     }
-    var cost = CONFIG.buildBaseCost || 300;
+    var cost = AT.buildBaseCostOf(c.level || 1);
     if (state.cash < cost) return { ok: false, reason: '资金不足（需 ' + cost + ' 万）' };
     state.cash -= cost;
     state.stats.cashSpent += cost;
@@ -1910,6 +1912,22 @@
     c.isHome = true;             /* 享受基地待遇：容量 +homeRouteBonus、渲染亮色实线 */
     log(state, '在 ' + c.name + ' 建立基地（耗资 ' + cost + ' 万）');
     return { ok: true, city: c };
+  }
+
+  /* 基地季度维护费（万元/季）：每基地按其城市等级线性计费。
+   *   维护费 = Σ baseMaintPerQuarter × level(city)
+   * 主基地同样计维护 —— 基地不是一次性投资，需要持续投入。
+   * 单一真源：resolveQuarter 与 forecast 共用，避免两处各写一份漂移。 */
+  function baseMaintOf(state) {
+    var per = AT.CONFIG.baseMaintPerQuarter;
+    if (!per) return 0;
+    var bases = state.bases || [state.homeCityId];
+    var total = 0;
+    for (var i = 0; i < bases.length; i++) {
+      var c = findCity(state, bases[i]);
+      if (c) total += per * Math.max(1, c.level || 1);
+    }
+    return total;
   }
 
   /* 竞对选新航线：从「玩家还没开、但需求最高」的城市对里挑一条。
@@ -2023,14 +2041,16 @@
     var revenue = 0, cost = 0, pax = 0;
     detail.forEach(function (d) { revenue += d.revenue; cost += d.cost; pax += d.pax; });
 
-    /* ③ 固定支出：总部与销售管理费用（规模不经济）+ 未投入航线飞机的持有与维护 */
+    /* ③ 固定支出：总部与销售管理费用（规模不经济）+ 未投入航线飞机的持有与维护
+     *   + 基地季度维护费（每基地按等级线性计费，见 baseMaintOf） */
     var overhead = overheadOf(state);
     var groundCost = idleGroundCostOf(state);
+    var baseMaint = baseMaintOf(state);
 
     /* ④ 债务利息 */
     var interest = state.debt * (C.loanRatePerQuarter || 0.022);
 
-    var net = revenue - cost - overhead - groundCost - interest;
+    var net = revenue - cost - overhead - groundCost - baseMaint - interest;
     state.cash += net;
 
     /* ⑤ 城市发展飞轮：按本季度客流推进 dev */
@@ -2092,11 +2112,12 @@
       cost: Math.round(cost),
       overhead: Math.round(overhead),
       interest: Math.round(interest),
-      groundCost: Math.round(groundCost)
+      groundCost: Math.round(groundCost),
+      baseMaint: Math.round(baseMaint)
     });
 
     log(state, '第 ' + state.quarter + ' 季度结算：收入 ' + revenue.toFixed(0) +
-              ' 成本 ' + (cost + overhead + groundCost).toFixed(0) +
+              ' 成本 ' + (cost + overhead + groundCost + baseMaint).toFixed(0) +
               ' 利息 ' + interest.toFixed(0) + ' → 净利 ' + net.toFixed(0) +
               '（现金 ' + state.cash.toFixed(0) + '）');
 
@@ -3190,13 +3211,14 @@
     detail.forEach(function (d) { revenue += d.revenue; cost += d.cost; pax += d.pax; });
     var overhead = overheadOf(state);
     var groundCost = idleGroundCostOf(state);
+    var baseMaint = baseMaintOf(state);
     var interest = state.debt * (CONFIG.loanRatePerQuarter || 0.022);
     return {
       detail: detail, revenue: revenue, cost: cost, pax: pax,
-      overhead: overhead, groundCost: groundCost, interest: interest,
-      /* ⚠ 口径与 resolveQuarter 完全一致（含 groundCost）—— 季报面板的四个数字
+      overhead: overhead, groundCost: groundCost, baseMaint: baseMaint, interest: interest,
+      /* ⚠ 口径与 resolveQuarter 完全一致（含 groundCost + baseMaint）—— 季报面板的四个数字
        *   必须能与净利对上账，预测值同理，否则玩家一眼就能看出数字是错的。 */
-      net: revenue - cost - overhead - groundCost - interest
+      net: revenue - cost - overhead - groundCost - baseMaint - interest
     };
   }
 
@@ -3233,7 +3255,7 @@
     myRank: myRank, verdict: verdict, verdictDetail: verdictDetail,
     globalization: globalization,
     /* A0b/A2：固定支出口径（供测试与 UI 复用，避免影子公式） */
-    overheadOf: overheadOf, idleGroundCostOf: idleGroundCostOf,
+    overheadOf: overheadOf, idleGroundCostOf: idleGroundCostOf, baseMaintOf: baseMaintOf,
     recalcCityRoutes: recalcCityRoutes,
     // UI 节奏控制
     nextQuarter: nextQuarter, quarterRemain: quarterRemain, setPaused: setPaused

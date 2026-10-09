@@ -152,10 +152,19 @@
      *   上限本身也随城市成长而成长，扩张因此有节奏、有取舍。 */
     homeRouteBonus: 2,
 
-    /* 建立分基地的花费（万元）。玩家可在任意城市投资设立分基地，
+    /* 建立分基地的花费基准（万元）。实际费用按城市等级差异化：
+     * 高等级枢纽城市地价更贵、建基地成本更高（见 AT.buildBaseCostOf）。
+     * buildBaseCostByLevel 为 Lv1..Lv5 的倍率，以 buildBaseCost 为基准。
+     *   Lv1→180 · Lv2→240 · Lv3→300 · Lv4→420 · Lv5→570 万
      * 设立后该城享受基地待遇（容量 +homeRouteBonus、实线环标记），
      * 且只有基地城市才能作为新航线的扩展起点（见 sim.openRoute）。 */
     buildBaseCost: 300,
+    buildBaseCostByLevel: [0.6, 0.8, 1.0, 1.4, 1.9],
+    /* 基地季度维护费（万元/季）：每基地按其城市等级线性计费，
+     * 维护费 = baseMaintPerQuarter × level（见 sim.baseMaintOf）。
+     *   Lv1→10 · Lv2→20 · Lv3→30 · Lv4→40 · Lv5→50 万/季
+     * 主基地同样计维护 —— 基地不是一次性投资，需要持续投入。 */
+    baseMaintPerQuarter: 10,
 
     /* ── 票价与收入 ──
      * ticketPerKm 标定依据（2026-09-14）：真实民航经济舱全价约 1.0~1.3 元/公里
@@ -980,6 +989,17 @@
   AT.routeCapOf = function (level, isHome) {
     var lv = Math.max(1, (level == null ? 1 : level) | 0);
     return lv + (isHome ? (AT.CONFIG.homeRouteBonus || 0) : 0);
+  };
+
+  /* 建立分基地的费用（万元），按城市等级差异化。单一真源 ——
+   * sim.buildBase 扣费与 ui 建基地按钮文案都经此函数，避免两边各写一份漂移。
+   * 高等级城市地价更贵：Lv1 180 → Lv5 570 万。 */
+  AT.buildBaseCostOf = function (level) {
+    var lv = Math.max(1, Math.min(5, (level == null ? 1 : level) | 0));
+    var base = AT.CONFIG.buildBaseCost || 300;
+    var tbl = AT.CONFIG.buildBaseCostByLevel;
+    var mul = (tbl && tbl[lv - 1] != null) ? tbl[lv - 1] : 1;
+    return Math.round(base * mul);
   };
 
   /* 机型适航门槛（见 CONFIG.planeGate）：该机型需要航线两端城市达到的最低等级。

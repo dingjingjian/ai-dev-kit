@@ -436,14 +436,18 @@
     return ownerRgb(color, tint) || ownerRgb(fallbackHex, tint);
   }
   var ARC_TINT = 0.30;      // 航线提亮量（细线要更亮才看得清）
-  var PLANE_TINT = 0.55;    // 客机提亮量（小点比线更吃亏，提得更多）
+  /* 客机提亮量（朝白插值）。2026-10-09 降：原 0.55/0.72 把航司色拉得太白，
+   * 六家飞机看起来都是白色、分不出谁是谁。降到 0.32/0.42 让航司识别色
+   * （红/橙/绿/蓝/紫/玫红）饱和显现，玩家一眼能认出「哪几架不是我的」。
+   * 提亮仍保留：飞机是 0.055 的小点 + AdditiveBlending，完全不提亮会在深色海面上糊掉。 */
+  var PLANE_TINT = 0.32;    // 玩家客机提亮量
   /* 竞对客机的额外强调（2026-10-09，用户：其他公司的飞机再明显点）。
-   * 本作的客机只有 0.055 世界单位大、又是俯视剪影，混在一堆暖白客机里几乎读不出
-   * 「哪几架不是我的」。故竞对客机放大 1.4 倍、提亮量抬到 0.72 ——
+   * 本作的客机只有 0.055 世界单位大、又是俯视剪影，混在一堆客机里几乎读不出
+   * 「哪几架不是我的」。故竞对客机放大 1.4 倍、提亮量略高于玩家 ——
    * 提亮不破坏航司识别色（色相不变），放大不改变航线走向（只是同一架更显眼）。
    * ⚠ 只放大**竞对**：玩家自己的机队是主角，但已经靠航线更亮、飞得更高区分，
    *   再放大只会让「我的网络」看起来比实际更密。 */
-  var PLANE_TINT_RIVAL = 0.72;
+  var PLANE_TINT_RIVAL = 0.42;
   var PLANE_SCALE_RIVAL = 1.4;
 
   function v3(lat, lon, r) {
@@ -1073,9 +1077,11 @@
       m.contour.scale.set(ctS, ctS, 1);
       m.contour.material.opacity = 0.6 * face;
 
-      /* ring：基地/已通航用实线环（solidRing），未通航/竞对用虚线环（ring）。
-       * 建立基地的城市从虚线变实线 —— 用户需求。 */
-      var useSolid = (tone === 0);
+      /* ring：只有基地城市用实线环（solidRing），已通航但非基地 / 仅竞对 / 未通航
+       * 都用虚线环（ring）—— 用户需求：还没建基地但已通航的城市外圈应是虚线。
+       * 颜色与不透明度仍按归属（tone）区分：已通航非基地 = mineHex 虚线、
+       * 仅竞对 = rivalHex 虚线、未通航 = virginHex 虚线。 */
+      var useSolid = !!c.isHome;
       m.ring.visible = !useSolid;
       m.solidRing.visible = useSolid;
       var ringSprite = useSolid ? m.solidRing : m.ring;

@@ -708,9 +708,9 @@ ok(lastH && lastH.revenue != null, '快照带营业收入字段',
 ok(lastH && lastH.cost != null && lastH.overhead != null && lastH.interest != null,
    '快照带成本/管理/利息字段');
 if (lastH && lastH.revenue != null) {
-  /* 恒等式：收入 − 成本 − 地面 − 管理 − 利息 = 净利（允许取整误差 ±4 万） */
+  /* 恒等式：收入 − 成本 − 地面 − 基地维护 − 管理 − 利息 = 净利（允许取整误差 ±4 万） */
   var rhs = lastH.net;
-  var lhs = lastH.revenue - lastH.cost - (lastH.groundCost || 0) - lastH.overhead - lastH.interest;
+  var lhs = lastH.revenue - lastH.cost - (lastH.groundCost || 0) - (lastH.baseMaint || 0) - lastH.overhead - lastH.interest;
   near(lhs, rhs, 4, '快照账目自洽：收入 − 各项支出 = 净利润');
   ok(lastH.revenue > 0, '快照收入为正', '实际 ' + lastH.revenue);
   ok(lastH.cost >= 0, '快照成本非负', '实际 ' + lastH.cost);
@@ -720,7 +720,7 @@ if (lastH && lastH.revenue != null) {
 var badSnap = [];
 stH.history.forEach(function (h) {
   if (h.revenue == null) return;
-  var diff = (h.revenue - h.cost - (h.groundCost || 0) - h.overhead - h.interest) - h.net;
+  var diff = (h.revenue - h.cost - (h.groundCost || 0) - (h.baseMaint || 0) - h.overhead - h.interest) - h.net;
   if (Math.abs(diff) > 4) badSnap.push('Q' + h.quarter + ' 差 ' + diff.toFixed(0));
 });
 ok(badSnap.length === 0, '全部历史快照账目自洽',
@@ -1109,22 +1109,24 @@ deliverAll(stN);
 var oN1 = S.openRoute(stN, 'C01', 'C02', tyN, 1);
 ok(oN1.ok, '① 从基地开线允许（基地恒在网络里）', oN1.reason);
 
-/* ② 两端都不在网络里 → 拒绝（这是旧版城市卡能凭空开线的漏洞）
+/* ② 两端都不在基地里 → 拒绝（基地机制：新航线至少一端是基地）
  *    ⚠ 用航程最长的机型：tyN 是按 C01-C02（1067km）挑的最便宜机型，
  *      飞不了 C09-C13（5570km）。若用 tyN，即便连通性校验被删掉，
  *      失败原因也会是「航程不足」而让这条断言变成假阳性。 */
 var tyLong = AT.PLANES.slice().sort(function (x, y) { return y.range - x.range; })[0].id;
 var oN2 = S.openRoute(stN, 'C09', 'C13', tyLong, 1);
-ok(!oN2.ok && /相连|连通/.test(oN2.reason || ''),
+ok(!oN2.ok && /基地|相连|连通/.test(oN2.reason || ''),
   '② 凭空开线被拒：两端都不是基地/已通航城市', oN2.reason);
 
-/* ③ 从已通航城市（C02）继续延伸 → 允许（网络是长出来的） */
+/* ③ 在已通航城市 C02 建分基地后，从 C02 继续延伸 → 允许（基地机制下
+ *    非基地城市不能直接延伸，需先投资建基地）。 */
+S.buildBase(stN, 'C02');
 var tyN2 = AT.PLANES.filter(function (p) { return p.range >= S.routeDistance(stN, 'C02', 'C04'); })
   .sort(function (x, y) { return x.price - y.price; })[0].id;
 S.buyPlane(stN, tyN2, 1);
 deliverAll(stN);
 var oN3 = S.openRoute(stN, 'C02', 'C04', tyN2, 1);
-ok(oN3.ok, '③ 从已通航城市延伸允许（C02 已在网络里）', oN3.reason);
+ok(oN3.ok, '③ 从分基地延伸允许（C02 已建基地）', oN3.reason);
 
 /* ④ 网络集合的内容：基地 + 各线两端；未通航的城市不在其中 */
 var netN = S.networkCityIds(stN);
