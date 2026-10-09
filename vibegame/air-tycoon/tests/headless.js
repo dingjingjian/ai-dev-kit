@@ -76,7 +76,7 @@ console.log('═'.repeat(74));
 
 /* ── 数据层 ── */
 section('数据层');
-ok(AT.CITIES.length === 24, '城市数 = 24', '实际 ' + AT.CITIES.length);
+ok(AT.CITIES.length === 36, '城市数 = 36（6 地区 × 6）', '实际 ' + AT.CITIES.length);
 ok(AT.PLANES.length === 13, '机型数 = 13', '实际 ' + AT.PLANES.length);
 ok(AT.REGIONS.length === 6, '地区数 = 6', '实际 ' + AT.REGIONS.length);
 ok(AT.EVENTS.length >= 12, '事件卡 ≥ 12', '实际 ' + AT.EVENTS.length);
@@ -848,6 +848,88 @@ ok(badRiv === 0, '⑥ 竞对的每条线都从自己母城长出来（无凭空�
 ok(noColor === 0, '⑥ 竞对都带航司识别色（render.js 按它对航线/客机着色）',
   '缺色 ' + noColor + ' 家');
 
+/* ───────────────────────── 城市等级门槛与航线上限层（2026-10-09 加）─────────────────────────
+ * 用户反馈「航线和飞机可以随便加、与城市等级没有正关联」，本次引入两条结构性约束：
+ *   · 航线上限 —— 每城最多承接 `cap = 该城等级` 条航线，基地城市额外 +homeRouteBonus；
+ *   · 机型等级门槛 —— 大型客机需**航线两端**城市等级达标（tier5→Lv5、tier4→Lv4、tier3→Lv3）。
+ * 两条规则都是**硬约束**（不是开发度软惩罚），口径单一真源在 data.js 的
+ * AT.routeCapOf / AT.planeLevelMin，sim/UI/tests 共用，避免界面与实际放行漂移。
+ * 二者都**只挡新动作、不追溯**，且在开线 / 派机 / 换机型三处一致生效。 */
+section('城市等级门槛与航线上限层');
+
+/* ① 公式：单一真源，纯函数 */
+ok(AT.routeCapOf(5, false) === 5, '① 上限公式：Lv5 非基地 = 5', String(AT.routeCapOf(5, false)));
+ok(AT.routeCapOf(4, false) === 4, '① 上限公式：Lv4 非基地 = 4', String(AT.routeCapOf(4, false)));
+ok(AT.routeCapOf(1, false) === 1, '① 上限公式：Lv1 非基地 = 1', String(AT.routeCapOf(1, false)));
+ok(AT.routeCapOf(3, true) === 3 + C.homeRouteBonus,
+  '① 上限公式：基地 = 等级 + homeRouteBonus', String(AT.routeCapOf(3, true)));
+ok(AT.planeLevelMin('cRJ1') === 1 && AT.planeLevelMin('cWB1') === 3 &&
+  AT.planeLevelMin('cWB2') === 4 && AT.planeLevelMin('cWB4') === 5,
+  '① 机型等级门槛：支线 Lv1 / 宽体 Lv3 / 777 Lv4 / A380 Lv5',
+  [1, 3, 4, 5].map(function (t) { return AT.planeLevelMin(t); }).join('-'));
+
+/* 辅助：造一个「自由网络」状态（freeNetwork 绕过连通性，专测容量与门槛两把闸）。
+ * ⚠ 不 advance —— 开局 phase 即为 'operating'，避免推进期间竞对开线抬高城市 dev，
+ *   污染「起始等级」这一被测前提。 */
+function freeState(home) {
+  var st = S.create({ seed: 7, homeCityId: home });
+  st.cash = 1e9; st.debt = 0; st.freeNetwork = true;
+  return st;
+}
+
+/* ② 开线门槛：777（cWB2，需两端 Lv4）不能飞 Lv2—Lv3 的线。
+ *    C28 胡志明市（dev0=34→Lv2）× C25 广州（dev0=58→Lv3），两端最低 Lv2 < 4。 */
+var stG = freeState('C28');
+S.buyPlane(stG, 'cWB2', 1); deliverAll(stG);
+var oG1 = S.openRoute(stG, 'C28', 'C25', 'cWB2', 1);
+ok(!oG1.ok && /两端均达/.test(oG1.reason || ''),
+  '② 开线：777 飞 Lv2—Lv3 线被拒（需两端 Lv4）', oG1.reason);
+
+/* ③ 达标放行：同一款 777 飞 C01 上海（Lv4）—C03 东京（Lv5）允许 */
+var stG2 = freeState('C01');
+S.buyPlane(stG2, 'cWB2', 1); deliverAll(stG2);
+var oG2 = S.openRoute(stG2, 'C01', 'C03', 'cWB2', 1);
+ok(oG2.ok, '③ 放行：777 飞 Lv4—Lv5 线允许', oG2.reason);
+
+/* ④ 派机门槛：支线机已在 C28—C25 运营，再派一架 777 上去 → 拒 */
+var stG3 = freeState('C28');
+S.buyPlane(stG3, 'cRJ1', 1); S.buyPlane(stG3, 'cWB2', 1); deliverAll(stG3);
+var oG3 = S.openRoute(stG3, 'C28', 'C25', 'cRJ1', 1);
+ok(oG3.ok, '④ 前置：支线机可在 Lv2—Lv3 线开航', oG3.reason);
+var big3 = stG3.planes.filter(function (p) { return p.type === 'cWB2'; })[0];
+var aG3 = S.assignPlane(stG3, big3.id, oG3.route.key);
+ok(!aG3.ok && /两端均达/.test(aG3.reason || ''),
+  '④ 派机：777 派到 Lv2—Lv3 线被拒', aG3.reason);
+
+/* ⑤ 换机型门槛：把 C28—C27（Lv2—Lv3）的支线线升级为 777 → 拒 */
+var stG4 = freeState('C28');
+S.buyPlane(stG4, 'cRJ1', 1); deliverAll(stG4);
+var oG4 = S.openRoute(stG4, 'C28', 'C27', 'cRJ1', 1);
+ok(oG4.ok, '⑤ 前置：支线机可在 Lv2—Lv3 线开航', oG4.reason);
+var uG4 = S.upgradeRouteType(stG4, oG4.route.key, 'cWB2');
+ok(!uG4.ok && /两端均达/.test(uG4.reason || ''),
+  '⑤ 换机型：支线线升级为 777 被拒', uG4.reason);
+
+/* ⑥ 航线上限：C28（Lv2，非基地 → cap 2）开到第 3 条被拒。
+ *    ⚠ 母城取 C01，让 C28 保持**非基地**（基地会 +2，令上限变成 4）。 */
+var stG5 = freeState('C01');
+S.buyPlane(stG5, 'cRJ1', 3); deliverAll(stG5);
+ok(S.cityRouteCap(stG5, 'C28') === AT.routeCapOf(2, false),
+  '⑥ C28 上限 = 2（Lv2，非基地）', String(S.cityRouteCap(stG5, 'C28')));
+var o1 = S.openRoute(stG5, 'C28', 'C27', 'cRJ1', 1);
+var o2 = S.openRoute(stG5, 'C28', 'C25', 'cRJ1', 1);
+ok(o1.ok && o2.ok, '⑥ 前 2 条线（C28—C27 / C28—C25）开航成功',
+  (o1.reason || '') + (o2.reason || ''));
+var o3 = S.openRoute(stG5, 'C28', 'C26', 'cRJ1', 1);
+ok(!o3.ok && /已达上限/.test(o3.reason || ''),
+  '⑥ 第 3 条线被拒：C28 已达上限 2 条', o3.reason);
+
+/* ⑦ 基地 +2：同一座 C28 作为基地时上限 = 4（Lv2 + homeRouteBonus） */
+ok(S.cityRouteCap(freeState('C28'), 'C28') === AT.routeCapOf(2, true) &&
+  S.cityRouteCap(freeState('C28'), 'C28') === 4,
+  '⑦ 基地加成：C28 作基地时上限 = 4（Lv2 + 2）',
+  String(S.cityRouteCap(freeState('C28'), 'C28')));
+
 /* ───────────────────────── 并购层 ─────────────────────────
  * 「整体并购对手」玩法（2026-10-08）的核心不变量：
  *   资格 = 排名领先（你排在它前面）+ 资金足够；报价 = 对手净资产 × 溢价（危机折价）；
@@ -913,8 +995,13 @@ ok(Math.round(stAc.cash) === Math.round(cashB - infoA.price), '② 现金按报�
   '实际 ' + Math.round(stAc.cash) + ' 期望 ' + Math.round(cashB - infoA.price));
 ok(stAc.planes.length === planesB + gainP, '② 机队并入：玩家机队 = 原 + 对手在册',
   '实际 ' + stAc.planes.length + ' 期望 ' + (planesB + gainP));
-ok(stAc.routes.length === routesB + gainR, '② 航线并入：玩家航线 = 原 + 对手航线',
-  '实际 ' + stAc.routes.length + ' 期望 ' + (routesB + gainR));
+/* ⚠ 并入的是「实际并入」的航线数 resA.routes，不是预展示的 gainR：
+ *   并购时若某城已达航线上限 / 机型不合两端等级门槛，会跳过该线（见 sim.acquireRival），
+ *   故 resA.routes ≤ gainR。用 gainR 会在「对手某城开满」时假失败。 */
+ok(stAc.routes.length === routesB + resA.routes, '② 航线并入：玩家航线 = 原 + 实际并入数',
+  '实际 ' + stAc.routes.length + ' 期望 ' + (routesB + resA.routes));
+ok(resA.routes <= gainR, '② 实际并入数 ≤ 预展示数（容量/门槛会跳过个别线）',
+  '并入 ' + resA.routes + ' / 预展示 ' + gainR);
 ok(stAc.priceWars.every(function (w) { return w.by !== tId; }),
   '② 它对我的价格战一并结束（by 为该对手的记录被清除）');
 ok(S.ranking(stAc).length === rivalsB, '② 榜单总数减 1（原「玩家 + 对手数」少一家）',

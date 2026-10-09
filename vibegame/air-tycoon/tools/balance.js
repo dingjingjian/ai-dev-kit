@@ -220,10 +220,14 @@ for (var ri = 0; ri < 5; ri++) {
   vals2.sort(function (a, b) { return a.nw - b.nw; });
   var mid = vals2[Math.floor(vals2.length / 2)];
   var aliveRate = (vals2.length / runs.length * 100).toFixed(0);
-  /* 竞对名字从第一局取 */
+  /* 竞对名字从第一局取 —— ⚠ 必须按**同一个 id** 取，不能按 ranking 位置取：
+   *   ranking 按净资产降序，位置与 R1..R5 的固定 id 不对应，会导致「名字张冠李戴」
+   *   （曾把 R3 的净值/航线数挂到 R5 名下，误导标定）。 */
   var nm = '竞对' + (ri + 1);
-  var firstOthers = runs[0].st.ranking.filter(function (x) { return !x.isPlayer; });
-  if (firstOthers[ri]) nm = firstOthers[ri].name;
+  var firstAll = runs[0].st.ranking;
+  for (var fi = 0; fi < firstAll.length; fi++) {
+    if (!firstAll[fi].isPlayer && firstAll[fi].id === 'R' + (ri + 1)) { nm = firstAll[fi].name; break; }
+  }
   console.log('   ' + rpad(nm, 12) + pad(aliveRate + '%', 7) +
     pad(Math.round(mid.nw), 13) + pad(mid.routes, 11));
 }

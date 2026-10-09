@@ -615,13 +615,21 @@
     var st = ui.state;
     var mine = st.routes.filter(function (r) { return r.a === c.id || r.b === c.id; });
     var pax = c.paxLast ? c.paxLast.toFixed(2) + ' 百万客/季' : '—';
+    var cap = S.cityRouteCap(st, c.id);
+    var full = mine.length >= cap;
+    var maxTierName = c.level >= 5 ? '旗舰巨无霸（A380 级）'
+      : c.level >= 4 ? '远程宽体'
+      : c.level >= 3 ? '宽体'
+      : '支线 / 窄体';
     var html = '<div class="cc-name">' + h(c.name) +
       (c.isHome ? '<span class="cc-home">基地</span>' : '') + '</div>' +
       '<div class="cc-row"><span>发展度</span><b>' + Math.round(c.dev) + ' / 100</b></div>' +
       '<div class="cc-row"><span>等级</span><b>Lv' + c.level + ' · ' + LV_NAME[Math.max(1, Math.min(5, c.level))] + '</b></div>' +
       '<div class="cc-row"><span>人口</span><b>' + c.pop.toFixed(1) + ' 百万</b></div>' +
       '<div class="cc-row"><span>本季客流</span><b>' + pax + '</b></div>' +
-      '<div class="cc-row"><span>我的航线</span><b>' + mine.length + ' 条</b></div>';
+      '<div class="cc-row"><span>我的航线</span><b' + (full ? ' class="c-warn"' : '') + '>' +
+        mine.length + ' / ' + cap + ' 条' + (full ? ' · 已满' : '') + '</b></div>' +
+      '<div class="cc-row"><span>可停机型</span><b>≤ ' + maxTierName + '</b></div>';
     if (mine.length) {
       html += '<div class="cc-lines">';
       mine.forEach(function (r) {
@@ -802,6 +810,10 @@
           toast('该线时刻已饱和：最多 ' + capA + ' 架。想增运力请换更大机型或调低频次档位', 'bad');
           break;
         }
+        /* 机型等级门槛（2026-10-09）：两端城市等级不足时 sim.assignPlane 会拒，
+         * 故必须在买机之前先校验，否则会白花购机款。 */
+        var tgA = S.planeLevelGate(st, rr.a, rr.b, val.trim());
+        if (!tgA.ok) { sfx('deny'); toast(tgA.reason, 'bad'); break; }
         var o = S.buyPlane(st, val.trim(), 1);
         if (!o.ok) { sfx('deny'); toast(o.reason, 'bad'); break; }
         var np = st.planes[st.planes.length - 1];
@@ -919,6 +931,20 @@
     /* 出发地：跟随面板选择 —— 可以是未入网城市（目的地连回网络即可），
      * UI 不再擅自回落基地；「两端至少一端在网络」由 sim.openRoute 最终校验。 */
     var from = (ui.newFrom && AT.CITIES_BY_ID[ui.newFrom]) ? ui.newFrom : st.homeCityId;
+
+    /* ⚠ 前置校验（2026-10-09）：本函数会「先买机、再开线」，若开线注定被拒
+     *   （城市航线已满 / 机型等级不足），必须先拦住，否则会白买一架飞机。
+     *   口径与 sim.openRoute 完全一致。 */
+    var fromC0 = AT.CITIES_BY_ID[from];
+    if (fromC0 && (fromC0.routes || 0) >= S.cityRouteCap(st, from)) {
+      return { ok: false, reason: fromC0.name + ' 航线已达上限 ' + S.cityRouteCap(st, from) + ' 条' };
+    }
+    var toC0 = AT.CITIES_BY_ID[ui.newTo];
+    if (toC0 && (toC0.routes || 0) >= S.cityRouteCap(st, ui.newTo)) {
+      return { ok: false, reason: toC0.name + ' 航线已达上限 ' + S.cityRouteCap(st, ui.newTo) + ' 条' };
+    }
+    var pgate = S.planeLevelGate(st, from, ui.newTo, ui.newType);
+    if (!pgate.ok) return { ok: false, reason: pgate.reason };
 
     var idle = S.idlePlanes(st).filter(function (p) { return p.type === ui.newType; }).length;
     if (!idle) {
@@ -1204,6 +1230,7 @@
       var slot = S.routeSlots(st, r.a, r.b);
       var sel = ui.selRoute === r.key;
       var cls = 'rcard' + (sel ? ' sel' : '') + (d && d.profit < 0 ? ' loss' : '');
+      var lg = S.planeLevelGate(st, r.a, r.b, r.type);
       out += '<div class="' + cls + '" data-act="sel-route" data-key="' + h(r.key) + '">' +
         '<div class="rc-top"><span class="rc-name">' + h(ca ? ca.name : r.a) + ' — ' +
           h(cb ? cb.name : r.b) + '</span>' +
@@ -1219,9 +1246,9 @@
         (d && d.slotTight ? '<div class="rc-hint warn">时刻已饱和 —— 加机不再增班，考虑换更大机型</div>' : '') +
         (d && d.demandThin ? '<div class="rc-hint">需求偏薄 —— 客座率偏低，可减班或换小机型</div>' : '') +
         (d && d.capacityTight ? '<div class="rc-hint warn">运力吃紧 —— 需求撑满航班，可加机</div>' : '') +
-        (d && d.gateLimited ? '<div class="rc-hint warn">城市开发度不足 —— ' + h(T.name) +
-          ' 需两端开发度 ≥' + d.gateReq + '（现 ' + Math.round(d.gateDev) +
-          '），有效运力仅 ' + pct(d.gateF, 0) + '</div>' : '') +
+        (lg && !lg.ok ? '<div class="rc-hint warn">城市等级不足 —— ' + h(T.name) +
+          ' 需两端 ≥' + lg.need + ' 级（现最低 ' + lg.minLv + ' 级）。该线仍在运营，' +
+          '但不能再在此追加同型飞机</div>' : '') +
         '</div>';
 
       if (sel) out += renderRouteDetail(st, r, d, n, T, dist, slot);
@@ -1270,14 +1297,22 @@
      * UI 不自己算（见 S.maxPlanesForRoute）。 */
     var planeCap = S.maxPlanesForRoute(st, r);
     var capFull = n >= planeCap;
+    /* 机型等级门槛（2026-10-09）：该线现有若已越级（城市降级导致），
+     * 加派同型会被 sim 拒绝 —— 置灰并说明（已开通的线仍可继续运营）。 */
+    var typeGate = S.planeLevelGate(st, r.a, r.b, r.type);
+    var addBlock = capFull || !typeGate.ok;
     out += '<div class="rd-sec"><div class="rd-h">运力（' + n + ' / ' + planeCap + ' 架）</div><div class="rd-btns">' +
-      '<button class="btn' + (capFull ? ' dis' : '') + '" data-act="add-plane" data-key="' + h(r.key) +
+      '<button class="btn' + (addBlock ? ' dis' : '') + '"' + (addBlock ? ' disabled' : '') +
+      ' data-act="add-plane" data-key="' + h(r.key) +
       '" data-val="' + h(r.type) + '" type="button">' +
       (capFull ? '时刻已满 · ' + planeCap + ' 架'
-               : '加 1 架 ' + h(T.name) + '（' + money(T.price) + '）') + '</button>' +
+               : (!typeGate.ok ? '城市等级不足 · 不能加派'
+                               : '加 1 架 ' + h(T.name) + '（' + money(T.price) + '）')) + '</button>' +
       '<button class="btn" data-act="drop-plane" data-key="' + h(r.key) + '" type="button">撤回 1 架</button>' +
       '</div>' +
       (capFull ? '<div class="rd-note">该线时刻已用满：再加机不会增班，只会白付持有成本 —— 请换更大机型</div>' : '') +
+      (!typeGate.ok ? '<div class="rd-note c-warn">该线两端城市等级已低于 ' + h(T.name) +
+        ' 所需（≥ Lv' + typeGate.need + '）：现有飞机照常运营，但不能再加派同型</div>' : '') +
       '</div>';
 
     /* 换机型：槽位满后唯一出路，故只在机型可升级时给按钮。
@@ -1287,22 +1322,22 @@
              AT.canBuyPlane(p, st.airlineId);
     });
     if (cands.length) {
-      /* 城市适航门槛：换装到越级机型（两端开发度不够）会被软惩罚压制有效运力，
-       * 故在按钮上直接标注门槛，引导玩家「按城市发展状况选机型」。
-       * 门槛是软惩罚而非硬禁，按钮仍可点（玩家自行权衡）。 */
-      var upGateDev = S.routeGateDev(st, r.a, r.b);
-      out += '<div class="rd-sec"><div class="rd-h">置换机型（补差价，' + n + ' 架一起换 · 该线两端开发度 ' +
-        Math.round(upGateDev) + '）</div><div class="rd-btns">';
+      /* 机型等级门槛（2026-10-09 重定）：换装到「两端城市等级不够」的机型
+       * 现在会被 sim 直接拒绝（硬禁），故按钮置灰并说明所需等级。 */
+      var upLv = S.routeGateLevel(st, r.a, r.b);
+      out += '<div class="rd-sec"><div class="rd-h">置换机型（补差价，' + n + ' 架一起换 · 该线两端最低等级 Lv' +
+        upLv + '）</div><div class="rd-btns">';
       cands.forEach(function (p) {
-        var req = AT.planeGateMinDev(p);
-        var overGate = req > upGateDev;
-        out += '<button class="btn" data-act="upgrade" data-key="' + h(r.key) +
+        var req = AT.planeLevelMin(p);
+        var overGate = req > upLv;
+        out += '<button class="btn' + (overGate ? ' dis' : '') + '"' + (overGate ? ' disabled' : '') +
+          ' data-act="upgrade" data-key="' + h(r.key) +
           '" data-val="' + p.id + '" type="button">换 ' + h(p.name) +
           '<i>' + p.seats + ' 座</i>' +
-          (overGate ? '<i class="c-warn">需两端开发度 ≥' + req + '</i>' : '') + '</button>';
+          (overGate ? '<i class="c-warn">需两端 ≥ Lv' + req + '</i>' : '') + '</button>';
       });
       out += '</div><div class="rd-note">旧机按机龄折价回收（约 92% 残值）' +
-        ' · 标注门槛的机型在城市发展到位前运力受限</div></div>';
+        ' · 大型客机需航线两端城市等级达标（Lv3 起用宽体、Lv4 远程、Lv5 巨无霸）</div></div>';
     }
 
     /* 成本明细：把 settleRoute 的分解原样列出，让玩家看得见钱花在哪 */
@@ -1484,21 +1519,28 @@
       if (c.id === fromId) return;
       if (S.findRoute(st, fromId, c.id)) return;
       var dist = S.routeDistance(st, fromId, c.id);
-      /* reach 同时放行「有购机资格」与「机队已持有（旧存档追溯放行）」的机型，
-       * 否则商飞专供机型会把「现购」文案顶掉，目的地被误判为不可达 */
-      var reach = AT.PLANES.filter(function (p) {
+      /* 机型等级门槛（2026-10-09 重定）：两端城市等级决定可用机型上限
+       * （Lv3 起可用宽体、Lv4 远程、Lv5 巨无霸），取两端较小者。 */
+      var gateLv = Math.min(from.level || 1, c.level || 1);
+      /* reachAll：够得到 + 有购机资格/已持有的全部机型（用于航程/等级两种「不可达」文案的区分）。
+       * reach：再按两端等级过滤 —— 越级机型现在会被 sim 硬拒，不进入可达集合。 */
+      var reachAll = AT.PLANES.filter(function (p) {
         return p.range >= dist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]);
       });
+      var reach = reachAll.filter(function (p) { return AT.planeLevelMin(p) <= gateLv; });
       var canFlyNow = reach.some(function (p) { return idleTypes[p.id]; });
       var canBuy = reach.some(function (p) { return st.cash >= p.price; });
       /* 连通性（与 sim.openRoute 同口径）：出发地未入网时，目的地必须已入网，
        * 否则两端都不在网络里 —— 「凭空开线」。这类城市直接禁用并说明原因。 */
       var badNet = offNet && !net[c.id];
+      /* 城市航线上限（2026-10-09 加，与 sim.openRoute 同口径）：两端任一已满则不可开 */
+      var capFull = (from.routes || 0) >= S.cityRouteCap(st, fromId) ||
+        (c.routes || 0) >= S.cityRouteCap(st, c.id);
       cands.push({
         c: c, dist: dist, pot: S.routePotential(st, fromId, c.id),
-        reach: reach, canFlyNow: canFlyNow, canBuy: canBuy,
-        badNet: badNet,
-        tier: badNet ? 2 : (canFlyNow ? 0 : (reach.length && canBuy ? 1 : 2)),
+        reach: reach, reachAll: reachAll, gateLv: gateLv,
+        canFlyNow: canFlyNow, canBuy: canBuy, badNet: badNet, capFull: capFull,
+        tier: (badNet || capFull) ? 2 : (canFlyNow ? 0 : (reach.length && canBuy ? 1 : 2)),
         stocked: canFlyNow
       });
     });
@@ -1515,7 +1557,16 @@
       var tag = '';
       if (x.badNet) {
         tag = '<i class="c-bad">未与你的网络连通 · 不能凭空开线</i>';
-      } else if (ok && !x.canFlyNow) {
+      } else if (x.capFull) {
+        /* 两端任一城市航线上限已满（cap = 等级，基地 +2）：不可再新开 */
+        var fullCity = (from.routes || 0) >= S.cityRouteCap(st, fromId) ? from : x.c;
+        tag = '<i class="c-bad">' + h(fullCity.name) + ' 航线已达上限 ' +
+          S.cityRouteCap(st, fullCity.id) + ' 条 · 不能再开</i>';
+      } else if (!ok) {
+        tag = x.reachAll.length
+          ? '<i class="c-bad">两端城市等级不足（最低 Lv' + x.gateLv + '）· 无合适机型</i>'
+          : '<i class="c-bad">超出现有机型航程</i>';
+      } else if (!x.canFlyNow) {
         var cheapest = null;
         x.reach.forEach(function (p) {
           if (cheapest === null || p.price < cheapest.price) cheapest = p;
@@ -1526,15 +1577,14 @@
         tag = x.canBuy
           ? '<i class="c-warn">需现购 ' + h(cheapest.name) + ' ' + money(cheapest.price) + '</i>'
           : '<i class="c-bad">' + h(cheapest.name) + ' ' + money(cheapest.price) + ' · 买不起</i>';
-      } else if (!ok) {
-        tag = '<i class="c-bad">超出现有机型航程</i>';
       }
       out += '<button class="chip chip-wide' + (ui.newTo === x.c.id ? ' on' : '') +
         (x.tier < 2 ? '' : ' over') +
         '"' + (x.tier < 2 ? ' data-act="pick-to" data-city="' + x.c.id + '"' : ' disabled') +
         ' type="button">' +
-        '<span class="ci-name">' + h(x.c.name) + '</span>' +
-        '<span class="ci-meta">' + num(x.dist) + 'km · 需求 ' + x.pot.toFixed(1) + '</span>' +
+        '<span class="ci-name">' + h(x.c.name) + ' <em class="ci-lv">Lv' + (x.c.level || 1) + '</em></span>' +
+        '<span class="ci-meta">' + num(x.dist) + 'km · 需求 ' + x.pot.toFixed(1) + ' · 航线 ' +
+        (x.c.routes || 0) + '/' + S.cityRouteCap(st, x.c.id) + '</span>' +
         (tag || '') + '</button>';
     });
     out += '</div></div>';
@@ -1558,27 +1608,24 @@
        *   两者一起才够玩家做决策。 */
       var ideal = S.idealSeatsFor(st, fromId, ui.newTo);
       var needType = S.bestNeededType(st, selDist);
-      /* 城市适航门槛：该线两端城市的**最低开发度**。越级机型（门槛高于它）
-       * 会被软惩罚压制有效运力 —— 这正是「飞机要根据城市发展状况来选」。 */
-      var nwGateDev = S.routeGateDev(st, fromId, ui.newTo);
+      /* 机型等级门槛（2026-10-09 重定）：该线两端城市的**最低等级**。大型客机
+       * 需两端达标（Lv3 宽体 / Lv4 远程 / Lv5 巨无霸），不达标在 sim 被硬拒。 */
+      var nwGateLv = S.routeGateLevel(st, fromId, ui.newTo);
       out += '<div class="nw-sec nw-type"><div class="rd-h">③ 机型（全线需约 ' + Math.round(ideal) +
         ' 座 · 最省能飞 ' + h(AT.planeOf(needType).name) +
-        ' · 该线两端开发度 ' + Math.round(nwGateDev) + '）</div><div class="chips">';
+        ' · 该线两端最低等级 Lv' + nwGateLv + '）</div><div class="chips">';
       /* 先算出「推荐机型」：在可飞机型里，选单机座位数最接近 `需要座位/3` 的一款。
        * 为什么是 /3：一条线要填满槽位大约需要 3 架（与 sim 的 idealSeatsFor
        * 内部同款假设一致），故单架理想座位 ≈ 总需求 / 3。
        * 这是给玩家的**提示**而非硬约束 —— 真正取舍仍由玩家按价格、
        * 库存、以及后续换机型余地自己决定。 */
       var perPlaneNeed = ideal / 3;
-      /* 推荐机型只从「飞得到 + 有购机资格（或已持有）」里挑 ——
-       * 推荐一枚点不了的机型比不推荐更糟 */
-      var flyable = AT.PLANES.filter(function (p) {
-        return p.range >= selDist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]);
+      /* 推荐机型只从「飞得到 + 有购机资格（或已持有）+ 等级达标」里挑 ——
+       * 推荐一枚点不了的机型比不推荐更糟。 */
+      var recPool = AT.PLANES.filter(function (p) {
+        return p.range >= selDist && (AT.canBuyPlane(p, st.airlineId) || ownedTypes[p.id]) &&
+          AT.planeLevelMin(p) <= nwGateLv;
       });
-      /* 推荐池优先只放「城市开发度够得上」的机型 —— 否则推荐会把玩家
-       * 引向一架在这条线上被门槛压制的越级巨机。全都越级时才退回原集合。 */
-      var flyableFit = flyable.filter(function (p) { return AT.planeGateMinDev(p) <= nwGateDev; });
-      var recPool = flyableFit.length ? flyableFit : flyable;
       var recId = null, recGap = Infinity;
       recPool.forEach(function (p) {
         var gap = Math.abs(p.seats - perPlaneNeed);
@@ -1602,31 +1649,44 @@
         var stock = idleOf ? '<i class="c-good">机队有 ' + idleOf + ' 架可派</i>'
                            : '<i class="c-warn">机队没有 · 需现购 ' + money(p.price) + '</i>';
         var rec = (p.id === recId) ? '<b class="rec-tag">推荐</b>' : '';
-        /* 越级机型（门槛高于该线两端开发度）：显式标注会被压制运力，
-         * 但**不置灰** —— 门槛是软惩罚，玩家仍可自行权衡。 */
-        var pReq = AT.planeGateMinDev(p);
-        var gateTag = (pReq > nwGateDev)
-          ? '<i class="c-warn">需两端开发度 ≥' + pReq + '（不足 · 运力被压制）</i>' : '';
+        /* 越级机型（等级门槛高于该线两端最低等级）：sim 会直接拒绝，故置灰。 */
+        var pReq = AT.planeLevelMin(p);
+        var overGate = pReq > nwGateLv;
         out += '<button class="chip chip-wide' + (ui.newType === p.id ? ' on' : '') +
-          (afford || idleOf ? '' : ' over') +
-          '"' + (afford || idleOf ? ' data-act="pick-type" data-type="' + p.id + '"' : '') + ' type="button">' +
+          (overGate || !(afford || idleOf) ? ' over' : '') + '"' +
+          (overGate || !(afford || idleOf) ? ' disabled'
+            : ' data-act="pick-type" data-type="' + p.id + '"') + ' type="button">' +
           h(p.name) + rec + '<em>' + p.seats + ' 座 · ' + money(p.price) + (afford ? '' : ' · 资金不足') + '</em>' +
-          stock + gateTag + '</button>';
+          stock + (overGate ? '<i class="c-warn">需两端 ≥ Lv' + pReq + '</i>' : '') + '</button>';
       });
       out += '</div>';
       var pot = S.routePotential(st, fromId, ui.newTo);
       var slot = Math.round(S.routeSlots(st, fromId, ui.newTo));
       out += '<div class="rd-note">该线潜在需求 ' + pot.toFixed(2) + ' 百万客/季 · 时刻上限 ' + slot +
         ' 班/日（竞对已占位会减少）</div>';
+      /* 城市航线上限提示（与 sim.openRoute 同口径）：任一端已满则给出明确原因 */
+      var fromFull = (from.routes || 0) >= S.cityRouteCap(st, fromId);
+      var toC = AT.CITIES_BY_ID[ui.newTo];
+      var toFull = toC && (toC.routes || 0) >= S.cityRouteCap(st, ui.newTo);
+      if (fromFull || toFull) {
+        var fc = fromFull ? from : toC;
+        out += '<div class="rd-note c-bad">' + h(fc.name) + ' 航线已达上限 ' +
+          S.cityRouteCap(st, fc.id) + ' 条（' + (fc.level || 1) + ' 级城市' +
+          (fc.isHome ? '，基地 +' + (C.homeRouteBonus || 0) : '') + '）· 请先关线或发展该城市</div>';
+      }
       /* 开通按钮：文案随所选机型是否有库存而变，让玩家点之前就知道会发生什么 */
       var selPlane = ui.newType ? AT.planeOf(ui.newType) : null;
       var selIdle = selPlane ? S.idlePlanes(st).filter(function (x) { return x.type === ui.newType; }).length : 0;
       var willBuy = selPlane && !selIdle;
+      /* 城市容量已满 → 开通按钮置灰（与 sim.openRoute 同口径，点之前就说清楚） */
+      var openBlocked = fromFull || toFull;
       out += '<div class="nw-actions"><button class="btn btn-pri' +
-        (selPlane && !willBuy && selIdle < 1 ? ' dis' : '') + '" data-act="do-open" type="button">' +
-        (selPlane
-          ? (willBuy ? '购机 1 架并开通（' + money(selPlane.price) + '）' : '开通航线')
-          : '开通航线') +
+        ((selPlane && !willBuy && selIdle < 1) || openBlocked ? ' dis' : '') + '"' +
+        (openBlocked ? ' disabled' : ' data-act="do-open"') + ' type="button">' +
+        (openBlocked ? '城市航线已满 · 无法开通' :
+          (selPlane
+            ? (willBuy ? '购机 1 架并开通（' + money(selPlane.price) + '）' : '开通航线')
+            : '开通航线')) +
         '（' + h((AT.CITIES_BY_ID[fromId] || {}).name) + ' → ' +
         h((AT.CITIES_BY_ID[ui.newTo] || {}).name) + '）</button></div>';
     } else {

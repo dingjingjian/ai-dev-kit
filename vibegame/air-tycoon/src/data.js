@@ -22,6 +22,15 @@
  * ⚠ 与 defcon 的分野：defcon 的红线是「不出现真实城市/国家名」（核打击题材）；
  *   本作题材是民航经营，打击对象是竞争对手而非城市，用真名不构成合规风险，
  *   且「开一条上海到东京的航线」正是玩家的直觉。两作口径不同是有意为之。
+ *
+ * ⚠ 2026-10-09 城市扩充 + 等级强关联（本次改动的动机与口径）：
+ *   用户反馈「航线和飞机可以随便加、与城市等级没有正关联；城市偏少，后期无脑选 A380」。
+ *   本次把城市由 24 扩到 36（§3），并引入两条硬约束（口径详见各行注释）：
+ *     · 每城航线上限 `cap = 等级（基地 +homeRouteBonus）`（CONFIG.homeRouteBonus）；
+ *     · 机型等级门槛（CONFIG.planeGate.minLevelByTier）：大机型需航线两端城市等级达标。
+ *   配套：重排既有 24 城 dev0（×0.9）拉开起始等级、抬高 levelDemandMul 补偿需求、
+ *   新增纯函数 AT.routeCapOf / AT.planeLevelMin 作单一真源（sim/UI/tests 共用）。
+ *   ⚠ 数值改动必须重跑 tests/headless.js + tools/audit-econ.js + tools/balance.js。
  */
 (function (global) {
   'use strict';
@@ -122,7 +131,26 @@
     cityDevDecay: 0.012,       // 无航线时的自然衰减（不经营就退化）
     devPerLevel: 20,           // 每 devPerLevel 点开发度升 1 级
     maxCityLevel: 5,           // 城市最高 5 级（全球枢纽）
-    levelDemandMul: [1, 1.22, 1.5, 1.85, 2.3],   // 各等级需求倍率（index = level-1）
+    /* ── 等级需求倍率（2026-10-09 重定）──
+     * ⚠ 本次与「城市 dev0 重排」配套改动（见 data.js 城市表注释）：
+     *   旧表 [1,1.22,1.5,1.85,2.3] 是配合「绝大多数城市开局即 Lv5」的分布，
+     *   本次把起始等级拉开（Lv5×6 / Lv4×16 / Lv3×12 / Lv2×2），若沿用旧表，
+     *   中盘城市（Lv3~4）的需求会整体走低、拖垮已标定的航线利润率。
+     *   故整体抬高：使**新 Lv4 ≈ 旧 Lv5**（中盘需求持平），Lv5 成为真正的「再上一档」。
+     *   index = level-1。改此表必须重跑 tools/audit-econ.js 与 tools/balance.js。 */
+    levelDemandMul: [1, 1.28, 1.68, 2.2, 2.85],
+
+    /* ── 每座城市的航线上限（2026-10-09 加）──
+     * 用户反馈「航线和飞机可以随便加、与城市等级没有正关联」。
+     * 规则：一座城市最多承接 `cap = 该城等级` 条航线，基地城市额外 +homeRouteBonus 条。
+     *   Lv5→5 条、Lv4→4 条 … Lv1→1 条；基地城市再 +2。
+     * 口径（勿改，见 sim.openRoute）：
+     *   · **每航司各自计数**（玩家与每个竞对各算一份，不是全网共享的池子）——
+     *     避免竞对占满城市导致玩家一位难求；跨航司竞争仍由时刻槽位承担。
+     *   · **只挡「新开线」**，不追溯：城市降级不会强拆已开通的航线。
+     * 效果：全网航线上限 = Σcaps / 2，随「通航→开发度涨→升级」的飞轮逐步放宽 ——
+     *   上限本身也随城市成长而成长，扩张因此有节奏、有取舍。 */
+    homeRouteBonus: 2,
 
     /* ── 票价与收入 ──
      * ticketPerKm 标定依据（2026-09-14）：真实民航经济舱全价约 1.0~1.3 元/公里
@@ -225,10 +253,15 @@
      * 经营收益停在 5.8 万/季不动，而玩家一路复利到 45 万/季（玩家 5.5×）。
      * 现改为「资本部署」：每季把超过备用金的部分投入机队，最多买 rivalBuyPerQuarter 架。
      * 这几个参数是难度的主旋钮，调完必跑 tools/balance.js。
-     * 标定结果（40 局托管 AI）：cap=2 / res=400 / mul=1.0 → 玩家 Q10 仅 0.19×榜首、
-     *   约 Q50 反超、Q60 以 1.21× 领先且 90% 登顶；五家竞对全存活、终局各 18 线。
-     *   对比旧版「Q10 即 100% 第一」，追赶弧线完整。 */
-    rivalIncomeMul: 1.0,       // 竞对经营收益倍率（1.0 = 与玩家同口径、无隐性补贴）
+     *
+     * ⚠ 2026-10-09 重标定（城市扩容 + 等级重构后）：
+     *   本次改动整体**抬高了竞对的相对强度**——竞对母城多为 Lv5 枢纽（东京/纽约/巴黎），
+     *   而平衡基准玩家母城 C01 上海在重排后恰为 Lv4；叠加 levelDemandMul 抬升后，
+     *   原 mul=1.0 的标定把托管玩家压到中位第 4 名、弧线走平（Q40 后不再逼近榜首）。
+     *   balance 40 局实测把 mul 从 1.0 降到 0.90 即恢复既定追赶弧线。
+     *   标定结果（40 局托管 AI，mul=0.90）：Q10 约 0.2× 榜首、约 Q50 反超、
+     *   Q60 约 80% 登顶；五家竞对全存活、终局各 18 线。 */
+    rivalIncomeMul: 0.90,      // 竞对经营收益倍率（本次标定值；1.0 = 与玩家同口径、无隐性补贴）
     rivalReserveCash: 400,     // 竞对保留的周转现金（低于此值不再买机）
     rivalBuyPerQuarter: 2,     // 竞对每季最多购机数（资本部署节奏，旧版实测约 0.55）
 
@@ -322,35 +355,34 @@
     slotMinPerDay: 6,          // 任何航线的最低保障槽位（不至于让薄线完全不能飞）
     slotMaxPerDay: 60,         // 全球最繁忙干线的槽位天花板
 
-    /* ── 城市适航门槛（2026-10-08 加）──
+    /* ── 机型适航门槛（2026-10-09 由「开发度软惩罚」改为「等级硬禁」）──
      *
      * 问题（用户反馈「无脑选 A380」）：槽位是硬上限，槽位一满，加机不再增运力，
      *   唯一的扩张手段就是换更大的机型 —— 于是「买最贵的那架」在几乎所有够厚的
-     *   航线（尤其城市全养到高等级后）都成立，机型选择退化成单一答案，
-     *   「飞机要根据城市发展状况来选」的意图落空。
+     *   航线上都成立，机型选择退化成单一答案。
      *
-     * 机制：机型按 tier 需要**航线两端城市达到一定开发度**（取两端较小者 ——
-     *   巨无霸需要两端都是发达枢纽，一端是小城就喂不饱）。低于门槛时，该机型在
-     *   这条线上「喂不饱」（缺乏巨机所需的客流与地面保障能力），有效运力按开发度
-     *   差距衰减 —— **软惩罚，不硬禁**：仍可飞，只是明显不划算，
-     *   逼玩家「小城用小机、大城才养得起巨无霸」。
+     * 旧机制（2026-10-08）用**开发度**做软惩罚（低于门槛只是有效运力衰减、仍可飞），
+     *   但城市 dev 养满后惩罚归零 → 后期依然最大机型通吃。
      *
-     *   minDevByTier  —— index = tier（0 位占位不用）：机型所需的最低城市开发度
-     *   stepDev       —— 开发度差距的计步单位
-     *   falloffPerStep—— 每差一个 stepDev，有效运力乘的系数（越小惩罚越猛）
+     * 新机制（用户 2026-10-09 拍板）：**按城市等级硬禁**。
+     *   机型按 tier 要求航线**两端城市**都达到一定等级（取两端较小者 ——
+     *   巨无霸需要两端都是发达枢纽，一端是小城就养不起）。达不到门槛时，
+     *   该机型**不能**在这条线上开线 / 派机 / 换机型（UI 置灰 + 说明原因）。
      *
-     * ⚠ 参数口径（勿凭直觉改）：
-     *   · tier1（支线）不限 —— 开局机型不受影响；
-     *   · tier2（窄体）门槛很低（≈ Lv2）—— 窄体机是现代机场的标配；
-     *   · tier3（宽体 A330/787）≈ Lv3 底、tier4（777/747）≈ Lv4 顶、
-     *     tier5（A380）≈ Lv5 顶 —— 越大的机越靠后解锁；
-     *   · 门槛设在「同一等级内仍有区分」的位置（如 84 / 93），否则城市全 Lv5 后
-     *     又回到「最大机型通吃」。改前跑 tools/audit-econ.js 看最优机型是否随
-     *     城市开发度变化。 */
+     *   minLevelByTier —— index = tier（0 位占位不用）：机型所需的最低城市等级
+     *   · tier1（支线）/ tier2（窄体）→ Lv1：现代机场的标配，不限；
+     *   · tier3（宽体 A330/787）→ Lv3；
+     *   · tier4（777/747）→ Lv4；
+     *   · tier5（A380）→ **Lv5** —— 只有全球枢纽才停得起巨无霸。
+     *
+     * ⚠ 口径（勿凭直觉改）：
+     *   · 硬禁，不是软惩罚 —— 不要再引入「衰减系数」那套（上一版就是这么失效的）；
+     *   · 只挡**飞行**（开线/派机/换机型），不挡**购机** —— 可以先买一架，
+     *     等城市养到 Lv5 再投入（与 `exclusive` 只挡采购的语义互补）；
+     *   · 只挡新增，不追溯：旧存档 / 并购所得的越级机型照常运营；
+     *   · 改前跑 tools/audit-econ.js，确认最优机型随城市等级变化（低级城用小机）。 */
     planeGate: {
-      minDevByTier: [0, 0, 22, 60, 84, 93],
-      stepDev: 10,
-      falloffPerStep: 0.55
+      minLevelByTier: [0, 1, 1, 3, 4, 5]
     },
 
     /* ── 机型数量（见 §3 机型表）── */
@@ -503,54 +535,77 @@
     return out;
   };
 
-  /* ───────────────────────── 3. 城市（24 座，精简首版）─────────────────────────
-   * 首版刻意收到 24 座（用户选了「精简首版，先验证玩法」）：
-   * 城市是经营的**目标池**，24 座足以撑起 6 地区 × 4 城的网络骨架，
-   * 又不至于让开局选择过载。玩法定稿后再按需扩到 60 座（defcon 量级）。
+  /* ───────────────────────── 3. 城市（36 座，6 地区 × 6）─────────────────────────
+   * 2026-10-09 由 24 座扩到 36 座（每地区 +2）：用户反馈「城市偏少，后期无脑堆线」。
+   * 城市是经营的**目标池**，6 座/地区既撑得起多样化的枢纽网络，又不至于让开局
+   * 选择过载。地区划分纯为经济地理聚类（见 §2），不含任何政治含义。
+   *
+   * ⚠⚠ dev0 重排（2026-10-09，与本次「等级约束」配套，勿轻易改回）
+   *   旧表 24 城中已有 15 座起始即 Lv5（dev0 ≥ 80）—— 「等级」几乎不构成约束，
+   *   导致新加的「每城航线上限」「大机型需高等级城市」两条规则形同虚设。
+   *   故把既有 24 城的 dev0 整体 ×0.9（保留城市间相对高低），结果：
+   *     Lv5×6（东京/新加坡/伦敦/巴黎/纽约/迪拜）、Lv4×12、Lv3×6。
+   *   新增 12 城再补上 Lv2~Lv4，使起始等级拉成一条完整的梯子，
+   *   「通航 → 开发度涨 → 升级 → 解锁更多航线与更大机型」的飞轮因此真正可玩。
+   *
+   *   ⚠ 降等级会压低需求（routePotential 的 lvF），必须与 CONFIG.levelDemandMul
+   *     的抬高一并生效（见该字段注释），二者是配套的。
    *
    * 字段：
    *   pop     —— 城市人口（百万），决定需求基数
-   *   dev0    —— 初始开发度（0..100），level 由它除 devPerLevel 得出
+   *   dev0    —— 初始开发度（0..100），level = 1 + floor(dev/20)（封顶 5）
    *   wealth  —— 富裕度（0.6~1.5），影响票价承受力
    *   hub     —— 是否为天然枢纽（开局就有较高开发度与更多需求）
    *   region  —— 所属地区（见 §2）
    */
   AT.CITIES = [
     /* ── 东亚 EASIA ── */
-    { id: 'C01', region: 'EASIA',  name: '上海',   lat: 31.23, lon: 121.47, pop: 24.9, dev0: 88, wealth: 1.30, hub: true  },
-    { id: 'C02', region: 'EASIA',  name: '北京',   lat: 39.90, lon: 116.41, pop: 21.9, dev0: 86, wealth: 1.32, hub: true  },
-    { id: 'C03', region: 'EASIA',  name: '东京',   lat: 35.68, lon: 139.65, pop: 37.4, dev0: 92, wealth: 1.42, hub: true  },
-    { id: 'C04', region: 'EASIA',  name: '首尔',   lat: 37.57, lon: 126.98, pop: 25.6, dev0: 84, wealth: 1.28, hub: true  },
+    { id: 'C01', region: 'EASIA',  name: '上海',   lat: 31.23, lon: 121.47, pop: 24.9, dev0: 79, wealth: 1.30, hub: true  },
+    { id: 'C02', region: 'EASIA',  name: '北京',   lat: 39.90, lon: 116.41, pop: 21.9, dev0: 77, wealth: 1.32, hub: true  },
+    { id: 'C03', region: 'EASIA',  name: '东京',   lat: 35.68, lon: 139.65, pop: 37.4, dev0: 83, wealth: 1.42, hub: true  },
+    { id: 'C04', region: 'EASIA',  name: '首尔',   lat: 37.57, lon: 126.98, pop: 25.6, dev0: 76, wealth: 1.28, hub: true  },
+    { id: 'C25', region: 'EASIA',  name: '广州',   lat: 23.13, lon: 113.26, pop: 18.7, dev0: 58, wealth: 1.24, hub: false },
+    { id: 'C26', region: 'EASIA',  name: '香港',   lat: 22.32, lon: 114.17, pop: 7.5,  dev0: 74, wealth: 1.46, hub: true  },
 
     /* ── 东南亚 SEASIA ── */
-    { id: 'C05', region: 'SEASIA', name: '新加坡', lat: 1.35,  lon: 103.82, pop: 5.9,  dev0: 90, wealth: 1.45, hub: true  },
-    { id: 'C06', region: 'SEASIA', name: '曼谷',   lat: 13.76, lon: 100.50, pop: 10.7, dev0: 72, wealth: 0.96, hub: false },
-    { id: 'C07', region: 'SEASIA', name: '雅加达', lat: -6.21, lon: 106.85, pop: 10.6, dev0: 66, wealth: 0.88, hub: false },
-    { id: 'C08', region: 'SEASIA', name: '马尼拉', lat: 14.60, lon: 120.98, pop: 13.9, dev0: 62, wealth: 0.84, hub: false },
+    { id: 'C05', region: 'SEASIA', name: '新加坡', lat: 1.35,  lon: 103.82, pop: 5.9,  dev0: 81, wealth: 1.45, hub: true  },
+    { id: 'C06', region: 'SEASIA', name: '曼谷',   lat: 13.76, lon: 100.50, pop: 10.7, dev0: 65, wealth: 0.96, hub: false },
+    { id: 'C07', region: 'SEASIA', name: '雅加达', lat: -6.21, lon: 106.85, pop: 10.6, dev0: 59, wealth: 0.88, hub: false },
+    { id: 'C08', region: 'SEASIA', name: '马尼拉', lat: 14.60, lon: 120.98, pop: 13.9, dev0: 56, wealth: 0.84, hub: false },
+    { id: 'C27', region: 'SEASIA', name: '吉隆坡', lat: 3.14,  lon: 101.69, pop: 8.4,  dev0: 52, wealth: 1.06, hub: true  },
+    { id: 'C28', region: 'SEASIA', name: '胡志明市',lat: 10.82, lon: 106.63, pop: 9.0,  dev0: 34, wealth: 0.78, hub: false },
 
     /* ── 西欧 EUR ── */
-    { id: 'C09', region: 'EUR',    name: '伦敦',   lat: 51.51, lon: -0.13,  pop: 9.6,  dev0: 94, wealth: 1.48, hub: true  },
-    { id: 'C10', region: 'EUR',    name: '巴黎',   lat: 48.86, lon: 2.35,   pop: 11.1, dev0: 90, wealth: 1.40, hub: true  },
-    { id: 'C11', region: 'EUR',    name: '法兰克福',lat: 50.11,lon: 8.68,   pop: 5.6,  dev0: 86, wealth: 1.44, hub: true  },
-    { id: 'C12', region: 'EUR',    name: '伊斯坦布尔',lat: 41.01,lon: 28.98,pop: 15.8, dev0: 74, wealth: 0.92, hub: true  },
+    { id: 'C09', region: 'EUR',    name: '伦敦',   lat: 51.51, lon: -0.13,  pop: 9.6,  dev0: 85, wealth: 1.48, hub: true  },
+    { id: 'C10', region: 'EUR',    name: '巴黎',   lat: 48.86, lon: 2.35,   pop: 11.1, dev0: 81, wealth: 1.40, hub: true  },
+    { id: 'C11', region: 'EUR',    name: '法兰克福',lat: 50.11,lon: 8.68,   pop: 5.6,  dev0: 77, wealth: 1.44, hub: true  },
+    { id: 'C12', region: 'EUR',    name: '伊斯坦布尔',lat: 41.01,lon: 28.98,pop: 15.8, dev0: 67, wealth: 0.92, hub: true  },
+    { id: 'C29', region: 'EUR',    name: '阿姆斯特丹',lat: 52.37,lon: 4.90, pop: 2.5,  dev0: 70, wealth: 1.44, hub: true  },
+    { id: 'C30', region: 'EUR',    name: '马德里', lat: 40.42, lon: -3.70,  pop: 6.7,  dev0: 58, wealth: 1.20, hub: false },
 
     /* ── 北美 NAMER ── */
-    { id: 'C13', region: 'NAMER',  name: '纽约',   lat: 40.71, lon: -74.01, pop: 19.6, dev0: 93, wealth: 1.50, hub: true  },
-    { id: 'C14', region: 'NAMER',  name: '洛杉矶', lat: 34.05, lon: -118.24,pop: 12.9, dev0: 88, wealth: 1.34, hub: true  },
-    { id: 'C15', region: 'NAMER',  name: '芝加哥', lat: 41.88, lon: -87.63, pop: 8.9,  dev0: 82, wealth: 1.28, hub: true  },
-    { id: 'C16', region: 'NAMER',  name: '墨西哥城',lat: 19.43,lon: -99.13, pop: 22.1, dev0: 68, wealth: 0.90, hub: false },
+    { id: 'C13', region: 'NAMER',  name: '纽约',   lat: 40.71, lon: -74.01, pop: 19.6, dev0: 84, wealth: 1.50, hub: true  },
+    { id: 'C14', region: 'NAMER',  name: '洛杉矶', lat: 34.05, lon: -118.24,pop: 12.9, dev0: 79, wealth: 1.34, hub: true  },
+    { id: 'C15', region: 'NAMER',  name: '芝加哥', lat: 41.88, lon: -87.63, pop: 8.9,  dev0: 74, wealth: 1.28, hub: true  },
+    { id: 'C16', region: 'NAMER',  name: '墨西哥城',lat: 19.43,lon: -99.13, pop: 22.1, dev0: 61, wealth: 0.90, hub: false },
+    { id: 'C31', region: 'NAMER',  name: '多伦多', lat: 43.65, lon: -79.38, pop: 6.4,  dev0: 72, wealth: 1.36, hub: true  },
+    { id: 'C32', region: 'NAMER',  name: '迈阿密', lat: 25.76, lon: -80.19, pop: 6.1,  dev0: 60, wealth: 1.28, hub: false },
 
     /* ── 中东 MIDEAST ── */
-    { id: 'C17', region: 'MIDEAST',name: '迪拜',   lat: 25.20, lon: 55.27,  pop: 3.5,  dev0: 89, wealth: 1.46, hub: true  },
-    { id: 'C18', region: 'MIDEAST',name: '多哈',   lat: 25.29, lon: 51.53,  pop: 2.4,  dev0: 82, wealth: 1.42, hub: true  },
-    { id: 'C19', region: 'MIDEAST',name: '开罗',   lat: 30.04, lon: 31.24,  pop: 21.3, dev0: 60, wealth: 0.78, hub: false },
-    { id: 'C20', region: 'MIDEAST',name: '孟买',   lat: 19.08, lon: 72.88,  pop: 20.7, dev0: 64, wealth: 0.82, hub: false },
+    { id: 'C17', region: 'MIDEAST',name: '迪拜',   lat: 25.20, lon: 55.27,  pop: 3.5,  dev0: 80, wealth: 1.46, hub: true  },
+    { id: 'C18', region: 'MIDEAST',name: '多哈',   lat: 25.29, lon: 51.53,  pop: 2.4,  dev0: 74, wealth: 1.42, hub: true  },
+    { id: 'C19', region: 'MIDEAST',name: '开罗',   lat: 30.04, lon: 31.24,  pop: 21.3, dev0: 54, wealth: 0.78, hub: false },
+    { id: 'C20', region: 'MIDEAST',name: '孟买',   lat: 19.08, lon: 72.88,  pop: 20.7, dev0: 58, wealth: 0.82, hub: false },
+    { id: 'C33', region: 'MIDEAST',name: '阿布扎比',lat: 24.45,lon: 54.38,  pop: 1.5,  dev0: 68, wealth: 1.48, hub: true  },
+    { id: 'C34', region: 'MIDEAST',name: '利雅得', lat: 24.71, lon: 46.68,  pop: 7.7,  dev0: 38, wealth: 1.02, hub: false },
 
-    /* ── 南半球 OTHER（大洋洲 / 非洲 / 南美）：四城纬度全为负 ── */
-    { id: 'C21', region: 'OTHER',  name: '悉尼',   lat: -33.87,lon: 151.21, pop: 5.3,  dev0: 84, wealth: 1.32, hub: true  },
-    { id: 'C22', region: 'OTHER',  name: '约翰内斯堡',lat:-26.20,lon: 28.05,pop: 6.0,  dev0: 62, wealth: 0.86, hub: false },
-    { id: 'C23', region: 'OTHER',  name: '圣保罗', lat: -23.55,lon: -46.63, pop: 22.4, dev0: 70, wealth: 0.88, hub: true  },
-    { id: 'C24', region: 'OTHER',  name: '内罗毕', lat: -1.29, lon: 36.82,  pop: 5.1,  dev0: 56, wealth: 0.74, hub: false }
+    /* ── 南半球 OTHER（大洋洲 / 非洲 / 南美）：六城纬度全为负 ── */
+    { id: 'C21', region: 'OTHER',  name: '悉尼',   lat: -33.87,lon: 151.21, pop: 5.3,  dev0: 76, wealth: 1.32, hub: true  },
+    { id: 'C22', region: 'OTHER',  name: '约翰内斯堡',lat:-26.20,lon: 28.05,pop: 6.0,  dev0: 56, wealth: 0.86, hub: false },
+    { id: 'C23', region: 'OTHER',  name: '圣保罗', lat: -23.55,lon: -46.63, pop: 22.4, dev0: 63, wealth: 0.88, hub: true  },
+    { id: 'C24', region: 'OTHER',  name: '内罗毕', lat: -1.29, lon: 36.82,  pop: 5.1,  dev0: 50, wealth: 0.74, hub: false },
+    { id: 'C35', region: 'OTHER',  name: '奥克兰', lat: -36.85,lon: 174.76, pop: 1.7,  dev0: 54, wealth: 1.26, hub: true  },
+    { id: 'C36', region: 'OTHER',  name: '布宜诺斯艾利斯',lat: -34.60,lon: -58.38,pop: 15.4, dev0: 56, wealth: 0.86, hub: true }
   ];
 
   /* ───────────────────────── 4. 机型（13 款）─────────────────────────
@@ -793,16 +848,24 @@
   // 机型查找
   AT.planeOf = function (typeId) { return AT.PLANES_BY_ID[typeId] || AT.PLANES[0]; };
 
-  /* 机型适航门槛（见 CONFIG.planeGate）：该机型需要航线两端城市达到的最低开发度。
+  /* 每座城市的航线上限（见 CONFIG.homeRouteBonus）：cap = 等级（基地 +2）。
+   * 单一真源 —— sim.openRoute / 竞对选线 / UI 计数与置灰全部经此函数，
+   * 避免「界面显示 N、实际只放 N-1」这类漂移。 */
+  AT.routeCapOf = function (level, isHome) {
+    var lv = Math.max(1, (level == null ? 1 : level) | 0);
+    return lv + (isHome ? (AT.CONFIG.homeRouteBonus || 0) : 0);
+  };
+
+  /* 机型适航门槛（见 CONFIG.planeGate）：该机型需要航线两端城市达到的最低等级。
    * 入参可以是**机型 id 字符串 / 机型对象 / tier 数字** —— sim/UI 两处共用同一
    * 来源，永不漂移。
-   * ⚠ 必须支持字符串 id：sim 的 settleRoute / planeGateFactor 拿到的是
-   *   route.type（id 字符串），早期只认对象与数字，导致「字符串 → tier 取不到
-   *   → 兜底 tier 1 → 门槛恒为 0」的静默失效 —— 门槛形同虚设，界面却显示正常。 */
-  AT.planeGateMinDev = function (planeOrTier) {
+   * ⚠ 必须支持字符串 id：sim / UI 拿到的是 route.type（id 字符串）或机型对象，
+   *   早期只认对象与数字，导致「字符串 → tier 取不到 → 兜底 tier 1 → 门槛恒为 0」
+   *   的静默失效 —— 门槛形同虚设，界面却显示正常。 */
+  AT.planeLevelMin = function (planeOrTier) {
     var g = AT.CONFIG.planeGate || {};
-    var arr = g.minDevByTier || [];
-    if (!arr.length) return 0;
+    var arr = g.minLevelByTier || [];
+    if (!arr.length) return 1;
     var tier;
     if (typeof planeOrTier === 'number') {
       tier = planeOrTier;
@@ -811,7 +874,7 @@
       tier = (p && p.tier) || 1;
     }
     var i = Math.max(0, Math.min(arr.length - 1, tier | 0));
-    return arr[i] == null ? 0 : arr[i];
+    return arr[i] == null ? 1 : arr[i];
   };
 
   /* 航线距离（两种口径）：
