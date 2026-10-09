@@ -129,14 +129,8 @@
   #uHint{bottom:calc(62px + var(--safe-b));left:0;right:0;text-align:center;
     color:var(--ink3);font-size:10px;letter-spacing:.02em;pointer-events:none}
 
-  /* ── 城市读数卡（点城市后弹出）──
-     做成「仪表面板」：左对齐读数行 + 冷细线分隔，贴在 Tab 栏之上。 */
-  #uCityCard{display:none;bottom:calc(86px + var(--safe-b));left:12px;right:12px;
-    max-height:50%;overflow-y:auto;-webkit-overflow-scrolling:touch;
-    border:1px solid var(--line2);border-radius:12px;padding:12px 13px;
-    background:var(--panel2)}
-  #uCityCard.show{display:block}
-  .cc-name{font-family:var(--sans);font-size:15px;font-weight:600;color:var(--ink);margin-bottom:8px}
+  /* ── 城市读数卡（点城市后弹出，走模态层 .md-box，与事件卡 / 季报同款样式）──
+     .cc-home / .cc-lines / .cc-tag 仍被城市模态复用（基地标签 + 航线标签列表）。 */
   .cc-home{font-size:10px;font-weight:600;color:#20160a;background:var(--amber);
     border-radius:4px;padding:1px 5px;margin-left:7px;vertical-align:middle;letter-spacing:.04em}
   .cc-row{display:flex;justify-content:space-between;align-items:baseline;
@@ -638,12 +632,10 @@
   /* 面板内滚动条（桌面端可见，移动端不显示；Chrome 61 支持 ::-webkit-scrollbar）*/
   .pn-body::-webkit-scrollbar,
   .md-box::-webkit-scrollbar,
-  .rs::-webkit-scrollbar,
-  #uCityCard::-webkit-scrollbar{width:4px}
+  .rs::-webkit-scrollbar{width:4px}
   .pn-body::-webkit-scrollbar-thumb,
   .md-box::-webkit-scrollbar-thumb,
-  .rs::-webkit-scrollbar-thumb,
-  #uCityCard::-webkit-scrollbar-thumb{background:rgba(112,182,242,.32);border-radius:2px}
+  .rs::-webkit-scrollbar-thumb{background:rgba(112,182,242,.32);border-radius:2px}
 </style>
 </head>
 <body>
@@ -670,8 +662,6 @@
     </div>
     <div id="uTimerWrap"><div id="uTimerBar"></div></div>
   </div>
-
-  <div id="uCityCard" class="hud panel"></div>
 
   <div id="uHint" class="hud">拖动旋转 · 双指缩放 · 点击城市查看</div>
 

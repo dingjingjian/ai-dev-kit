@@ -94,7 +94,7 @@
      *   已在用的 #loader / #fallback —— 不为了 UI 好看去改启动脚本的 id。 */
     var ALIAS = { uStage: 'stage', uLoader: 'loader', uFallback: 'fallback' };
     ['uCompany', 'uQuarter', 'uSpeed', 'uMute', 'uCash', 'uNet', 'uRank', 'uRoutes', 'uPlanes',
-     'uDev', 'uTimer', 'uTimerBar', 'uCityCard', 'uHint', 'uToast', 'uLoader',
+     'uDev', 'uTimer', 'uTimerBar', 'uHint', 'uToast', 'uLoader',
      'uMine', 'uPanel', 'uPanelBody', 'uPanelTitle', 'uPanelSub', 'uPanelClose',
      'uModal', 'uModalBody', 'uTabRoutes', 'uTabFleet', 'uTrade',
      'uFallback', 'uStage', 'uBtnRoutes', 'uBtnFleet', 'uBtnNew', 'uBtnRivals'
@@ -126,12 +126,16 @@
     if (el.uBtnRivals) el.uBtnRivals.addEventListener('click', function () { togglePanel('rivals'); }, false);
     if (el.uPanelBody) el.uPanelBody.addEventListener('click', onPanelClick, false);
     if (el.uModalBody) el.uModalBody.addEventListener('click', onModalClick, false);
-    if (el.uCityCard) el.uCityCard.addEventListener('click', onCityCardClick, false);
-    // Esc 关闭面板（桌面端调试方便）
+    /* 城市模态的遮罩点击关闭：点 .modal 背景（非 .md-box 内部）时收起城市卡。
+     * 事件卡 / 季报不在此列 —— 它们必须做出选择 / 点按钮才能关。 */
+    if (el.uModal) el.uModal.addEventListener('click', function (e) {
+      if (e.target === el.uModal && ui.modal === 'city') closeModal();
+    }, false);
+    // Esc 关闭面板 / 城市模态（桌面端调试方便）
     global.addEventListener('keydown', function (e) {
       if (e.keyCode === 27) {
         if (ui.panel) closePanel();
-        else if (el.uCityCard) el.uCityCard.classList.remove('show');
+        else if (ui.modal === 'city') closeModal();
       }
     }, false);
   }
@@ -586,43 +590,19 @@
         ui.selCity = c.id;
         R.flyToCity(ui.state, c.id);
         /* 卡片互斥的另一半：面板开着时点城市 → 收面板，只留城市卡片。
-         * 两张卡叠在一起（底部面板 + 左下城市卡）会互相遮挡。 */
+         * 两张卡叠在一起（底部面板 + 城市模态）会互相遮挡。 */
         if (ui.panel) closePanel();
         renderCityCard(c);
         dirty.hud = true;
-      } else if (el.uCityCard) {
-        el.uCityCard.classList.remove('show');    // 点空地 → 收起卡片
       }
     }, false);
   }
 
-  function onCityCardClick(e) {
-    var a = e.target.closest ? e.target.closest('[data-act]') : null;
-    if (!a) return;
-    var act = a.getAttribute('data-act');
-    if (act === 'build-base') {
-      var c0 = AT.CITIES_BY_ID[ui.selCity];
-      if (!c0) return;
-      var res = S.buildBase(ui.state, c0.id);
-      if (res.ok) {
-        toast('已在 ' + c0.name + ' 建立基地');
-        renderCityCard(S.findCity(ui.state, c0.id) || c0);
-        dirty.hud = true;
-      } else {
-        toast(res.reason || '建立基地失败');
-      }
-    } else if (act === 'open-here') {
-      var c = AT.CITIES_BY_ID[ui.selCity];
-      if (!c) return;
-      closePanel();
-      openPanel('newroute');
-      ui.newFrom = c.id;
-      toast('从 ' + c.name + ' 出发，选择一个目的地');
-    }
-  }
+  /* 城市卡的操作（build-base / open-here / close-city）已迁入 onModalClick，
+   * 城市卡现在走模态层（openModal('city', ...)），与事件卡 / 季报同款样式。 */
 
   function renderCityCard(c) {
-    if (!el.uCityCard) return;
+    if (!el.uModalBody) return;
     var st = ui.state;
     var mine = st.routes.filter(function (r) { return r.a === c.id || r.b === c.id; });
     var pax = c.paxLast ? c.paxLast.toFixed(2) + ' 百万客/季' : '—';
@@ -632,15 +612,22 @@
       : c.level >= 4 ? '远程宽体'
       : c.level >= 3 ? '宽体'
       : '支线 / 窄体';
-    var html = '<div class="cc-name">' + h(c.name) +
-      (c.isHome ? '<span class="cc-home">基地</span>' : '') + '</div>' +
-      '<div class="cc-row"><span>发展度</span><b>' + Math.round(c.dev) + ' / 100</b></div>' +
-      '<div class="cc-row"><span>等级</span><b>Lv' + c.level + ' · ' + LV_NAME[Math.max(1, Math.min(5, c.level))] + '</b></div>' +
-      '<div class="cc-row"><span>人口</span><b>' + c.pop.toFixed(1) + ' 百万</b></div>' +
-      '<div class="cc-row"><span>本季客流</span><b>' + pax + '</b></div>' +
-      '<div class="cc-row"><span>我的航线</span><b' + (full ? ' class="c-warn"' : '') + '>' +
+    var region = AT.regionOf(c);
+    /* 城市卡走模态层（openModal），与事件卡 / 季报 / 终局同款 .md-box 样式。
+     * md-kind 放地区名、md-title 放城市名 + 基地标签、md-kv 放读数行。
+     * 不阻塞回合计时：syncClockPause 只对 'report' 暂停，'city' 不触发。 */
+    var html = '<div class="md-kind">' + h(region.name || '城市') + '</div>' +
+      '<div class="md-title">' + h(c.name) +
+        (c.isHome ? '<span class="cc-home">基地</span>' : '') + '</div>' +
+      '<div class="md-kv">' +
+      '<div><span>发展度</span><b>' + Math.round(c.dev) + ' / 100</b></div>' +
+      '<div><span>等级</span><b>Lv' + c.level + ' · ' + LV_NAME[Math.max(1, Math.min(5, c.level))] + '</b></div>' +
+      '<div><span>人口</span><b>' + c.pop.toFixed(1) + ' 百万</b></div>' +
+      '<div><span>本季客流</span><b>' + pax + '</b></div>' +
+      '<div><span>我的航线</span><b' + (full ? ' class="c-warn"' : '') + '>' +
         mine.length + ' / ' + cap + ' 条' + (full ? ' · 已满' : '') + '</b></div>' +
-      '<div class="cc-row"><span>可停机型</span><b>≤ ' + maxTierName + '</b></div>';
+      '<div><span>可停机型</span><b>≤ ' + maxTierName + '</b></div>' +
+      '</div>';
     if (mine.length) {
       html += '<div class="cc-lines">';
       mine.forEach(function (r) {
@@ -655,13 +642,14 @@
      * 建基地费用按城市等级差异化（AT.buildBaseCostOf），高等级枢纽更贵。 */
     var isBase = !!c.isHome;
     var baseCost = AT.buildBaseCostOf(c.level || 1);
+    html += '<div class="md-actions">';
     if (isBase) {
-      html += '<div class="cc-actions"><button class="btn" data-act="open-here" type="button">从这里开新航线</button></div>';
+      html += '<button class="btn btn-pri" data-act="open-here" type="button">从这里开新航线</button>';
     } else {
-      html += '<div class="cc-actions"><button class="btn" data-act="build-base" type="button">建立基地（¥' + baseCost + '）</button></div>';
+      html += '<button class="btn btn-pri" data-act="build-base" type="button">建立基地（¥' + baseCost + '）</button>';
     }
-    el.uCityCard.innerHTML = html;
-    el.uCityCard.classList.add('show');
+    html += '<button class="btn" data-act="close-city" type="button">关闭</button></div>';
+    openModal('city', html);
   }
 
   /* ───────────────────────── 速度 ───────────────────────── */
@@ -708,10 +696,10 @@
 
   function openPanel(name) {
     ui.panel = name;
-    /* 卡片互斥（2026-10-08 用户要求）：同屏只留一张卡 —— 面板升起时收掉城市卡片，
-     * 否则它会压在面板上方挡视线。城市卡片自己的「从这里开新航线」分支
-     * （onCityCardClick）不必再单独收卡，这里统一兜底。 */
-    if (el.uCityCard) el.uCityCard.classList.remove('show');
+    /* 卡片互斥（2026-10-08 用户要求）：同屏只留一张卡 —— 面板升起时收掉城市模态，
+     * 否则它会压在面板上方挡视线。城市卡自己的「从这里开新航线」分支
+     * （onModalClick）不必再单独收卡，这里统一兜底。 */
+    if (ui.modal === 'city') closeModal();
     /* 每次打开都回到顶部：上次可能停在列表中部，重新进来应从第一屏开始看 ——
      * 带着旧滚动位置开新决策，读起来像「面板坏了」。 */
     if (el.uPanelBody) el.uPanelBody.scrollTop = 0;
@@ -724,7 +712,7 @@
      * 出发地/目的地/机型全部清空 —— 关面板不等于做决定，「上次看到一半」的
      * 选中项不该在重开后冒充已选（目的地/机型的高亮、开通按钮的可用态都会骗人）。
      * 清掉的 newFrom 由 renderNewRoute 重新落回基地默认（见 1421 行附近）；
-     * 城市卡片「从这里开新航线」的出发地意图在 openPanel 之后再种入（onCityCardClick）。
+     * 城市模态「从这里开新航线」的出发地意图在 openPanel 之后再种入（onModalClick）。
      * 滚动意图标记一并清掉：它是「这次点击」的一次性量，不该跨次生效。 */
     if (name === 'newroute') {
       ui.newFrom = null;
@@ -1013,6 +1001,31 @@
     } else if (act === 'restart') {
       sfx('click');
       global.location.reload();
+    } else if (act === 'build-base') {
+      /* 城市卡（模态）里的建基地按钮 —— 从 onCityCardClick 迁移而来。 */
+      var c0 = AT.CITIES_BY_ID[ui.selCity];
+      if (!c0) return;
+      var res = S.buildBase(ui.state, c0.id);
+      if (res.ok) {
+        sfx('confirm');
+        toast('已在 ' + c0.name + ' 建立基地');
+        renderCityCard(S.findCity(ui.state, c0.id) || c0);
+        dirty.hud = true;
+      } else {
+        sfx('deny');
+        toast(res.reason || '建立基地失败', 'bad');
+      }
+    } else if (act === 'open-here') {
+      var ch = AT.CITIES_BY_ID[ui.selCity];
+      if (!ch) return;
+      sfx('click');
+      closeModal();
+      openPanel('newroute');
+      ui.newFrom = ch.id;
+      toast('从 ' + ch.name + ' 出发，选择一个目的地');
+    } else if (act === 'close-city') {
+      sfx('click');
+      closeModal();
     }
   }
 

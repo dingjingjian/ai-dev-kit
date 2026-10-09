@@ -1449,7 +1449,11 @@
       planeMesh.setMatrixAt(i, planeDummy.matrix);
 
       col = _color.setRGB(p.c[0], p.c[1], p.c[2]);
-      col.multiplyScalar(0.85 + 0.5 * Math.sin(t * Math.PI));   // 中段更亮（贴近弧线最高点）
+      /* 中段更亮（贴近弧线最高点），但乘子上限必须 ≤ 1.0 ——
+       * 超过 1.0 会让颜色最高通道截断（clamp 到 1.0），色相丢失、飞机变白。
+       * 原 0.85+0.5*sin 上限 1.35 正是此病：红色 R 通道 0.92×1.35=1.24→1.0 截断成粉白。
+       * 改为 0.55+0.35*sin，范围 [0.55, 0.90]，不截断、色相完整保留。 */
+      col.multiplyScalar(0.55 + 0.35 * Math.sin(t * Math.PI));
       planeMesh.setColorAt(i, col);
       planeHidden[i] = false;                                    // 标记为「在用」
     }
