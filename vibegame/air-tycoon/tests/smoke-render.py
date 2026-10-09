@@ -11,7 +11,10 @@ air-tycoon 渲染层实机冒烟
 运行：
   python tests/smoke-render.py
 断言流：加载 → 无 console 报错 → render.ok → 贴图加载 → 城市/弧线/客机计数 →
-        像素体检（非纯黑、非过曝）→ 截图三视口。
+        像素体检（非纯黑、非过曝）→ 截图三视口 →
+        UI 操作链（面板/买机/开线/事件/季报/终局）→
+        昼夜·夜景定量探针（另开一页：日面/夜面/东亚灯火面 + 四组 A/B 对照）→
+        灯火可读性（标记叠在灯火上还剩多少对比度与彩度；含同机位复现的「改前」配方）。
 """
 import asyncio, pathlib, sys
 from playwright.async_api import async_playwright
@@ -27,6 +30,156 @@ SHOT = ROOT / "docs" / "shots"
 def analyze_png(path):
     """像素体检 —— 实现已抽到 tests/smoke_render_util.py，与 verify-dist.py 共用同一套判据。"""
     return _analyze_png(path)
+
+
+SPHERE_RR = 0.55          # 取样半径 = 0.55R（见 sphere_lum 的口径说明）
+
+
+def sphere_lum(path):
+    """球面本体在 0.55R 圆内的平均亮度 —— 昼夜对比的唯一读数。
+
+    口径（标定时定下的，改口径会让历史读数不可比）：
+      · 球心恒在**屏幕正中** —— 相机 lookAt(0,0,0)、球心在原点，投影必落中心；
+        早先误取 0.42H 当过球心，采样框偏上、把大片星空算了进去，读数全是噪声。
+      · R_px = 0.2828 × H —— 由 R=1.6 / 相机 7.4 / fov 52° 推出。
+      · 只取 0.55R 内 —— 避开球体边缘那圈大气辉光（它在 0.95~1.05R 一带最亮，
+        会把「夜面有多黑」这件事整个淹掉）。
+    """
+    from PIL import Image
+    im = Image.open(path).convert("RGB")
+    W, H = im.size
+    px = im.load()
+    cx, cy = W // 2, H // 2
+    rs = (0.2828 * H * SPHERE_RR) ** 2
+    n, lsum = 0, 0.0
+    for y in range(0, H, 2):
+        dy = y - cy
+        for x in range(0, W, 2):
+            dx = x - cx
+            if dx * dx + dy * dy > rs:
+                continue
+            r, g, b = px[x, y]
+            lsum += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+            n += 1
+    return lsum / max(1, n)
+
+
+def light_delta(on_path, off_path):
+    """同一机位「开夜灯 / 关夜灯」两张图的差值 —— 夜灯机制是否真的改变了输出。
+
+    为什么要这个而不是直接数「暖色像素占多少」：
+      · 暖色阈值口径（亮度 > X 且 R−B > Y）在白天陆地上也会亮起（陆地本来就偏暖），
+        测不出「夜里的灯」。实测白天球面 warm 占比 0.006，比夜面还高。
+      · 灯火核心会被 sRGB 压向白色，R−B 随亮度反而收窄，阈值一高就漏。
+    所以改成配对差分：只看「关灯后变暗」的那些像素，问两件事 ——
+      dInner  它们平均亮了多少（夜灯真的在发光）
+      dWarm   它们平均变暖了多少（R−B 增量）
+    ⚠ dWarm 的判据在 2026-10-09 反转了：灯火从暖金改低彩度冷白之后，
+      「光是暖的」不再是要断言的性质，反而「光**不**改变色相」才是。
+      故断言从 dWarm > 0.02 改成 |dWarm| 小且不偏暖（见 main 的夜景验收表）。
+    """
+    from PIL import Image
+    on = Image.open(on_path).convert("RGB")
+    off = Image.open(off_path).convert("RGB")
+    if on.size != off.size:
+        raise ValueError("配对图尺寸不一致，无法逐像素比对：%s vs %s" % (on.size, off.size))
+    W, H = on.size
+    pon, poff = on.load(), off.load()
+    cx, cy = W // 2, H // 2
+    rs = (0.2828 * H * SPHERE_RR) ** 2
+    n = lit = 0
+    d_inner = 0.0
+    rb_on = rb_off = 0.0
+    for y in range(0, H, 2):
+        dy = y - cy
+        for x in range(0, W, 2):
+            dx = x - cx
+            if dx * dx + dy * dy > rs:
+                continue
+            r0, g0, b0 = pon[x, y]
+            r1, g1, b1 = poff[x, y]
+            l0 = (0.2126 * r0 + 0.7152 * g0 + 0.0722 * b0) / 255.0
+            l1 = (0.2126 * r1 + 0.7152 * g1 + 0.0722 * b1) / 255.0
+            n += 1
+            d_inner += l0 - l1
+            if l0 - l1 > 0.03:                     # 「关灯后明显变暗」= 被夜灯照亮的像素
+                lit += 1
+                rb_on += (r0 - b0) / 255.0
+                rb_off += (r1 - b1) / 255.0
+    n = max(1, n)
+    return {"dInner": d_inner / n,
+            "dWarm": ((rb_on - rb_off) / lit) if lit else 0.0,
+            "litFrac": lit / n}
+
+
+def info_layer_ab(on_path, off_path):
+    """信息层（城市点/航线/客机）在「灯火打开」后还剩多少对比度与彩度 —— 灯火可读性 A/B。
+
+    为什么只有同机位开灯/关灯对照才回答得了「看不清」（用户 2026-10-09 报：
+    夜晚的灯光和机场颜色接近，导致看不清）：
+      · 两张图只差灯火那一层，且灯火是加性混合 —— 信息层在两图里**逐像素相同**，
+        所以标记任何衰减都只能归因于「背景被灯火抬高了」，归因是干净的。
+      · 只看「夜里的灯多亮」测不出这件事：要问的是「标记还读不读得出来」。
+
+    口径：
+      · 信息层像素 = **关灯图**里「够亮（亮度 > 0.35）且局部凸显（比 15px 盒式模糊
+        高 0.10）」的点。为什么要「局部凸显」这一条：东亚夜面同时压着日面与冰盖，
+        满屏都是亮而平滑的地表，只按亮度筛会把它们全算成标记。
+      · 标记对比度 = 标记亮度 − **它周围的背景亮度**。背景用 15px 盒式模糊近似
+        （核半径远大于点核，故标记自身被摊薄成固定比例，两图一致）。
+        于是「灯火吃掉多少对比度」＝ 开灯图的背景抬高了 blur_on − blur_off：
+            contraOff = lum_off − blur_off      关灯时的对比度（干净底）
+            contraOn  = lum_off − blur_on       同一像素在灯火背景上的对比度
+        用 lum_off 而不是 lum_on 是刻意的：标记自身贡献两图相同，取差值更干净。
+      · 彩度用 |R−B|（信息层的归属色都是饱和色；灯火是低彩度冷白，几乎不贡献 |R−B|）。
+      · hotFrac / hotFracOff = 开灯 / 关灯两张图里亮度 > 0.97 的像素占比 ——
+        8bit 缓冲截断出来的「纯白斑」。两者都返回是为了让断言可以问
+        「灯火**新造**了多少白斑」，而不是跟一个不可复核的绝对阈值比
+        （关灯图里本来就有日面与冰盖，实测占 0.04%）。
+    """
+    from PIL import Image, ImageFilter
+    on = Image.open(on_path).convert("RGB")
+    off = Image.open(off_path).convert("RGB")
+    if on.size != off.size:
+        raise ValueError("配对图尺寸不一致，无法逐像素比对：%s vs %s" % (on.size, off.size))
+    W, H = on.size
+    pon, poff = on.load(), off.load()
+    blur_on = on.convert("L").filter(ImageFilter.BoxBlur(15)).load()
+    blur_off = off.convert("L").filter(ImageFilter.BoxBlur(15)).load()
+    cx, cy = W // 2, H // 2
+    rs = (0.2828 * H * SPHERE_RR) ** 2
+
+    def lum(p, x, y):
+        r, g, b = p[x, y]
+        return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0
+
+    n = hot = hot_off = m = 0
+    con_on = con_off = chr_on = chr_off = 0.0
+    for y in range(0, H, 2):
+        dy = y - cy
+        for x in range(0, W, 2):
+            dx = x - cx
+            if dx * dx + dy * dy > rs:
+                continue
+            n += 1
+            if lum(pon, x, y) > 0.97:
+                hot += 1
+            if lum(poff, x, y) > 0.97:
+                hot_off += 1
+            lf = lum(poff, x, y)
+            if lf > 0.35 and lf - blur_off[x, y] / 255.0 > 0.10:
+                m += 1
+                con_off += lf - blur_off[x, y] / 255.0
+                con_on += lf - blur_on[x, y] / 255.0
+                r0, b0 = pon[x, y][0], pon[x, y][2]
+                r1, b1 = poff[x, y][0], poff[x, y][2]
+                chr_on += abs(r0 - b0) / 255.0
+                chr_off += abs(r1 - b1) / 255.0
+    n = max(1, n)
+    m = max(1, m)
+    return {"nInfo": m, "infoFrac": m / n, "hotFrac": hot / n, "hotFracOff": hot_off / n,
+            "contraOn": con_on / m, "contraOff": con_off / m,
+            "chromaOn": chr_on / m, "chromaOff": chr_off / m}
 
 
 async def run(pw):
@@ -614,10 +767,204 @@ async def run(pw):
     return out
 
 
+async def probe_night(pw):
+    """昼夜 / 夜景定量探针 —— 另开一页独立跑，不复用 run() 那条操作链的页面。
+
+    为什么要独立开页（两条都是「读数不可比」的坑）：
+      · run() 跑到最后停在「终局面板盖住地图」，采样框里根本不是球面；
+      · 开局 1.2s 内相机还在做 radius 12→7.4 的推近，屏幕上球径不符
+        sphere_lum 的 R_px = 0.2828×H 口径，亮度会被算错。
+    独立页里等相机停稳再拍，读数才和标定值可比。
+
+    观察点从页面里取（render.sunLL），不在这里另抄一份太阳方向 —— 与主光/夜壳同源。
+
+    ⚠ 2026-10-09：太阳方向改由**本机真实时间**驱动（src/solar.js），所以本探针
+      在开局后**立刻把时钟锁到「改前那个固定机位」**（直射点 25.1°N/128.7°E，
+      即历史常量 SUN_DIR=[4,3,5]）。不锁的话，下面每一条门槛都会变成日期的函数：
+      同一个断言今天绿、明天红，读数也没法和 README 里那张标定表对照 —— 那等于
+      把上一轮好不容易建立的定量口径全部作废。锁定后本探针与历次读数严格可比。
+      真实时间驱动的**正确性**由两处独立覆盖：
+        · tests/headless.js 的「太阳位置层」（纯函数，16 条）
+        · 本文件的 sunPlan 断言（校验五处消费点真的同源，见下）
+    """
+    browser = await pw.chromium.launch(
+        executable_path=EDGE,
+        args=["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"]
+    )
+    ctx = await browser.new_context(viewport={"width": VW, "height": VH},
+                                    device_scale_factor=2, is_mobile=True, has_touch=True)
+    page = await ctx.new_page()
+    errs = []
+    page.on("console", lambda m: errs.append(m.text) if m.type == "error" else None)
+    page.on("pageerror", lambda e: errs.append("PAGEERROR: " + str(e)))
+
+    res = {"errors": errs}
+    try:
+        await page.goto((ROOT / "index.html").as_uri(), wait_until="load")
+        await page.wait_for_timeout(1200)
+        await page.click("#uSelectList .al-card")
+        await page.click("#uSelGo")
+        # ⚠ 采集「真实时间开局」必须在**点击开始之后**：渲染层是 createGame → boot
+        #   才初始化的（applySunAt 在 render.init 里跑）。在点击前取会读到尚未
+        #   初始化的回退值 [4,3,5]，看起来「真实时间没生效」——其实只是取早了。
+        await page.wait_for_timeout(1200)
+        res["sunReal"] = await page.evaluate("() => window.AT.render.sunPlan")
+        res["sunFallback"] = await page.evaluate(
+            "() => window.AT.solar && window.AT.solar.FALLBACK_SUN_DIR")
+        res["sunNow"] = await page.evaluate("() => new Date().toString()")
+        # 锁到「改前那个固定机位」，让下面所有标定读数与 README 那张表严格可比
+        res["sunLocked"] = await page.evaluate(
+            "() => window.AT.render.setSunDir(window.AT.solar.FALLBACK_SUN_DIR)")
+        # 等推近停稳（radius 12→7.4，阻尼 0.12/帧 ≈ 1s）+ 夜景贴图解码上屏
+        await page.wait_for_timeout(3600)
+
+        async def clear_modal():
+            """事件卡弹出的那一帧会盖住地图，采样前先把它点掉；返回是否点掉过。"""
+            got = await page.evaluate("""() => {
+                const m = document.getElementById('uModal');
+                if (!m || !m.classList.contains('show')) return false;
+                const o = document.querySelector('#uModalBody [data-act]');
+                if (o) o.click();
+                return true;
+            }""")
+            if got:
+                await page.wait_for_timeout(700)
+            return got
+
+        async def shoot(fname):
+            if await clear_modal():
+                res["modalDismissed"] += 1
+            p = SHOT / fname
+            await page.screenshot(path=str(p))
+            return p
+
+        async def fly(ll):
+            """转过去并等阻尼收敛；返回「真的转过去了」—— 否则下面的读数可能是同一面。"""
+            await page.evaluate("ll => window.AT.render.flyTo(ll.lat, ll.lon)", ll)
+            await page.wait_for_timeout(1800)
+            return await page.evaluate("""ll => {
+                const R = window.AT.render;
+                const v = window.AT.geo.ll2v(ll.lat, ll.lon, 1);
+                let d = R.camTarget.theta - Math.atan2(v.x, v.z);
+                while (d > Math.PI) d -= Math.PI * 2;
+                while (d < -Math.PI) d += Math.PI * 2;
+                return Math.abs(d) < 0.02;
+            }""", ll)
+
+        res["modalDismissed"] = 0
+        res["nightOk"] = await page.evaluate(
+            "() => !!(window.AT && window.AT.render && window.AT.render.nightOk)")
+        res["gain"] = await page.evaluate("() => window.AT.render.nightGain")
+        res["dim"] = await page.evaluate("() => window.AT.render.nightDim")
+        res["bloom"] = await page.evaluate("() => window.AT.render.bloomStrength")
+        res["lightPlan"] = await page.evaluate("() => window.AT.render.lightPlan")
+        res["nightPlan"] = await page.evaluate("() => window.AT.render.nightPlan")
+        res["gridProbe"] = await page.evaluate("() => window.AT.render.gridNightProbe")
+        sun = await page.evaluate("() => window.AT.render.sunLL")
+        res["sunLL"] = sun
+        # 锁定机位后的太阳快照：主光/补光/两个夜壳 uSun 应当与 dir 完全同源。
+        # 这一份 JSON 是「五处消费点没漏更新」的唯一证据 —— 只读 SUN_DIR 断言不了
+        # 另外四处（它们各持一份 position / uniform 实例，漏更新不报错）。
+        res["sunLockedPlan"] = await page.evaluate("() => window.AT.render.sunPlan")
+        # 相机要真的停在 R=7.4 上，否则球径口径不成立
+        res["settledR"] = await page.evaluate("() => window.AT.render.camTarget.radius")
+
+        # 开局主场视角（推近已停稳）—— 这张最接近玩家第一眼
+        res["homeInner"] = sphere_lum(await shoot("smoke-11-night-home.png"))
+        # 同一机位的「改前」：开局视角是玩家第一眼看到的画面，
+        # 留一组同机位对照比任何描述都能说明这次改动做了什么。
+        await page.evaluate("v => window.AT.render.setNightDim(v)", 0)
+        await page.evaluate("v => window.AT.render.setNightGain(v)", 0)
+        await page.wait_for_timeout(600)
+        res["homeBeforeInner"] = sphere_lum(await shoot("smoke-19-home-before.png"))
+        await page.evaluate("v => window.AT.render.setNightDim(v)", res["dim"])
+        await page.evaluate("v => window.AT.render.setNightGain(v)", res["gain"])
+        await page.wait_for_timeout(600)
+
+        antilat = -sun["lat"]
+        antilon = ((sun["lon"] + 180 + 540) % 360) - 180
+        anti = {"lat": antilat, "lon": antilon}
+        res["antiLL"] = anti
+
+        res["dayArrived"] = await fly(sun)
+        res["dayInner"] = sphere_lum(await shoot("smoke-12-day-face.png"))
+        res["nightArrived"] = await fly(anti)
+        res["nightInner"] = sphere_lum(await shoot("smoke-13-night-face.png"))
+        res["ratio"] = res["nightInner"] / res["dayInner"]
+
+        # ── 机制有效性 A/B（一）：夜面压暗壳 ──
+        # 为什么非要做这组对照：
+        #   单看「夜面 inner < 0.16」无法区分「夜壳真的在压暗」与「这里本来就黑」。
+        #   三盏灯的参数扫描早就证明过亮度不是被光强调出来的（见 render.js 注释），
+        #   所以必须做「同机位、只翻开关」的对照，机制才算被断言覆盖。
+        await page.evaluate("v => window.AT.render.setNightDim(v)", 0)
+        await page.wait_for_timeout(600)
+        res["noDimInner"] = sphere_lum(await shoot("smoke-15-night-nodim.png"))
+        await page.evaluate("v => window.AT.render.setNightDim(v)", res["dim"])
+        await page.wait_for_timeout(600)
+        # 还原后必须回到原读数 —— 否则说明 setter 有粘滞，A/B 结论也不可信
+        res["restoreInner"] = sphere_lum(await shoot("smoke-17-night-restore.png"))
+
+        # 「改前」的复现机位：两个壳都关掉 == 这次改动之前的样子。
+        # 有了它，README 里那句「改前 0.207」就不是一句不可复核的历史读数。
+        await page.evaluate("v => window.AT.render.setNightDim(v)", 0)
+        await page.evaluate("v => window.AT.render.setNightGain(v)", 0)
+        await page.wait_for_timeout(600)
+        res["beforeInner"] = sphere_lum(await shoot("smoke-18-night-before.png"))
+        await page.evaluate("v => window.AT.render.setNightDim(v)", res["dim"])
+        await page.evaluate("v => window.AT.render.setNightGain(v)", res["gain"])
+        await page.wait_for_timeout(400)
+
+        # ── 机制有效性 A/B（二）：夜面城市灯火 ──
+        # ⚠ 观察点必须挑**灯火密集**的夜面。反日点落在澳洲中部荒漠，
+        #   那里开灯关灯的 inner 只差 0.002，拿它验灯火等于没验。
+        #   东亚夜面（中国东部 + 朝鲜半岛 + 日本）是全场最密的灯火带。
+        #   这一面同样是夜面（距反日点约 61°，未过 90° 晨昏线），所以它「该黑」
+        #   的判据仍然成立，只是多了「黑底上亮起一片暖金」这一层。
+        lights = {"lat": 32.0, "lon": 122.0}
+        res["lightsArrived"] = await fly(lights)
+        on_png = await shoot("smoke-14-lights-face.png")
+        res["lightsInner"] = sphere_lum(on_png)
+        await page.evaluate("v => window.AT.render.setNightGain(v)", 0)
+        await page.wait_for_timeout(600)
+        off_png = await shoot("smoke-16-lights-off.png")
+        res["lightDelta"] = light_delta(on_png, off_png)
+        # 灯火可读性 A/B：同上两张图，但问的是「标记还读不读得出来」
+        # （灯火把标记从背景里吃掉多少对比度与彩度 —— 用户报的就是这件事）
+        res["infoAB"] = info_layer_ab(on_png, off_png)
+        await page.evaluate("v => window.AT.render.setNightGain(v)", res["gain"])
+
+        # ── 全链路 A/B：把「改前」那条配方（暖金 tint + 软膝不接）在同一机位复现 ──
+        # 为什么不能只写绝对阈值就断言「灯火不再偏暖、不再有纯白斑」：
+        #   ① Δ(R−B) 里混着夜面底色的蓝 —— 底色 R−B ≈ −0.11（很蓝），于是**任何**
+        #      亮度抬高都会让 R−B 上升。实测冷白 tint 下 Δ(R−B) 仍是 +0.04，
+        #      单看数字分不清「灯火是暖的」与「底色是蓝的」。
+        #   ② 「有纯白斑」同样受日面/冰盖干扰（关灯图里就有 0.04%）。
+        # 同机位换配方才把这两个量隔离出来：kneeK = 0 时软膝退化为恒等，
+        # 配合旧暖金 tint 就是本次改动**之前**的渲染配方。
+        # 关灯图复用上面那张：tint 与软膝只影响灯火那一层，背景逐像素不变。
+        await page.evaluate("v => window.AT.render.setNightKneeK(v)", 0)
+        await page.evaluate("h => window.AT.render.setNightTint(h)", 0xfff2e0)
+        await page.wait_for_timeout(600)
+        old_png = await shoot("smoke-20-recipe-before.png")
+        res["infoBefore"] = info_layer_ab(old_png, off_png)
+        res["lightDeltaBefore"] = light_delta(old_png, off_png)
+        await page.evaluate("v => window.AT.render.setNightKneeK(v)",
+                            (res["nightPlan"] or {}).get("kneeK"))
+        await page.evaluate("h => window.AT.render.setNightTint(h)", (res["nightPlan"] or {}).get("tint"))
+    finally:
+        await browser.close()
+    return res
+
+
 async def main():
     SHOT.mkdir(parents=True, exist_ok=True)
     async with async_playwright() as pw:
         out = await run(pw)
+        try:
+            out["night"] = await probe_night(pw)
+        except Exception as ex:                       # 探针自身崩了也不该吞掉整轮结果
+            out["night"] = {"errors": ["PROBE CRASH: " + repr(ex)]}
 
     print("=" * 62)
     print("air-tycoon 渲染层实机冒烟")
@@ -636,6 +983,25 @@ async def main():
         print("   ! " + f)
     if not out["reqFailed"]:
         print("   （无）")
+
+    ng = out.get("night") or {}
+    print("\n[昼夜 / 夜景]")
+    for kk in ("nightOk", "gain", "dim", "bloom", "settledR", "modalDismissed",
+               "homeBeforeInner", "homeInner", "dayInner", "nightInner", "ratio",
+               "noDimInner", "restoreInner", "beforeInner", "lightsInner"):
+        vv = ng.get(kk)
+        if isinstance(vv, float):
+            print("   " + kk.ljust(18) + " = %.4f" % vv)
+        else:
+            print("   " + kk.ljust(18) + " = " + str(vv))
+    for kk in ("sunLL", "antiLL", "lightPlan", "nightPlan", "gridProbe", "lightDelta",
+               "lightDeltaBefore", "infoAB", "infoBefore", "sunReal", "sunLockedPlan"):
+        print("   " + kk.ljust(18) + " = " + str(ng.get(kk)))
+    print("   " + "转到位".ljust(16) + " = day:%s night:%s lights:%s" % (
+        ng.get("dayArrived"), ng.get("nightArrived"), ng.get("lightsArrived")))
+    for e in ng.get("errors") or []:
+        print("   ! " + e)
+
     print("\n截图 → " + str(SHOT))
 
     c = out["core"]
@@ -692,7 +1058,130 @@ async def main():
     print("   " + ("✓" if sel_ok else "✗") +
           " 覆盖层显示 6 家航司 → 点选后收起并开局")
 
-    ok = base_ok and all_ui and sel_ok
+    # ── 昼夜 / 夜景验收 ──
+    # 门槛数字都是标定实测值留了余量后的取值，括号里是实测：
+    #   day   > 0.35 (实测 0.403) 日面不许被压暗 —— 压暗壳必须只作用于夜面
+    #   night < 0.16 (实测 0.118) 夜面必须真的黑下来（改前 0.207）
+    #   ratio < 0.45 (实测 0.293) 昼夜对比要拉得开（改前 0.515）
+    #   dInner> 0.02 (实测 0.025) 夜灯真的在往夜面上打光
+    #   ceil  < 1                软膝渐近上界（数学上不可能被 8bit 缓冲截断成纯白）
+    #   ia.*                     灯火可读性 A/B（见 info_layer_ab）—— 用户报的「看不清」
+    #   ib.*                     同一机位复现的「改前」配方（暖金 tint + 软膝不接）
+    ld = ng.get("lightDelta") or {}
+    ldb = ng.get("lightDeltaBefore") or {}
+    ia = ng.get("infoAB") or {}
+    ib = ng.get("infoBefore") or {}
+    np_ = ng.get("nightPlan") or {}
+    tint = np_.get("tint") or 0
+    tintR, tintB = (tint >> 16) & 255, tint & 255
+
+    # ── 太阳方向：真实时间驱动 + 五处消费点同源（2026-10-09）──────────────
+    # 两组分开断言，因为它们回答的是不同问题：
+    #   sunReal    —— 「真实时间真的改动了太阳吗」（机制生效）
+    #   sunLockedPlan —— 「锁回固定机位后，主光/补光/两个夜壳/uSun 是否同一份」
+    sp = ng.get("sunLockedPlan") or {}
+    sr = ng.get("sunReal") or {}
+
+    def _vclose(a, b, tol=1e-6):
+        if not a or not b or len(a) != 3 or len(b) != 3:
+            return False
+        return all(abs(a[i] - b[i]) <= tol for i in range(3))
+
+    def _vneg(a, b, tol=1e-6):
+        if not a or not b or len(a) != 3 or len(b) != 3:
+            return False
+        return all(abs(a[i] + b[i]) <= tol for i in range(3))
+
+    sd = sp.get("dir")
+    # 真实时间那一组：方向必须是单位向量
+    sr_len = 0.0
+    if sr.get("dir"):
+        sr_len = sum(c * c for c in sr["dir"]) ** 0.5
+
+    def _ratio(d, k_on, k_off):
+        off = d.get(k_off) or 0
+        return (d.get(k_on) or 0) / off if off else 9
+
+    night_checks = [
+        ("夜景贴图已加载", ng.get("nightOk")),
+        # ── 太阳方向（2026-10-09：真实时间驱动）──
+        ("真实时间的太阳是单位向量", abs(sr_len - 1) < 1e-6),
+        ("真实时间已经应用过（sunAppliedAt 非空）", bool(sr.get("appliedAt"))),
+        # ⚠ 这条是「机制真的生效」的核心判据：真实时间算出的方向必须**不同于**
+        #   回退常量。若 solar.js 被短路（或 applySunAt 没跑），方向会停在回退值，
+        #   画面依旧「有个太阳」、所有夜景读数也照样全绿 —— 只有这条会红。
+        #   注意：理论上真实值与回退值可能恰好接近（都在东亚上空的正午），
+        #   那种情况这里会误报。但两者相差 180°（回退 = 25.1N/128.7E，
+        #   真实正午也只落在本机经度基准 0°），实测远大于阈值。
+        ("真实时间真的挪动了太阳（≠ 回退常量）",
+         sd is None or not _vclose(sr.get("dir"), sp.get("dir"), 1e-3)),
+        ("真实时间的方向也在五处同源（key/rim/两壳）",
+         _vclose(sr.get("key"), sr.get("dir")) and _vneg(sr.get("rim"), sr.get("dir")) and
+         _vclose(sr.get("dimUSun"), sr.get("dir")) and _vclose(sr.get("nightUSun"), sr.get("dir"))),
+        ("锁定时钟成功（setSunDir 返回 true）", ng.get("sunLocked") is True),
+        ("太阳方向是单位向量", sd is not None and abs(sum(c * c for c in sd) ** 0.5 - 1) < 1e-6),
+        ("主光位置与 SUN_DIR 同源", _vclose(sp.get("key"), sd)),
+        ("补光方向 = −SUN_DIR（恒在太阳对面）", _vneg(sp.get("rim"), sd)),
+        ("压暗壳 uSun 与 SUN_DIR 同源", _vclose(sp.get("dimUSun"), sd)),
+        ("灯火壳 uSun 与 SUN_DIR 同源", _vclose(sp.get("nightUSun"), sd)),
+        ("夜灯增益非零", (ng.get("gain") or 0) > 0),
+        ("压暗系数非零", (ng.get("dim") or 0) > 0),
+        ("相机停在 R=7.4", abs((ng.get("settledR") or 0) - 7.4) < 0.01),
+        ("日面转到位", ng.get("dayArrived")),
+        ("夜面转到位", ng.get("nightArrived")),
+        ("东亚夜面转到位", ng.get("lightsArrived")),
+        ("日面足够亮 >0.35", (ng.get("dayInner") or 0) > 0.35),
+        ("夜面足够黑 <0.16", (ng.get("nightInner") or 9) < 0.16),
+        ("昼夜比 <0.45", (ng.get("ratio") or 9) < 0.45),
+        ("夜壳真的在压暗 (去掉后变亮 >0.05)",
+         (ng.get("noDimInner") or 0) - (ng.get("nightInner") or 0) > 0.05),
+        ("压暗系数可还原 (差 <0.01)",
+         abs((ng.get("restoreInner") or 9) - (ng.get("nightInner") or 0)) < 0.01),
+        ("两壳合起来才有效果 (改前机位更亮 >0.06)",
+         (ng.get("beforeInner") or 0) - (ng.get("nightInner") or 0) > 0.06),
+        ("开局视角也确实压暗了 (>0.02)",
+         (ng.get("homeBeforeInner") or 0) - (ng.get("homeInner") or 0) > 0.02),
+        ("夜灯真的在发光 (Δ>0.02)", (ld.get("dInner") or 0) > 0.02),
+        # ↓ 下面七条是 2026-10-09 新增的「灯火可读性」红线（用户报：灯光与机场颜色撞车）
+        ("灯火色相是冷白 (B > R)", tintB > tintR),
+        ("灯火彩度足够低 (max-min < 40/255)", (tintB - tintR) <= 40),
+        ("软膝上界 <1 (不可能截断成纯白)", (np_.get("ceil") or 9) < 1.0),
+        # 反例自证：这条 A/B 如果没有信号，下面那条「消掉白斑」的断言就是空的
+        # （实测改前 0.21%，若它掉到 0.1% 以下说明 A/B 没接上）
+        ("改前配方确实有纯白斑 (>0.1%)",
+         ((ib.get("hotFrac") or 0) - (ib.get("hotFracOff") or 0)) > 0.001),
+        ("信息层仍有足够对比度 (开灯后 >0.15)", (ia.get("contraOn") or 0) > 0.15),
+        ("灯火没吃掉标记对比度 (保留 >0.6)",
+         _ratio(ia, "contraOn", "contraOff") > 0.6),
+        ("灯火没洗掉标记彩度 (保留 >0.6)",
+         _ratio(ia, "chromaOn", "chromaOff") > 0.6),
+        # 用**差值**而不是比例：实测改后仍有 0.05% 的 >0.97 像素，
+        # 那是「标记叠在灯火上」时标记自身的亮核被截断（关灯基线为 0），
+        # 不是灯火造出来的白雾 —— 所以判据是「改前比改后多造了多少白斑」。
+        ("软膝真的消掉了纯白斑 (改前 − 改后 >0.1%)",
+         ((ib.get("hotFrac") or 0) - (ib.get("hotFracOff") or 0)) -
+         ((ia.get("hotFrac") or 0) - (ia.get("hotFracOff") or 0)) > 0.001),
+        ("改后标记可读性优于改前 (彩度保留更高)",
+         _ratio(ia, "chromaOn", "chromaOff") > _ratio(ib, "chromaOn", "chromaOff")),
+        ("改后灯火更不偏暖 (ΔR−B 更小)",
+         (ld.get("dWarm") or 0) < (ldb.get("dWarm") or 0) - 0.005),
+        # ↓ 经纬网：读的是烘进顶点色、真正送进 GPU 的那份数据（不是常量）
+        ("经纬网条数 = 17 (5 纬 + 12 经)",
+         ((ng.get("gridProbe") or {}).get("lines")) == 17),
+        ("经纬网夜面按晨昏线压暗了 (≈GRID_NIGHT)",
+         ((ng.get("gridProbe") or {}).get("nightMul") or 9) < 0.35),
+        ("经纬网阳面未被压暗 (≈1)",
+         ((ng.get("gridProbe") or {}).get("dayMul") or 0) > 0.98),
+        ("探针页无报错", not (ng.get("errors") or [])),
+    ]
+    print("\n[昼夜 / 夜景验收]")
+    all_night = True
+    for name, v in night_checks:
+        if not v:
+            all_night = False
+        print("   " + ("✓" if v else "✗") + " " + name)
+
+    ok = base_ok and all_ui and sel_ok and all_night
     print("\n结论：" + ("通过 ✅" if ok else "有问题 ❌"))
     if not base_ok:
         print("   （渲染层未达标）")
@@ -700,6 +1189,8 @@ async def main():
         print("   （UI 操作链有断点，见上表 ✗ 项）")
     if not sel_ok:
         print("   （开局选航司入口有问题）")
+    if not all_night:
+        print("   （昼夜/夜景未达标，见上表 ✗ 项）")
     return 0 if ok else 1
 
 

@@ -8,10 +8,11 @@ air-tycoon 提交包同步与打包（不进提交包）
 
 与源文件的差异：
   · index.html 去掉 `data-page-node-id` 属性（D2C 工具残留的产物标记，提交包不需要）
-  · **省略 assets/earth.jpg**：它是 earth-tex.js 的源文件，而运行期优先用内联
-    data URI（file:// 下 Chrome 会以 CORS 拒绝本地 jpg 作 WebGL 纹理）。
-    zip 场景必然走内联，故带走只是白占 500KB。render.js 的降级链
-    （内联 → earth.jpg → 纯色球）在 zip 里自动跳过缺失的第二档，行为不变。
+  · **省略 assets/earth.jpg 与 assets/earth-night.jpg**：它们是 earth-tex.js /
+    earth-night-tex.js 的源文件，而运行期优先用内联 data URI（file:// 下 Chrome
+    会以 CORS 拒绝本地 jpg 作 WebGL 纹理）。zip 场景必然走内联，故带走只是白占
+    500KB + 40KB。render.js 的降级链（内联 → 外链 jpg → 兜底）在 zip 里自动跳过
+    第二档，行为不变。
 
 用法：
   python tools/build_dist.py          # 同步 dist + 重打 air-tycoon.zip + 列出产物体积
@@ -32,7 +33,7 @@ NODE_ID = re.compile(r' data-page-node-id="[^"]*"')
 # 需要进包的东西。顺序固定，保证 zip 里的条目顺序可复现。
 COPY_DIRS = ["src", "assets"]                  # 逐字节复制
 # 只作为内联贴图源文件存在、运行期不需要的外链版本（见文件头说明）
-EXCLUDE = {"assets/earth.jpg"}
+EXCLUDE = {"assets/earth.jpg", "assets/earth-night.jpg"}
 
 
 def build():

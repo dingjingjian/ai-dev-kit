@@ -35,6 +35,111 @@
   var CITY_LIFT = 1.012;       // 城市光点离地高度
   var ARC_LIFT = 1.004;        // 航线贴地高度（低于城市，避免弧线压住光点）
   var PLANE_LIFT = 1.024;      // 客机离地高度（最高，保证永远不被城市/航线遮住）
+  /* 夜面城市灯光球壳的离地高度。
+   * ⚠ 取 1.002 而非与航线相同的 1.004：两层都是加性混合、都不写深度，
+   *   共面虽不会 z-fight（不写深度就不比深度），但把夜壳略微压到航线之下，
+   *   观感上更符合「灯火贴在地表、航线浮在其上」的层次。 */
+  var NIGHT_LIFT = 1.002;
+  /* 夜面压暗壳的离地高度。比灯光壳再低一档 —— 两者都不写深度、不会 z-fight，
+   * 错开只是为了让绘制顺序与视觉层次（先压暗、再点灯）在半径上也成立。 */
+  var NIGHT_DIM_LIFT = 1.0008;
+  /* 夜面灯火的颜色 —— 低彩度冷白。
+   *
+   * ⚠ 2026-10-09 从暖金 0xfff2e0 改过来，原因不是审美，是**信息可读性**：
+   *   暖金的色相 34.8°，而我通航城市 / 基地 / 航线回落色 / 客机回落色分别是
+   *   37.3° / 38.3° / 41.6° / 45.4°，连新航的航司色都是 36.0° —— 六个暖色要素
+   *   全挤在 11° 以内，夜面上「哪里是灯火」与「哪里是我的网络」根本读不出归属
+   *   （实机：灯火中段把标记的视差 ΔE 压到 5.1，核心处归零）。
+   *   改冷白之后本作多了一条能写进文档、也能被断言覆盖的规则：
+   *     **夜面上唯一有彩度的东西就是信息**（橙黄=我的 / 冰青=未通航 / 紫罗兰=竞对），
+   *     灯火只贡献亮度。
+   * ⚠ 色相只由这一个值决定：灯火壳的片元着色器取的是贴图的 max(r,g,b)（＝亮度），
+   *   贴图本身偏不偏黄完全不参与着色，所以改色**不需要**重跑贴图生成链路。
+   * 值取 0xe6ecf6（色相 ≈218°、最大通道差仅 16/255）：与冰青 0x2fc4ff 的彩度比约 1:13，
+   *   不会被读成「未通航」；同时与深蓝夜面同温，不再是夜面上唯一的暖色孤岛。 */
+  var NIGHT_TINT = 0xe6ecf6;
+
+  /* 夜面灯火的整体增益。⚠ 它作用在**软膝之前**：低段（灯火主体）按它放大，
+   *   增益后的高段被 NIGHT_SOFT_KNEE 压住 —— 这正是「保留中低段、只压顶部」的分工。
+   *
+   * ⚠ 实测这个参数主要削的是**弥漫的雾状光场**（灯火贴图的大半径 glow），
+   *   而城市核心的亮度几乎不动 —— 因为核心早就被软膝顶到上界了：
+   *     gain   1.0    1.4    1.6    1.9    2.4
+   *     峰值  0.387  0.404  0.409  0.419  0.424   （变化仅 ±4%）
+   *     光场  0.019  0.023  0.025  0.030  0.033   （变化 ±40%）
+   *   而「雾」正是吃掉城市标记对比度的那部分（实测 gain 1.0→2.4 时，
+   *   标记的对比度保留率从 0.82 掉到 0.70）。故取 1.6：核心仍然醒目，
+   *   雾收到标记读得清的程度。 */
+  var NIGHT_GAIN = 1.6;
+
+  /* 灯火亮度的软膝压缩 —— 消掉「纯白斑」的手段。⚠ 它作用在 uGain **之后**的值上。
+   *
+   * ⚠ 为什么必须压：贴图峰值 luma = 1.00，而实测 **29 个航点里有 22 个**的 5×5 峰值
+   *   > 0.70、16 个 > 0.86 —— 也就是绝大多数机场正好压在灯火最亮的像素上。
+   *   旧配方 gain 1.9 × 0.88 ≈ 1.67，而 rtScene 是 8bit，超过 1 就被截断成纯白：
+   *   城市点叠上去的 ΔE 直接归零（模拟：灯火核心 (1,1,1) 叠橙黄 → (1,1,1)，ΔE 0.0；
+   *   叠冰青也一样）。实拍佐证：夜面亮度 >0.90 的像素占比是关灯时的 **11 倍**。
+   *
+   * ⚠ 为什么不能用「整体乘一个小系数」压：那会把中低段灯火一起压没。贴图是极端
+   *   高对比的 —— 非黑像素里 P99 = 0.945，而 P50 只有 0.047。所以要保留中低段、
+   *   只压顶部，用软膝（x = 增益后的亮度）：
+   *     f(x) = KNEE + (x-KNEE) / (1 + K·(x-KNEE))     (x ≥ KNEE)
+   *   渐近上界 = KNEE + 1/K = 0.18 + 1/3.6 ≈ **0.458** —— 数学上不可能截断。
+   *   KNEE 以下逐像素不变（k = 0 时 f(x) = x），暗灯火不被牺牲。
+   * 标定结果：峰值 1.90 → 0.419（× 冷白最大通道 0.965 → 0.404 线性 → 显示 0.66），
+   *   夜面不再有纯白斑，而航点周围留出了足够的亮度余量给城市点。 */
+  var NIGHT_SOFT_KNEE = 0.18;
+  var NIGHT_SOFT_K = 3.6;
+
+  /* 夜面经纬网的亮度保留比。
+   * ⚠ 经纬网是 transparent + 默认 renderOrder 的 Line，排在夜面压暗壳（−3）之后绘制，
+   *   所以它此前**根本没被压暗** —— 夜面上最亮的元素之一就是那几圈网格线，
+   *   与灯火、城市点抢注意力（压暗壳的旧注释声称「经纬网也一起压暗」，与实现不符）。
+   *   太阳方向在开局由真实时间决定（src/solar.js），但**整局不再移动**，所以可以把
+   *   晨昏线烘进顶点色：建几何时烘一次，之后每次 setSunDir() 重烘一次，仍零每帧成本。
+   *   ⚠ 正因为它是烘焙而非每帧着色，setSunDir() 里**必须**调 rebakeGridNight()，
+   *   否则改了太阳方向而经纬网的明暗还停在旧晨昏线上（五处消费点漏掉这一处最隐蔽）。
+   * ⚠ 保留 0.28 而不是 0：网格线存在的意义就是「转动地球时判断不出转到哪了」
+   *   （见 buildGlobe 的注释），夜面全黑等于把夜半球的朝向参照一起删掉。
+   *   压到 0.28 是「不再抢戏、但仍能读」。 */
+  var GRID_NIGHT = 0.28;
+
+  /* 夜面压暗系数：夜面片元乘 (1 − 该值 × night)。0 = 不压暗，1 = 夜面全黑。
+   *
+   * ⚠ 为什么要单独压暗，而不是「把环境光调低」——这是本轮标定最重要的一个发现：
+   *   实测把 AmbientLight 从 2.6 一路降到 0.25（降 90%），夜面屏幕上只从 0.195 掉到 0.152。
+   *   原因是渲染管线的 sRGB 编码：夜面的**线性**亮度本就极低（≈0.03），
+   *   而编码是 pow(x, 1/2.2) —— 0.03 被抬到 0.20，0.006 仍被抬到 0.09。
+   *   低值区在编码后被整体抬离黑色，所以「调灯」这条路对夜面几乎无效，
+   *   必须显式乘一个压暗系数，把线性值压到编码也抬不起来的量级。
+   * 另一个好处：压暗只作用在夜面（乘 night 因子），阳面**逐像素不变**——
+   *   不必为了「夜更黑」去牺牲玩家已经熟悉的白昼观感。 */
+  var NIGHT_DIM = 0.92;
+
+  /* 主光（太阳）方向 —— 全世界只此一处真源。
+   * ⚠ 夜面灯光的晨昏线必须与球体的明暗分界**严丝合缝**：只要两处各写一份坐标，
+   *   迟早会出现「白天那半边也亮着灯」或「晨昏线错开一段」的静默走样
+   *   （两者都不报错，只是看着别扭）。故 key 光位置与夜壳 uSun 共用这个数组。
+   *
+   * ⚠ 2026-10-09 起这个方向不再写死，改由 src/solar.js 按**本机真实时间**
+   *   算出日下点、再经 AT.geo.ll2v 转成球面向量。这里保留的 [4, 3, 5] 只是
+   *   **回退值**（等价于历史上那个固定机位：直射点 25.1°N / 128.7°E）——
+   *   solar.js 一旦解析异常就会退回它，保证球体不会整个变黑或整个变亮。
+   *   改动这个方向请走 setSunDir()，不要直接改数组元素：四层壳与经纬网顶点色
+   *   都需要跟着重算，只改数组会让它们各自停在旧位置（静默错开）。 */
+  var SUN_DIR = (AT.solar && AT.solar.FALLBACK_SUN_DIR
+    ? AT.solar.FALLBACK_SUN_DIR.slice() : [4, 3, 5]);
+
+  /* 三盏灯的强度（2026-10-09 昼夜重定的唯一可调面）。
+   *   amb —— 环境光，决定夜面的**底色**；
+   *   key —— 暖主光，决定阳面的亮度与晨昏线的陡峭程度；
+   *   rim —— 冷补光，从**主光反方向**打（= 正对夜面），作用只是把球体轮廓
+   *          从深空底里勾出来，不能当第二盏照明的灯用。
+   *
+   * ⚠ 这里保持 2026-09-28 定下的原值不动：夜面变暗改由 buildNightLights 的
+   *   **夜面压暗壳**负责（原因见 NIGHT_DIM 的注释 —— 调灯对夜面几乎无效，
+   *   且会连带动到白昼面）。三盏灯与 exposure 1.15 是一组，单改其一都会失衡。 */
+  var LIGHT = { key: 3.0, amb: 2.6, rim: 0.8 };
 
   var MAX_ARCS = 96;           // 同时显示的航线数上限（玩家 + 竞对合计约 90 条）
   var ARC_SEG = 48;            // 每条大圆弧的采样段数（48 段在 1.6R 球面上已看不出折角）
@@ -98,8 +203,22 @@
     ]
   };
 
-  var api = { ok: false };
+  var api = { ok: false, nightOk: false };
   var renderer, scene, camera, globe, gridGroup;
+  var gridGeoms = [];                     // 经纬网几何（读回顶点色做夜面压暗断言用）
+  var nightMat = null, nightMesh = null;  // 夜面城市灯光球壳（见 buildNightLights）
+  var dimMat = null, dimMesh = null;      // 夜面压暗球壳（见 buildNightLights）
+  /* 主光与冷补光。提到模块级是因为太阳方向可变（见 setSunDir）——
+   * 光的位置必须跟着太阳一起挪，否则「球体的明暗分界」与「夜壳的晨昏线」
+   * 会错开，而这不会报错。 */
+  var keyLight = null, rimLight = null;
+  /* 太阳方向的临时向量（setSunDir 里 copy 给两个壳的共享 uniform）。
+   * 延迟创建，避免模块加载期就 new THREE 对象。 */
+  var _sunVec = null;
+  /* 上一次按真实时间应用太阳的时刻（null = 还没应用过，仍是回退常量）。 */
+  var sunAppliedAt = null;
+  /* 开局时玩家的基地是否落在夜面（真实时间下约有一半概率）。UI 据此提示。 */
+  var openAtNight = false;
   var cityPoints, cityGeom, cityPos, cityColor, citySize, cityAlpha;
   var haloPoints;                         // 城市柔光光晕层（与 cityGeom 共用几何，只换贴图与倍数）
   var cityLevel, cityRinged;              // 每城当前等级 / 是否已通航（我的网络）
@@ -336,24 +455,133 @@
     );
     scene.add(shell);
 
-    // 矢量经纬网：保留球面朝向感（没有它，转动地球时判断不出转到哪了）
+    /* 矢量经纬网：保留球面朝向感（没有它，转动地球时判断不出转到哪了）
+     *
+     * ⚠ 顶点色按晨昏线烘焙（2026-10-09）：网格线是 transparent + 默认 renderOrder，
+     *   排在夜面压暗壳（−3）之后绘制，所以它此前**根本没被压暗**（压暗壳的旧注释
+     *   声称它会被压暗，与实现不符）。故改为把晨昏线烘进顶点色：
+     *   夜面保留 GRID_NIGHT 的亮度当朝向参照，阳面逐像素不变（factor = 0）。
+     *   用顶点色而不是给材质加着色器，是为了不引入第四条自写着色器链路 ——
+     *   网格线只是背景参照，不值得。
+     *
+     * ⚠ 太阳可变之后，烘焙不能再只在建几何时跑一次：顶点色是**太阳方向的快照**，
+     *   太阳一挪，网格的明暗界线就会与夜壳/主光的晨昏线错开。故几何只建一次，
+     *   **颜色单独抽成 rebakeGridNight()**，setSunDir() 时重跑（见那边的说明）。 */
     gridGroup = new THREE.Group();
     var gR = R * 1.003;
     var gmat = new THREE.LineBasicMaterial({
-      color: 0x86bad8, transparent: true, opacity: 0.2
+      color: 0xffffff, vertexColors: true, transparent: true, opacity: 0.2
     });
+    var gBase = new THREE.Color(0x86bad8);
+    /* 与夜壳 NIGHT_TERM 共用同一条 smoothstep 与同一个太阳方向 —— 两处各写一份
+     * 迟早会出现「网格变暗的界线」与「灯火亮起的界线」错开的静默走样。 */
+    function addGridLine(pts) {
+      var n = pts.length;
+      var pos = new Float32Array(n * 3);
+      var col = new Float32Array(n * 3);        // 占位，颜色由 rebakeGridNight 填
+      for (var i = 0; i < n; i++) {
+        var p = pts[i];
+        pos[i * 3] = p.x; pos[i * 3 + 1] = p.y; pos[i * 3 + 2] = p.z;
+      }
+      var g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      gridGeoms.push(g);
+      gridGroup.add(new THREE.Line(g, gmat));
+    }
     var lats = [-60, -30, 0, 30, 60];
     lats.forEach(function (lat) {
       var pts = [], i;
       for (i = 0; i <= 96; i++) pts.push(v3(lat, i / 96 * 360 - 180, gR));
-      gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gmat));
+      addGridLine(pts);
     });
     for (var lon = -180; lon < 180; lon += 30) {
       var mp = [], j;
       for (j = 0; j <= 96; j++) mp.push(v3(j / 96 * 360 - 180, lon, gR));
-      gridGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(mp), gmat));
+      addGridLine(mp);
     }
     scene.add(gridGroup);
+    rebakeGridNight();
+  }
+
+  /* 把「当前太阳方向」烘进经纬网顶点色。
+   *
+   * 拆出来是为了让太阳可变：顶点色是太阳的快照，光改 SUN_DIR 而不管它，
+   * 就会出现「网格的明暗界线」与「夜壳灯火亮起的界线」错开 —— 静默走样。
+   * 成本：17 条线 × 97 个顶点 = 1649 次点积，只在 setSunDir 时跑一次，
+   * 不进每帧循环。
+   * ⚠ 必须与 buildNightLights 的 NIGHT_TERM 用同一条 smoothstep 与同一个
+   *   SUN_DIR（下面这行是它的 JS 版镜像，改一处要改两处 —— 已由 headless 的
+   *   「晨昏线同源」断言锁住：把两者改成不同方向会让断言变红）。 */
+  function rebakeGridNight() {
+    if (!gridGeoms.length) return;
+    var sun = new THREE.Vector3(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
+    var base = new THREE.Color(0x86bad8);
+    var v = new THREE.Vector3();
+    gridGeoms.forEach(function (g) {
+      var pos = g.getAttribute('position'), col = g.getAttribute('color');
+      for (var i = 0; i < pos.count; i++) {
+        v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+        var d = v.dot(sun);
+        var t = (d - 0.08) / (-0.26 - 0.08);
+        t = t < 0 ? 0 : (t > 1 ? 1 : t);
+        var nt = t * t * (3 - 2 * t);                     // smoothstep(0.08, -0.26, d)
+        var m = 1 - (1 - GRID_NIGHT) * nt;
+        col.setXYZ(i, base.r * m, base.g * m, base.b * m);
+      }
+      col.needsUpdate = true;
+    });
+  }
+
+  /* 设置太阳方向 —— 五处消费点必须一起更新（2026-10-09 太阳可变之后）。
+   *
+   * 为什么必须有一个**统一的写入口**，而不是让调用方直接改 SUN_DIR：
+   *   这个方向被**五处**消费，任何一处漏更新，晨昏线就会错开，而且**不报错**：
+   *     ① keyLight.position      —— 球体的明暗分界
+   *     ② rimLight.position      —— 必须恒为太阳的反方向
+   *     ③ dimMat.uniforms.uSun   —— 夜面压暗壳的晨昏线
+   *     ④ nightMat.uniforms.uSun —— 夜面灯火壳的晨昏线
+   *     ⑤ 经纬网顶点色           —— 烘在几何里的快照（要重烘）
+   *   ① ② ③ ④ 是「写一次就跟着走」的，⑤ 必须显式重跑，所以这里集中处理。
+   *
+   * ⚠ 两个材质的 uSun 是**共享同一个 Vector3 实例**的（buildNightLights 里的
+   *   `var sun`）。这里用 `copy()` 原地改，正是为了顺带把两个壳一起更新；
+   *   若改成 `uniforms.uSun.value = newVec`，只会换掉其中一个壳的引用 ——
+   *   另一个壳继续停在旧方向，静默错开。
+   *
+   * ⚠ 定义在**模块级**而不是 api 字面量内部：init() 需要调它，而 init 是由
+   *   api.init 调用的 —— 若写成 api.setSunDir 就会在字面量求值中途读到
+   *   undefined（实测报过 `api.applySunAt is not a function`，且整个渲染
+   *   初始化静默失败、画面停在纯黑 0.098）。 */
+  function setSunDir(v) {
+    var x, y, z;
+    if (Array.isArray(v)) { x = +v[0]; y = +v[1]; z = +v[2]; }
+    else if (v && typeof v === 'object') { x = +v.x; y = +v.y; z = +v.z; }
+    else { return false; }
+    var len = Math.sqrt(x * x + y * y + z * z);
+    if (!isFinite(len) || len < 1e-6) return false;       // 零向量会让整条链变成 NaN
+    x /= len; y /= len; z /= len;
+    SUN_DIR[0] = x; SUN_DIR[1] = y; SUN_DIR[2] = z;
+
+    if (keyLight) keyLight.position.set(x, y, z);
+    if (rimLight) rimLight.position.set(-x, -y, -z);
+    var sv = _sunVec || (_sunVec = new THREE.Vector3());
+    sv.set(x, y, z);
+    // 原地 copy：两个壳共享同一个 value 实例，故一次 copy 同时生效
+    if (dimMat) dimMat.uniforms.uSun.value.copy(sv);
+    if (nightMat) nightMat.uniforms.uSun.value.copy(sv);
+    rebakeGridNight();                                     // 顶点色是快照，必须重烘
+    return true;
+  }
+
+  /* 太阳直射点 → 方向向量并应用（solar.js 的唯一对接点）。
+   * 传 null 取「现在」；传 Date 可取任意时刻（标定与测试用）。 */
+  function applySunAt(when) {
+    if (!AT.solar) return false;
+    var d = (when instanceof Date) ? when : new Date();
+    var ok = setSunDir(AT.solar.sunDirAt(d, G));
+    if (ok) sunAppliedAt = d;
+    return ok;
   }
 
   /* 贴图加载链：内联 data URI → assets/earth.jpg → 纯色球。
@@ -384,6 +612,162 @@
         mat.color.setHex(0xffffff);    // 原色：贴图不再叠冷蓝
         mat.needsUpdate = true;
         api.texOk = true;              // 供冒烟断言「贴图真加载了」，而不是静默走纯色兜底
+      }, undefined, fallback);
+    } catch (e) {
+      fallback();
+    }
+  }
+
+  /* 夜面贴图的候选源（内联优先，理由同地球贴图，见 tools/gen-earth-night-tex.js）。
+   * 下面 buildNightLights 里那层灯光壳会消费它。 */
+  var NIGHT_TEX_SRC = [
+    (typeof global.AT_EARTH_NIGHT_TEX === 'string' && global.AT_EARTH_NIGHT_TEX)
+      ? global.AT_EARTH_NIGHT_TEX : null,
+    'assets/earth-night.jpg'
+  ];
+
+  /* ── 夜面两层球壳（2026-10-09，自 vibeknow/nobel-atlas 移植并加强）──
+   *
+   * 两个壳共用同一条晨昏线公式与同一个太阳方向，保证「压暗到哪里」与「灯亮到哪里」
+   * 逐像素一致 —— 若各写一份，迟早出现晨昏线错开的静默走样（不报错，只是看着别扭）。
+   *
+   * ① **夜面压暗壳**（半透明黑，renderOrder −3）
+   *    不是所有「让夜晚更黑」都要靠调灯：实测把环境光降到 1/10，夜面屏幕上只掉 20%
+   *    （原因见 NIGHT_DIM 的注释）。这一层直接在线性域乘系数，是唯一能把夜面压到
+   *    接近黑色的手段，且**只作用在夜面**——阳面逐像素不变。
+   *    ⚠ renderOrder = −3（早于城市光晕的 −1）是本方案成立的关键：它只压暗先于它
+   *      绘制的东西 —— 也就是**不透明**的地球本体。城市点/航线/客机/经纬网全是
+   *      transparent 层，排在它之后，因此**不会被一起压暗**（这正是想要的：夜幕下
+   *      信息层反而更突出）。调到正数会让整片夜景连同灯火一起变灰。
+   *    ⚠ 2026-10-09 更正一处与实现不符的旧注释：这里原先写「球体与矢量经纬网
+   *      （都是不透明，在 opaque pass 里先画完）」，但经纬网用的是
+   *      transparent: true 的 LineBasicMaterial，走的是透明队列、renderOrder 0，
+   *      **根本没被压暗** —— 夜面上最亮的元素之一就是那几圈网格线。
+   *      经纬网的夜面压暗改由顶点色烘焙（GRID_NIGHT，见 buildGlobe），
+   *      不再依赖绘制顺序；这个坑的教训是「注释断言的东西也要能被断言覆盖」。
+   *
+   * ② **夜面城市灯光壳**（加色混合，renderOrder −2）
+   *    贴图是「黑底 + 暖金城市灯光」的等距圆柱图，加性叠在地表之上。
+   *    ⚠ 贴图偏暖、而渲染出来是冷白 —— 这不是笔误：着色器只取 max(r,g,b) 当亮度，
+   *      颜色 100% 由 NIGHT_TINT 决定（见该常量的注释）。贴图那层暖色只用来在
+   *      make_night_texture.py 里「把灯光从蓝调地表里挑出来」，不进最终颜色。
+   *    三处照抄 nobel-atlas 的坑：
+   *      · 不能用 NASA 黑大理石原图直出：那张图的海洋与陆地本身带冷蓝底噪
+   *        （海洋 max 通道 ≈0.15、陆地 ≈0.33），加性叠上去会把夜面糊成一片蓝雾，
+   *        而真正的灯光只占 0.2% 的像素。故贴图由 tools/make_night_texture.py
+   *        按「暖度 R−B」把灯光从蓝调地表里挑出来、再晕开、压成 JPEG。
+   *      · **不做 sRGB 解码**：ShaderMaterial 原始取样，贴图已按显示值调好暖金。
+   *      · 晨昏线用 smoothstep(0.08, −0.26, d)，不是 d<0 的一刀切 ——
+   *        硬切换会在球面上留下一圈可见接缝。
+   *
+   * UV 对齐的前提：夜景贴图与 assets/earth.jpg 同一等距圆柱投影生成
+   *   （两项目的 earth.jpg 逐字节同源，md5 e15eb8d2…），否则灯光会落在错误的海岸线上。 */
+  function buildNightLights() {
+    var seg = quality ? 64 : 32;
+    /* 太阳方向：两个壳共用同一个 Vector3 实例（只读，故可共享）。 */
+    var sun = new THREE.Vector3(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
+
+    /* 共用顶点着色器：把法线送到世界空间。
+     * ⚠ 用 modelMatrix 而非直接拿 position 当法线：本例球壳虽然无旋转，
+     *   但写死「法线 = 位置」在日后加地轴倾角时会静默错位。 */
+    var NIGHT_VS = [
+      'varying vec2 vUv;',
+      'varying vec3 vN;',
+      'void main(){',
+      '  vUv = uv;',
+      '  vN = normalize(mat3(modelMatrix) * normal);',
+      '  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);',
+      '}'
+    ].join('\n');
+    /* 晨昏线：在向阳侧 (d>0.08) 恒为 0、背阳侧 (d<−0.26) 恒为 1，中间平滑过渡。 */
+    var NIGHT_TERM = [
+      '  float d = dot(normalize(vN), normalize(uSun));',
+      '  float night = smoothstep(0.08, -0.26, d);',
+      '  if (night <= 0.003) discard;'          // 白昼侧直接不画，省填充率
+    ].join('\n');
+
+    /* ① 压暗壳 */
+    dimMat = new THREE.ShaderMaterial({
+      uniforms: { uSun: { value: sun }, uNight: { value: NIGHT_DIM } },
+      vertexShader: NIGHT_VS,
+      fragmentShader: [
+        'uniform vec3 uSun;',
+        'uniform float uNight;',
+        'varying vec2 vUv;',
+        'varying vec3 vN;',
+        'void main(){',
+        NIGHT_TERM,
+        '  gl_FragColor = vec4(0.0, 0.0, 0.0, uNight * night);',
+        '}'
+      ].join('\n'),
+      transparent: true, depthWrite: false
+    });
+    dimMesh = new THREE.Mesh(new THREE.SphereGeometry(R * NIGHT_DIM_LIFT, seg, seg / 2), dimMat);
+    dimMesh.renderOrder = -3;
+    scene.add(dimMesh);
+
+    /* ② 城市灯光壳 */
+    nightMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap: { value: null },
+        uSun: { value: sun },
+        uTint: { value: new THREE.Color(NIGHT_TINT) },
+        uGain: { value: NIGHT_GAIN },
+        uKnee: { value: NIGHT_SOFT_KNEE },
+        uKneeK: { value: NIGHT_SOFT_K }
+      },
+      vertexShader: NIGHT_VS,
+      fragmentShader: [
+        'uniform sampler2D uMap;',
+        'uniform vec3 uSun;',
+        'uniform vec3 uTint;',
+        'uniform float uGain;',
+        'uniform float uKnee;',
+        'uniform float uKneeK;',
+        'varying vec2 vUv;',
+        'varying vec3 vN;',
+        'void main(){',
+        NIGHT_TERM,
+        '  vec3 c = texture2D(uMap, vUv).rgb;',
+        '  float lum = max(max(c.r, c.g), c.b);',
+        '  float x = lum * uGain;',
+        /* 软膝作用在**增益后**的值上（顺序不能反，否则低段会被一起压掉）：
+         * x ≤ uKnee 时 k=0，soft 恰等于 x（灯火主体逐像素不变）；
+         * x >  uKnee 时按 1/(1+K·k) 压缩，渐近上界 uKnee + 1/uKneeK < 1，
+         * 故**不可能**被 8bit 缓冲截断成纯白（原因见 NIGHT_SOFT_KNEE 的注释）。 */
+        '  float k = max(0.0, x - uKnee);',
+        '  float soft = (x - k) + k / (1.0 + uKneeK * k);',
+        '  gl_FragColor = vec4(uTint * (soft * night), 1.0);',
+        '}'
+      ].join('\n'),
+      transparent: true, blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    nightMesh = new THREE.Mesh(new THREE.SphereGeometry(R * NIGHT_LIFT, seg, seg / 2), nightMat);
+    nightMesh.renderOrder = -2;
+    nightMesh.visible = false;            // 贴图到货前保持隐藏，避免空材质球壳遮住地球
+    scene.add(nightMesh);
+  }
+
+  /* 夜面贴图的加载链：内联 data URI → assets/earth-night.jpg → 关掉夜景层。
+   * 与地球贴图同一个理由（file:// 下 CORS 拒绝本地 jpg 作 WebGL 纹理），
+   * 但失败时**不**回落到纯色 —— 夜面没有灯光只是少一层效果，不该退化成一块色斑。 */
+  function loadNightTexture(attempt) {
+    var src = NIGHT_TEX_SRC[attempt];
+    if (!nightMat) return;
+    function fallback() {
+      if (attempt + 1 < NIGHT_TEX_SRC.length) { loadNightTexture(attempt + 1); return; }
+      nightMat.uniforms.uGain.value = 0;   // 兜底：静默关掉这一层，画面其余部分不受影响
+      nightMesh.visible = false;
+    }
+    if (!src) { fallback(); return; }
+    try {
+      new THREE.TextureLoader().load(src, function (tex) {
+        /* ⚠ 刻意**不**设 tex.encoding —— ShaderMaterial 原始取样，见函数头注释 ②。 */
+        tex.anisotropy = quality ? 4 : 1;
+        nightMat.uniforms.uMap.value = tex;
+        nightMat.needsUpdate = true;
+        nightMesh.visible = true;
+        api.nightOk = true;                // 供冒烟断言「灯层真加载了」，而不是静默走兜底
       }, undefined, fallback);
     } catch (e) {
       fallback();
@@ -1337,7 +1721,7 @@
     'uniform float uStrength;',
     'varying vec2 vUv;',
     /* 线性 → sRGB：与 three 的 outputEncoding = sRGBEncoding 同一套分段传输函数。
-     * ⚠ 这一句才是「又亮、又不过曝」的关键，也是本轮过曝的真正根因：
+     * ⚠ 这一句才是「又亮、又不过曝」的关键：
      *   中间缓冲 rtScene 是**线性**的，而合成着色器此前直接把这些线性值当 8bit 输出
      *   ——没有 gamma 编码。于是线性 0.15（地表陆地）只显示成 38/255，整球发暗；
      *   唯一的「提亮」手段就只剩加大光照，而光照一加，冰盖（albedo≈1）必然顶成一片纯白。
@@ -1351,6 +1735,13 @@
     'void main(){',
     '  vec3 c = texture2D(tScene, vUv).rgb;',
     '  vec3 b = texture2D(tBloom, vUv).rgb;',
+    /* ⚠ 2026-10-09 记一笔：曾在这里实现「夜面 bloom 衰减」（把屏幕像素反投影回球面
+     *   求出夜面因子、让 bloom 在夜面打折），理由是怀疑 bloom 把夜面抬亮了。
+     *   实测推翻了这个怀疑：bloom 强度 1.1 → 0 时夜面逐像素不变（0.154 → 0.154）。
+     *   之前看起来「bloom 让夜面亮 0.096」其实是 setQuality(0) 顺带把 pixelRatio
+     *   从 1.5 降到 1 造成的采样差异，不是 bloom 的贡献。
+     *   故整段反投影逻辑已删除 —— 每帧 4 个 uniform 更新与逐像素求交的开销，
+     *   不该为一个不存在的收益付。 */
     '  gl_FragColor = vec4(lin2srgb(clamp(c + b * uStrength, 0.0, 1.0)), 1.0);',
     '}'
   ].join('\n');
@@ -1359,6 +1750,10 @@
                 rtScene: null, rtA: null, rtB: null,
                 quad: null, scene: null, cam: null,
                 mBright: null, mBlur: null, mComp: null };
+  /* bloom 的合成强度（默认值）。拆成变量是为了让标定脚本能在**不改画质档位**的前提下
+   * 单独量出 bloom 对画面的贡献 —— 早先只能用 setQuality(0) 关掉整条后处理，
+   * 而那同时会改 pixelRatio，两组读数不可比（2026-10-09 昼夜标定时踩过）。 */
+  var bloomStrength = 1.1;
 
   function makeRT(w, h) {
     return new THREE.WebGLRenderTarget(w, h, {
@@ -1396,7 +1791,8 @@
         vertexShader: POST_VS, fragmentShader: POST_BLUR_FS, depthTest: false, depthWrite: false
       });
       bloom.mComp = new THREE.ShaderMaterial({
-        uniforms: { tScene: { value: null }, tBloom: { value: null }, uStrength: { value: 1.1 } },
+        uniforms: { tScene: { value: null }, tBloom: { value: null },
+                    uStrength: { value: bloomStrength } },
         vertexShader: POST_VS, fragmentShader: POST_COMP_FS, depthTest: false, depthWrite: false
       });
     }
@@ -1426,7 +1822,7 @@
     bloom.quad.material = bloom.mComp;
     bloom.mComp.uniforms.tScene.value = bloom.rtScene.texture;
     bloom.mComp.uniforms.tBloom.value = bloom.rtA.texture;
-    bloom.mComp.uniforms.uStrength.value = 1.1 + bloomPulse * 1.1;
+    bloom.mComp.uniforms.uStrength.value = bloomStrength + bloomPulse * 1.1;
     renderer.setRenderTarget(null);
     renderer.render(bloom.scene, bloom.cam);
   }
@@ -1635,23 +2031,42 @@
     camera = new THREE.PerspectiveCamera(52, w / h, 0.1, 5000);
     clock = new THREE.Clock();
 
-    /* 光照：对齐 vibeknow/earth-3d 的原始配方 —— 冷而弱的环境光 + 一盏主导的**暖**主光，
+    /* 光照：冷而弱的环境光 + 一盏主导的**暖**主光 + 一盏薄薄的冷补光。
      * 昼夜交界由主光自然形成，而不是拿大面积环境光把整颗球「泛白」。
-     * ⚠ 上一版过曝的根因就在这里：环境光 0x9db8cc×4.0（又亮又中性）+ 主光 2.4 叠加后，
-     *   本来就亮的贴图区域（极地冰盖、沙漠）直接顶到 255 被硬切。
-     * earth-3d 原值：环境 0x223044×0.5、暖光 0xfff2d0×2.4（那边是点光，这里用平行光）。
-     * 三盏灯的强度是「ACES 已生效」前提下配的，想整体再加亮就抬 exposure（见 renderer 初始化）。 */
-    scene.add(new THREE.AmbientLight(0x223044, 2.6));
-    var key = new THREE.DirectionalLight(0xfff2d0, 3.0);
-    key.position.set(4, 3, 5);
-    scene.add(key);
-    var rim = new THREE.DirectionalLight(0x4aa8d6, 0.8);
-    rim.position.set(-5, -2, -4);
-    scene.add(rim);
+     *
+     * ⚠ 2026-10-09 复核（用户：「黑夜效果也不明显」）：曾尝试靠压低这几盏灯来压暗夜面，
+     *   实测无效——环境光 2.6 → 0.25（降 90%）只换来夜面 0.195 → 0.152，
+     *   因为夜面在线性域本就极暗（≈0.03），是 sRGB 编码把它抬离了黑色（详见 NIGHT_DIM）。
+     *   故这三盏灯保持原值，夜面改由夜面压暗壳处理（见 buildNightLights）。
+     *   intensity 与 exposure 1.15 是一组，单改其一都会失衡。 */
+    scene.add(new THREE.AmbientLight(0x223044, LIGHT.amb));
+    keyLight = new THREE.DirectionalLight(0xfff2d0, LIGHT.key);
+    keyLight.position.set(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]);   // 与夜壳 uSun 同源
+    scene.add(keyLight);
+    rimLight = new THREE.DirectionalLight(0x4aa8d6, LIGHT.rim);
+    // 冷补光从**太阳反方向**打（= 正对夜面），作用只是把球体轮廓从深空底里勾出来。
+    // 太阳一挪，它必须跟着反向 —— 否则会变成一盏从白昼侧打来的多余光源。
+    rimLight.position.set(-SUN_DIR[0], -SUN_DIR[1], -SUN_DIR[2]);
+    scene.add(rimLight);
 
     buildTextures();
     buildStars();
     buildGlobe();
+    buildNightLights();
+    loadNightTexture(0);
+
+    /* ── 按真实时间定太阳位置（2026-10-09）────────────────────────────────
+     * 顺序上：buildGlobe 建了经纬网几何并烘了一次顶点色（用的是回退方向），
+     * buildNightLights 把两个壳的 uSun 指向同一个 Vector3。
+     * 这里再调 applySunAt()，它会把这五处一起改成真实方向（含重新烘焙网格）。
+     * 放在开场镜头之前，是因为**基地半球判定要读最终太阳方向**（见下）。
+     *
+     * ⚠ 必须调**模块级的 applySunAt**，不能写成 api.applySunAt：init 本身就是
+     *   被 api.init 调用的，此刻 api 字面量还没求值完，属性全是 undefined ——
+     *   实测报 `api.applySunAt is not a function`，且整个渲染初始化静默失败
+     *   （画面停在纯黑，全部读数退化成同一个值，五层测试只有夜景探针能看出来）。 */
+    applySunAt(null);
+
     buildAtmosphere();
     atmoPhase = 0;
     buildCities(state);
@@ -1688,6 +2103,19 @@
       cam.radius = 12; cam.tRadius = 7.4; cam.phi = 1.25; cam.tPhi = 1.25;
     }
     applyCam();
+    /* 记录开局时基地是不是落在夜面 —— UI 可据此给一句提示
+     * （「此刻你基地所在半球是夜晚」）。刻意**不改太阳方向去迁就镜头**：
+     * 那样等于把「真实时间」这个功能本身架空了。
+     * ⚠ 写的是**模块级变量** openAtNight，导出面用 getter 读它。
+     *   别在这里写 `api.openAtNight = ...`：init 是被 api.init 调用的，
+     *   此刻 api 字面量还没求值完，赋值只是在临时的未完成对象上打水漂 ——
+     *   实测读出来恒为 false（`sunPlan.openAtNight` 却是 true，直接露馅）。 */
+    openAtNight = false;
+    if (home) {
+      var hn = new THREE.Vector3(hv.x, hv.y, hv.z).normalize();
+      var sd = new THREE.Vector3(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
+      openAtNight = hn.dot(sd) < 0;
+    }
 
     canvas.addEventListener('webglcontextlost', function (e) {
       e.preventDefault();
@@ -1760,6 +2188,80 @@
      *   （画面明明在正常出帧）。值为 false 本身就说明这是个 bug，不是测试的问题。 */
     get ok() { return api.ok; },
     get texOk() { return !!api.texOk; },
+    /* 夜面灯光层是否真的加载了贴图（false = 走了兜底，那层被静默关掉）。 */
+    get nightOk() { return !!api.nightOk; },
+    /* 夜面灯光增益的读写 —— 标定与实机诊断用，不改贴图。 */
+    get nightGain() { return nightMat ? nightMat.uniforms.uGain.value : 0; },
+    setNightGain: function (v) {
+      if (!nightMat) return;
+      nightMat.uniforms.uGain.value = Math.max(0, +v || 0);
+    },
+    /* 夜面压暗系数读写（0 = 不压暗，1 = 夜面全黑）—— 标定用。 */
+    get nightDim() { return dimMat ? dimMat.uniforms.uNight.value : 0; },
+    setNightDim: function (v) {
+      if (!dimMat) return;
+      dimMat.uniforms.uNight.value = Math.max(0, Math.min(1, +v || 0));
+    },
+    /* 夜景的配色与压峰读数（供冒烟断言「灯火是低彩度冷白」「软膝上界 < 1」，
+     * 而不是只看源码 —— 改错了断言得能变红）。 */
+    get nightPlan() {
+      return {
+        tint: nightMat ? nightMat.uniforms.uTint.value.getHex() : NIGHT_TINT,
+        gain: nightMat ? nightMat.uniforms.uGain.value : 0,
+        knee: NIGHT_SOFT_KNEE,
+        kneeK: NIGHT_SOFT_K,
+        ceil: NIGHT_SOFT_KNEE + 1 / NIGHT_SOFT_K,   // 软膝渐近上界（必须 < 1）
+        gridNight: GRID_NIGHT
+      };
+    },
+    /* 灯火颜色读写 —— 与 setNightGain / setNightDim 同类的标定旋钮。
+     * ⚠ 为什么要暴露它：冒烟里那条「灯火不再抢标记的色相」如果只写一个绝对阈值，
+     *   就成了不可复核的魔法数字（且 Δ(R−B) 还混着夜面底色的蓝，见 light_delta 注释）。
+     *   有了这个旋钮，测试可以在同一机位把旧暖金换回来做 A/B，
+     *   断言「换回暖金后色相偏移确实更大」—— 机制才算被覆盖。 */
+    get nightTint() { return nightMat ? nightMat.uniforms.uTint.value.getHex() : NIGHT_TINT; },
+    setNightTint: function (hex) {
+      if (!nightMat) return;
+      nightMat.uniforms.uTint.value.setHex(hex >>> 0);
+    },
+    /* 软膝压缩强度读写。⚠ kneeK = 0 时曲线**退化为恒等**（k/(1+0·k) = k ⇒ soft = x），
+     * 也就是「软膝没接上」的那条线性链路。暴露它同样是为了让测试能证明
+     * 「软膝真的在起作用」：机制写了不等于生效 —— 只有把 kneeK 归零再拍一张，
+     * 才能说明夜面的纯白斑确实是被这条曲线消掉的，而不是本来就那么暗。 */
+    get nightKneeK() { return nightMat ? nightMat.uniforms.uKneeK.value : 0; },
+    setNightKneeK: function (v) {
+      if (!nightMat) return;
+      nightMat.uniforms.uKneeK.value = Math.max(0, +v || 0);
+    },
+    /* 经纬网夜面压暗的读数 —— 直接读**烘进顶点色**的暗化系数（也就是真正送到 GPU 的
+     * 那份数据），而不是读常量：烘焙发生在构建期与每次 setSunDir()（太阳整局不动，
+     * 但开局那一次也是真烘），光看代码断言不了它真的跑过、也断言不了晨昏线与夜壳对齐。
+     * dayMul  = 最靠太阳直射点那条线的系数（应 ≈1，阳面不被压暗）
+     * nightMul= 最靠反日点那条线的系数（应 ≈GRID_NIGHT）
+     * ⚠ 系数由「顶点色的 R 通道 ÷ 基础色 R 通道」还原 —— 读的是颜色本身，
+     *   所以若有人把烘焙删掉（顶点色恒为基色），这里会返回 1 而不是 GRID_NIGHT。 */
+    get gridNightProbe() {
+      var sun = new THREE.Vector3(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
+      var dayD = -2, nightD = 2, dayM = 0, nightM = 0;
+      var v = new THREE.Vector3();
+      gridGeoms.forEach(function (g) {
+        var pos = g.getAttribute('position'), col = g.getAttribute('color');
+        for (var i = 0; i < pos.count; i++) {
+          v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+          var d = v.dot(sun);
+          var m = col.getX(i) / (0x86 / 255);
+          if (d > dayD) { dayD = d; dayM = m; }
+          if (d < nightD) { nightD = d; nightM = m; }
+        }
+      });
+      return { lines: gridGeoms.length, dayMul: dayM, nightMul: nightM, gridNight: GRID_NIGHT };
+    },
+    /* bloom 合成强度读写 —— 标定与诊断用。有了它就不必再为「看看 bloom 贡献多少」
+     * 去调 setQuality（那会顺带动到 pixelRatio，两组读数不可比）。 */
+    get bloomStrength() { return bloomStrength; },
+    setBloomStrength: function (v) { bloomStrength = Math.max(0, +v || 0); },
+    /* 三盏灯的强度读数（供标定脚本核对页面里的实际配方，而不是只看源码）。 */
+    get lightPlan() { return { key: LIGHT.key, amb: LIGHT.amb, rim: LIGHT.rim }; },
     probe: probe,
     init: init,
     frame: frame,
@@ -1790,6 +2292,55 @@
     },
     /* 当前相机朝向（供测试断言 flyTo 真的转过去了） */
     get camTarget() { return { theta: cam.tTheta, phi: cam.tPhi, radius: cam.tRadius }; },
+    /* 太阳直射点经纬度 = SUN_DIR 反算，与主光/夜壳 uSun 同源。
+     * 实机冒烟用它取「日面」观察点，反足点即「夜面」——避免测试里再抄一份 (4,3,5)。 */
+    get sunLL() { return G.v2ll({ x: SUN_DIR[0], y: SUN_DIR[1], z: SUN_DIR[2] }); },
+
+    /* ── 太阳方向：读 / 写（2026-10-09 起太阳可变）────────────────────────────
+     *
+     * 为什么必须有一个**统一的写入口**，而不是让调用方直接改 SUN_DIR：
+     *   这个方向被**五处**消费，任何一处漏更新，晨昏线就会错开，而且**不报错**：
+     *     ① keyLight.position      —— 球体的明暗分界
+     *     ② rimLight.position      —— 必须恒为太阳的反方向
+     *     ③ dimMat.uniforms.uSun   —— 夜面压暗壳的晨昏线
+     *     ④ nightMat.uniforms.uSun —— 夜面灯火壳的晨昏线
+     *     ⑤ 经纬网顶点色           —— 烘在几何里的快照（要重烘）
+     *   ① ② ③ ④ 是「写一次就跟着走」的，⑤ 必须显式重跑，所以这里集中处理。
+     *
+     * ⚠ 两个材质的 uSun 是**共享同一个 Vector3 实例**的（buildNightLights 里的
+     *   `var sun`）。这里用 `copy()` 原地改，正是为了顺带把两个壳一起更新；
+     *   若改成 `uniforms.uSun.value = newVec`，只会换掉其中一个壳的引用 ——
+     *   另一个壳继续停在旧方向，静默错开。 */
+    get sunDir() { return SUN_DIR.slice(); },
+    setSunDir: setSunDir,
+    /* 太阳直射点 → 方向向量并应用（solar.js 的唯一对接点）。
+     * 传 null 取「现在」；传 Date 可取任意时刻（标定与测试用）。 */
+    applySunAt: applySunAt,
+    /* 上一次 applySunAt 用的时刻（null = 还没取过真实时间）。 */
+    get sunAppliedAt() { return sunAppliedAt; },
+    /* 开局时基地是否落在夜面（真实时间驱动下约一半概率为 true）。
+     * ⚠ 用 getter 而不是字面量属性：init 在 api 字面量求值完成**之前**就被调用了，
+     *   字面量里写 `openAtNight: false` 会把这个初值盖回去（实测恒为 false）。 */
+    get openAtNight() { return openAtNight; },
+    /* 太阳这条链的完整快照 —— 一次取齐，供探针核对「五处消费点真的同源」。
+     * ⚠ 只读快照，不要拿它当写入口（写请用 setSunDir）。 */
+    get sunPlan() {
+      var lit = keyLight ? keyLight.position : null;
+      var rim = rimLight ? rimLight.position : null;
+      var du = dimMat ? dimMat.uniforms.uSun.value : null;
+      var nu = nightMat ? nightMat.uniforms.uSun.value : null;
+      return {
+        dir: SUN_DIR.slice(),
+        ll: api.sunLL,
+        appliedAt: sunAppliedAt ? sunAppliedAt.toISOString() : null,
+        openAtNight: openAtNight,
+        // 下面三项由探针断言「与 dir 同源」—— 任何一处漏更新都会在这里露出来
+        key: lit ? [lit.x, lit.y, lit.z] : null,
+        rim: rim ? [rim.x, rim.y, rim.z] : null,
+        dimUSun: du ? [du.x, du.y, du.z] : null,
+        nightUSun: nu ? [nu.x, nu.y, nu.z] : null
+      };
+    },
     setAtmoBreath: function (v) {
       atmoBreath = Math.max(0, Math.min(0.5, +v || 0));
     },

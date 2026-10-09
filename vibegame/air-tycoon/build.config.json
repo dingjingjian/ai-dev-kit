@@ -31,6 +31,7 @@
   ],
   "zipRoot": "dist",
   "exclude": [
-    "dist/assets/earth.jpg"
+    "dist/assets/earth.jpg",
+    "dist/assets/earth-night.jpg"
   ]
 }

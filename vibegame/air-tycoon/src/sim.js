@@ -585,7 +585,12 @@
     function crowd(c) {
       var byHub = c.hub ? 0.34 : 0.10;
       var byLevel = Math.max(0, (c.level - 1)) / 4 * 0.34;   // Lv1→0，Lv5→0.34
-      return Math.min(1, byHub + byLevel);
+      /* 同城堆线互挤（2026-10-09 加）：该城**玩家自己**已开的航线数越多越拥挤。
+       * 只算自营航线（竞对占位在下面单独扣），且上限 slotCrowdRouteCap。 */
+      var cap = (CONFIG.slotCrowdRouteCap == null ? 0.20 : CONFIG.slotCrowdRouteCap);
+      var per = (CONFIG.slotCrowdPerRoute == null ? 0.025 : CONFIG.slotCrowdPerRoute);
+      var byOwn = Math.min(cap, (c.routes || 0) * per);
+      return Math.min(1, byHub + byLevel + byOwn);
     }
     var c = (crowd(ca) + crowd(cb)) / 2;
     var base = CONFIG.slotBase == null ? 42 : CONFIG.slotBase;
@@ -1039,10 +1044,22 @@
      *   这里**不能再乘 nPlanes** —— 首版写成 flights * nPlanes 使油耗按飞机数平方增长，
      *   是「加机越多单位成本越高」这一反直觉现象的来源。 */
     var fuel = flights * dist * T.fuelPerKm * 7.6 / 1e4;                // 元 → 万元
-    /* 维护：按飞行量 × 座位规模因子。
+    /* 维护：按飞行量 × 座位规模因子 × **机龄因子**。
      * ⚠ 不要用 nPlanes × upkeep 那一项 —— 它已被「飞机持有成本」覆盖，
-     *   重复计入会让大机队凭空多出一笔固定支出。 */
-    var maint = flights * 1.2 * Math.pow(T.seats / 174, 0.75);
+     *   重复计入会让大机队凭空多出一笔固定支出。
+     *
+     * ⚠⚠ 2026-10-09 加机龄因子（A1）：机龄此前只影响残值，对经营成本毫无影响，
+     *   于是「飞机飞到天荒地老」零代价、「机队更新换代」这个真实航司最大的
+     *   资本开支在游戏里不存在。现在维护费随**该航线执飞飞机的平均机龄**上浮：
+     *       maintAgeF = 1 + maintAgePerQuarter × 平均机龄
+     *   机龄 30 季 → ×1.6，60 季（整局）→ ×2.2。
+     *   ⚠ 必须折进 maint 字段（不新开成本项）—— headless 断言成本五项恒等。 */
+    var avgPlaneAge = 0;
+    for (var pa = 0; pa < planes.length; pa++) avgPlaneAge += planes[pa].ageQ || 0;
+    if (nPlanes > 0) avgPlaneAge /= nPlanes;
+    var maintAgeF = 1 + (CONFIG.maintAgePerQuarter == null ? 0.02 : CONFIG.maintAgePerQuarter) * avgPlaneAge;
+    var maint = flights * (CONFIG.maintPerFlight == null ? 1.2 : CONFIG.maintPerFlight)
+      * Math.pow(T.seats / 174, 0.75) * maintAgeF;
 
     /* ⑤ 飞机持有成本（折旧/租金）—— 2026-09-14 补上的最后一个缺口。
      *
@@ -1089,7 +1106,9 @@
       /* 需求是否填不满运力 —— 说明该减机/降频/降价了（UI 提示） */
       demandThin: capacity > 1e-9 && demandWanted < sellable * 0.62,
       fare: avgFareAdj, revenue: revenue, cost: cost, profit: profit,
-      fuel: fuel, landing: landing, crew: crew, maint: maint, ownership: ownership
+      fuel: fuel, landing: landing, crew: crew, maint: maint, ownership: ownership,
+      /* 机龄相关（A1）：供 UI 提示「该线机队老化，维护费上浮 X%」 */
+      avgPlaneAge: avgPlaneAge, maintAgeF: maintAgeF
     };
   }
 
@@ -1672,6 +1691,28 @@
       });
     });
 
+    /* ── 候选 E：整队换新（A1 的出口，2026-10-09 加）──
+     * 老机队的维护费被机龄抬高，换新的收益 = 每季维护费节省。评分口径与 A/C/D
+     * 统一为「收益 ÷ 资本投入」，另加两条纪律（与候选 D 同构）：
+     *   ① 回本期 ≤ 8 季 —— 机队尚新时换新自然被这条挡掉（这就是机龄门槛，
+     *      不必再写一个硬阈值；写死阈值反而会与回本期判据打架）
+     *   ② 换后仍留 25% 现金安全垫，不许借钱换新
+     * ⚠ 只在「扩张已无空间」时才会胜出（A/C/D 的分数通常高得多）——
+     *   这正是这条机制的设计意图：**给后期资本一个出口**，而不是抢扩张的戏。 */
+    state.routes.forEach(function (r) {
+      var dNowE = settleRoute(state, r);
+      if (!dNowE) return;
+      if (!(dNowE.maintAgeF > 1.06)) return;              // 机队尚新（机龄 ≲3 季）不考虑
+      var infE = renewInfo(state, r.key);
+      if (!infE.ok || !infE.needNew) return;
+      if (!(infE.payback <= 8)) return;                    // ① 回本期纪律
+      if (state.cash < infE.net * 1.25) return;            // ② 现金纪律
+      var scoreE = infE.savedPerQuarter / Math.max(1, infE.net);
+      if (scoreE > best.score) {
+        best = { kind: 'renew', score: scoreE, route: r };
+      }
+    });
+
     /* ── 执行 ── */
     if (best.kind === 'add') {
       var planeA = best.plane;
@@ -1703,6 +1744,10 @@
     if (best.kind === 'upgrade') {
       var up = upgradeRouteType(state, best.route.key, best.newType);
       return !!(up && up.ok);
+    }
+    if (best.kind === 'renew') {
+      var rn = renewRouteFleet(state, best.route.key);
+      return !!(rn && rn.ok);
     }
     if (best.kind === 'open') {
       var rec2 = best.rec;
@@ -1898,6 +1943,33 @@
 
   /* ───────────────────────── 9. 季度结算 ───────────────────────── */
 
+  /* 总部与销售管理费用（A2，2026-10-09）——
+   * 单一真源：resolveQuarter 与 forecast 共用，杜绝「两处副本各写一份」的漂移。
+   * 超线性表达规模不经济，标定与理由见 data.js 的 overheadPerPlane 注释。 */
+  function overheadOf(state) {
+    var C = AT.CONFIG;
+    var base = C.overheadBase == null ? 60 : C.overheadBase;
+    var per = C.overheadPerPlane == null ? 8 : C.overheadPerPlane;
+    var exp = C.overheadExp == null ? 1 : C.overheadExp;
+    return base + per * Math.pow(Math.max(0, state.planes.length), exp);
+  }
+
+  /* 未投入航线（闲置 / 停场检修）飞机的持有与维护支出（A0b，2026-10-09）——
+   * ⚠ 旧版只对 `onGround > 0` 收半价维护费，**买了不派线的飞机持有成本为 0**
+   *   （只付 8 万/季的管理费），于是「先囤机、慢慢想」是免费的。
+   * 现在：凡是不在航线上正常执飞的飞机（含闲置与停场）都按
+   *   upkeep × 0.5 + 机价 × ownershipPerQuarter × idleOwnershipMul 计费。 */
+  function idleGroundCostOf(state) {
+    var C = AT.CONFIG;
+    var rate = (C.ownershipPerQuarter == null ? 0.7 : C.ownershipPerQuarter)
+      * (C.idleOwnershipMul == null ? 0.5 : C.idleOwnershipMul);
+    var off = state.planes.filter(function (p) { return !(p.routeKey && p.onGround <= 0); });
+    return off.reduce(function (s, p) {
+      var T = AT.planeOf(p.type);
+      return s + T.upkeep * 0.5 + T.price * rate;
+    }, 0);
+  }
+
   function resolveQuarter(state) {
     var C = AT.CONFIG;
 
@@ -1912,10 +1984,9 @@
     var revenue = 0, cost = 0, pax = 0;
     detail.forEach(function (d) { revenue += d.revenue; cost += d.cost; pax += d.pax; });
 
-    /* ③ 固定支出：总部与销售管理费用 + 停场飞机的维护（停场也要养） */
-    var overhead = 60 + state.planes.length * 8;
-    var grounded = state.planes.filter(function (p) { return p.onGround > 0; });
-    var groundCost = grounded.reduce(function (s, p) { return s + AT.planeOf(p.type).upkeep * 0.5; }, 0);
+    /* ③ 固定支出：总部与销售管理费用（规模不经济）+ 未投入航线飞机的持有与维护 */
+    var overhead = overheadOf(state);
+    var groundCost = idleGroundCostOf(state);
 
     /* ④ 债务利息 */
     var interest = state.debt * (C.loanRatePerQuarter || 0.022);
@@ -2543,6 +2614,76 @@
     return { ok: true, net: Math.round(net), count: n, from: oldTypeName, to: T2.name };
   }
 
+  /* 整队换新（A1 的「出口」，2026-10-09 加）
+   *
+   * 为什么需要它：机龄会抬高维护费（见 settleRoute 的 maintAgeF），但玩家要「换新」
+   *   只能一架一架地「出售 → 购机 → 重新派机」（三步 × N 架），成本高到没人会做 ——
+   *   那 A1 就退化成一笔纯惩罚，而不是一个决策。本函数把
+   *   「退役本线全部老机 + 购入同型号新机 + 挂回原线」做成**一个动作**，
+   *   与 upgradeRouteType 完全同构（同样的残值回收口径、同样即时交割），只是不换型号。
+   *
+   * 语义与约束：
+   *   · 补差价 = 同型新机总价 − 旧机残值（旧机按 0.968^机龄 × 0.92 折价回收）；
+   *   · 现金不足时**可以动用贷款额度**（与换机型同口径：`cash + 额度 − 债务`）；
+   *   · 不改变机队规模与航线运力（架数一致），只把机龄清零。
+   * 收益：每季维护费下降（dBefore.maint − dAfter.maint），回本期 = 补差价 ÷ 该差额。 */
+  function renewInfo(state, key) {
+    var r = findRouteByKey(state, key);
+    if (!r) return { ok: false, reason: '航线不存在' };
+    var T = AT.planeOf(r.type);
+    /* 只统计该线上正常执飞的飞机（停场中的不算，与 settleRoute 口径一致） */
+    var on = state.planes.filter(function (p) { return p.routeKey === key && p.onGround <= 0; });
+    if (!on.length) return { ok: false, reason: '该航线没有执飞飞机' };
+    var tradeIn = 0;
+    on.forEach(function (p) { tradeIn += T.price * Math.pow(0.968, p.ageQ) * 0.92; });
+    var gross = T.price * on.length;
+    var net = Math.round(gross - tradeIn);
+    var avgAge = on.reduce(function (s, p) { return s + (p.ageQ || 0); }, 0) / on.length;
+    var dBefore = settleRoute(state, r);
+    /* 维护费节省 = 基准维护 × (机龄因子 − 1) = 当前维护 × (1 − 1/机龄因子) */
+    var saved = dBefore ? dBefore.maint * Math.max(0, 1 - 1 / Math.max(1e-9, dBefore.maintAgeF)) : 0;
+    return {
+      ok: true, count: on.length, avgAge: avgAge, net: net,
+      gross: gross, tradeIn: Math.round(tradeIn),
+      savedPerQuarter: saved,
+      /* 回本期（季）：补差价 ÷ 每季维护节省。无节省时判为无穷（不值得换） */
+      payback: saved > 1e-9 ? net / saved : Infinity,
+      needNew: net > 0
+    };
+  }
+
+  function renewRouteFleet(state, key) {
+    var info = renewInfo(state, key);
+    if (!info.ok) return info;
+    if (!info.needNew) return { ok: false, reason: '该线机队已接近全新（残值高于新机价）' };
+    var r = findRouteByKey(state, key);
+    var T = AT.planeOf(r.type);
+    var available = state.cash + loanLimitOf(state) - state.debt;
+    if (info.net > available) {
+      return { ok: false, reason: '资金不足（需补 ' + info.net + ' 万元，可用 ' + Math.round(available) + ' 万元）', need: info.net };
+    }
+    var on = state.planes.filter(function (p) { return p.routeKey === key && p.onGround <= 0; });
+    var n = on.length;
+    var ids = {};
+    on.forEach(function (p) { ids[p.id] = 1; });
+    /* 退役旧机（按精确残值回收，与 renewInfo 同口径），其余同线的停场机保留不动 */
+    state.planes = state.planes.filter(function (p) { return !ids[p.id]; });
+    state.cash += info.tradeIn;
+    for (var i = 0; i < n; i++) {
+      var np = makePlane(state, r.type);
+      np.onGround = 0;              /* 即时交割，不走交付期（与换机型一致） */
+      np.routeKey = key;
+      state.planes.push(np);
+    }
+    state.cash -= T.price * n;
+    state.stats.planesBought += n;
+    recalcCityRoutes(state);
+    log(state, '航线 ' + cityName(state, r.a) + '—' + cityName(state, r.b) +
+      ' 机队换新：' + T.name + ' ×' + n + '（平均机龄 ' + Math.round(info.avgAge) +
+      ' 季 → 0，补差价 ' + info.net + ' 万元）');
+    return { ok: true, net: info.net, count: n };
+  }
+
   /* 贷款 / 还款 */
   function borrow(state, amount) {
     amount = Math.max(0, Math.round(amount || 0));
@@ -2851,6 +2992,26 @@
     return r.cash + rivalFleetValue(r) * 0.85;
   }
 
+  /* 榜单色点 = **航司识别色**（玩家 `state.airlineColor`、竞对 `r.color`，
+   * 两者同源 data.js AIRLINES），与地图上该家的弧线/客机同色相 ——
+   * 玩家因此能把「榜上这一行」和「地球上那条线」对上号。
+   * 此前竞对写死灰蓝 '#8C93A8'，五家在面板上是同一个点，航司识别色只活在
+   * 「选航司」界面与地图的 8px 客机里，等于没有第二处参照。
+   *
+   * ⚠ 玩家侧一并改成自己的航司色（不再固定暖金）：实测 CIEDE2000 下
+   *   暖金 #F5C542 与新加坡航空橙 #EF9F27 只差 **12.3**（金点与其余五色的
+   *   色差都 ≥ 39.9）—— 八像素色块挨着排，这两个会被读成同一家。
+   *   改用航司色后全盘最小色差是国航红 vs 澳航玫红 **15.7**，全部 ≥ 经验舒适线 15。
+   *   且这与既有约定一致：render.js 里暖金（arcMine/planeMine）本就标注为
+   *   「缺省回落：没选航司的旧路径才用它」，不是「玩家专属色」。
+   *
+   * ⚠ 回落色只服务**旧路径**（不传 airlineId 建局：工具/测试脚本，以及
+   *   选航司覆盖层不可用时的兜底开局）：那条路玩家无 airlineColor、
+   *   竞对无 color，地图侧同样回落到暖金/紫罗兰，面板保持一致。
+   * ⚠ 玩家所选的那家航司**不会**出现在竞对列表里（见建局处 `a.id === airline.id`
+   *   的过滤），故玩家的色点与任何竞对色点都不同源，不会撞色。
+   * ⚠ 判据不是「色值互不相同」而是**感知色差**：见 tests/headless.js 的
+   *   「榜单归属色层」（CIEDE2000 ≥ 15）。别把这里改回常量。 */
   function ranking(state) {
     var list = [];
     list.push({
@@ -2858,7 +3019,7 @@
       netWorth: netWorth(state),
       cash: Math.round(state.cash), debt: Math.round(state.debt),
       fleet: state.planes.length, routes: state.routes.length,
-      pax: state.stats.paxTotal, color: '#F5C542'
+      pax: state.stats.paxTotal, color: state.airlineColor || '#F5C542'
     });
     state.rivals.forEach(function (r) {
       list.push({
@@ -2866,7 +3027,7 @@
         netWorth: rivalNetWorth(r),
         cash: Math.round(r.cash), debt: 0,
         fleet: rivalFleetCount(r),
-        routes: r.routes.length, pax: 0, color: '#8C93A8',
+        routes: r.routes.length, pax: 0, color: r.color || '#8C93A8',
         alive: r.alive
       });
     });
@@ -2880,21 +3041,83 @@
     return 0;
   }
 
+  /* ── D2 多维终局评价（2026-10-09）──
+   * 旧判定的两个门槛（净资产 ≥ 6 亿 / 机队 ≥ 40 架）在实测终局读数（净资产 ≈ 40 亿、
+   * 机队 ≈ 110 架）面前形同虚设，giant 实际退化成「排名前三」。于是「堆机堆线但
+   * 单位效率差」与「精耕细作」拿到同一个评价 —— 玩家没有理由优化效率，这正是
+   * 「后期无脑加线」在目标层的根因。
+   *
+   * 现改为三维加权（权重与门槛见 data.js CONFIG 的 verdict* 参数）：
+   *   规模 scale —— max(净资产/winNetWorth, 机队/winFleetSize)，封顶 1（「够大」门槛）
+   *   效率 eff   —— 最近 4 季**平均净利率**映射 [verdictEffFloor, verdictEffFull] → [0,1]
+   *   覆盖 cover —— globalization 百分比
+   * ⚠ 用 4 季均值而不是最后一季：单季波动（事件卡、价格战）不该决定终局评价。
+   * ⚠ 返回值带 dims 明细，UI 的终局面板直接展示三个分项 —— 让玩家看得见
+   *   「我为什么不是巨企」，而不是只给一个标签。 */
+  function verdictDetail(state) {
+    var C = AT.CONFIG;
+    var nw = netWorth(state);
+    var scale = Math.min(1, Math.max(
+      nw / (C.winNetWorth || 60000),
+      state.planes.length / (C.winFleetSize || 40)
+    ));
+    /* 最近 4 季平均净利率（收入为 0 的季度不参与，避免除零拉低均值） */
+    var n = 0, sumMargin = 0;
+    for (var i = state.history.length - 1; i >= 0 && n < 4; i--) {
+      var h = state.history[i];
+      if (!h || !(h.revenue > 0)) continue;
+      sumMargin += h.net / h.revenue;
+      n++;
+    }
+    var margin = n ? sumMargin / n : 0;
+    var floor = C.verdictEffFloor == null ? 0.08 : C.verdictEffFloor;
+    var full = C.verdictEffFull == null ? 0.20 : C.verdictEffFull;
+    var eff = Math.max(0, Math.min(1, (margin - floor) / Math.max(1e-6, full - floor)));
+    var cover = Math.max(0, Math.min(1, globalization(state).pct / 100));
+    var score = (C.verdictWScale == null ? 0.40 : C.verdictWScale) * scale
+      + (C.verdictWEff == null ? 0.35 : C.verdictWEff) * eff
+      + (C.verdictWCover == null ? 0.25 : C.verdictWCover) * cover;
+    return {
+      scale: scale, eff: eff, cover: cover, score: score,
+      margin: margin, netWorth: nw, planes: state.planes.length
+    };
+  }
+
   /* 终局评价：五档（bankrupt / giant / major / survivor / failing）。
    *   ⚠ 胜负必须用 tier 判（tier === 'giant'），verdict 从不返回 win 字段。 */
   function verdict(state) {
     var C = AT.CONFIG;
     var rank = myRank(state);
     if (state.bankrupt) return { tier: 'bankrupt', label: '破产退市', desc: '资金链断裂，公司进入清算程序。' };
-    var nw = netWorth(state);
-    if (rank <= (C.winRank || 3) && (nw >= (C.winNetWorth || 60000) || state.planes.length >= (C.winFleetSize || 40))) {
-      return { tier: 'giant', label: '全球航空巨企', desc: '你建成了一张真正的全球航线网络，成为航空业不可忽视的力量。' };
+    var d = verdictDetail(state);
+    var giantScore = C.verdictGiantScore == null ? 0.68 : C.verdictGiantScore;
+    /* ⚠ 必须 rank >= 1：myRank 在「尚未清算/无榜单」时返回 0，
+     *   若只判 `rank <= winRank`，0 会通过门槛 —— 中途调用 verdict（UI 判定获胜音效）
+     *   就会凭空给出「巨企」。 */
+    if (rank >= 1 && rank <= (C.winRank || 3) && d.score >= giantScore) {
+      return {
+        tier: 'giant', label: '全球航空巨企',
+        desc: '你建成了一张真正的全球航线网络，规模与效率同时站在行业前列。',
+        dims: d
+      };
     }
-    if (rank <= (C.winRank || 3)) {
-      return { tier: 'major', label: '区域级强者', desc: '规模已进入全球前列，但离真正的巨企还差一步。' };
+    if (rank >= 1 && rank <= (C.winRank || 3)) {
+      /* 「大而不强」——排名已进前三，但综合分不达标。指出最弱的那一维，
+       * 让玩家知道差在哪（这正是 D2 想传达的：堆规模 ≠ 做强）。 */
+      var weakest = 'scale', wv = d.scale;
+      if (d.eff < wv) { weakest = 'eff'; wv = d.eff; }
+      if (d.cover < wv) { weakest = 'cover'; wv = d.cover; }
+      var why = weakest === 'eff'
+        ? '规模已进入全球前列，但单位效率偏弱 —— 堆机队并不等于做强。'
+        : weakest === 'cover'
+          ? '规模已进入全球前列，但航线网络仍集中在少数市场，全球化不足。'
+          : '规模已进入全球前列，但离真正的巨企还差一步。';
+      return { tier: 'major', label: '区域级强者', desc: why, dims: d };
     }
-    if (nw > 0) return { tier: 'survivor', label: '稳健经营者', desc: '公司在竞争中活了下来，规模稳步增长。' };
-    return { tier: 'failing', label: '艰难维持', desc: '资产已不足以覆盖负债，需要重新审视航线网络。' };
+    if (netWorth(state) > 0) {
+      return { tier: 'survivor', label: '稳健经营者', desc: '公司在竞争中活了下来，规模稳步增长。', dims: d };
+    }
+    return { tier: 'failing', label: '艰难维持', desc: '资产已不足以覆盖负债，需要重新审视航线网络。', dims: d };
   }
 
   /* 全球化程度：已通航城市 × 覆盖地区数 / 全球城市数。
@@ -2925,12 +3148,15 @@
     var detail = state.routes.map(function (r) { return settleRoute(state, r); }).filter(Boolean);
     var revenue = 0, cost = 0, pax = 0;
     detail.forEach(function (d) { revenue += d.revenue; cost += d.cost; pax += d.pax; });
-    var overhead = 60 + state.planes.length * 8;
+    var overhead = overheadOf(state);
+    var groundCost = idleGroundCostOf(state);
     var interest = state.debt * (CONFIG.loanRatePerQuarter || 0.022);
     return {
       detail: detail, revenue: revenue, cost: cost, pax: pax,
-      overhead: overhead, interest: interest,
-      net: revenue - cost - overhead - interest
+      overhead: overhead, groundCost: groundCost, interest: interest,
+      /* ⚠ 口径与 resolveQuarter 完全一致（含 groundCost）—— 季报面板的四个数字
+       *   必须能与净利对上账，预测值同理，否则玩家一眼就能看出数字是错的。 */
+      net: revenue - cost - overhead - groundCost - interest
     };
   }
 
@@ -2956,6 +3182,7 @@
     // 指令
     openRoute: openRoute, closeRoute: closeRoute, assignPlane: assignPlane,
     buyPlane: buyPlane, sellPlane: sellPlane, upgradeRouteType: upgradeRouteType,
+    renewInfo: renewInfo, renewRouteFleet: renewRouteFleet,
     borrow: borrow, repay: repay, setFare: setFare, setFrequency: setFrequency,
     chooseEvent: chooseEvent,
     acquireInfo: acquireInfo, acquireRival: acquireRival,
@@ -2963,7 +3190,10 @@
     idealSeatsFor: idealSeatsFor, playerTurn: playerTurn,
     // 结算与终局
     resolveQuarter: resolveQuarter, forecast: forecast, ranking: ranking,
-    myRank: myRank, verdict: verdict, globalization: globalization,
+    myRank: myRank, verdict: verdict, verdictDetail: verdictDetail,
+    globalization: globalization,
+    /* A0b/A2：固定支出口径（供测试与 UI 复用，避免影子公式） */
+    overheadOf: overheadOf, idleGroundCostOf: idleGroundCostOf,
     recalcCityRoutes: recalcCityRoutes,
     // UI 节奏控制
     nextQuarter: nextQuarter, quarterRemain: quarterRemain, setPaused: setPaused

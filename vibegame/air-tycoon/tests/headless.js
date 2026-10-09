@@ -31,7 +31,7 @@
 var path = require('path');
 var SRC = path.join(__dirname, '..', 'src');
 global.window = global;
-['data', 'geo', 'landmask', 'sim', 'save'].forEach(function (f) {
+['data', 'geo', 'landmask', 'solar', 'sim', 'save'].forEach(function (f) {
   require(path.join(SRC, f + '.js'));
 });
 var AT = global.AT, S = AT.sim, C = AT.CONFIG, G = AT.geo, SV = AT.save;
@@ -191,6 +191,91 @@ ok(stOld.airlineId === null && stOld.homeCityId === 'C01' &&
                    rep: stOld.reputation, loan: stOld.loanLimit }));
 ok(S.traitOf(stOld).id === 'none', '不传 airlineId：中性技能（无任何加成）');
 
+/* ── 榜单归属色层（2026-10-09）──
+ * 面板「全球排名」每行前面那个色点，必须能把玩家指回**地图上的那条线/那架机**：
+ * 玩家与竞对都用自己的**航司识别色**（data.js AIRLINES[].color），
+ * 只有旧路径（不传 airlineId）才回落到暖金 / 灰蓝。
+ *
+ * ⚠ 为什么值得断言：色点在 UI 里只是 `background:<color>` 的一次拼串 ——
+ *   链条断了（字段为 undefined、被写死成常量）**不会报错、不会白屏**，
+ *   只会让面板上五家竞对变成同一个点，玩家「看榜认不出谁是谁」。
+ *   这类静默失效正是本层存在的理由（同类：id 打错、class 没样式）。
+ *
+ * ⚠ 判据用**感知色差 CIEDE2000 ≥ 15**，不是「字符串不相等」：
+ *   色点只有 8px、并排出现在深色面板上，两个 hex 不同但色相差几度
+ *   （如暖金 #F5C542 与新加坡航空橙 #EF9F27 只差 12.3）人眼读作同一家。
+ *   旧实现的灰蓝 #8C93A8 与暖金差 40+ 却「五家同色」，故下面还断言互不相同。 */
+function srgb2lab_(hex) {
+  function lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  var n = parseInt(hex.slice(1), 16);
+  var r = lin((n >> 16) & 255), g = lin((n >> 8) & 255), b = lin(n & 255);
+  function f(t) { return t > 0.008856 ? Math.pow(t, 1 / 3) : (7.787 * t + 16 / 116); }
+  var fx = f((r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047);
+  var fy = f(r * 0.2126 + g * 0.7152 + b * 0.0722);
+  var fz = f((r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function de00_(hex1, hex2) {
+  var l1 = srgb2lab_(hex1), l2 = srgb2lab_(hex2);
+  var C1 = Math.hypot(l1[1], l1[2]), C2 = Math.hypot(l2[1], l2[2]);
+  var G = 0.5 * (1 - Math.sqrt(Math.pow((C1 + C2) / 2, 7) /
+    (Math.pow((C1 + C2) / 2, 7) + Math.pow(25, 7))));
+  var a1 = l1[1] * (1 + G), a2 = l2[1] * (1 + G);
+  var c1 = Math.hypot(a1, l1[2]), c2 = Math.hypot(a2, l2[2]);
+  var h1 = Math.atan2(l1[2], a1) * 180 / Math.PI; if (h1 < 0) h1 += 360;
+  var h2 = Math.atan2(l2[2], a2) * 180 / Math.PI; if (h2 < 0) h2 += 360;
+  var dL = l2[0] - l1[0], dC = c2 - c1, dh = 0;
+  if (c1 * c2 > 0) { dh = h2 - h1; if (dh > 180) dh -= 360; if (dh < -180) dh += 360; }
+  var dH = 2 * Math.sqrt(c1 * c2) * Math.sin(dh * Math.PI / 360);
+  var Lb = (l1[0] + l2[0]) / 2, Cb = (c1 + c2) / 2, hb = h1 + h2;
+  if (c1 * c2 > 0) { hb = (Math.abs(h1 - h2) > 180 ? (h1 + h2 < 360 ? hb + 360 : hb - 360) : hb) / 2; }
+  else hb /= 2;
+  var T = 1 - 0.17 * Math.cos((hb - 30) * Math.PI / 180) + 0.24 * Math.cos(2 * hb * Math.PI / 180) +
+    0.32 * Math.cos((3 * hb + 6) * Math.PI / 180) - 0.20 * Math.cos((4 * hb - 63) * Math.PI / 180);
+  var S_L = 1 + 0.015 * Math.pow(Lb - 50, 2) / Math.sqrt(20 + Math.pow(Lb - 50, 2));
+  var S_C = 1 + 0.045 * Cb, S_H = 1 + 0.015 * Cb * T;
+  var R_T = -Math.sin(2 * 30 * Math.exp(-Math.pow((hb - 275) / 25, 2)) * Math.PI / 180) *
+    2 * Math.sqrt(Math.pow(Cb, 7) / (Math.pow(Cb, 7) + Math.pow(25, 7)));
+  return Math.sqrt(Math.pow(dL / S_L, 2) + Math.pow(dC / S_C, 2) + Math.pow(dH / S_H, 2) +
+    R_T * (dC / S_C) * (dH / S_H));
+}
+
+section('榜单归属色');
+var rkCA = S.ranking(stRiv);            // stRiv：以国航开局 → 竞对恰为其余五家
+var rowMe = null, rowsRiv = [];
+rkCA.forEach(function (r) { if (r.isPlayer) rowMe = r; else rowsRiv.push(r); });
+ok(!!rowMe && rowsRiv.length === 5, '榜单 = 玩家行 1 + 竞对行 5', String(rkCA.length));
+ok(!!rowMe && rowMe.color === stRiv.airlineColor && stRiv.airlineColor === '#E24B4A',
+  '玩家行色点 = 自选航司的识别色（不再固定暖金）', rowMe && rowMe.color);
+ok(rowsRiv.every(function (r) {
+  var rv = stRiv.rivals.filter(function (x) { return x.id === r.id; })[0];
+  var a = rv ? AT.AIRLINES_BY_ID[rv.airlineId] : null;
+  return !!rv && !!a && r.color === a.color;
+}), '每个竞对行色点 = 该家航司的识别色（不再是五家同一灰蓝）',
+  rowsRiv.map(function (r) { return r.color; }).join(' '));
+ok(rowsRiv.every(function (r) { return r.color !== '#8C93A8'; }),
+  '灰蓝常量已不再出现在榜单（防回退到「五家一个点」）');
+var hexes = [rowMe.color].concat(rowsRiv.map(function (r) { return r.color; }));
+var uniq = {}; hexes.forEach(function (c) { uniq[c] = 1; });
+ok(Object.keys(uniq).length === 6, '六行六个不同色值（玩家与五家竞对互不撞色）',
+  hexes.join(' '));
+var minDE = 999, minPair = '';
+for (var di = 0; di < hexes.length; di++) {
+  for (var dj = di + 1; dj < hexes.length; dj++) {
+    var d = de00_(hexes[di], hexes[dj]);
+    if (d < minDE) { minDE = d; minPair = hexes[di] + ' vs ' + hexes[dj]; }
+  }
+}
+ok(minDE >= 15, '六色两两 CIEDE2000 ≥ 15（8px 色块并排的可分辨下限）',
+  '最小 ' + minDE.toFixed(1) + '（' + minPair + '）');
+/* 旧路径：无 airlineId → 玩家暖金 / 竞对灰蓝（与地图侧的暖金/紫罗兰回落对应） */
+var rkOld = S.ranking(stOld);
+ok(rkOld.filter(function (r) { return r.isPlayer; })[0].color === '#F5C542' &&
+  rkOld.filter(function (r) { return !r.isPlayer; })
+    .every(function (r) { return r.color === '#8C93A8'; }),
+  '旧路径（无 airlineId）回落到暖金 / 灰蓝，不出现 undefined');
+ok(stOld.airlineColor === null, '旧路径的 airlineColor 为 null（回落条件成立）');
+
 /* ── 商飞机型专供中国国际航空（2026-10-08）── */
 ok(!!AT.planeOf('cRJ2').exclusive && !!AT.planeOf('cNB3').exclusive,
   '商飞 ARJ21 / C919 均标记 exclusive: al_ca');
@@ -334,6 +419,110 @@ near(_G.legAt(1).t, 0, 1e-9, 'u=1 环绕回起点');
 ok(_G.legAt(1.25).t === _G.legAt(0.25).t, 'u=1.25 等价于 u=0.25');
 near(_G.legAt(-0.25).t, 0.5, 1e-9, '负相位 -0.25 等价于 0.75');
 ok(_G.legAt(-0.25).fwd === -1, '负相位 -0.25 为回程');
+
+
+/* ── 太阳位置层（真实时间 → 日下点 → 球面方向）──
+ * 这一节存在的理由与「往返航段层」相同：太阳位置是**纯函数**（Date → {lat,lon}），
+ * 完全不需要 THREE 与相机，所以能把天文换算的正确性、以及
+ * 「方向向量与渐变几何的约定是否对齐」这两件**只看代码断言不了**的事钉死在这里。
+ *
+ * 为什么必须单独断言「ll2v 与 v2ll 互逆」：
+ *   solar.js 把日下点经 ll2v 转成方向向量。若这个约定与球体贴图的 UV 约定
+ *   差 180°，晨昏线会整体贴反 —— 球还是那个球、不报错、断言也不红，
+ *   只是「白天那半边亮着灯」。这是本项目最典型的静默失效形态。 */
+section('太阳位置层');
+var _SOL = AT.solar;
+ok(!!_SOL, 'AT.solar 已挂载（index.html 的 <script src="src/solar.js"> 没漏）');
+
+/* ① 二至二分的赤纬必须落在正确日期（不能用 sin 的简单形式，
+ *    那会把极值日钉在 3/22 与 9/22，误差可达数度） */
+(function () {
+  var best = -99, bestD = 0, worst = 99, worstD = 0;
+  for (var i = 0; i < 365; i++) {
+    var d = new Date(2026, 0, 1 + i);
+    var dec = _SOL.declination(_SOL.dayOfYear(d), 12);
+    if (dec > best) { best = dec; bestD = d.getMonth() + 1; }
+    if (dec < worst) { worst = dec; worstD = d.getMonth() + 1; }
+  }
+  ok(bestD === 6 && Math.abs(best - 23.44) < 0.3,
+    '赤纬最大值落在 6 月且 ≈ +23.44°', '实际 ' + best.toFixed(2) + '° @' + bestD + '月');
+  ok(worstD === 12 && Math.abs(worst + 23.44) < 0.3,
+    '赤纬最小值落在 12 月且 ≈ −23.44°', '实际 ' + worst.toFixed(2) + '° @' + worstD + '月');
+})();
+ok(Math.abs(_SOL.declination(_SOL.dayOfYear(new Date(2026, 2, 20)), 12)) < 1.5,
+  '春分赤纬 ≈ 0°（±1.5°）',
+  '实际 ' + _SOL.declination(_SOL.dayOfYear(new Date(2026, 2, 20)), 12).toFixed(2) + '°');
+
+/* ② 时角：本机时钟的 12:00 ⇒ 日下点落在本机经度基准上（lon = 0 基准） */
+(function () {
+  var noon = _SOL.subsolarPoint(new Date(2026, 5, 21, 12, 0, 0));
+  near(noon.lon, 0, 0.01, '本机 12:00 → 日下点经度 = 0°');
+  var six = _SOL.subsolarPoint(new Date(2026, 5, 21, 6, 0, 0));
+  near(six.lon, 90, 0.01, '本机 06:00 → 日下点经度 = 90°E');
+  var eight = _SOL.subsolarPoint(new Date(2026, 5, 21, 18, 0, 0));
+  near(eight.lon, -90, 0.01, '本机 18:00 → 日下点经度 = 90°W');
+})();
+
+/* ③ 经度必须始终落在 [-180, 180)（越界会让 ll2v 的 p = lon+180 跑出 0~360） */
+(function () {
+  var bad = 0, sample = '';
+  for (var h = 0; h < 24; h++) {
+    var p = _SOL.subsolarPoint(new Date(2026, 9, 9, h, 30, 0));
+    if (!(p.lon >= -180 && p.lon < 180)) { bad++; if (!sample) sample = 'h=' + h + ' → ' + p.lon; }
+  }
+  ok(bad === 0, '日下点经度恒在 [-180, 180)', sample);
+})();
+
+/* ④ 方向向量必须是单位向量，且与 ll2v 的 UV 约定严格对齐（互逆） */
+(function () {
+  var bad = 0;
+  [[0, 0], [25.1, 128.7], [-33.9, 151.2], [51.5, -0.1], [90, 0], [-90, 0]].forEach(function (ll) {
+    var v = _G.ll2v(ll[0], ll[1], 1);
+    var back = _G.v2ll(v);
+    var dLat = Math.abs(back.lat - ll[0]);
+    var dLon = Math.abs(((back.lon - ll[1] + 540) % 360) - 180);
+    if (dLat > 1e-6 || dLon > 1e-6) bad++;
+  });
+  ok(bad === 0, 'll2v ↔ v2ll 严格互逆（太阳方向的几何约定没偏）', '不互逆 ' + bad + ' 组');
+})();
+(function () {
+  var v = _SOL.sunDirAt(new Date(2026, 9, 9, 14, 0, 0), _G);
+  var len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+  near(len, 1, 1e-9, 'sunDirAt 返回单位向量');
+  ok(v.length === 3 && v.every(function (x) { return isFinite(x); }),
+    'sunDirAt 返回 3 个有限数', JSON.stringify(v));
+})();
+
+/* ⑤ 异常输入必须安全回退，不能产出 NaN 方向
+ *    （NaN 方向会让整条渲染链变成黑屏或全亮，且不报错） */
+(function () {
+  var bad = new Date('nonsense');
+  var v = _SOL.sunDirAt(bad, _G);
+  ok(v.length === 3 && v.every(function (x) { return isFinite(x); }),
+    '非法 Date 不产出 NaN 方向（回退到常量）', JSON.stringify(v));
+  var v2 = _SOL.sunDirAt(new Date(2026, 0, 1), null);   // 不传 geo
+  ok(v2.length === 3 && v2.every(function (x) { return isFinite(x); }),
+    '缺 geo 参数时安全回退', JSON.stringify(v2));
+  ok(_SOL.FALLBACK_SUN_DIR.length === 3, '回退方向常量为三元组');
+})();
+
+/* ⑥ 一天之内日下点必须自西向东连续绕行（不能跳变或倒转）
+ *    —— 时角公式写错（如用 12+h 而不是 12−h）会在这里露出来。 */
+(function () {
+  var prev = null, maxStep = 0, back = 0;
+  for (var i = 0; i <= 48; i++) {
+    var h = i * 0.5;
+    var p = _SOL.subsolarPoint(new Date(2026, 9, 9, Math.floor(h), (h % 1) * 60, 0));
+    if (prev !== null) {
+      var dl = ((p.lon - prev + 540) % 360) - 180;      // 归一到 [-180,180)
+      maxStep = Math.max(maxStep, Math.abs(dl));
+      if (dl > 0) back++;                                // 应当恒为负（自西向东 = 经度递减）
+    }
+    prev = p.lon;
+  }
+  ok(back === 0, '日下点经度单调递减（自西向东绕行，未倒转）', '反常步数 ' + back);
+  ok(maxStep < 8, '日下点经度无跳变（半步 <8°）', '最大步长 ' + maxStep.toFixed(2) + '°');
+})();
 
 
 /* ── 需求层 ── */
@@ -620,6 +809,117 @@ for (var q3 = 0; q3 < 6; q3++) {
 }
 ok(S.findCity(stG, 'C01').dev >= devHomeBefore, '有航线的城市 dev 不衰减',
   devHomeBefore.toFixed(1) + ' → ' + S.findCity(stG, 'C01').dev.toFixed(1));
+
+/* ── 晚期经济重定层（2026-10-09：A0 资本成本 / A0b 闲置机 / A1 机龄 / A2 规模不经济 / D2 多维终局）──
+ *
+ * 为什么单列一节：这批机制的共同特征是「写在公式里但不一定生效」——
+ *   A1 的机龄因子若乘错位置、A0b 的闲置机若没被任何口径收走、
+ *   A2 若仍是一条线性公式，**所有既有断言都会继续为绿**，而玩家依然可以
+ *   无脑堆机堆线。故每条机制都必须有一条「它真的改变了输出」的断言。
+ * 用法约定：数值只断言**方向与量级**（×2、超线性、>0），
+ *   不写死具体数字 —— 参数是标定出来的，会在做难度调参时再动。 */
+section('晚期经济重定层');
+
+/* A1 机龄 → 维护费 ×(1 + maintAgePerQuarter × 平均机龄) */
+var agA1 = onRoute('C01', 'C01', 'C03', 'cNB1', 2, 3);
+if (agA1.d) {
+  var freshMaint = agA1.d.maint;
+  ok(agA1.d.avgPlaneAge === 0, 'A1 新机队平均机龄为 0',
+    '实际 ' + agA1.d.avgPlaneAge);
+  /* 把该线两架机一起变老 50 季 */
+  agA1.st.planes.forEach(function (p) { if (p.routeKey === agA1.r.key) p.ageQ = 50; });
+  var agedA1 = S.settleRoute(agA1.st, agA1.r);
+  var ageK = C.maintAgePerQuarter == null ? 0.02 : C.maintAgePerQuarter;
+  near(agedA1.maint, freshMaint * (1 + ageK * 50), freshMaint * 0.01,
+    'A1 机龄 50 季 → 维护费 ×(1+0.02×50)');
+  ok(agedA1.cost > agA1.d.cost, 'A1 老机队使航线总成本上升',
+    Math.round(agA1.d.cost) + ' → ' + Math.round(agedA1.cost));
+  near(agedA1.fuel + agedA1.landing + agedA1.crew + agedA1.maint + agedA1.ownership,
+    agedA1.cost, 1e-6, 'A1 成本五项恒等仍成立（机龄折进 maint，未新开成本项）');
+  ok(agedA1.avgPlaneAge === 50, 'A1 结算结果带平均机龄（供 UI 提示）',
+    '实际 ' + agedA1.avgPlaneAge);
+} else {
+  ok(false, 'A1 用例前置条件失败', String(agA1.fail));
+}
+
+/* A0b 闲置机也要付持有成本（旧版只有 onGround>0 才收半价维护费） */
+var stIdle = st9('C01');
+var idleMul = C.idleOwnershipMul == null ? 0.5 : C.idleOwnershipMul;
+var holdRate = (C.ownershipPerQuarter == null ? 0.7 : C.ownershipPerQuarter) * idleMul;
+var expIdle = stIdle.planes.reduce(function (s, p) {
+  var T = AT.planeOf(p.type);
+  return s + T.upkeep * 0.5 + T.price * holdRate;
+}, 0);
+ok(S.idleGroundCostOf(stIdle) > 0, 'A0b 闲置机产生持有成本（>0）',
+  String(Math.round(S.idleGroundCostOf(stIdle))));
+near(S.idleGroundCostOf(stIdle), expIdle, 1e-6,
+  'A0b 闲置机 = upkeep×0.5 + 机价×持有率×idleOwnershipMul');
+var oldIdle = stIdle.planes.reduce(function (s, p) { return s + AT.planeOf(p.type).upkeep * 0.5; }, 0);
+ok(S.idleGroundCostOf(stIdle) > oldIdle, 'A0b 新口径高于旧的「只算停场维护」口径',
+  Math.round(oldIdle) + ' → ' + Math.round(S.idleGroundCostOf(stIdle)));
+/* 派上线的飞机不该被重复计入闲置成本 */
+var stIdle2 = st9('C01');
+var opIdle = S.openRoute(stIdle2, 'C01', 'C02', 'cRJ1', 1);
+if (opIdle.ok) {
+  deliverAll(stIdle2);
+  var freeIdle = S.idlePlanes(stIdle2);
+  if (freeIdle.length) S.assignPlane(stIdle2, freeIdle[0].id, opIdle.route.key);
+  var beforeCnt = stIdle2.planes.filter(function (p) { return !(p.routeKey && p.onGround <= 0); }).length;
+  ok(beforeCnt < stIdle2.planes.length, 'A0b 已执飞且未停场的飞机不计入闲置成本',
+    beforeCnt + ' / ' + stIdle2.planes.length);
+}
+
+/* A2 管理费随规模**超线性**增长（规模不经济） */
+var stOh = st9('C01');
+function fillTo(n) { var guard = 0; while (stOh.planes.length < n && guard++ < 300) S.buyPlane(stOh, 'cRJ1', 1); }
+fillTo(10); var oh10 = S.overheadOf(stOh);
+fillTo(20); var oh20 = S.overheadOf(stOh);
+fillTo(40); var oh40 = S.overheadOf(stOh);
+var ohBase = C.overheadBase == null ? 60 : C.overheadBase;
+ok((oh20 - ohBase) > 2 * (oh10 - ohBase), 'A2 机队翻倍 → 管理费增量超线性（指数 >1）',
+  Math.round(oh10) + ' → ' + Math.round(oh20));
+ok((oh40 - ohBase) > 2 * (oh20 - ohBase), 'A2 再翻倍仍超线性',
+  Math.round(oh20) + ' → ' + Math.round(oh40));
+ok(S.overheadOf(stOh) === oh40, 'A2 管理费只由机队规模决定（纯函数，无隐状态）');
+
+/* A2 同城自营航线越多 → 时刻槽位越紧 */
+var stSlot = st9('C01');
+var slotFreeA = S.routeSlots(stSlot, 'C01', 'C03');
+S.findCity(stSlot, 'C01').routes = 8;
+S.findCity(stSlot, 'C03').routes = 8;
+var slotBusyA = S.routeSlots(stSlot, 'C01', 'C03');
+ok(slotBusyA < slotFreeA, 'A2 同城堆线 → 槽位收紧',
+  slotFreeA.toFixed(1) + ' → ' + slotBusyA.toFixed(1));
+ok(slotBusyA >= C.slotMinPerDay, 'A2 收紧后仍不低于保底槽位', String(slotBusyA));
+
+/* D2 三维终局评价：效率分由最近 4 季平均净利率驱动 */
+var stV = st9('C01');
+function snap(net) {
+  return { quarter: 1, cash: 0, netWorth: 0, routes: 0, planes: 0, pax: 0,
+    net: net, revenue: 1000, cost: 1000 - net, overhead: 0, interest: 0, groundCost: 0 };
+}
+stV.history = [snap(0), snap(0), snap(0), snap(0)];
+var vLow = S.verdictDetail(stV);
+stV.history = [snap(250), snap(250), snap(250), snap(250)];      // 净利率 25%
+var vHigh = S.verdictDetail(stV);
+ok(vLow.eff === 0, 'D2 净利率 ≤ verdictEffFloor → 效率分 0', String(vLow.eff));
+ok(vHigh.eff === 1, 'D2 净利率 ≥ verdictEffFull → 效率分 1', String(vHigh.eff));
+var wS = C.verdictWScale == null ? 0.40 : C.verdictWScale;
+var wE = C.verdictWEff == null ? 0.35 : C.verdictWEff;
+var wC = C.verdictWCover == null ? 0.25 : C.verdictWCover;
+near(vHigh.score, wS * vHigh.scale + wE * vHigh.eff + wC * vHigh.cover, 1e-9,
+  'D2 综合分 = 规模×W + 效率×W + 覆盖×W');
+ok(vHigh.cover >= 0 && vHigh.cover <= 1, 'D2 覆盖分归一化到 [0,1]', String(vHigh.cover));
+/* 「大而低效」：规模满分（200 架）+ 零效率 → 综合分必须够不到巨企门槛 */
+for (var vpz = 0; vpz < 200; vpz++) {
+  stV.planes.push({ id: 'VT' + vpz, type: 'cRJ1', reg: 'VT', routeKey: null, ageQ: 0, onGround: 0 });
+}
+stV.history = [snap(0), snap(0), snap(0), snap(0)];
+var vBig = S.verdictDetail(stV);
+var gScore = C.verdictGiantScore == null ? 0.68 : C.verdictGiantScore;
+ok(vBig.scale === 1, 'D2 200 架 → 规模分封顶为 1', String(vBig.scale));
+ok(vBig.score < gScore, 'D2 「规模满分但零效率」综合分够不到巨企门槛',
+  vBig.score.toFixed(3) + ' < ' + gScore);
 
 /* ── 终局层 ── */
 section('终局层');
@@ -957,6 +1257,11 @@ function runTo(st, quarter) {
 
 /* ① 资格与报价：排名第 1 + 现金充足 → 可并购，报价 = 净资产 × 正常溢价 */
 var stAc = S.create({ seed: 7, homeCityId: 'C01' });
+/* ⚠ 2026-10-09：资本重新定价后（飞机持有成本 ×15.6、闲置机也计费），
+ *   「注资 + 什么都不做」的空转玩家会在 Q8 前烧穿现金退场，而本层想测的是
+ *   **并购资格与报价**，不是「空转能活几季」。故把注资提前到推进之前 ——
+ *   隔离财务因素，只保留「对手经过 8 季已开线」这个前提。 */
+stAc.cash = 1e9; stAc.debt = 0;
 runTo(stAc, 8);
 stAc.cash = 1e9; stAc.debt = 0;               // 净资产碾压 → 稳居第 1
 ok(S.ranking(stAc)[0].isPlayer, '① 现金 1e9 → 玩家位列第 1（取得并购资格）');

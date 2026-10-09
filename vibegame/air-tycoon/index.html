@@ -777,12 +777,17 @@
 <script src="assets/three.min.js"></script>
 <!-- 地球贴图内联版（file:// 下外链 jpg 会被 CORS 拒绝，见 tools/gen-earth-tex.js） -->
 <script src="assets/earth-tex.js"></script>
+<!-- 夜面城市灯光贴图内联版（同上，见 tools/gen-earth-night-tex.js） -->
+<script src="assets/earth-night-tex.js"></script>
 <!-- 能力检测最先行：给 <html> 挂 Chrome 61 降级 class，必须在首帧渲染前完成 -->
 <script src="src/compat.js"></script>
 <script src="src/data.js"></script>
 <script src="src/geo.js"></script>
 <!-- 海陆掩膜（布阵/城市地理判定用，Natural Earth 光栅化，离线内联） -->
 <script src="src/landmask.js"></script>
+<!-- 太阳位置（真实时间 → 日下点）：必须在 geo.js 之后（用 AT.geo.ll2v）、
+     render.js 之前（render.js 取它的 FALLBACK_SUN_DIR 且 init 时调 applySunAt）。 -->
+<script src="src/solar.js"></script>
 <script src="src/sim.js"></script>
 <!-- 自动存档（Storage JS API 优先，低版本降级 localStorage）：必须早于 game.js；
      它只依赖 sim.js（复原随机流），不依赖渲染/UI。 -->
@@ -819,7 +824,18 @@
       opts.companyName = '环球航空';
     }
     var ok = window.AT && window.AT.game && window.AT.game.init() && window.AT.game.boot(opts);
-    if (!ok) showFallback();
+    if (!ok) { showFallback(); return; }
+    /* 真实时间驱动的太阳下，基地约有**一半概率**落在夜面（见 src/solar.js）。
+     * 开局镜头对准的是基地，所以这时玩家第一眼看到的是一片夜面 ——
+     * 不解释的话会被读成「画面太黑/坏了」。这里给一句提示，把
+     * 「此刻你基地那半球是夜晚」这件事说清楚；不改太阳去迁就镜头，
+     * 否则「按真实时间」这个功能本身就失效了。 */
+    try {
+      var R = window.AT.render;
+      if (R && R.openAtNight && window.AT.ui && window.AT.ui.toast) {
+        window.AT.ui.toast('此刻你基地所在半球是夜晚，太阳在另一侧', 'warn');
+      }
+    } catch (e) { /* 提示失败不影响开局 */ }
   }
 
   /* 从自动存档接着跑（不建新局）。state 由 AT.save.load 复原（见下 start）。

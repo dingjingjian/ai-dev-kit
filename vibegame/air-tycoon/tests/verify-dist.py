@@ -166,6 +166,7 @@ async def check_runtime(tmp):
               })(),
               renderOk: !!(A.render && A.render.ok),
               texOk: !!(A.render && A.render.texOk),
+              nightOk: !!(A.render && A.render.nightOk),
               bloomOk: !!(A.render && A.render.bloomOk),
               gameRunning: !!g.running,
               airline: g.state ? g.state.airlineName : null,
@@ -194,11 +195,19 @@ async def check_runtime(tmp):
         ok(st["muteVisible"], "静音键在页面上可见可点")
         ok(st["renderOk"], "渲染器初始化成功（render.ok）")
         ok(st["texOk"], "**地球贴图真的加载了**（texOk —— 证明内联 data URI 在 file:// 下可用）")
+        # 夜景贴图是**第二个**内联 data URI，单独一个 assets/earth-night-tex.js。
+        # 它和音频那条是同一类风险：脚本漏挂 / 漏进包时，代码会优雅降级成
+        # 「夜面没有灯火」—— 不报错、不崩、console 干净，只是效果静默消失。
+        # 所以必须在提交包里点一次名。
+        ok(st["nightOk"], "**夜景贴图也加载了**（nightOk —— 夜面灯火不是静默降级）")
         ok(st["gameRunning"], "主循环在跑")
         ok(st["phase"] == "operating", "开局即运营阶段（简报已删）", st["phase"])
         ok(st["airline"], "所选航司已生效（state.airlineName 非空）", st["airline"])
         ok(st["homeCity"] == "C02", "航司基地即玩家基地（国航 → 北京 C02）", st["homeCity"])
-        ok(st["cityCount"] == 24, "24 座城市数据就位", st["cityCount"])
+        # ⚠ 2026-10-09 修正陈旧断言：城市在「城市扩容」那次改动里从 24 座
+        #   （6 地区 × 4）扩到 36 座（6 地区 × 6），tests/headless.js 早已断言 36，
+        #   只有本文件漏改 —— 属历史遗留的假红，与本次经济重定无关。
+        ok(st["cityCount"] == 36, "36 座城市数据就位", st["cityCount"])
         # 开局不送示范航线（seedFirstRoute 已移除）：第一条线开在哪由玩家自己决策，
         # 航线面板的空态文案（ui.js「还没有航线…」）负责引导第一步。
         ok(st["routes"] == 0, "开局 0 条航线（首个决策留给玩家）", st["routes"])

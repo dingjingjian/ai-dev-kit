@@ -860,6 +860,15 @@
         toast('已置换为 ' + res.to + '（' + res.count + ' 架，补差 ' + money(res.net) + '）', 'ok');
         dirty.panel = true; dirty.hud = true;
         break;
+      /* 整队换新（A1）：把该线老机整体换成同型号新机，维护费随之回落 */
+      case 'renew': {
+        res = S.renewRouteFleet(st, key);
+        if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
+        sfx('confirm');
+        toast('机队已换新：' + res.count + ' 架（补差 ' + money(res.net) + '）', 'ok');
+        dirty.panel = true; dirty.hud = true;
+        break;
+      }
       case 'close-route': {
         res = S.closeRoute(st, key);
         if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
@@ -1076,8 +1085,29 @@
       '<div><span>城市开发贡献</span><b>' + Math.round(st.stats.devPushed) + ' 点 · ' +
         st.stats.citiesUpgraded + ' 次升级</b></div>' +
       (first ? '<div><span>开局净资产</span><b>' + money(first.netWorth) + '</b></div>' : '') +
-      '</div>' +
-      '<div class="md-actions"><button class="btn btn-pri" data-act="restart" type="button">再来一局</button></div>';
+      '</div>';
+
+    /* ── 终局评分三维（D2，2026-10-09）──
+     * 旧的终局只给一个标签，「大而低效」与「精耕细作」拿同一个评价。
+     * 现在把规模 / 效率 / 覆盖三个分项与门槛摆出来，让玩家看懂差在哪 ——
+     * 这一条与「后期无脑堆线」是同一个问题的两端：没有目标，就没有取舍。 */
+    if (v.dims) {
+      var dm = v.dims;
+      var need = (C.verdictGiantScore == null ? 0.68 : C.verdictGiantScore);
+      html += '<div class="md-notes"><div>· 终局综合分 <b>' + dm.score.toFixed(2) +
+        '</b>（巨企门槛 ' + need.toFixed(2) + '：排名前 ' + (C.winRank || 3) +
+        ' 且综合分达标才算巨企，堆规模但效率低不再自动算巨企）</div>' +
+        '<div>· 效率按最近四季平均净利率 ' + (dm.margin * 100).toFixed(1) +
+        '% 折算（' + ((C.verdictEffFloor == null ? 0.08 : C.verdictEffFloor) * 100).toFixed(0) +
+        '% 以下记 0 分，' + ((C.verdictEffFull == null ? 0.20 : C.verdictEffFull) * 100).toFixed(0) +
+        '% 及以上记满分）</div></div>' +
+        '<div class="rc-bars">' +
+        bar('规模', dm.scale, 1, dm.scale.toFixed(2)) +
+        bar('效率', dm.eff, 1, dm.eff.toFixed(2)) +
+        bar('覆盖', dm.cover, 1, dm.cover.toFixed(2)) +
+        '</div>';
+    }
+    html += '<div class="md-actions"><button class="btn btn-pri" data-act="restart" type="button">再来一局</button></div>';
     openModal('over', html);
   }
 
@@ -1348,6 +1378,26 @@
         '<div class="cc-total"><span>合计支出</span><b>−' + money(d.cost) + '</b></div>' +
         '<div class="cc-total"><span>收入</span><b class="c-good">' + money(d.revenue) + '</b></div>' +
         '</div></div>';
+    }
+
+    /* ── 机队老化与整队换新（A1，2026-10-09）──
+     * 机龄会抬高维护费（sim 的 maintAgeF）。这里把「平均机龄 → 维护上浮比例」
+     * 与「整队换新的补差价 / 回本期」摆在同一处 —— 换不换由玩家按回本期判断，
+     * 而不是给一个隐含的自动兜底。 */
+    var rn = S.renewInfo(st, r.key);
+    if (d && d.avgPlaneAge >= 6 && rn.ok) {
+      var affordRn = st.cash >= rn.net;
+      out += '<div class="rd-sec"><div class="rd-h">机队老化</div><div class="rd-note">' +
+        '该线平均机龄 <b>' + Math.round(d.avgPlaneAge) + ' 季</b>，维护费已上浮 ' +
+        Math.round((d.maintAgeF - 1) * 100) + '%' +
+        (isFinite(rn.payback)
+          ? '；整队换新 ' + rn.count + ' 架需补差 ' + money(rn.net) + '，每季省维护 ' +
+            money(Math.round(rn.savedPerQuarter)) + '，回本约 ' + rn.payback.toFixed(1) + ' 季'
+          : '；整队换新当前不划算（节省不足以回本）') +
+        '</div>' +
+        '<button class="btn' + (affordRn ? '' : ' dis') + '"' + (affordRn ? '' : ' disabled') +
+        ' data-act="renew" data-key="' + h(r.key) + '" type="button">整队换新 · ' +
+        rn.count + ' 架（补差 ' + money(rn.net) + '）</button></div>';
     }
 
     out += '<div class="rd-sec"><button class="btn btn-danger" data-act="close-route" data-key="' +
