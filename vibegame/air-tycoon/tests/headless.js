@@ -1009,6 +1009,26 @@ S.advance(stP, (C.quarterSeconds || 60) + 1);
 ok(stP.quarter === qBeforeP + 1, '恢复后季度正常推进一季',
   '实际 Q' + stP.quarter + ' 期望 Q' + (qBeforeP + 1));
 
+/* 事件卡未决时同样冻结回合计时 —— 而且是**真正冻结 t**（不只是不结算）。
+ * ⚠ 旧实现的 `t += dt` 写在 card 判定之前：读卡这段时间 t 照常累满，
+ *   玩家一决策完，下一季立刻结算（等于白送一季）。这条断言把 t 钉住。 */
+var stPC = st9('C01');
+stPC.t = 0;                       // 从季度初起算，便于断言「拿到完整的一季」
+stPC.card = AT.EVENTS[0];
+var qBeforeC = stPC.quarter;
+S.advance(stPC, (C.quarterSeconds || 22) * 3);
+near(stPC.t, 0, 1e-9, '事件卡未决时 t 完全冻结（不结算，也不累加）');
+ok(stPC.quarter === qBeforeC, '事件卡未决时季度不推进',
+  '实际 Q' + stPC.quarter + ' 期望 Q' + qBeforeC);
+/* 清卡后必须拿到**完整**的一季（而不是「刚决策完下一季就跳掉」） */
+S.chooseEvent(stPC, 0);
+S.advance(stPC, (C.quarterSeconds || 22) - 1);
+ok(stPC.quarter === qBeforeC, '清卡后仍有一整季可用（不跳季）',
+  '实际 Q' + stPC.quarter + ' 期望 Q' + qBeforeC);
+S.advance(stPC, 2);
+ok(stPC.quarter === qBeforeC + 1, '清卡后走满一季才推进',
+  '实际 Q' + stPC.quarter + ' 期望 Q' + (qBeforeC + 1));
+
 /* ── 单航线架数上限（槽位容不下就拒绝派机）──
  *
  * 为什么单列一节：这是「玩家的钱被悄悄吃掉」的防线。此前 assignPlane 不校验架数，
@@ -1178,7 +1198,7 @@ function freeState(home) {
 }
 
 /* ② 开线门槛：777（cWB2，需两端 Lv4）不能飞 Lv2—Lv3 的线。
- *    C28 胡志明市（dev0=34→Lv2）× C25 广州（dev0=58→Lv3），两端最低 Lv2 < 4。 */
+ *    C28 胡志明市（dev0=34→Lv2）× C25 武汉（dev0=57→Lv3），两端最低 Lv2 < 4。 */
 var stG = freeState('C28');
 S.buyPlane(stG, 'cWB2', 1); deliverAll(stG);
 var oG1 = S.openRoute(stG, 'C28', 'C25', 'cWB2', 1);

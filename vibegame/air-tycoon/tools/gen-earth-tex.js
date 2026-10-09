@@ -21,8 +21,14 @@ var path = require('path');
 
 var ROOT = path.join(__dirname, '..');
 var PORT = 8734;
-var W = parseInt(process.argv[2], 10) || 1536;      // 等距圆柱贴图宽度，高恒为其一半
-var Q = parseFloat(process.argv[3]) || 0.85;        // JPEG 编码质量
+/* ⚠ 默认 2048 / q0.90（2026-10-09 由 1536 / q0.85 上调）。
+ *   旧默认是「体积换质量」的取舍，但实测**分辨率才是主项**：同一 q0.85 下
+ *   1536→2048 把 PSNR（升回原尺寸对照原图）从 30.67 抬到 37.08 dB（+6.4），
+ *   而在 1536 上把 q 从 0.85 提到 0.92 只 +0.7 dB。当前 air-tycoon.zip 才 507 KB、
+ *   build.config 的 maxZipBytes 是 10 MB，一次 +400 KB 完全付得起。
+ *   2048 已是源图原生分辨率（再大没有信息量），q0.90 下 earth-tex.js ≈ 510 KB。 */
+var W = parseInt(process.argv[2], 10) || 2048;      // 等距圆柱贴图宽度，高恒为其一半
+var Q = parseFloat(process.argv[3]) || 0.90;        // JPEG 编码质量
 var SRC = 'assets/earth.jpg';
 var OUT = 'assets/earth-tex.js';
 
@@ -44,16 +50,40 @@ function serve() {
   });
 }
 
-var PLAYWRIGHT = 'C:/Users/ASUS/.workbuddy/binaries/node/workspace/node_modules/playwright';
-var EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+/* Playwright 的解析顺序（2026-10-09 由写死一条绝对路径改成多候选）：
+ *   ① 环境变量 AT_PLAYWRIGHT —— 本机把 playwright-core 装在临时目录时用
+ *      （`npm i --prefix <dir> playwright-core` + `NODE_PATH=<dir>/node_modules`），
+ *      不必往这个「零依赖」仓库里塞 node_modules；
+ *   ② 常规模块名（NODE_PATH / 本地 node_modules 命中）；
+ *   ③ 历史写死路径，保留以免老机器上的既有用法失效。
+ * ⚠ 浏览器用 Edge（executablePath），所以只需要 playwright(-core) 这个 JS 包，
+ *   不需要它自带下载 Chromium。 */
+function loadPlaywright() {
+  var cands = [
+    process.env.AT_PLAYWRIGHT,
+    'playwright-core',
+    'playwright',
+    'C:/Users/ASUS/.workbuddy/binaries/node/workspace/node_modules/playwright'
+  ];
+  for (var i = 0; i < cands.length; i++) {
+    if (!cands[i]) continue;
+    try { return require(cands[i]); } catch (e) { /* 试下一个 */ }
+  }
+  return null;
+}
+var EDGE = process.env.AT_EDGE ||
+  'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
 
 (async function () {
   if (!fs.existsSync(path.join(ROOT, SRC))) {
     console.error('找不到源图 ' + SRC); process.exit(1);
   }
-  var pw;
-  try { pw = require(PLAYWRIGHT); }
-  catch (e) { console.error('缺少 Playwright，无法生成内联贴图'); process.exit(1); }
+  var pw = loadPlaywright();
+  if (!pw) {
+    console.error('缺少 Playwright —— 装一个即可：npm i --prefix <dir> playwright-core，'
+      + ' 再 NODE_PATH=<dir>/node_modules node tools/gen-earth-tex.js');
+    process.exit(1);
+  }
 
   var srv = await serve();
   var browser = await pw.chromium.launch({
@@ -96,7 +126,9 @@ var EDGE = 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
     ' * data URI 不受 CORS 约束，且走 <script src> 而非 fetch，不违反小工具红线。\n' +
     ' *\n' +
     ' * 源图 ' + dataUrl.ow + '×' + dataUrl.oh + ' → 内联 ' + dataUrl.w + '×' + dataUrl.h +
-    '（球在屏幕上直径约 500–700px，此分辨率足够，体积只有原图的四成）。\n' +
+    (dataUrl.w < dataUrl.ow
+      ? '（球在屏幕上直径约 500–700px，此分辨率足够）'
+      : '（已是源图原生分辨率，再大没有信息量）') + '。\n' +
     ' * render.js 的加载顺序：内联 data URI → assets/earth.jpg → 纯色球体。\n' +
     ' */\n' +
     '(function (global) {\n' +

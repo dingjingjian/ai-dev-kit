@@ -521,8 +521,11 @@
     { code: 'NAMER',  name: '北美',     demandMul: 1.16, costMul: 1.12, hubBonus: 1.10, color: '#378ADD' },
     { code: 'MIDEAST',name: '中东',     demandMul: 1.05, costMul: 0.92, hubBonus: 1.14, color: '#7F77DD' },
     /* 第 6 个地区是「五大区域之外」的兜底聚类：悉尼 / 约翰内斯堡 / 圣保罗 / 内罗毕
-     * —— 四城纬度全在南半球（-1° ~ -34°）。命名为「南半球」而不是「其他地区」：
-     * 「其他」是个占位词，玩家读到会以为没做完（用户 2026-09-30 指出的正是这一点）。
+     * / 拉各斯 / 波哥大。命名为「南半球」而不是「其他地区」：「其他」是个占位词，
+     * 玩家读到会以为没做完（用户 2026-09-30 指出的正是这一点）。
+     * ⚠ 2026-10-09 城市表调整后不再是「六城纬度全为负」：为补上非洲西部机场换入
+     *   拉各斯（6.5°N）与波哥大（4.7°N）—— 两城都紧贴赤道、同属该经济聚类（低需求 /
+     *   低成本的南半球与近赤道市场），显示名仍沿用「南半球」。
      * ⚠ 代号仍是 OTHER（代码与存档口径不变），只换显示名。 */
     { code: 'OTHER',  name: '南半球',   demandMul: 0.92, costMul: 0.94, hubBonus: 1.00, color: '#888780' }
   ];
@@ -646,6 +649,18 @@
    * 城市是经营的**目标池**，6 座/地区既撑得起多样化的枢纽网络，又不至于让开局
    * 选择过载。地区划分纯为经济地理聚类（见 §2），不含任何政治含义。
    *
+   * 2026-10-09（第二轮）「等距 + 补缺」微调（用户反馈：香港与广州太近；南美北部 /
+   *   非洲西部 / 俄罗斯没有机场）。**总数与地区配额不变（仍 36 座、每地区 6 座）**，
+   *   只换城市、沿用原 id 号 —— 于是每座新城的等级与 hub 数与旧城一一对应，平衡不漂移：
+   *     广州→武汉（原距香港 130km）、吉隆坡→仰光（原距新加坡 309km）、
+   *     阿布扎比→德黑兰（原距迪拜 123km / 多哈 302km）、
+   *     阿姆斯特丹→莫斯科（原距伦敦 358km / 法兰克福 364km，兼补俄罗斯缺口）、
+   *     奥克兰→拉各斯（补非洲西部）、布宜诺斯艾利斯→波哥大（补南美北部）。
+   *   ⚠ 有意保留的近似对：伦敦—巴黎（343km）与迪拜—多哈（376km）是各洲无可替换的
+   *     标志性双枢纽，靠得近但仍是两座不同的城市，地图上可分辨，故不动。
+   *   ⚠ 被换下的 6 座城在测试 / 工具里的引用已同步（fit-demand 的吉隆坡样本会因
+   *     缺城被跳过，与既有的「大阪 / 台北 / 吉达」样本同处理）。
+   *
    * ⚠⚠ dev0 重排（2026-10-09，与本次「等级约束」配套，勿轻易改回）
    *   旧表 24 城中已有 15 座起始即 Lv5（dev0 ≥ 80）—— 「等级」几乎不构成约束，
    *   导致新加的「每城航线上限」「大机型需高等级城市」两条规则形同虚设。
@@ -670,7 +685,7 @@
     { id: 'C02', region: 'EASIA',  name: '北京',   lat: 39.90, lon: 116.41, pop: 21.9, dev0: 77, wealth: 1.32, hub: true  },
     { id: 'C03', region: 'EASIA',  name: '东京',   lat: 35.68, lon: 139.65, pop: 37.4, dev0: 83, wealth: 1.42, hub: true  },
     { id: 'C04', region: 'EASIA',  name: '首尔',   lat: 37.57, lon: 126.98, pop: 25.6, dev0: 76, wealth: 1.28, hub: true  },
-    { id: 'C25', region: 'EASIA',  name: '广州',   lat: 23.13, lon: 113.26, pop: 18.7, dev0: 58, wealth: 1.24, hub: false },
+    { id: 'C25', region: 'EASIA',  name: '武汉',   lat: 30.59, lon: 114.31, pop: 13.6, dev0: 57, wealth: 1.20, hub: false },
     { id: 'C26', region: 'EASIA',  name: '香港',   lat: 22.32, lon: 114.17, pop: 7.5,  dev0: 74, wealth: 1.46, hub: true  },
 
     /* ── 东南亚 SEASIA ── */
@@ -678,15 +693,15 @@
     { id: 'C06', region: 'SEASIA', name: '曼谷',   lat: 13.76, lon: 100.50, pop: 10.7, dev0: 65, wealth: 0.96, hub: false },
     { id: 'C07', region: 'SEASIA', name: '雅加达', lat: -6.21, lon: 106.85, pop: 10.6, dev0: 59, wealth: 0.88, hub: false },
     { id: 'C08', region: 'SEASIA', name: '马尼拉', lat: 14.60, lon: 120.98, pop: 13.9, dev0: 56, wealth: 0.84, hub: false },
-    { id: 'C27', region: 'SEASIA', name: '吉隆坡', lat: 3.14,  lon: 101.69, pop: 8.4,  dev0: 52, wealth: 1.06, hub: true  },
+    { id: 'C27', region: 'SEASIA', name: '仰光',   lat: 16.87, lon: 96.20,  pop: 5.4,  dev0: 52, wealth: 0.78, hub: true  },
     { id: 'C28', region: 'SEASIA', name: '胡志明市',lat: 10.82, lon: 106.63, pop: 9.0,  dev0: 34, wealth: 0.78, hub: false },
 
-    /* ── 西欧 EUR ── */
+    /* ── 西欧 EUR（莫斯科地理上属欧洲，归入此区）── */
     { id: 'C09', region: 'EUR',    name: '伦敦',   lat: 51.51, lon: -0.13,  pop: 9.6,  dev0: 85, wealth: 1.48, hub: true  },
     { id: 'C10', region: 'EUR',    name: '巴黎',   lat: 48.86, lon: 2.35,   pop: 11.1, dev0: 81, wealth: 1.40, hub: true  },
     { id: 'C11', region: 'EUR',    name: '法兰克福',lat: 50.11,lon: 8.68,   pop: 5.6,  dev0: 77, wealth: 1.44, hub: true  },
     { id: 'C12', region: 'EUR',    name: '伊斯坦布尔',lat: 41.01,lon: 28.98,pop: 15.8, dev0: 67, wealth: 0.92, hub: true  },
-    { id: 'C29', region: 'EUR',    name: '阿姆斯特丹',lat: 52.37,lon: 4.90, pop: 2.5,  dev0: 70, wealth: 1.44, hub: true  },
+    { id: 'C29', region: 'EUR',    name: '莫斯科', lat: 55.75, lon: 37.62,  pop: 12.6, dev0: 72, wealth: 1.16, hub: true  },
     { id: 'C30', region: 'EUR',    name: '马德里', lat: 40.42, lon: -3.70,  pop: 6.7,  dev0: 58, wealth: 1.20, hub: false },
 
     /* ── 北美 NAMER ── */
@@ -702,16 +717,16 @@
     { id: 'C18', region: 'MIDEAST',name: '多哈',   lat: 25.29, lon: 51.53,  pop: 2.4,  dev0: 74, wealth: 1.42, hub: true  },
     { id: 'C19', region: 'MIDEAST',name: '开罗',   lat: 30.04, lon: 31.24,  pop: 21.3, dev0: 54, wealth: 0.78, hub: false },
     { id: 'C20', region: 'MIDEAST',name: '孟买',   lat: 19.08, lon: 72.88,  pop: 20.7, dev0: 58, wealth: 0.82, hub: false },
-    { id: 'C33', region: 'MIDEAST',name: '阿布扎比',lat: 24.45,lon: 54.38,  pop: 1.5,  dev0: 68, wealth: 1.48, hub: true  },
+    { id: 'C33', region: 'MIDEAST',name: '德黑兰', lat: 35.69,lon: 51.39,  pop: 9.1,  dev0: 66, wealth: 0.80, hub: true  },
     { id: 'C34', region: 'MIDEAST',name: '利雅得', lat: 24.71, lon: 46.68,  pop: 7.7,  dev0: 38, wealth: 1.02, hub: false },
 
-    /* ── 南半球 OTHER（大洋洲 / 非洲 / 南美）：六城纬度全为负 ── */
+    /* ── 南半球 OTHER（大洋洲 / 非洲 / 南美）：拉各斯 / 波哥大紧贴赤道 ── */
     { id: 'C21', region: 'OTHER',  name: '悉尼',   lat: -33.87,lon: 151.21, pop: 5.3,  dev0: 76, wealth: 1.32, hub: true  },
     { id: 'C22', region: 'OTHER',  name: '约翰内斯堡',lat:-26.20,lon: 28.05,pop: 6.0,  dev0: 56, wealth: 0.86, hub: false },
     { id: 'C23', region: 'OTHER',  name: '圣保罗', lat: -23.55,lon: -46.63, pop: 22.4, dev0: 63, wealth: 0.88, hub: true  },
     { id: 'C24', region: 'OTHER',  name: '内罗毕', lat: -1.29, lon: 36.82,  pop: 5.1,  dev0: 50, wealth: 0.74, hub: false },
-    { id: 'C35', region: 'OTHER',  name: '奥克兰', lat: -36.85,lon: 174.76, pop: 1.7,  dev0: 54, wealth: 1.26, hub: true  },
-    { id: 'C36', region: 'OTHER',  name: '布宜诺斯艾利斯',lat: -34.60,lon: -58.38,pop: 15.4, dev0: 56, wealth: 0.86, hub: true }
+    { id: 'C35', region: 'OTHER',  name: '拉各斯', lat: 6.52,  lon: 3.38,   pop: 15.4, dev0: 48, wealth: 0.74, hub: true  },
+    { id: 'C36', region: 'OTHER',  name: '波哥大', lat: 4.71,  lon: -74.07, pop: 11.3, dev0: 58, wealth: 0.82, hub: true }
   ];
 
   /* ───────────────────────── 4. 机型（13 款）─────────────────────────

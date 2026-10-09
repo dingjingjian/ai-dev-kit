@@ -220,7 +220,9 @@
      *   根因：只飞到「本地小口袋」的近邻会钻进死胡同，网络无法继续生长。
      *   → 现改为：若母城周边（POCKET 内）凑不齐 2 个枢纽，说明它处在一个孤立小口袋，
      *     兜底必须保证能买到**跳出本地口袋**（到达 POCKET 外最近枢纽）的远程机。
-     *   枢纽群茂密的母城（如东京、纽约）不受影响，所需资金本就很小。 */
+     *   枢纽群茂密的母城（如东京、纽约）不受影响，所需资金本就很小。
+     *   ⚠ 2026-10-09 城市表调整后布宜诺斯艾利斯已被波哥大替换（见 data.js §3）：
+     *     圣保罗周边 4000km 内再无其它枢纽 → 走「孤立口袋」分支，逻辑无需改动。 */
     var POCKET_KM = 4000;
     rivals.forEach(function (r) {
       var home = null;
@@ -2900,13 +2902,16 @@
     dt = (dt == null) ? TICK : dt;
 
     if (state.phase === 'operating') {
-      /* 面板打开（paused）时冻结回合计时 —— 玩家在读航线详情、挑目的地、
-       * 算钱的时候，时间不该继续走。 */
+      /* 面板 / 季报弹窗（paused）时冻结回合计时 —— 玩家在读航线详情、挑目的地、
+       * 算钱、看季报的时候，时间不该继续走。 */
       if (state.paused) return state;
-      state.t += dt;
-      /* 有未处理的事件卡时暂停回合计时 —— 玩家要先做出决策才能继续，
-       * 否则「事件卡弹出 → 玩家还在读 → 回合已经跳过了」的体验很糟。 */
+      /* 有未处理的事件卡时冻结回合计时 —— 玩家要先做出决策才能继续，
+       * 否则「事件卡弹出 → 玩家还在读 → 回合已经跳过了」的体验很糟。
+       * ⚠ 这一判必须在 `t += dt` **之前**：写在累加之后只是「不结算」，
+       *   读卡这段时间照样把 t 累满，玩家一决策完下一季就**瞬间**结算（白送一季）。
+       *   挪到前面才是真正的冻结。 */
       if (state.card) return state;
+      state.t += dt;
       if (state.t >= (CONFIG.quarterSeconds || 22)) {
         state.t = 0;
         resolveQuarter(state);
@@ -2945,7 +2950,7 @@
     /* 暂停时拒绝推进：本函数是「跳过本回合」的对外接口（当前 UI 未接线，由
      * 测试与脚本调用）。若不拒绝，调用方会拿到 ok:true 而季度纹丝不动 ——
      * 返回值与实际效果自相矛盾，比直接拒绝更难排查。 */
-    if (state.paused) return { ok: false, reason: '面板打开中，请先关闭面板' };
+    if (state.paused) return { ok: false, reason: '面板或弹窗打开中，请先关闭' };
     if (state.card) return { ok: false, reason: '有未处理的事件卡' };
     state.t = (AT.CONFIG.quarterSeconds || 22);
     tick(state, TICK);

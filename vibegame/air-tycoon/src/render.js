@@ -617,7 +617,10 @@
     try {
       new THREE.TextureLoader().load(src, function (tex) {
         if (THREE.sRGBEncoding !== undefined) tex.encoding = THREE.sRGBEncoding;
-        tex.anisotropy = quality ? 4 : 1;
+        /* 各向异性取硬件上限（2026-10-09 由固定 4 改）：球面靠近轮廓处是极端斜视，
+         * 4 档会把海岸线糊成一条渐变带 —— 同源的 vibeknow/nobel-atlas 一直用
+         * maxAnisotropy，这也是本作「看着比它糊」的原因之一。低画质档仍取 1（省带宽优先）。 */
+        tex.anisotropy = quality ? (renderer.capabilities.getMaxAnisotropy() || 1) : 1;
         mat.map = tex;
         mat.color.setHex(0xffffff);    // 原色：贴图不再叠冷蓝
         mat.needsUpdate = true;
@@ -773,7 +776,7 @@
     try {
       new THREE.TextureLoader().load(src, function (tex) {
         /* ⚠ 刻意**不**设 tex.encoding —— ShaderMaterial 原始取样，见函数头注释 ②。 */
-        tex.anisotropy = quality ? 4 : 1;
+        tex.anisotropy = quality ? (renderer.capabilities.getMaxAnisotropy() || 1) : 1;
         nightMat.uniforms.uMap.value = tex;
         nightMat.needsUpdate = true;
         nightMesh.visible = true;

@@ -154,7 +154,7 @@ var missing = ROUTES.filter(function (r) { return !CITIES[r[0]] || !CITIES[r[1]]
 if (missing.length) {
   console.error('探针失效：以下航线引用了不存在的城市 id → '
     + missing.map(function (r) { return r[0] + '-' + r[1]; }).join(', '));
-  console.error('（可用的城市 id 形如 C01…C24，请核对 src/data.js）');
+  console.error('（可用的城市 id 形如 C01…C36，请核对 src/data.js）');
   process.exit(4);
 }
 if (ROUTES.length < 6) {

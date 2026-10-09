@@ -21,6 +21,8 @@
 
 用法：python tools/make_night_texture.py
 """
+import base64
+import re
 import sys
 import urllib.request
 from pathlib import Path
@@ -42,10 +44,18 @@ W_OUT, H_OUT = 2048, 1024
 WARM_FLOOR = 0.004        # 暖度下限：低于它的都算地表蓝调底噪
 WARM_GAIN = 9.0           # 暖度映射增益：暖度 0.004+1/9 ≈ 0.115 起满亮
 BOOST = 2.3               # 整体提亮：原图灯光峰值也不过 0.5 上下，不提亮在几百像素的地球上几乎看不见
-GLOW = ((7, 1.00), (26, 0.80), (70, 0.50), (150, 0.28), (260, 0.14))
-# 多重晕开：(半径, 权重)。近几档把单像素灯点铺成一团小光斑，远两档（150 / 260）
-# 让同一片城市群连成一块发亮的地带——手机上地球只有一百多 CSS 像素宽，
-# 只有「块」看得出是城市，单像素的「点」到了屏幕上就没了。
+GLOW = ((5, 1.00), (16, 0.90), (40, 0.50), (80, 0.22))
+# 多重晕开：(半径, 权重)。近三档把单像素灯点铺成一团小光斑、把同一片城市群连成
+# 一块发亮的地带——手机上地球只有一百多 CSS 像素宽，只有「块」看得出是城市，
+# 单像素的「点」到了屏幕上就没了。
+#
+# ⚠ 2026-10-09 大幅收紧（原为 (7,1.00)(26,0.80)(70,0.50)(150,0.28)(260,0.14)）：
+#   原配方在 4096 宽的源图上最大半径 260px = **22.9°≈2500km**，等于把「城市块」
+#   直接糊成「整片海都在发光」—— 实测近海水面平均亮度被抬到东海 0.043 / 日本海 0.036 /
+#   美东近海 0.052 / 地中海西 0.059（P90 0.11），与「关灯对照帧」一比肉眼即见。
+#   现最大 62px = 5.45°≈600km：390 宽的手机屏上约 23px（1° ≈ 4.2px），
+#   刚好是「一块看得见的城市群」，不会再淹掉邻海。半径是这次的关键量，权重只调幅。
+#   改完务必重跑 tests/smoke-render.py 的夜景探针（灯火核心亮度 / litFrac 都要复核）。
 TINT = (1.0, 0.87, 0.64)  # 烘进贴图的暖金色（app.js 侧还会再乘一层极淡的 tint）
 
 if not SRC.exists():
@@ -66,6 +76,39 @@ glow = sig.copy()
 for r, w in GLOW:
     glow += w * (np.asarray(s.filter(ImageFilter.GaussianBlur(r))).astype(np.float32) / 255.0)
 out = np.clip(glow, 0, 1)
+
+
+def land_gate(h, w):
+    """把灯火限制在陆地上（与 src/landmask.js 同一份 1° 掩膜）。
+
+    ⚠ 2026-10-09 加。起因：实机看夜面「大海都是亮的」。查下来是两个来源叠加：
+      ① 大半径高斯把近岸城市糊向海面（旧配方最大半径 260px = 22.9°≈2500km）；
+      ② 更主要的 —— 原图（NASA 黑大理石）**海上本来就有大片暖色像素**：东亚 / 黄海 /
+         日本海的渔船编队是黑大理石里最著名的海上光源。所以只收紧半径治不了本：
+         实测东海水面平均亮度 0.043→0.046，纹丝不动（那些亮像素本来就在水里）。
+    做法：先向海「膨胀」1 格（≈111km）—— 1° 掩膜的格心常落在海里，而曼哈顿 / 伦敦 /
+      上海这类贴海岸的大城恰好压在这种格上，不膨胀会把它们的核心一起削掉；再轻微模糊
+      给出海岸线外侧约一格的柔和过渡，避免 1° 网格被放大成方块边；最后上采样到源图
+      分辨率，乘在**晕开之后**的结果上。
+    ⚠ 顺序不能反：先门控再晕开，灯光会从岸边渗回海里 —— 等于没做。
+    """
+    txt = (ROOT / 'src' / 'landmask.js').read_text(encoding='utf-8')
+    b64 = re.search(r"var BITS = '([A-Za-z0-9+/=]+)'", txt).group(1)
+    bits = np.unpackbits(np.frombuffer(base64.b64decode(b64), dtype=np.uint8))[:360 * 180]
+    m = bits.reshape(180, 360).astype(np.float32)          # 1 = 陆地，行 0 = 北纬 90°
+    grown = m.copy()
+    for dy in (-1, 0, 1):
+        for dx in (-1, 0, 1):
+            grown = np.maximum(grown, np.roll(np.roll(m, dy, 0), dx, 1))
+    g = Image.fromarray((grown * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(0.8))
+    g = g.resize((w, h), Image.BILINEAR)
+    return np.asarray(g, dtype=np.float32) / 255.0
+
+
+gate = land_gate(out.shape[0], out.shape[1])
+print("陆地门：非黑像素 %.3f%% → 门控后 %.3f%%"
+      % (100.0 * (out > 0.02).mean(), 100.0 * ((out * gate) > 0.02).mean()))
+out = out * gate
 
 rgb = np.stack([out * TINT[0], out * TINT[1], out * TINT[2]], axis=2)
 img = Image.fromarray((np.clip(rgb, 0, 1) * 255.0 + 0.5).astype(np.uint8)).resize((W_OUT, H_OUT), Image.LANCZOS)

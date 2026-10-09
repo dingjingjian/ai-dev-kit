@@ -7,8 +7,10 @@
  * ── 架构：HUD + 抽屉 + 模态层（三层，各有明确职责）──
  *   HUD    —— 常驻读数（资金/净资产/排名/回合/计时）。每帧刷新，只改 textContent。
  *   抽屉   —— 左下按钮打开的面板：航线列表、机队、开新线。**打开时暂停回合计时**
- *             （见 pauseForPanel；2026-09-27 起，此前是不阻塞）。
- *   模态   —— 事件卡、季报、终局。**阻塞回合计时**，必须处理完才能继续。
+ *             （见 syncClockPause；2026-09-27 起，此前是不阻塞）。
+ *   模态   —— 事件卡、季报、终局。**都冻结回合计时**：事件卡由 sim 的 state.card 冻结；
+ *             季报由 syncClockPause 冻结（2026-10-09 修：此前季报在屏时计时照走，
+ *             玩家读完一屏季报，下一季已经自己跑掉了）；终局 phase='over' 时 tick 早退。
  *
  * ── 为什么事件卡必须阻塞 ──
  *   sim 的 tick 里有 `if (state.card) return state`，事件卡未决策时不推进回合。
@@ -682,11 +684,19 @@
     else openPanel(name);
   }
 
-  /* 面板打开 = 暂停回合计时（2026-09-27 用户要求：在底部面板里操作时不该被计时催）。
+  /* 回合计时暂停的唯一入口（2026-09-27 加「面板」；2026-10-09 扩到「季报」）。
+   *
+   * 判据 = 抽屉面板打开 ∨ 阻塞型模态（季报）在屏上：
+   *   · 事件卡不在这里管 —— sim 的 state.card 已冻结计时（见 sim.tick）；
+   *   · 终局（phase='over'）tick 本就早退，也不必管。
+   *
+   * ⚠ 做成「每次现算」而不是各处 setPaused(true/false)：面板与季报是两条独立开关，
+   *   各写各的话，后关的那个会把另一个的暂停一起解掉。syncClockPause() 只回答
+   *   「此刻该不该暂停」，任何一处开关变化都收敛到同一个答案。
    * 走 sim 的 setPaused 而不是直接写 state.paused —— 维持「UI 只调 sim 接口」的约定，
    * 也让这条链路能被无头测试断言（tests/headless.js 的暂停层）。 */
-  function pauseForPanel(on) {
-    if (S && S.setPaused) S.setPaused(ui.state, on);
+  function syncClockPause() {
+    if (S && S.setPaused) S.setPaused(ui.state, !!(ui.panel || ui.modal === 'report'));
   }
 
   function openPanel(name) {
@@ -718,7 +728,7 @@
     }
     if (el.uPanel) el.uPanel.classList.add('show');
     syncTabs();
-    pauseForPanel(true);
+    syncClockPause();
     dirty.panel = true;
     dirty.hud = true;
   }
@@ -729,7 +739,7 @@
     ui.selRoute = null;       // 航线行展开态同理（openPanel 打开时也会再兜一次）
     if (el.uPanel) el.uPanel.classList.remove('show');
     syncTabs();
-    pauseForPanel(false);
+    syncClockPause();
     dirty.hud = true;
   }
 
@@ -985,15 +995,14 @@
       var okc = S.chooseEvent(ui.state, +val);
       if (!okc) { sfx('deny'); toast('选项无效', 'bad'); return; }
       sfx('confirm');
-      ui.modal = null;
-      if (el.uModal) el.uModal.classList.remove('show');
+      closeModal();
       dirty.hud = true;
       toast('决策已生效', 'ok');
     } else if (act === 'close-report') {
       sfx('click');
       ui.reports.shift();
       if (ui.reports.length) showReport(ui.reports[0]);
-      else { ui.modal = null; if (el.uModal) el.uModal.classList.remove('show'); }
+      else closeModal();
     } else if (act === 'restart') {
       sfx('click');
       global.location.reload();
@@ -1004,6 +1013,16 @@
     ui.modal = kind;
     if (el.uModalBody) el.uModalBody.innerHTML = html;
     if (el.uModal) el.uModal.classList.add('show');
+    syncClockPause();      // 季报在屏 = 冻结回合计时（事件卡另有 sim 的 state.card 兜底）
+  }
+
+  /* 关模态：摘 ui.modal、收掉遮罩，并重算一次计时暂停。
+   * 三处关模态（事件选项 / 季报读完 / 队列清空的兜底）以前各写一遍这三个动作；
+   * 漏掉 syncClockPause 会留下「关掉季报后计时还冻着」这类静默 bug，故收敛到这一处。 */
+  function closeModal() {
+    ui.modal = null;
+    if (el.uModal) el.uModal.classList.remove('show');
+    syncClockPause();
   }
 
   /* 事件卡：sim 把当前卡挂在 state.card 上（直接是事件对象本身）。
@@ -1815,8 +1834,7 @@
     if (ui.reports.length && ui.modal !== 'report') {
       showReport(ui.reports[0]);
     } else if (!ui.reports.length && ui.modal === 'report') {
-      ui.modal = null;
-      if (el.uModal) el.uModal.classList.remove('show');
+      closeModal();
     }
   }
 
