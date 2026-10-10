@@ -1283,14 +1283,16 @@
     var savedScroll = el.uPanelBody.scrollTop;
     el.uPanelBody.innerHTML = html;
 
-    /* 展开航线后把该航线卡片滚到面板顶部（详情紧随其后） */
+    /* 展开航线后把展开详情区滚到面板顶部（而非航线卡片本身，否则详情被推到卡片下方） */
     if (ui.scrollRoute) {
       var rk2 = ui.scrollRoute;
       ui.scrollRoute = null;
       var card = el.uPanelBody.querySelector('[data-act="sel-route"][data-key="' + rk2 + '"]');
       if (card) {
+        var detail = card.nextElementSibling;
+        var target = (detail && detail.classList.contains('rdetail')) ? detail : card;
         var cbr = el.uPanelBody.getBoundingClientRect();
-        var csr = card.getBoundingClientRect();
+        var csr = target.getBoundingClientRect();
         el.uPanelBody.scrollTop = (csr.top - cbr.top) - 6;
       } else {
         el.uPanelBody.scrollTop = savedScroll;
