@@ -95,8 +95,9 @@
    * ⚠ 经纬网是 transparent + 默认 renderOrder 的 Line，排在夜面压暗壳（−3）之后绘制，
    *   所以它此前**根本没被压暗** —— 夜面上最亮的元素之一就是那几圈网格线，
    *   与灯火、城市点抢注意力（压暗壳的旧注释声称「经纬网也一起压暗」，与实现不符）。
-   *   太阳方向在开局由真实时间决定（src/solar.js），但**整局不再移动**，所以可以把
-   *   晨昏线烘进顶点色：建几何时烘一次，之后每次 setSunDir() 重烘一次，仍零每帧成本。
+   *   太阳方向在开局由真实时间决定（src/solar.js），之后按加速虚拟时间缓慢转动
+   *   （见 frame 的动态昼夜逻辑），所以晨昏线烘进顶点色：建几何时烘一次，
+   *   之后每次 setSunDir() 重烘一次。动态昼夜下每 SUN_UPDATE_INTERVAL 秒重烘一次。
    *   ⚠ 正因为它是烘焙而非每帧着色，setSunDir() 里**必须**调 rebakeGridNight()，
    *   否则改了太阳方向而经纬网的明暗还停在旧晨昏线上（五处消费点漏掉这一处最隐蔽）。
    * ⚠ 保留 0.28 而不是 0：网格线存在的意义就是「转动地球时判断不出转到哪了」
@@ -121,12 +122,13 @@
    *   迟早会出现「白天那半边也亮着灯」或「晨昏线错开一段」的静默走样
    *   （两者都不报错，只是看着别扭）。故 key 光位置与夜壳 uSun 共用这个数组。
    *
-   * ⚠ 2026-10-09 起这个方向不再写死，改由 src/solar.js 按**本机真实时间**
-   *   算出日下点、再经 AT.geo.ll2v 转成球面向量。这里保留的 [4, 3, 5] 只是
-   *   **回退值**（等价于历史上那个固定机位：直射点 25.1°N / 128.7°E）——
-   *   solar.js 一旦解析异常就会退回它，保证球体不会整个变黑或整个变亮。
-   *   改动这个方向请走 setSunDir()，不要直接改数组元素：四层壳与经纬网顶点色
-   *   都需要跟着重算，只改数组会让它们各自停在旧位置（静默错开）。 */
+    * ⚠ 2026-10-09 起这个方向不再写死，改由 src/solar.js 按**本机真实时间**
+    *   算出日下点、再经 AT.geo.ll2v 转成球面向量。2026-10-10 起进一步改为动态：
+    *   开局按真实时间定方向，之后 frame 每帧按加速虚拟时间推进（见 SUN_TIME_SCALE）。
+    *   这里保留的 [4, 3, 5] 只是**回退值**（等价于历史上那个固定机位：直射点 25.1°N / 128.7°E）——
+    *   solar.js 一旦解析异常就会退回它，保证球体不会整个变黑或整个变亮。
+    *   改动这个方向请走 setSunDir()，不要直接改数组元素：四层壳与经纬网顶点色
+    *   都需要跟着重算，只改数组会让它们各自停在旧位置（静默错开）。 */
   var SUN_DIR = (AT.solar && AT.solar.FALLBACK_SUN_DIR
     ? AT.solar.FALLBACK_SUN_DIR.slice() : [4, 3, 5]);
 
@@ -186,14 +188,14 @@
    *      峰值 luma ≈ 0.80，既保住橙黄又不过曝。
    *
    * ── 归属色的分工（2026-09-30 修订后）──
-   *   航司识别色（六色板）  = **航线与客机**：我的线用我选的航司色，竞对各自一色。
+   *   航司识别色（六色板）  = **航线、客机与竞对城市**：我的线/机用我选的航司色，
+   *   竞对各自一色；竞对独飞的城市点也用该竞对的航司色（2026-10-10 改，原统一紫罗兰）。
    *   暖金 / 橙黄（0xffc76b 系）= **我的城市**：我通航的城市点与环。
-   *   紫罗兰（0xb48cff 系）   = **竞对的城市**：仅竞对通航的城市环（不区分到具体哪家）。
    *   冰青（0x2fc4ff）        = **无人通航**（不属于任何人，是「待开拓」而非「归属」）。 */
   var PALETTE = {
     homeHex:      0xffd488,    // 基地城市：更亮的橙黄（同色相更亮，配 1.25 倍尺寸与更亮的定位环）
     mineHex:      0xffc76b,    // 已通航航点：橙黄 = 面板「资金」的 --amber
-    rivalHex:     0xb48cff,    // 仅竞对通航的城市：紫罗兰细环（不区分是哪一家，见注释 ③）
+    rivalHex:     0xb48cff,    // 竞对城市回落色：竞对无 color 字段时才用（正常路径用 rival.color）
     virginHex:    0x2fc4ff,    // 未通航城市：冰青（地图上没有的色相；够饱和才能在蓝海上不被读成白点）
     arcMine:      0xffcd5c,    // **缺省回落**：没选航司的旧路径（工具/测试）才用它，暖金
     arcRival:     0xb48cff,    // **缺省回落**：竞对无 color 字段时（旧路径）才用它，紫罗兰
@@ -221,6 +223,22 @@
   var sunAppliedAt = null;
   /* 开局时玩家的基地是否落在夜面（真实时间下约有一半概率）。UI 据此提示。 */
   var openAtNight = false;
+
+  /* ── 动态昼夜交替（2026-10-10）──
+   * 开局按本机真实时间定太阳方向（见 init 的 applySunAt(null)），之后每帧推进
+   * 一个加速的虚拟时间，让晨昏线缓慢转动 —— 太阳不再整局钉死。
+   *
+   * SUN_TIME_SCALE：1 秒真实 = SUN_TIME_SCALE 秒虚拟。
+   *   取 40（1 秒 = 40 秒虚拟）→ 36 分钟真实转一圈昼夜，变化缓慢自然，
+   *   一局 30 分钟能看到约 0.8 圈，不会眼花。
+   * SUN_BAKE_INTERVAL：经纬网顶点色重烘间隔（秒）。
+   *   灯光与夜壳 uniform 每帧更新（零分配，极轻量），经纬网烘焙较重（1649 顶点），
+   *   每 SUN_BAKE_INTERVAL 秒重烘一次。太阳走得慢，0.5 秒内只走 0.03°，视觉无跳跃。 */
+  var SUN_TIME_SCALE = 40;
+  var SUN_BAKE_INTERVAL = 0.5;
+  var sunSimOffset = 0;          // 虚拟时间相对开局真实时间的偏移（毫秒）
+  var sunBakeAcc = 0;            // 烘焙节流累积器（秒）
+  var _sunDate = null;           // 复用 Date 对象，避免每帧分配
   /* 城市标记点：Sprite 四层（contour 描边 / halo 光晕 / core 核心 / ring 虚线环），
    * 形制对齐 vibeknow/nobel-atlas 的 buildMarkers。每城一个 Group 挂在球面 R*CITY_LIFT，
    * 逐帧 syncMarkers 按归属/等级/脉冲/背面剔除调颜色与尺寸。
@@ -446,8 +464,11 @@
    * 「哪几架不是我的」。故竞对客机放大 1.4 倍、提亮量略高于玩家 ——
    * 提亮不破坏航司识别色（色相不变），放大不改变航线走向（只是同一架更显眼）。
    * ⚠ 只放大**竞对**：玩家自己的机队是主角，但已经靠航线更亮、飞得更高区分，
-   *   再放大只会让「我的网络」看起来比实际更密。 */
-  var PLANE_TINT_RIVAL = 0.42;
+   *   再放大只会让「我的网络」看起来比实际更密。
+   * 2026-10-10 降 0.42→0.15：原 0.42 向白插值太多，六家竞对飞机看起来都是白色、
+   *   分不出航司色。降到 0.15 让航司识别色（红/橙/绿/蓝/紫/玫红）饱和显现，
+   *   与城市点（核心往白提 7%）质感一致。 */
+  var PLANE_TINT_RIVAL = 0.15;
   var PLANE_SCALE_RIVAL = 1.4;
 
   function v3(lat, lon, r) {
@@ -534,26 +555,26 @@
    *
    * 拆出来是为了让太阳可变：顶点色是太阳的快照，光改 SUN_DIR 而不管它，
    * 就会出现「网格的明暗界线」与「夜壳灯火亮起的界线」错开 —— 静默走样。
-   * 成本：17 条线 × 97 个顶点 = 1649 次点积，只在 setSunDir 时跑一次，
-   * 不进每帧循环。
+   * 成本：17 条线 × 97 个顶点 = 1649 次点积。动态昼夜下定期调用（见 frame 的
+   * SUN_BAKE_INTERVAL），临时对象模块级复用，零分配不触发 GC。
    * ⚠ 必须与 buildNightLights 的 NIGHT_TERM 用同一条 smoothstep 与同一个
    *   SUN_DIR（下面这行是它的 JS 版镜像，改一处要改两处 —— 已由 headless 的
    *   「晨昏线同源」断言锁住：把两者改成不同方向会让断言变红）。 */
+  var _gridSun = null, _gridBase = null, _gridV = null;
   function rebakeGridNight() {
     if (!gridGeoms.length) return;
-    var sun = new THREE.Vector3(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
-    var base = new THREE.Color(0x86bad8);
-    var v = new THREE.Vector3();
+    if (!_gridSun) { _gridSun = new THREE.Vector3(); _gridBase = new THREE.Color(0x86bad8); _gridV = new THREE.Vector3(); }
+    _gridSun.set(SUN_DIR[0], SUN_DIR[1], SUN_DIR[2]).normalize();
     gridGeoms.forEach(function (g) {
       var pos = g.getAttribute('position'), col = g.getAttribute('color');
       for (var i = 0; i < pos.count; i++) {
-        v.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
-        var d = v.dot(sun);
+        _gridV.set(pos.getX(i), pos.getY(i), pos.getZ(i)).normalize();
+        var d = _gridV.dot(_gridSun);
         var t = (d - 0.08) / (-0.26 - 0.08);
         t = t < 0 ? 0 : (t > 1 ? 1 : t);
         var nt = t * t * (3 - 2 * t);                     // smoothstep(0.08, -0.26, d)
         var m = 1 - (1 - GRID_NIGHT) * nt;
-        col.setXYZ(i, base.r * m, base.g * m, base.b * m);
+        col.setXYZ(i, _gridBase.r * m, _gridBase.g * m, _gridBase.b * m);
       }
       col.needsUpdate = true;
     });
@@ -579,7 +600,7 @@
    *   api.init 调用的 —— 若写成 api.setSunDir 就会在字面量求值中途读到
    *   undefined（实测报过 `api.applySunAt is not a function`，且整个渲染
    *   初始化静默失败、画面停在纯黑 0.098）。 */
-  function setSunDir(v) {
+  function setSunDir(v, bake) {
     var x, y, z;
     if (Array.isArray(v)) { x = +v[0]; y = +v[1]; z = +v[2]; }
     else if (v && typeof v === 'object') { x = +v.x; y = +v.y; z = +v.z; }
@@ -596,7 +617,7 @@
     // 原地 copy：两个壳共享同一个 value 实例，故一次 copy 同时生效
     if (dimMat) dimMat.uniforms.uSun.value.copy(sv);
     if (nightMat) nightMat.uniforms.uSun.value.copy(sv);
-    rebakeGridNight();                                     // 顶点色是快照，必须重烘
+    if (bake !== false) rebakeGridNight();                // 顶点色是快照，默认重烘
     return true;
   }
 
@@ -1005,6 +1026,21 @@
     return false;
   }
 
+  /* 返回第一个通航该城市的存活竞对的识别色（用于城市点按航司色着色）。
+   * 一座城可能被多家竞对通航，这里取第一家 —— 地图上城市点是「归属桶」，
+   * 多家竞对共占一城时用最先铺到的那家代表，比统一紫色更能传达「谁在这」。 */
+  function cityRivalColor(state, cityId) {
+    for (var i = 0; i < state.rivals.length; i++) {
+      var rv = state.rivals[i];
+      if (!rv.alive) continue;
+      for (var j = 0; j < rv.routes.length; j++) {
+        var r = rv.routes[j];
+        if (r.a === cityId || r.b === cityId) return rv.color || null;
+      }
+    }
+    return null;
+  }
+
   function syncMarkers(state, dt) {
     if (!markerGroup) return;
     _markerTime += dt;
@@ -1048,11 +1084,15 @@
       var s = m.base * lvMul * (c.isHome ? 1.25 : 1) * mkScale;
       if (p > 0) s *= (1 + 0.45 * p);
 
-      /* 归属色：基地 > 已通航 > 仅竞对 > 未通航。 */
+      /* 归属色：基地 > 已通航 > 仅竞对 > 未通航。
+       * 竞对城市用该竞对的航司识别色（不再统一紫色），和竞对航线/客机同色。 */
       var col;
       if (c.isHome) col = PALETTE.homeHex;
       else if (connected) col = PALETTE.mineHex;
-      else if (tone === 1) col = PALETTE.rivalHex;
+      else if (tone === 1) {
+        var rc = cityRivalColor(state, c.id);
+        col = rc ? rc : PALETTE.rivalHex;
+      }
       else col = PALETTE.virginHex;
       var cLin = mkColor(col);
 
@@ -2072,6 +2112,21 @@
 
   function frame(state, dt) {
     if (!api.ok || !renderer) return;
+
+    /* 动态昼夜：每帧推进虚拟时间并更新灯光+夜壳 uniform（零分配轻量），
+     * 经纬网顶点色定期重烘（见 SUN_BAKE_INTERVAL）。 */
+    if (sunAppliedAt) {
+      sunSimOffset += dt * 1000 * SUN_TIME_SCALE;
+      if (!_sunDate) _sunDate = new Date(sunAppliedAt.getTime());
+      _sunDate.setTime(sunAppliedAt.getTime() + sunSimOffset);
+      setSunDir(AT.solar.sunDirAt(_sunDate, G), false);   // 每帧：灯光+uniform，跳过烘焙
+      sunBakeAcc += dt;
+      if (sunBakeAcc >= SUN_BAKE_INTERVAL) {
+        sunBakeAcc = 0;
+        rebakeGridNight();                                 // 定期：重烘经纬网顶点色
+      }
+    }
+
     syncMarkers(state, dt);
     syncArcs(state, dt);
     syncPlanes(state, dt);
