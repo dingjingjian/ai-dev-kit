@@ -1907,6 +1907,18 @@
     if (c) flyTo(c.lat, c.lon);
   }
 
+  /* 定位到航线两端的中点（球面向量平均方向），展开航线时自动转过去。 */
+  function flyToRoute(state, route) {
+    var ca = AT.CITIES_BY_ID[route.a], cb = AT.CITIES_BY_ID[route.b];
+    if (!ca || !cb) return;
+    var va = G.ll2v(ca.lat, ca.lon, 1), vb = G.ll2v(cb.lat, cb.lon, 1);
+    var mx = va.x + vb.x, my = va.y + vb.y, mz = va.z + vb.z;
+    var ml = Math.sqrt(mx * mx + my * my + mz * mz);
+    if (ml < 1e-6) return;
+    var mid = G.v2ll({ x: mx / ml, y: my / ml, z: mz / ml });
+    if (mid && isFinite(mid.lat) && isFinite(mid.lon)) flyTo(mid.lat, mid.lon);
+  }
+
   /* 城市拾取：把每城 3D 坐标投到屏幕，找命中半径内最近的一座。
    * 背面（法线与视线夹角余弦 < 0.1）跳过 —— 手指点到的是它前面的地表。
    *
@@ -2243,6 +2255,7 @@
     resize: resize,
     flyTo: flyTo,
     flyToCity: flyToCity,
+    flyToRoute: flyToRoute,
     pickCity: pickCity,
     shake: shake,
     setQuality: setQuality,

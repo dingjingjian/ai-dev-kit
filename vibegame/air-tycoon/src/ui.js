@@ -35,11 +35,13 @@
     acquireId: null,          // 对手榜：当前展开「确认并购」的对手 id（null=未展开）
     selCity: null,            // 选中城市 id
     selRoute: null,           // 选中航线 key
+    assignPlaneId: null,      // 机库：当前正在派往航线的闲置飞机 id（null=未展开）
     lastQuarter: 0,           // 用于检测回合变化 → 弹季报
     reports: [],              // 待看季报队列
     modal: null,              // 'event' | 'report' | 'over' | 'invest' | null
     scrollType: false,        // 新航线：下一次重绘后把③机型区滚进视野（一次性）
     scrollOpen: false,        // 新航线：选完机型后把「开通」按钮滚进视野（一次性）
+    scrollRoute: null,        // 航线：下一次重绘后把展开的详情滚进视野（一次性）
     toastT: 0
   };
   var el = {};
@@ -494,7 +496,7 @@
 
     var html =
       '<div class="sel-hd">' +
-        '<div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 续飞</span></div>' +
+        '<div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 续营</span></div>' +
         '<span class="sel-title">继续上一次经营？</span>' +
         '<span class="sel-sub">进度已自动保存。以下是存档时的经营报表 —— 接着执掌，或开启全新一局。</span>' +
       '</div>' +
@@ -708,6 +710,7 @@
      * 关面板 ≠ 取消选中 —— 不清的话重开面板后旧行还是摊开的（「展开永远是展开的」）。 */
     ui.selRoute = null;
     ui.acquireId = null;
+    ui.assignPlaneId = null;
     /* 「新航线」是一张决策表单，**每次打开都初始化**（2026-10-08 用户要求）：
      * 出发地/目的地/机型全部清空 —— 关面板不等于做决定，「上次看到一半」的
      * 选中项不该在重开后冒充已选（目的地/机型的高亮、开通按钮的可用态都会骗人）。
@@ -732,6 +735,7 @@
     ui.panel = null;
     ui.acquireId = null;      // 关面板即收起「确认并购」的展开态，下次进来从头看
     ui.selRoute = null;       // 航线行展开态同理（openPanel 打开时也会再兜一次）
+    ui.assignPlaneId = null;  // 派机展开态同理
     if (el.uPanel) el.uPanel.classList.remove('show');
     syncTabs();
     syncClockPause();
@@ -799,7 +803,14 @@
       /* ── 航线操作 ── */
       case 'sel-route':
         sfx('click');
-        ui.selRoute = key;
+        ui.selRoute = (ui.selRoute === key) ? null : key;   // 再点一次收起
+        if (ui.selRoute) {
+          ui.scrollRoute = key;                              // 展开后把详情滚进视野
+          if (R && R.flyToRoute) {
+            var _r = S.findRouteByKey(st, key);
+            if (_r) R.flyToRoute(st, _r);                   // 展开时自动定位到航线中点
+          }
+        }
         dirty.panel = true;
         break;
       case 'add-plane': {
@@ -898,6 +909,20 @@
         if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
         sfx('confirm');
         toast('已售出，回收 ' + money(res.value), 'ok');
+        dirty.panel = true; dirty.hud = true;
+        break;
+      }
+      case 'toggle-assign':
+        sfx('click');
+        ui.assignPlaneId = (ui.assignPlaneId === key) ? null : key;
+        dirty.panel = true;
+        break;
+      case 'assign-plane': {
+        res = S.assignPlane(st, key, val);
+        if (!res.ok) { sfx('deny'); toast(res.reason, 'bad'); break; }
+        sfx('confirm');
+        ui.assignPlaneId = null;
+        toast('飞机已派往航线', 'ok');
         dirty.panel = true; dirty.hud = true;
         break;
       }
@@ -1250,11 +1275,29 @@
     var sig = ui.panel + '\u0000' + sub + '\u0000' + html;
     /* 内容没变就不重建 DOM（见上）。这种情况滚动标记也没有意义，一并清掉：
      * 否则它会留到下一次无关的重绘里才生效（例如 1Hz 的季度刷新），变成「莫名跳一下」。 */
-    if (sig === panelSig) { ui.scrollType = false; ui.scrollOpen = false; return; }
+    if (sig === panelSig) { ui.scrollType = false; ui.scrollOpen = false; ui.scrollRoute = null; return; }
     panelSig = sig;
     if (el.uPanelTitle) el.uPanelTitle.textContent = title;
     if (el.uPanelSub) el.uPanelSub.textContent = sub;
+    /* 保存滚动位置：innerHTML 重建会重置 scrollTop=0，展开底部航线后视图跳回顶部 */
+    var savedScroll = el.uPanelBody.scrollTop;
     el.uPanelBody.innerHTML = html;
+
+    /* 展开航线后把该航线卡片滚到面板顶部（详情紧随其后） */
+    if (ui.scrollRoute) {
+      var rk2 = ui.scrollRoute;
+      ui.scrollRoute = null;
+      var card = el.uPanelBody.querySelector('[data-act="sel-route"][data-key="' + rk2 + '"]');
+      if (card) {
+        var cbr = el.uPanelBody.getBoundingClientRect();
+        var csr = card.getBoundingClientRect();
+        el.uPanelBody.scrollTop = (csr.top - cbr.top) - 6;
+      } else {
+        el.uPanelBody.scrollTop = savedScroll;
+      }
+    } else {
+      el.uPanelBody.scrollTop = savedScroll;
+    }
 
     /* 选完目的地后把③机型区滚进视野。
      * 为什么需要：面板只留了一条滚动条（不再给列表限高内部滚动），② 一长，
@@ -1337,7 +1380,32 @@
   /* 航线详情：频次档位 / 票价 / 加机 / 换机型 / 关线
    * 这是本作操作密度最高的面板，所有按钮都直接映射 sim 的指令接口。 */
   function renderRouteDetail(st, r, d, n, T, dist, slot) {
+    var ca = AT.CITIES_BY_ID[r.a], cb = AT.CITIES_BY_ID[r.b];
     var out = '<div class="rdetail">';
+
+    /* 航线标题：从哪到哪 + 机型 + 架数 + 距离，展开后一眼能看出是哪条线 */
+    out += '<div class="rd-title">' + h(ca ? ca.name : r.a) + ' — ' +
+      h(cb ? cb.name : r.b) + '<span class="rd-title-sub">' + h(T.name) +
+      ' ×' + n + ' · ' + num(dist) + ' km</span></div>';
+
+    /* 基本运营信息：客流 / 票价 / 市场份额 / 竞对运力 */
+    if (d) {
+      var rivalCap = 0;
+      st.rivals.forEach(function (rv) {
+        if (!rv.alive) return;
+        rv.routes.forEach(function (rk) {
+          if (rk.key === r.key) rivalCap += rk.capacity || 0;
+        });
+      });
+      out += '<div class="rd-sec"><div class="rd-h">运营概况</div><div class="rd-info">' +
+        infoRow('本季客流', Math.round(d.pax * 100) / 100 + ' 万人次') +
+        infoRow('平均票价', money(Math.round(d.fare)) + ' / 张') +
+        infoRow('客座率', pct(d.realLf, 0)) +
+        infoRow('市场份额', pct(d.share, 0)) +
+        infoRow('竞对运力', rivalCap > 0 ? Math.round(rivalCap * 100) / 100 + ' 万人次' : '无竞对') +
+        infoRow('航线距离', num(dist) + ' km') +
+        '</div></div>';
+    }
 
     /* 频次档位：档位含义是「每架每日班次」，故列表里要标出换算后的航线总班次 */
     out += '<div class="rd-sec"><div class="rd-h">频次档位（每架每日）</div><div class="rd-btns">';
@@ -1346,12 +1414,22 @@
       var total = ft.perDay * n;
       var over = ft.perDay > typeCap || total > Math.min(C.routeMaxPerDay || 20, slot);
       var cur = (r.perDay || 3) === ft.perDay;
+      /* over 时标注实际会落到哪档（对齐后不超过上限的最大档位） */
+      var sub;
+      if (cur) sub = '';
+      else if (over) {
+        var land = 1;
+        (C.freqTiers || []).forEach(function (f2) {
+          if (f2.perDay <= typeCap && f2.perDay * n <= Math.min(C.routeMaxPerDay || 20, slot)) land = f2.perDay;
+        });
+        sub = '<i>→' + land + ' 班</i>';
+      } else sub = '<i>总' + total + '</i>';
       out += '<button class="chip' + (cur ? ' on' : '') + (over ? ' over' : '') +
         '" data-act="freq" data-key="' + h(r.key) + '" data-val="' + ft.perDay + '" type="button">' +
-        ft.perDay + ' 班' + (cur ? '' : '<i>总' + total + '</i>') + '</button>';
+        ft.perDay + ' 班' + sub + '</button>';
     });
     out += '</div><div class="rd-note">本机单架上限 ' + typeCap + ' 班/日 · 该线时刻上限 ' +
-      Math.round(slot) + ' 班/日（合计）</div></div>';
+      Math.round(slot) + ' 班/日（合计）· 超限档位会自动降到最近可用档</div></div>';
 
     /* 票价：0.70 ~ 1.40 五档。sim 会夹取，这里按夹取后的值标 on。 */
     out += '<div class="rd-sec"><div class="rd-h">票价策略</div><div class="rd-btns">';
@@ -1450,6 +1528,10 @@
     return '<div class="cc-row"><span>' + h(k) + '</span><b>−' + money(v) + '</b></div>';
   }
 
+  function infoRow(k, v) {
+    return '<div class="ri-row"><span>' + h(k) + '</span><b>' + h(v) + '</b></div>';
+  }
+
   function renderFleet(st) {
     var idle = S.idlePlanes(st);
     /* 顶部：公司信息 + 特色技能。玩家的航司身份与技能常驻可见 ——
@@ -1464,12 +1546,45 @@
       out += '<div class="fsec warn-sec"><div class="rd-h">闲置飞机 ' + idle.length + ' 架 —— 不飞也在亏持有成本</div>' +
         '<div class="flist">';
       idle.forEach(function (p) {
-        out += '<div class="frow"><span>' + h(AT.planeOf(p.type).name) + ' · ' + h(p.reg) +
+        var Tp = AT.planeOf(p.type);
+        out += '<div class="frow"><span>' + h(Tp.name) + ' · ' + h(p.reg) +
           ' · 机龄 ' + p.ageQ + ' 季</span>' +
-          '<span class="fbtns"><button class="btn btn-sm" data-act="sell-plane" data-key="' +
+          '<span class="fbtns">' +
+          '<button class="btn btn-sm" data-act="toggle-assign" data-key="' + h(p.id) +
+          '" type="button">派往航线</button>' +
+          '<button class="btn btn-sm" data-act="sell-plane" data-key="' +
           h(p.id) + '" type="button">出售</button></span></div>';
+        /* 展开航线选择列表：列出该机能飞的已有航线 */
+        if (ui.assignPlaneId === p.id) {
+          var targets = st.routes.filter(function (r) {
+            var dist = S.routeDistance(st, r.a, r.b);
+            return dist <= Tp.range;
+          });
+          if (!targets.length) {
+            out += '<div class="rd-note" style="padding:4px 0 8px">没有该机航程可达的已有航线</div>';
+          } else {
+            out += '<div class="rd-note" style="padding:4px 0 2px">选择航线派往：</div>';
+            targets.forEach(function (r) {
+              var ca = AT.CITIES_BY_ID[r.a], cb = AT.CITIES_BY_ID[r.b];
+              var n = S.planesOnRoute(st, r.key).length;
+              var cap = S.maxPlanesForRoute(st, r);
+              var full = n >= cap;
+              var lg = S.planeLevelGate(st, r.a, r.b, p.type);
+              var blocked = full || !lg.ok;
+              out += '<button class="btn btn-sm' + (blocked ? ' dis' : '') + '"' +
+                (blocked ? ' disabled' : '') +
+                ' data-act="assign-plane" data-key="' + h(p.id) + '" data-val="' + h(r.key) +
+                '" type="button" style="width:100%;margin:0 0 5px;text-align:left">' +
+                h(ca ? ca.name : r.a) + ' — ' + h(cb ? cb.name : r.b) +
+                ' · ' + h(AT.planeOf(r.type).name) + ' ×' + n +
+                (full ? ' · 时刻已满' : '') +
+                (!lg.ok ? ' · 等级不足' : '') +
+                '</button>';
+            });
+          }
+        }
       });
-      out += '</div><div class="rd-note">在航线详情里「加 1 架」会自动派机；也可先买机再派</div></div>';
+      out += '</div><div class="rd-note">在航线详情里「加 1 架」会自动买机+派机；这里直接派已有的闲置机</div></div>';
     }
 
     out += '<div class="fsec"><div class="rd-h">购买新机</div><div class="plist">';
@@ -1508,7 +1623,12 @@
    * 收购走面板内二次确认（ui.acquireId），不弹模态：见 onPanelClick 的说明。 */
   function renderRivals(st) {
     var rk = S.ranking(st);
-    var out = '<div class="fsec"><div class="rd-h">全球排名（按净资产）</div><div class="flist">';
+    /* 顶部统一提示并购资格，不每行重复 */
+    var pi = -1;
+    rk.forEach(function (row, i) { if (row.isPlayer) pi = i; });
+    var out = '<div class="fsec"><div class="rd-h">全球排名（按净资产）</div>' +
+      '<div class="rd-note" style="margin-bottom:10px">仅可收购排名低于你的航司' +
+      (pi >= 0 ? '（你当前第 ' + (pi + 1) + '）' : '') + '</div><div class="flist">';
     rk.forEach(function (row, i) {
       var dot = '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
         'background:' + h(row.color) + ';margin-right:6px"></i>';
@@ -1535,7 +1655,8 @@
         '<div class="rd-note">' + h(home.name || '—') + ' · 机队 ' + row.fleet + ' 架 · 航线 ' +
         row.routes + ' 条 · 净资产 ' + money(row.netWorth) +
         (info.crisis ? ' · <i class="c-warn">现金告急（折价）</i>' : '') +
-        (info.ok ? '' : ' · <i class="c-warn">' + h(info.reason) + '</i>') + '</div>';
+        (info.ok || !info.reason ? '' : ' · <i class="c-warn">' +
+          h(info.reason.indexOf('排名') >= 0 ? '排名高于你' : info.reason) + '</i>') + '</div>';
 
       if (expanded && info.ok) {
         out += '<div class="fsec" style="margin:8px 0">' +

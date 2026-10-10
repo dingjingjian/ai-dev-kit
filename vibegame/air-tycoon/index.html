@@ -276,6 +276,10 @@
   .rdetail{margin-top:10px;padding-top:10px;border-top:1px dashed rgba(112,182,242,.24)}
   .rd-sec{margin-bottom:13px}
   .rd-sec:last-child{margin-bottom:0}
+  .rd-title{font-size:14px;font-weight:600;color:var(--ink);margin-bottom:12px;
+    padding-bottom:8px;border-bottom:1px solid rgba(112,182,242,.12)}
+  .rd-title-sub{display:block;font-size:11px;font-weight:400;color:var(--ink3);
+    margin-top:4px;font-family:var(--mono)}
   .rd-h{font-size:10px;color:var(--cyan);margin-bottom:8px;letter-spacing:.06em}
   /* 小破折号前缀：让每个分区标题像仪表带上的分区标签 */
   .rd-h::before{content:'';display:inline-block;width:8px;height:1px;background:var(--cyan);
@@ -283,6 +287,12 @@
   .rd-btns{display:flex;flex-wrap:wrap}
   .rd-note{font-size:10px;color:var(--ink3);margin-top:7px;line-height:1.7}
   .rd-cost{border-top:1px solid rgba(112,182,242,.1);padding-top:6px}
+  .rd-info{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+  .ri-row{display:flex;justify-content:space-between;align-items:baseline;
+    padding:4px 0;border-top:1px solid rgba(112,182,242,.06);font-size:11px}
+  .ri-row:first-of-type{border-top:0}
+  .ri-row span{color:var(--ink3)}
+  .ri-row b{color:var(--ink);font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
 
   /* ── 档位 chip（频次 / 票价 / 城市 / 机型）──
      .on = 当前选中；.over = 超出上限（仍可点，sim 会夹取并给 reason）；
@@ -427,7 +437,7 @@
        哪怕 1.5% 的透出都会在深空底上显成重影（实测踩过）；
      顶部冷光改走 background-image 固定层（不随滚动）。 */
   .sel{position:absolute;top:0;right:0;bottom:0;left:0;z-index:250;display:none;
-    flex-direction:column;padding:calc(var(--safe-t) + 20px) 18px calc(var(--safe-b) + 12px);
+    flex-direction:column;padding:calc(var(--safe-t) + var(--top-gap)) 18px calc(var(--safe-b) + 12px);
     /* ⚠ 必须全不透明：底下躺着 #top 仪表带（白字），哪怕 1.5% 的透出也会在深空底上
        显成重影（实测踩过）。 */
     background:#050c18;
@@ -719,7 +729,7 @@
        verify-dist / verify-heading / check-fallback），改 id 前先同步这四个脚本。 -->
   <div id="uSelect" class="sel">
     <div class="sel-hd">
-      <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 值机</span></div>
+      <div class="sel-brand"><b>AIR TYCOON</b><span>航空大亨 · 开局</span></div>
       <span class="sel-title">选择你的航空公司</span>
       <span class="sel-sub">六家航司各据一方 —— 点按下方航司试选，地球随之转向它的基地；技能决定这一局的打法。</span>
     </div>
@@ -736,7 +746,7 @@
     </div>
     <div class="sel-cta">
       <button id="uSelGo" class="sel-go" type="button">确认开航</button>
-      <div class="sel-ft">一经值机，不可改签 · 60 个季度执掌所选航司</div>
+      <div class="sel-ft">一经选定，不可更换 · 60 个季度执掌所选航司</div>
     </div>
   </div>
 

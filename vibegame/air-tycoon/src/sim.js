@@ -2813,6 +2813,17 @@
       clampedBySlot = slotCap <= routeMax;
       clampedByRoute = !clampedBySlot;
     }
+    /* 对齐到 freqTiers 档位：夹取后的值可能落在档位之间（如 typeCap=5），
+     * 不对齐会导致 r.perDay 不等于任何档位，UI 上所有按钮都失去选中态。 */
+    var tiers = (CONFIG.freqTiers || []).map(function (ft) { return ft.perDay; })
+      .sort(function (a, b) { return a - b; });
+    if (tiers.length) {
+      var aligned = tiers[0];
+      for (var ti = 0; ti < tiers.length; ti++) {
+        if (tiers[ti] <= applied) aligned = tiers[ti];
+      }
+      applied = aligned;
+    }
     r.perDay = applied;
 
     if (applied < want) {
