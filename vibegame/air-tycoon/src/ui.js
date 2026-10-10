@@ -518,6 +518,13 @@
             '<div><span>全球化</span><b>' + g.pct + '%（' + g.cities + '/' + g.totalCities +
               ' 城 · ' + g.regions + '/' + g.totalRegions + ' 地区）</b></div>' +
           '</div>' +
+          (history.length >= 2 ?
+            '<div class="md-spark"><span class="ms-l">近 ' + Math.min(history.length, 12) + ' 季净资产</span>' +
+              sparkline(history.slice(-12).map(function (x) { return x.netWorth; }), 120, 40,
+                { fill: true, color: 'var(--cyan)' }) + '</div>'
+          : history.length === 1 ?
+            '<div class="md-spark"><span class="ms-l">首季存档</span><span class="ms-empty">趋势图自下季起显示</span></div>'
+          : '') +
           /* ② 上一季度账目：逐项列出「收入 − 各项支出 = 净利」，全部取自 history 快照的
            *    真实结算值（不是 forecast 的预测值），保证这页数字自洽、能对上账。
            *    开局首季结算前没有快照，此时只留一句说明，不编造数字。 */
@@ -1119,6 +1126,13 @@
       '<div><span>客运量</span><b>' + (rep.pax || 0).toFixed(2) + ' 百万客</b></div>' +
       '<div><span>航线 / 机队</span><b>' + rep.routes + ' 条 / ' + rep.planes + ' 架</b></div>' +
       '</div>';
+    if (rep.histNet && rep.histNet.length >= 2) {
+      html += '<div class="md-spark"><span class="ms-l">近 ' + rep.histNet.length + ' 季净利</span>' +
+        sparkline(rep.histNet, 120, 40, { fill: true, zeroline: true, color: 'var(--amber)' }) + '</div>';
+    } else if (rep.histNet && rep.histNet.length === 1) {
+      html += '<div class="md-spark"><span class="ms-l">首季结算</span>' +
+        '<span class="ms-empty">趋势图自下季起显示</span></div>';
+    }
     if (rep.notes && rep.notes.length) {
       html += '<div class="md-notes">' + rep.notes.map(function (n) {
         return '<div>· ' + h(n) + '</div>';
@@ -1151,6 +1165,15 @@
         st.stats.citiesUpgraded + ' 次升级</b></div>' +
       (first ? '<div><span>开局净资产</span><b>' + money(first.netWorth) + '</b></div>' : '') +
       '</div>';
+
+    /* 成长曲线：净值折线 + 季度净利柱（正绿负红）。sim.js:127 注释本就预留"成长曲线"，
+     * 此前只用首末两点，现在基于 history 全序列画出整局走势。 */
+    if (st.history.length >= 2) {
+      html += '<div class="md-chart"><div class="rd-h">成长曲线 · 净资产（线）与季度净利（柱）</div>' +
+        trendChart(st.history, 280, 96) +
+        '<div class="md-chart-leg"><i style="background:var(--cyan)"></i>净资产' +
+        '<i style="background:var(--good)"></i>盈利<i style="background:var(--bad)"></i>亏损</div></div>';
+    }
 
     /* ── 终局评分三维（D2，2026-10-09）──
      * 旧的终局只给一个标签，「大而低效」与「精耕细作」拿同一个评价。
@@ -1379,6 +1402,141 @@
       '<span class="bv">' + h(txt) + '</span></div>';
   }
 
+  /* ───────────────────────── 内联 SVG 图表（零依赖，Chrome 61 兼容）─────────────────────────
+   * 配色一律走 CSS 变量（style="stroke:var(--cyan)"），跟随主题、不硬编码；
+   * 个别无变量的色直接用 hex。viewBox 自适应宽度，sparkline/trend 用 preserveAspectRatio="none"
+   * 拉伸铺满（矢量折线拉伸无锯齿），donut/hbars 保持比例。色值参数统一传完整 CSS 色串。 */
+
+  /* 迷你折线：vals 数值数组，w/h 为 viewBox。opts.fill=填充区域；opts.zeroline=画零线；
+   * opts.color=线色（完整 CSS 色串，默认 var(--cyan)）。点数 < 2 返回空。 */
+  function sparkline(vals, w, h, opts) {
+    opts = opts || {};
+    if (!vals || vals.length < 2) return '';
+    var n = vals.length, i, lo = Infinity, hi = -Infinity;
+    for (i = 0; i < n; i++) { if (vals[i] < lo) lo = vals[i]; if (vals[i] > hi) hi = vals[i]; }
+    if (hi === lo) hi = lo + 1;
+    var pad = 2, span = hi - lo, xstep = (w - pad * 2) / (n - 1), pts = [];
+    for (i = 0; i < n; i++) {
+      var x = pad + i * xstep, y = pad + (h - pad * 2) * (1 - (vals[i] - lo) / span);
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    var col = opts.color || 'var(--cyan)';
+    var s = '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
+    if (opts.fill) {
+      var baseY = h - pad;
+      s += '<path d="M' + pts[0] + ' L' + pts.join(' L') + ' L' + (pad + (n - 1) * xstep).toFixed(1) +
+        ',' + baseY + ' L' + pad + ',' + baseY + ' Z" style="fill:' + col + ';opacity:.16"/>';
+    }
+    if (opts.zeroline && lo < 0 && hi > 0) {
+      var zy = pad + (h - pad * 2) * (1 - (0 - lo) / span);
+      s += '<line x1="' + pad + '" y1="' + zy.toFixed(1) + '" x2="' + (w - pad) + '" y2="' + zy.toFixed(1) +
+        '" style="stroke:var(--ink3);stroke-width:.5;stroke-dasharray:2 2;opacity:.6"/>';
+    }
+    s += '<polyline points="' + pts.join(' ') + '" fill="none" style="stroke:' + col +
+      ';stroke-width:1.4;stroke-linejoin:round;stroke-linecap:round"/></svg>';
+    return s;
+  }
+
+  /* 环形占比：segs=[{label,value,color}]，color 为完整 CSS 色串。r=半径，sw=环宽。
+   * opts.center/centerLabel=中心文字。total≤0 返回空。 */
+  function donut(segs, r, sw, opts) {
+    opts = opts || {};
+    var total = 0, i;
+    for (i = 0; i < segs.length; i++) total += Math.max(0, segs[i].value || 0);
+    if (total <= 0) return '';
+    var cx = r + sw, cy = r + sw, R = r, C = 2 * Math.PI * R;
+    var s = '<svg class="donut" viewBox="0 0 ' + (2 * cx) + ' ' + (2 * cy) + '">';
+    s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" ' +
+      'style="stroke:rgba(112,182,242,.12);stroke-width:' + sw + '"/>';
+    var acc = 0;
+    for (i = 0; i < segs.length; i++) {
+      var v = Math.max(0, segs[i].value || 0);
+      if (v <= 0) continue;
+      var dash = (v / total) * C, off = -acc * C;
+      s += '<circle cx="' + cx + '" cy="' + cy + '" r="' + R + '" fill="none" ' +
+        'style="stroke:' + segs[i].color + ';stroke-width:' + sw + ';' +
+        'stroke-dasharray:' + dash.toFixed(2) + ' ' + (C - dash).toFixed(2) + ';' +
+        'stroke-dashoffset:' + off.toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+      acc += v / total;
+    }
+    if (opts.center) {
+      s += '<text x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" ' +
+        'style="fill:var(--ink3);font-size:8.5px;font-family:var(--mono)">' + h(opts.centerLabel || '合计') + '</text>';
+      s += '<text x="' + cx + '" y="' + (cy + 10) + '" text-anchor="middle" ' +
+        'style="fill:var(--ink);font-size:11px;font-weight:600;font-family:var(--mono)">' + h(opts.center) + '</text>';
+    }
+    s += '</svg>';
+    return s;
+  }
+
+  /* 横向柱状对比：rows=[{label,value,color,highlight}]，color 完整 CSS 色串。
+   * w=总宽，rowH=行高，opts.fmt=数值格式化。 */
+  function hbars(rows, w, rowH, opts) {
+    opts = opts || {};
+    if (!rows || !rows.length) return '';
+    var maxv = 0, i;
+    for (i = 0; i < rows.length; i++) if (rows[i].value > maxv) maxv = rows[i].value;
+    if (maxv <= 0) maxv = 1;
+    var labelW = 88, valW = 54, barX = labelW, barW = w - labelW - valW - 6, H = rows.length * rowH;
+    var s = '<svg class="hbars" viewBox="0 0 ' + w + ' ' + H + '">';
+    for (i = 0; i < rows.length; i++) {
+      var r = rows[i], y = i * rowH, mid = y + rowH / 2;
+      var bw = Math.max(0, r.value / maxv) * barW;
+      s += '<text x="' + (labelW - 6) + '" y="' + (mid + 3).toFixed(1) + '" text-anchor="end" ' +
+        'style="fill:' + (r.highlight ? 'var(--ink)' : 'var(--ink2)') + ';font-size:10px;font-family:var(--sans)' +
+        (r.highlight ? ';font-weight:600' : '') + '">' + h(r.label) + '</text>';
+      s += '<rect x="' + barX + '" y="' + (mid - 4).toFixed(1) + '" width="' + barW + '" height="8" rx="2" ' +
+        'style="fill:rgba(112,182,242,.1)"/>';
+      if (bw > 0) s += '<rect x="' + barX + '" y="' + (mid - 4).toFixed(1) + '" width="' + bw.toFixed(1) +
+        '" height="8" rx="2" style="fill:' + (r.color || 'var(--cyan)') + (r.highlight ? '' : ';opacity:.85') + '"/>';
+      var fmt = opts.fmt || function (v) { return String(Math.round(v)); };
+      s += '<text x="' + (w - valW + 4) + '" y="' + (mid + 3).toFixed(1) + '" ' +
+        'style="fill:var(--ink2);font-size:9.5px;font-family:var(--mono);font-variant-numeric:tabular-nums">' +
+        h(fmt(r.value)) + '</text>';
+    }
+    s += '</svg>';
+    return s;
+  }
+
+  /* 终局成长曲线：history 全序列，净值折线 + 季度净利柱（正绿负红）+ 零线 + 首末点。 */
+  function trendChart(history, w, h) {
+    if (!history || history.length < 2) return '';
+    var n = history.length, i, nw = [], net = [];
+    for (i = 0; i < n; i++) { nw.push(history[i].netWorth || 0); net.push(history[i].net || 0); }
+    var lo = Infinity, hi = -Infinity;
+    for (i = 0; i < n; i++) { if (nw[i] < lo) lo = nw[i]; if (nw[i] > hi) hi = nw[i]; }
+    for (i = 0; i < n; i++) { if (net[i] < lo) lo = net[i]; if (net[i] > hi) hi = net[i]; }
+    if (hi === lo) hi = lo + 1;
+    var padL = 6, padR = 6, padT = 8, padB = 14, span = hi - lo;
+    var xstep = (w - padL - padR) / (n - 1);
+    function xp(i) { return padL + i * xstep; }
+    function yp(v) { return padT + (h - padT - padB) * (1 - (v - lo) / span); }
+    var zeroY = yp(0);
+    var s = '<svg class="trend" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">';
+    if (lo < 0 && hi > 0) {
+      s += '<line x1="' + padL + '" y1="' + zeroY.toFixed(1) + '" x2="' + (w - padR) + '" y2="' + zeroY.toFixed(1) +
+        '" style="stroke:var(--ink3);stroke-width:.5;stroke-dasharray:2 2;opacity:.5"/>';
+    }
+    var bw = Math.min(10, xstep * 0.6);
+    for (i = 0; i < n; i++) {
+      var x = xp(i) - bw / 2, y0 = zeroY, y1 = yp(net[i]), top = Math.min(y0, y1), bh = Math.abs(y1 - y0);
+      if (bh < 0.5) continue;
+      s += '<rect x="' + x.toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + bw.toFixed(1) +
+        '" height="' + bh.toFixed(1) + '" style="fill:var(' + (net[i] >= 0 ? '--good' : '--bad') + ');opacity:.55"/>';
+    }
+    var pts = [];
+    for (i = 0; i < n; i++) pts.push(xp(i).toFixed(1) + ',' + yp(nw[i]).toFixed(1));
+    var baseY = h - padB;
+    s += '<path d="M' + pts[0] + ' L' + pts.join(' L') + ' L' + xp(n - 1).toFixed(1) + ',' + baseY +
+      ' L' + padL + ',' + baseY + ' Z" style="fill:var(--cyan);opacity:.1"/>';
+    s += '<polyline points="' + pts.join(' ') + '" fill="none" ' +
+      'style="stroke:var(--cyan);stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round"/>';
+    s += '<circle cx="' + pts[0].split(',')[0] + '" cy="' + pts[0].split(',')[1] + '" r="2" style="fill:var(--cyan)"/>';
+    s += '<circle cx="' + xp(n - 1).toFixed(1) + '" cy="' + yp(nw[n - 1]).toFixed(1) + '" r="2.4" style="fill:var(--amber)"/>';
+    s += '</svg>';
+    return s;
+  }
+
   /* 航线详情：频次档位 / 票价 / 加机 / 换机型 / 关线
    * 这是本作操作密度最高的面板，所有按钮都直接映射 sim 的指令接口。 */
   function renderRouteDetail(st, r, d, n, T, dist, slot) {
@@ -1492,7 +1650,18 @@
 
     /* 成本明细：把 settleRoute 的分解原样列出，让玩家看得见钱花在哪 */
     if (d) {
+      var costSegs = [
+        { label: '航油', value: d.fuel, color: 'var(--cyan)' },
+        { label: '起降地服', value: d.landing, color: 'var(--amber)' },
+        { label: '机组', value: d.crew, color: 'var(--good)' },
+        { label: '维护', value: d.maint, color: '#b48cff' },
+        { label: '飞机持有', value: d.ownership, color: 'var(--ink2)' }
+      ];
       out += '<div class="rd-sec"><div class="rd-h">本季成本构成</div><div class="rd-cost">' +
+        '<div class="rd-donut">' + donut(costSegs, 36, 9, { center: money(d.cost), centerLabel: '合计支出' }) +
+        '<div class="donut-leg">' + costSegs.map(function (g) {
+          return '<span><i style="background:' + g.color + '"></i>' + h(g.label) + '</span>';
+        }).join('') + '</div></div>' +
         costRow('航油', d.fuel) + costRow('起降地服', d.landing) + costRow('机组', d.crew) +
         costRow('维护', d.maint) + costRow('飞机持有', d.ownership) +
         '<div class="cc-total"><span>合计支出</span><b>−' + money(d.cost) + '</b></div>' +
@@ -1628,9 +1797,14 @@
     /* 顶部统一提示并购资格，不每行重复 */
     var pi = -1;
     rk.forEach(function (row, i) { if (row.isPlayer) pi = i; });
+    var barRows = rk.map(function (row) {
+      return { label: row.name, value: Math.max(0, row.netWorth), color: row.color || 'var(--cyan)', highlight: row.isPlayer };
+    });
     var out = '<div class="fsec"><div class="rd-h">全球排名（按净资产）</div>' +
       '<div class="rd-note" style="margin-bottom:10px">仅可收购排名低于你的航司' +
-      (pi >= 0 ? '（你当前第 ' + (pi + 1) + '）' : '') + '</div><div class="flist">';
+      (pi >= 0 ? '（你当前第 ' + (pi + 1) + '）' : '') + '</div>' +
+      '<div class="rival-bars">' + hbars(barRows, 280, 22, { fmt: function (v) { return money(v); } }) + '</div>' +
+      '<div class="flist">';
     rk.forEach(function (row, i) {
       var dot = '<i style="display:inline-block;width:8px;height:8px;border-radius:50%;' +
         'background:' + h(row.color) + ';margin-right:6px"></i>';
@@ -1957,7 +2131,9 @@
           groundCost: hasBreak ? (hh.groundCost || 0) : 0,
           baseMaint: hasBreak ? (hh.baseMaint || 0) : 0,
           net: hh.net, cash: hh.cash, netWorth: hh.netWorth, nwDelta: nwDelta,
-          pax: hh.pax, routes: hh.routes, planes: hh.planes
+          pax: hh.pax, routes: hh.routes, planes: hh.planes,
+          histNet: st.history.slice(-12).map(function (x) { return x.net; }),
+          histNw: st.history.slice(-12).map(function (x) { return x.netWorth; })
         });
         lastNetWorth = hh.netWorth;
         /* 季度钟 + 盈亏音一起响：钟是「时间推进了」，

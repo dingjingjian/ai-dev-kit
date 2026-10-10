@@ -147,6 +147,31 @@
   .cc-total > span{color:var(--ink3)}
   .cc-total > b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums}
 
+  /* ── 内联 SVG 图表（sparkline / donut / hbars / trend）──
+     零依赖、Chrome 61 兼容、配色走 CSS 变量。 */
+  .spark{display:block;width:100%;height:40px}
+  .trend{display:block;width:100%;height:96px}
+  .donut{display:block;width:90px;height:90px;flex:0 0 auto}
+  .hbars{display:block;width:100%;height:auto}
+  .md-spark{display:flex;align-items:center;gap:8px;margin-top:10px;
+    padding:7px 9px;border:1px solid rgba(112,182,242,.12);border-radius:8px;
+    background:rgba(112,182,242,.04)}
+  .ms-l{flex:0 0 auto;font-size:10px;color:var(--ink3);font-family:var(--mono);white-space:nowrap}
+  .ms-empty{flex:1 1 auto;min-width:0;font-size:10px;color:var(--ink3);font-family:var(--mono);text-align:right}
+  .md-spark .spark{flex:1 1 auto;min-width:0;height:40px}
+  .md-chart{margin-top:13px;padding:10px 9px 8px;border:1px solid rgba(112,182,242,.14);
+    border-radius:10px;background:rgba(112,182,242,.04)}
+  .md-chart-leg{display:flex;align-items:center;gap:12px;margin-top:7px;font-size:10px;
+    color:var(--ink3);font-family:var(--mono)}
+  .md-chart-leg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
+  .rd-donut{display:flex;align-items:center;gap:12px;margin-bottom:9px;
+    padding-bottom:9px;border-bottom:1px solid rgba(112,182,242,.08)}
+  .donut-leg{flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:5px 10px;font-size:10px;color:var(--ink2)}
+  .donut-leg span{display:inline-flex;align-items:center}
+  .donut-leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px}
+  .rival-bars{margin-bottom:12px;padding:8px 4px;border:1px solid rgba(112,182,242,.12);
+    border-radius:8px;background:rgba(112,182,242,.03)}
+
   /* ── toast ──
      ⚠ 位置：右半区、仪表带下方的固定带（仪表带底边 ≈ safe-t + top-gap + 74px）。
          · 放正中/下方 → 会压住抽屉面板内容；
@@ -154,7 +179,7 @@
        右半区在这一带只有球体，是最干净的落点。
      ⚠ z-index 200 必须高于 .modal(190)：决策确认提示要能浮在模态之上。 */
   #uToast{position:absolute;z-index:200;right:12px;top:calc(var(--safe-t) + var(--top-gap) + 96px);
-    max-width:58%;padding:8px 13px;border-radius:9px;background:rgba(9,23,41,.96);
+    max-width:84%;padding:8px 13px;border-radius:9px;background:rgba(9,23,41,.96);
     border:1px solid var(--line2);color:var(--ink);font-family:var(--sans);font-size:12px;
     opacity:0;pointer-events:none;transition:opacity .2s;text-align:right;
     line-height:1.5;box-shadow:0 6px 18px rgba(0,0,0,.4)}
