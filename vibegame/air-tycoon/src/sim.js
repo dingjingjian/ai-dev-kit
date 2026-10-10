@@ -3160,7 +3160,7 @@
   function verdict(state) {
     var C = AT.CONFIG;
     var rank = myRank(state);
-    if (state.bankrupt) return { tier: 'bankrupt', label: '破产退市', desc: '资金链断裂，公司进入清算程序。' };
+    if (state.bankrupt) return { tier: 'bankrupt', label: '破产退市', desc: '资金链断了，公司进入清算。' };
     var d = verdictDetail(state);
     var giantScore = C.verdictGiantScore == null ? 0.68 : C.verdictGiantScore;
     /* ⚠ 必须 rank >= 1：myRank 在「尚未清算/无榜单」时返回 0，
@@ -3169,7 +3169,7 @@
     if (rank >= 1 && rank <= (C.winRank || 3) && d.score >= giantScore) {
       return {
         tier: 'giant', label: '全球航空巨企',
-        desc: '你建成了一张真正的全球航线网络，规模与效率同时站在行业前列。',
+        desc: '一张真正全球的航线网络，规模和效率都站在行业前列。',
         dims: d
       };
     }
@@ -3180,16 +3180,16 @@
       if (d.eff < wv) { weakest = 'eff'; wv = d.eff; }
       if (d.cover < wv) { weakest = 'cover'; wv = d.cover; }
       var why = weakest === 'eff'
-        ? '规模已进入全球前列，但单位效率偏弱 —— 堆机队并不等于做强。'
+        ? '规模进了全球前列，但单位效率偏弱——堆机队并不等于做强。'
         : weakest === 'cover'
-          ? '规模已进入全球前列，但航线网络仍集中在少数市场，全球化不足。'
-          : '规模已进入全球前列，但离真正的巨企还差一步。';
+          ? '规模进了全球前列，但航线还扎在少数市场，全球化不够。'
+          : '规模进了全球前列，但离真正的巨企还差一步。';
       return { tier: 'major', label: '区域级强者', desc: why, dims: d };
     }
     if (netWorth(state) > 0) {
-      return { tier: 'survivor', label: '稳健经营者', desc: '公司在竞争中活了下来，规模稳步增长。', dims: d };
+      return { tier: 'survivor', label: '稳健经营者', desc: '扛过了竞争，规模还在稳步往上走。', dims: d };
     }
-    return { tier: 'failing', label: '艰难维持', desc: '资产已不足以覆盖负债，需要重新审视航线网络。', dims: d };
+    return { tier: 'failing', label: '艰难维持', desc: '资产已经盖不住负债，该回头看看航线网络了。', dims: d };
   }
 
   /* 全球化程度：已通航城市 × 覆盖地区数 / 全球城市数。

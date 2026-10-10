@@ -586,42 +586,42 @@
     { id: 'al_ca', iata: 'CA', name: '中国国际航空', region: 'EASIA', baseCityId: 'C02', baseCode: 'PEK', color: '#E24B4A', startPlane: 'cRJ2',
       prototype: '东亚载旗全服务航司',
       trait: { id: 'scale', name: '规模经济',
-        desc: '超大机队摊薄固定成本：全机队持有成本 −20%。',
+        desc: '机队越大越省钱：全机队持有成本 −20%。',
         ownershipMul: 0.80 } },
 
     /* ── 东南亚：高端服务与品牌溢价 ── */
     { id: 'al_sq', iata: 'SQ', name: '新加坡航空', region: 'SEASIA', baseCityId: 'C05', baseCode: 'SIN', color: '#EF9F27', startPlane: 'cNB5',
       prototype: '高端服务型枢纽航司',
       trait: { id: 'service', name: '服务品牌',
-        desc: '顶级服务口碑：起始声誉 65（默认 50），声誉对需求与票价的影响翻倍。',
+        desc: '口碑就是底气：起始声誉 65，声誉对需求与票价的影响翻倍。',
         repStart: 65, repEffectMul: 2.0 } },
 
     /* ── 西欧：成熟枢纽的时刻优势 ── */
     { id: 'al_ba', iata: 'BA', name: '英国航空', region: 'EUR', baseCityId: 'C09', baseCode: 'LHR', color: '#1D9E75', startPlane: 'cRJ0',
       prototype: '欧洲老牌跨洋枢纽航司',
       trait: { id: 'alliance', name: '联盟网络',
-        desc: '老牌枢纽的时刻优先权：所有航线的时刻槽位 +15%。',
+        desc: '老牌枢纽的底气：所有航线时刻槽位 +15%。',
         slotMul: 1.15 } },
 
     /* ── 北美：雄厚资本与融资能力 ── */
     { id: 'al_ua', iata: 'UA', name: '联合航空', region: 'NAMER', baseCityId: 'C15', baseCode: 'ORD', color: '#378ADD', startPlane: 'cNB1',
       prototype: '北美超大型网络航司',
       trait: { id: 'capital', name: '雄厚资本',
-        desc: '资本市场融资便利：起始资金 +50%，贷款额度 +50%。',
+        desc: '家底厚，借钱也好说话：起始资金 +50%，贷款额度 +50%。',
         startCashMul: 1.5, loanLimitMul: 1.5 } },
 
     /* ── 中东：东西方十字路口的中转枢纽 ── */
     { id: 'al_ek', iata: 'EK', name: '阿联酋航空', region: 'MIDEAST', baseCityId: 'C17', baseCode: 'DXB', color: '#7F77DD', startPlane: 'cNB4',
       prototype: '中东超级中转航司',
       trait: { id: 'transit', name: '中转枢纽',
-        desc: '连接东西方的中转网络：航线两端分属不同地区、且一端在基地地区时，需求 +25%。',
+        desc: '做中转很拿手：航线跨地区、且一端在基地地区时，需求 +25%。',
         crossRegionDemand: 1.25 } },
 
     /* ── 南半球（大洋洲 / 非洲 / 南美）：本土市场的区域深耕 ── */
     { id: 'al_qf', iata: 'QF', name: '澳洲航空', region: 'OTHER', baseCityId: 'C21', baseCode: 'SYD', color: '#E05284', startPlane: 'cNB2',
       prototype: '大洋洲区域霸主',
       trait: { id: 'regional', name: '区域深耕',
-        desc: '南半球本土壁垒：本区城市的开发度增长 +40%。',
+        desc: '把自家地盘养肥：本区城市的开发度增长 +40%。',
         devGrowthMul: 1.40 } }
   ];
 
@@ -828,97 +828,97 @@
    *   reputation    —— 品牌声誉变动（影响需求与票价承受力）
    */
   AT.EVENTS = [
-    { id: 'ev_oil_spike', title: '原油价格跳涨', desc: '主要产油区局势紧张，航空煤油现货价格一周内上涨三成。行业内所有航司的每公里油耗成本同步抬升。',
+    { id: 'ev_oil_spike', title: '原油价格跳涨', desc: '产油区局势吃紧，航油现货一周涨了三成。这口子谁都得担——全行业油耗成本一起被顶上去。',
       options: [
         { label: '全额承受，维持票价不变', crisis: 0, effect: { type: 'cost_all', mult: 0.30, turns: 3 } },
         { label: '套期保值锁定油价', crisis: 0, effect: { type: 'cash', amount: -420, note: '支付套保保证金' } },
         { label: '把成本转嫁给乘客', crisis: 0, effect: { type: 'demand_all', mult: -0.12, turns: 3, note: '提价损失客流' } }
       ] },
 
-    { id: 'ev_boom', title: '跨太平洋出行热潮', desc: '长假期与商务往来叠加，跨洋航线一票难求，订座率连续数周爆满。',
+    { id: 'ev_boom', title: '跨太平洋出行热潮', desc: '长假叠加商务出差，跨洋航班一票难求，订座率连着几周爆满。',
       options: [
         { label: '加开加班机', crisis: 0, effect: { type: 'demand_all', mult: 0.20, turns: 2 } },
         { label: '趁势上调票价', crisis: 0, effect: { type: 'cash', amount: 520, note: '短期超额收益' } },
         { label: '投入品牌广告', crisis: 0, effect: { type: 'reputation', amount: 8 } }
       ] },
 
-    { id: 'ev_budget_rival', title: '廉价航空入场', desc: '一家新成立的廉价航司宣布以极低票价切入多条干线，行业价格战一触即发。',
+    { id: 'ev_budget_rival', title: '廉价航空入场', desc: '一家新廉航放出狠话，用超低价打进好几条干线。这一刀砍下来，全行业票价怕是都要跟着跌。',
       options: [
         { label: '跟进降价守住份额', crisis: 0, effect: { type: 'demand_all', mult: 0.06, turns: 3, extra: { cash: -260 } } },
         { label: '坚持定位不降价', crisis: 0, effect: { type: 'demand_all', mult: -0.14, turns: 3 } },
         { label: '与对方谈判划分市场', crisis: 0, effect: { type: 'cash', amount: -180, note: '支付和解成本' } }
       ] },
 
-    { id: 'ev_new_airport', title: '新机场落成', desc: '一座新兴城市的国际机场正式通航，初期为吸引航司提供起降费减免与航线补贴。',
+    { id: 'ev_new_airport', title: '新机场落成', desc: '一座新兴城市的国际机场开航了。为了抢航司入驻，头两年起降费减免、还贴航线补贴。',
       options: [
         { label: '抢先开通航线', crisis: 0, effect: { type: 'dev_push', amount: 12, note: '抢得先机的城市开发度提升' } },
         { label: '观望一段时间', crisis: 0, effect: { type: 'cash', amount: 120, note: '省下开辟成本' } }
       ] },
 
-    { id: 'ev_pilot_strike', title: '飞行员工会罢工', desc: '工会要求提高薪酬与改善排班，谈判陷入僵局，部分航班面临停飞风险。',
+    { id: 'ev_pilot_strike', title: '飞行员工会罢工', desc: '飞行员要加薪、要改善排班，谈判谈崩了。再拖下去，部分航班就得停飞。',
       options: [
         { label: '接受涨薪诉求', crisis: 0, effect: { type: 'cost_all', mult: 0.14, turns: 4, extra: { cash: -200 } } },
         { label: '强硬拒绝，承受停飞', crisis: 0, effect: { type: 'fleet_ground', count: 3, turns: 2 } },
         { label: '紧急招募替代机组', crisis: 0, effect: { type: 'cash', amount: -480, note: '高昂的临时成本' } }
       ] },
 
-    { id: 'ev_tech_break', title: '新一代省油发动机', desc: '制造商发布新型发动机，油耗较上一代降低一成半，可对现有机队进行改装。',
+    { id: 'ev_tech_break', title: '新一代省油发动机', desc: '厂家发布了新一代发动机，比上一代省油一成半，现有机队都可以拿去改装。',
       options: [
         { label: '全面改装现役机队', crisis: 0, effect: { type: 'cash', amount: -860, extra: { costTurns: 99, costMult: -0.13 } } },
         { label: '只改装主力机型', crisis: 0, effect: { type: 'cash', amount: -380, extra: { costTurns: 99, costMult: -0.06 } } },
         { label: '暂不改装，维持现状', crisis: 0, effect: { type: 'cash', amount: 60 } }
       ] },
 
-    { id: 'ev_typhoon', title: '超强台风袭击枢纽', desc: '一场罕见的超强台风正面袭击你的枢纽机场，连续多日关闭跑道，航班大面积取消。',
+    { id: 'ev_typhoon', title: '超强台风袭击枢纽', desc: '一场罕见的超强台风正面砸向你的枢纽机场，跑道连关好几天，航班大面积取消。',
       options: [
         { label: '紧急转运旅客', crisis: 0, effect: { type: 'cash', amount: -520, note: '赔偿与转运成本' } },
         { label: '按规退票，不多赔付', crisis: 0, effect: { type: 'reputation', amount: -14 } }
       ] },
 
-    { id: 'ev_visa', title: '签证便利化协议', desc: '数个地区之间达成互免签证安排，跨境出行门槛大幅降低，短途国际航线需求激增。',
+    { id: 'ev_visa', title: '签证便利化协议', desc: '几个地区谈拢了互免签证，跨境出行的门槛一下降下来，短途国际航线需求要涨。',
       options: [
         { label: '立即加密区域航线', crisis: 0, effect: { type: 'demand_region', region: 'SEASIA', mult: 0.26, turns: 3 } },
         { label: '布局跨区中转网络', crisis: 0, effect: { type: 'demand_all', mult: 0.12, turns: 3 } }
       ] },
 
-    { id: 'ev_fuel_efficiency', title: '空管航路优化', desc: '新一代空管系统上线，主干航路的飞行距离与等待时间缩短，全行业运营效率提升。',
+    { id: 'ev_fuel_efficiency', title: '空管航路优化', desc: '新一代空管系统上线，主干航路飞得短了、排队等得少了，全行业运营都顺了。',
       options: [
         { label: '接入新系统', crisis: 0, effect: { type: 'cost_all', mult: -0.09, turns: 5 } },
         { label: '观望他航使用效果', crisis: 0, effect: { type: 'cash', amount: 80 } }
       ] },
 
-    { id: 'ev_investor', title: '资本市场看好航空业', desc: '航空板块估值整体上行，多家投资机构主动接触，希望注资扩张。',
+    { id: 'ev_investor', title: '资本市场看好航空业', desc: '航空板块估值在往上走，好几家机构主动找上门来，想注资让你扩盘子。',
       options: [
         { label: '接受注资，稀释股权换现金', crisis: 0, effect: { type: 'cash', amount: 1600, extra: { equityHit: 0.08 } } },
         { label: '拒绝注资，独立发展', crisis: 0, effect: { type: 'reputation', amount: 5 } }
       ] },
 
-    { id: 'ev_safety', title: '机队老龄化的隐忧', desc: '监管机构提出新的适航要求，部分机龄偏高的飞机需要额外检修才能继续执飞。',
+    { id: 'ev_safety', title: '机队老龄化的隐忧', desc: '监管出了新适航要求，机龄偏高的飞机得加做一轮检修，才让继续执飞。',
       options: [
         { label: '按规全面检修', crisis: 0, effect: { type: 'cash', amount: -760 } },
         { label: '分批检修，拖延部分机队', crisis: 0, effect: { type: 'fleet_ground', count: 2, turns: 3 } }
       ] },
 
-    { id: 'ev_new_route_right', title: '优质航权公开招标', desc: '监管机构放出一批高价值的跨洲航权，多家航司参与竞标，价格不菲。',
+    { id: 'ev_new_route_right', title: '优质航权公开招标', desc: '监管放出一批高价值的跨洲航权，好几家航司抢着竞标，价码不低。',
       options: [
         { label: '高价竞得航权', crisis: 0, effect: { type: 'cash', amount: -1200, extra: { freeRoute: 1 } } },
         { label: '放弃竞标', crisis: 0, effect: { type: 'rival_gain', amount: 0.05 } }
       ] },
 
-    { id: 'ev_recession', title: '全球经济放缓', desc: '主要经济体增速下行，企业差旅预算普遍压缩，商务舱需求明显走弱。',
+    { id: 'ev_recession', title: '全球经济放缓', desc: '主要经济体增速往下走，企业都在砍差旅预算，商务舱需求明显变弱。',
       options: [
         { label: '转向休闲客源市场', crisis: 0, effect: { type: 'demand_all', mult: -0.10, turns: 4, extra: { cash: -150 } } },
         { label: '维持商务定位静待回暖', crisis: 0, effect: { type: 'demand_all', mult: -0.22, turns: 4 } },
         { label: '收缩航线减少亏损', crisis: 0, effect: { type: 'cash', amount: 300, extra: { closeWeakRoute: 1 } } }
       ] },
 
-    { id: 'ev_green', title: '可持续航空燃料强制掺混', desc: '多地下达强制掺混指令，可持续航空燃料用量必须达到一定比例，成本高于传统航油。',
+    { id: 'ev_green', title: '可持续航空燃料强制掺混', desc: '多地下了强制掺混令，可持续燃料得用到一定比例，可它比传统航油贵。',
       options: [
         { label: '提前锁定长期供应', crisis: 0, effect: { type: 'cash', amount: -600, extra: { costTurns: 6, costMult: -0.05 } } },
         { label: '按最低比例执行', crisis: 0, effect: { type: 'cost_all', mult: 0.12, turns: 5 } }
       ] },
 
-    { id: 'ev_rival_crisis', title: '竞争对手陷入困境', desc: '一家主要竞争对手因资金链紧张被迫停飞部分航线，其航线网络出现明显空缺。',
+    { id: 'ev_rival_crisis', title: '竞争对手陷入困境', desc: '一家主要对手资金链吃紧，被迫停飞部分航线——它空出来的地盘，正好是机会。',
       options: [
         { label: '迅速接手其核心航线', crisis: 0, effect: { type: 'cash', amount: -900, extra: { stealRoute: 1 } } },
         { label: '挖走其飞行员队伍', crisis: 0, effect: { type: 'cash', amount: -340, extra: { reputation: 6 } } },
