@@ -1106,10 +1106,13 @@
       perDay: perDay, perDayCap: perDayCap, slotCap: slotCap, slotTight: slotTight,
       capacity: capacity, sellable: sellable, realLf: realLf,
       potential: potential, pax: pax, loadFactor: lf, share: share, mature: mature,
-      /* 运力是否吃紧 —— 需求撑满运力：说明该加机/提频了（UI 提示）。 */
-      capacityTight: capacity > 1e-9 && demandWanted > sellable * 0.98,
-      /* 需求是否填不满运力 —— 说明该减机/降频/降价了（UI 提示） */
-      demandThin: capacity > 1e-9 && demandWanted < sellable * 0.62,
+      /* 运力是否吃紧 —— 客座率接近满载基准且还能加机（未到槽位天花板）。
+       * 旧判据 demandWanted>sellable*0.98 因需求恒≫运力而恒真，提示变噪声；
+       * 改基于 realLf/lf 让提示与客座率条一致，并叠加 !slotTight 避免与
+       * slotTight 的"换大机型"提示重叠。 */
+      capacityTight: capacity > 1e-9 && realLf >= lf * 0.95 && !slotTight,
+      /* 需求是否填不满运力 —— 客座率远低于满载基准，该减机/降频/降价（UI 提示） */
+      demandThin: capacity > 1e-9 && realLf < lf * 0.65,
       fare: avgFareAdj, revenue: revenue, cost: cost, profit: profit,
       fuel: fuel, landing: landing, crew: crew, maint: maint, ownership: ownership,
       /* 机龄相关（A1）：供 UI 提示「该线机队老化，维护费上浮 X%」 */

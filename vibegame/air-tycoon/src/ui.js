@@ -1378,8 +1378,8 @@
           num(dist) + ' km</div>' +
         '<div class="rc-bars">' +
           bar('客座率', d ? d.realLf : 0, 1, d ? pct(d.realLf, 0) : '—') +
-          bar('槽位', d ? Math.min(1, (d.perDay * n) / Math.max(1, slot)) : 0, 1,
-              d ? Math.round(d.perDay * n) + '/' + Math.round(slot) + ' 班' : '—') +
+          bar('槽位', d ? Math.min(1, d.perDay / Math.max(1, slot)) : 0, 1,
+              d ? Math.round(d.perDay) + '/' + Math.round(slot) + ' 班' : '—') +
         '</div>' +
         (d && d.slotTight ? '<div class="rc-hint warn">时刻已饱和 —— 加机不再增班，考虑换更大机型</div>' : '') +
         (d && d.demandThin ? '<div class="rc-hint">需求偏薄 —— 客座率偏低，可减班或换小机型</div>' : '') +
